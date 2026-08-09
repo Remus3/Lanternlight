@@ -110,6 +110,40 @@ local surface carrying a loadout, so Emberforge cannot read one from disk.
 - **`SAF-4`** - some `TS.UI` lines carry **CJK text**, so a raw log excerpt is
   neither ASCII nor single-byte.
 
+## The refutation pass earned its keep, twice over
+
+An independent verifier was told to REFUTE this session's own claims and to
+default to refuted when uncertain. It refuted nothing - but it found **two
+guarantees that were narrower than the words describing them**, and both were
+in code this session had already mutation-tested and called proven:
+
+1. **The read-only refusal was bypassable.** It lived only in `state_path()`
+   and `fragment_path()`, so every default route raised and every route taking
+   an explicit `path=` walked straight past it. `save(LaneState(lane_id=
+   "verify"), p)` wrote a file. "Eight entry points raise" is not the same
+   property as "verify writes nothing, ever" - and only the second is what
+   lets a read-only lane grade other lanes' work.
+2. **`integrate()`'s `reversed()` had zero coverage.** Removing it left the
+   whole suite green, because every test used a single-entry fragment. The
+   docstring promise that newest lands on top was decoration.
+
+**The lesson is about the method, not the bugs.** An author's own mutation
+testing aims at the code that exists; it does not aim at the route around it,
+and it cannot notice a promise nothing ever exercised. That is precisely why
+the adversarial pass is a separate agent with a separate brief, and why
+"agreement is not evidence" is written the way it is.
+
+It also caught two stale things worth knowing: the merge test was still
+building fragments at the **nested** `lanes/<id>/LEDGER.md` layout abandoned
+earlier the same session, so it had stopped exercising what ships; and the
+conflict assertion matched the bare word `CONFLICT`, which also matches git's
+own advice text "fix conflicts".
+
+One process note for next time: the verifier ran while the branch was moving
+under it, and it handled that correctly by re-anchoring to pinned clones. But
+a refutation pass is cheaper and sharper against a frozen ref - dispatch it
+after the last commit of a slice, not during.
+
 ## Where to start next
 
 **Item 2b** - the sanitised fixture for the transient save. It is safety-lane
