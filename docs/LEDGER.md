@@ -56,6 +56,23 @@ four records to each other.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0009 - 2026-08-09 - Lane architecture proven end to end by running the ingest lane
+
+**Evidence:**
+- ingest lane launched into C:/ll-worktrees/ll-lane-ingest on branch lane/ingest
+- refusal guard proven three ways: refused from the primary checkout, allowed in its own worktree, refused for a different lane's worktree
+- lane built ROADMAP item 2 (GVAS .sav reader) TDD: lanternlight/gvas.py, tests/test_gvas.py, 5 redacted base64 fixtures, 75 new tests
+- primary checkout byte-identical throughout: HEAD a51c608 and tree f1ce3754 before and after, zero dirty files
+- lane touched ONLY its owned paths - git diff --stat shows gvas.py, test_gvas.py and tests/fixtures/gvas/ and nothing else
+- lane committed 73423fa to lane/ingest and pushed it; never merged to main
+- fixtures independently re-scanned by the merger: all five decode to zero redactor hits
+- DEFECT FOUND BY THE RUN: ops.lanes.REPO_ROOT is derived from __file__, so inside a worktree it equals that worktree and every not-the-primary-checkout assertion inverts - 6 tests failed from the worktree
+- fixed with primary_checkout() via git rev-parse --git-common-dir, which answers identically from every worktree
+- fix proven from a second lane worktree: 436 passed 0 failed running from C:/ll-worktrees/ll-lane-capture, where REPO_ROOT and primary_checkout() genuinely differ
+
+Base64 fixtures are invisible to tests/test_no_pii.py - a planted SteamID64 is detected in raw text and not in its base64 form. tests/fixtures/gvas/ is covered only by the lane's own decode-then-scan test. This belongs to the safety lane.
+git worktree remove exited 255 on Windows leaving the directory behind while unregistering it. Cleanup is not yet reliable and lane_launcher does not handle it.
+
 ### LL-0008 - 2026-08-09 - Lane launcher and generated per-lane contracts
 
 **Evidence:**
