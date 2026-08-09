@@ -56,6 +56,47 @@ four records to each other.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0012 - 2026-08-09 - Both lanes merged into the session branch and verified together
+
+**Evidence:**
+- merged lane/ingest then lane/safety with no conflicts
+- merged suite: 583 passed 0 failed, ruff clean, caches cleared before the run
+- THE interaction that only the merge could test: safety's new encoded scanner now walks and decodes ingest's five base64 fixtures for the first time - all five CLEAN
+- primary checkout was byte-identical throughout both lane runs: HEAD e2fe3e2 and tree ecf189f before and after, zero dirty files
+- each lane touched only paths its own ops/lanes.py entry owns, confirmed by git diff --stat against its branch point
+
+METHOD HAZARD found by the ingest lane and worth propagating: a same-length mutation written within one mtime tick leaves source size and mtime unchanged, so Python reuses a stale .pyc. That can fake a GREEN under mutation and therefore fake a non-vacuity proof outright. Clear __pycache__ before every mutation run.
+
+### LL-0011 - 2026-08-09 - Ingest lane decoded the GVAS trailing block; save and log corroborate
+
+**Evidence:**
+- all 627 trailing bytes of EnhancedInputUserSettings.sav decode into a named nested object; GvasSave.undecoded_trailing is 0
+- raw bytes are still kept in GvasSave.trailing for fidelity, so nothing is lost to the decode
+- merger parsed all five REAL .sav files independently: 5/5 parse
+- merger corrupted a property type in place: still raises UnknownPropertyTypeError rather than returning a partial parse
+- decoded key profile cross-corroborates the game log: KB_Blackarrow_Major_Action -> RightMouseButton appears in BOTH the save bytes and the log's decode key mapping lines
+- TextProperty history 0x00 added - measured, not speculative; grep of all five files yields only Bool, Double, Int, Map, Str, Text
+- merger re-scanned all five fixtures decoded from base64 with ALL_LABELS: 0 findings, and 0 leaks of the real persona or userId
+- tests/test_gvas.py 75 -> 111; commit b153d41 on lane/ingest, pushed; merged to the session branch
+
+The 4 zero bytes after every tagged property list remain UNIDENTIFIED and are handed back as GvasSave.epilogue rather than named. An int32 zero, an empty FString and four zero flag bytes all fit and nothing observed separates them.
+The save persists 3 key mappings while the log carries 81, suggesting the save stores only overrides. Recorded in docs/OBSERVED_IDS.md as a strong reading, not a proven one.
+
+### LL-0010 - 2026-08-09 - Safety lane closed the base64 PII hole and stopped skipping binaries
+
+**Evidence:**
+- redact.iter_encoded_sensitive finds base64 and hex runs, decodes them, and re-runs the EXISTING structural rules - no new pattern that could fire alone
+- the finding names the container ('in a 76-character base64 run') and never quotes the decoded value, so firing the guard does not itself publish the identifier
+- merger's independent probe: a planted base64 SteamID64 + ProductUserId file makes tests/test_no_pii.py exit 1; removing it returns green
+- merger poisoned a REAL committed fixture with a synthetic account-name key and id - the guard caught it at file:line:byte, fixture restored byte-identical, green after
+- binary files are now scanned via _tracked.iter_scannable_files; merger confirmed a raw id inside a .png is CAUGHT where it was previously skipped by suffix
+- false-positive rate measured by the lane: 0 findings over the Lanternlight tree; 15 findings over the CPython stdlib (20,077 files) all genuine 15+ digit runs
+- lane found 2 of its own guards VACUOUS on the first mutation pass and fixed both; second pass 14 of 14 red
+- commit 7fcf640 on lane/safety, pushed; merged to the session branch
+
+GAP, measured by the merger and not claimed by the lane: raw UTF-16 in a file is MISSED. UTF-16 inside a base64 blob IS caught. The lane's report said 'UTF-16: a NUL-stripped second reading' without that qualifier.
+OPEN QUESTION for whoever owns policy: .gitignore blocks *.sav but not *.sav.b64, and .githooks/pre-commit's PII_HAZARD regex is \.sav$ so it does not match either. An encoded save is content-scanned but not path-blocked. The safety lane deliberately did not add that rule because it would block already-verified fixtures - it is a cross-lane call.
+
 ### LL-0009 - 2026-08-09 - Lane architecture proven end to end by running the ingest lane
 
 **Evidence:**

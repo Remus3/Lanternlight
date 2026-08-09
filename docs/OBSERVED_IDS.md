@@ -218,6 +218,31 @@ and reading a truncated copy of that line makes `"classId":12` look like
 `classId 1`. The value was re-extracted with an anchored pattern over the whole
 file before being written here.
 
+## Input action bindings - 2026-08-09, from the save AND the log
+
+The first bindings established from **two independent first-party surfaces at
+once**, which is stronger than either alone.
+
+`EnhancedInputUserSettings.sav` persists a
+`/Script/EnhancedInput.EnhancedPlayerMappableKeyProfile` object holding three
+mapping rows. The game log independently emits `decode key mapping <action>
+<key>` lines. They agree:
+
+| Action id | Key | Method |
+|---|---|---|
+| `KB_Blackarrow_Major_Action` | `RightMouseButton` | save bytes AND log line |
+| `KB_Blackarrow_Minor_Action` | `LeftMouseButton` | save bytes AND log line |
+| `KB_EmptyHands_Minor_Action` | unbound (`None`) | save bytes AND log line |
+
+**The save persists 3 rows; the log carries 81 pairs.** That asymmetry is the
+finding: the save appears to store only **overrides**, not the full keymap. It
+is a strong reading rather than a proven one - a deliberate rebind followed by
+a re-read of the save would settle it, and nobody has done that.
+
+Each mapping row also carries two further key slots (`None` in every observed
+row) and 6 bytes that are **not decoded**. They are handed back verbatim rather
+than named.
+
 ## Rule
 
 Every future id binding gets recorded here at the moment it is observed, with
