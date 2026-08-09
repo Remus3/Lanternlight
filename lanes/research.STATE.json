@@ -24,10 +24,16 @@
       "item_id": "RES-4",
       "opened": "2026-08-09",
       "text": "ROADMAP 5 - Sorcerer surfaced one weapon config id and has no published explanation, unlike Blackarrow; until settled nothing may call Blackarrow the only single-weapon class"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "RES-5",
+      "opened": "2026-08-09",
+      "text": "Scav.sav and its bIsMaskReward property are observed but uninterpreted - record in OBSERVED_IDS.md with the method, do not guess what Scav or Mask mean"
     }
   ],
   "resume_note": "no lane session yet - docs/CLASSES.md and OBSERVED_IDS.md are current to 2026-08-09",
   "schema": 1,
   "sessions": 0,
-  "updated": "2026-08-09T22:47:43+00:00"
+  "updated": "2026-08-09T22:52:56+00:00"
 }
