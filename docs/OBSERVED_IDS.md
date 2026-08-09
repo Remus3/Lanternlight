@@ -243,6 +243,109 @@ Each mapping row also carries two further key slots (`None` in every observed
 row) and 6 bytes that are **not decoded**. They are handed back verbatim rather
 than named.
 
+## Blackarrow talent tree - 2026-08-09, complete for a level-2 character
+
+**Method: pixel capture joined to operator attestation.** `tools/frame_poller.py`
+captured the TALENTS screen every 2s from 16:01:06 to 16:09:16 local while the
+operator hovered each node in turn; the operator then named which frame showed
+which node, and every name and description below was **read off the rendered
+tooltip in that frame**. No wiki, no inference from the icon.
+
+Frames are at `~/.lanternlight/frames/` and are **not** committed - a capture of
+a running game shows the account panel.
+
+**12 clusters over 2 pages.** Only **Battle Hardened** is unlocked at level 2;
+every other cluster displays `Unlocks at Lv. N`.
+
+| Cluster | Unlocks | Page |
+|---|---|---|
+| **Battle Hardened** | **already unlocked** | 1 |
+| Archer's Arrow Enhancement 1 | Lv. 3 | 1 |
+| Mighty Archer | Lv. 5 | 1 |
+| Nimble Evade | Lv. 7 | 1 |
+| Swift Shot | Lv. 8 | 1 |
+| Archer's Arrow Enhancement 2 | Lv. 11 | 1 |
+| Hunter's Arrow Enhancement 1 | Lv. 6 | 2 |
+| Bomb Engineering | Lv. 9 | 2 |
+| Predator's Stealth | Lv. 10 | 2 |
+| Woodling Expert | Lv. 10 | 2 |
+| Hunter's Arrow Enhancement 2 | Lv. 12 | 2 |
+| Way of the Gylden Hunt | Lv. 12 | 2 |
+
+### Battle Hardened - the six nodes, with tooltip text
+
+| Node | Effect, verbatim from the tooltip |
+|---|---|
+| Measured Pace | When carrying at least 2 Archer's Arrows, fully drawing and immediately firing Normal Arrows recovers Energy. |
+| Battle-fed | When carrying at least 2 Hunter's Arrows, hitting an enemy with a shot reduces the remaining cooldown of all skills. |
+| Lasting Pain | After hitting an enemy with a shot, increases the duration of all active debuffs on that enemy. |
+| Marksman | Fully-drawn arrows will home in on enemies near the crosshairs. |
+| Dodge Rapid Shot | Changes roll into dodge and unlocks Dodge Rapid Shot: shoot immediately after dodging, consuming additional Energy to quickly fire both the currently loaded arrow and a normal arrow toward enemies near the crosshairs. This skill has a cooldown. |
+| Dodge Power Shot | Changes roll into dodge and unlocks Dodge Power Shot: shoot immediately after dodging, consuming additional Energy to quickly fire the currently loaded quick-charge arrow. Quick-charge arrows can activate all special effects of fully drawn arrows but have a lower Damage Multiplier. This skill has a cooldown. |
+
+### Node names in the remaining clusters
+
+Names and icons operator-attested per frame; tooltip text captured only where
+noted, so these are **names, not effects**.
+
+| Cluster | Nodes |
+|---|---|
+| Swift Shot | Tactical Adjustments, Full Draw*, Colossal Power |
+| Nimble Evade | Pursuer, Rapid Barrage, Pursuit Mark |
+| Archer's Arrow Enhancement 1 | Sepsis, Astound, Lightning Spread |
+| Archer's Arrow Enhancement 2 | Long Shot, Blood Infection* |
+| Mighty Archer | Unstoppable Edge, Powerful Scattershot, Focus Fire |
+| Hunter's Arrow Enhancement 1 | Power Infusion, Laceration, Shockwave |
+| Hunter's Arrow Enhancement 2 | Neurotoxin, Lingering |
+| Predator's Stealth | Steady Stealth, Heightened Senses |
+| Bomb Engineering | Crippling Pain*, Cold Infusion |
+| Woodling Expert | Woodling Bane, Swift Exit*, Regular |
+| Way of the Gylden Hunt | Death Sense, Greed is Good, Gyldenmist Tolerance, Monster Hunter |
+
+`*` tooltip text also captured:
+
+- **Full Draw** - Increases the Damage Multiplier of fully drawn arrows.
+- **Blood Infection** - Upon hitting an enemy, Bloodfly Arrow deals reduced DoT
+  but inflicts bonus Swarm stacks. Hitting an enemy that has Swarm stacks with
+  any fully drawn arrow other than Bloodfly Arrow will detonate the Swarm,
+  dealing bonus damage. The more Swarm stacks, the higher the damage. The swarm
+  detonation deals Critical Damage, with a portion converted to True Damage.
+- **Crippling Pain** - Enemies damaged by Impact Grenade have reduced Movement
+  Speed for a period of time.
+- **Swift Exit** - Allows you to learn the spawn location of the Smuggler
+  Woodling and Soul Ferry in advance.
+
+### What this corroborates, and what it opens
+
+**Corroborates:** the class research finding that **Archer and Hunter are ammo
+families**, not weapon stances. Measured Pace gates on Archer's Arrows and
+Battle-fed on Hunter's Arrows, and both cluster names use the same split. That
+was previously a claim adjudicated from published sources; it is now visible in
+the game's own UI.
+
+**Opens:** the tooltips say both Dodge nodes change `roll` into `dodge` and
+never say how the two differ. Whether dodge is shorter, faster, or has different
+invulnerability is **unmeasured**, and it matters - the class's effective
+heavy-shot range was reported at roughly two dodge-lengths, so the dodge is the
+unit its spacing is counted in.
+
+**No numbers appear anywhere in these tooltips.** Every effect is qualitative -
+"recovers Energy", "reduces the remaining cooldown", "lower Damage Multiplier" -
+with not one magnitude given. That is consistent with the project's founding
+measurement: this game publishes no coefficients, and any source quoting one is
+fabricating it.
+
+### UI facts observed in passing
+
+Top-level hotkeys: `Warehouse` Tab, `Prepare` E, `Skills` K, `Talents` P, `Camp`
+U, `Task` H, `Mall` Z. `LAlt` pins a tooltip open ("Lock and view"). Page turn
+is `A` and `D`.
+
+**The account panel shows a display name that is NOT the Steam persona** - a
+separate in-game identifier. Any capture published from this screen must redact
+it, and it is a different string from the one `lanternlight/redact.py` discovers
+in the log.
+
 ## Rule
 
 Every future id binding gets recorded here at the moment it is observed, with
