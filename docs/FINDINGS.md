@@ -485,6 +485,52 @@ Named so they are not later mistaken for absent:
 - Whether the operator has ever died. No `Game.PlayState.Death` is attributed to
   them (see 9.3).
 
+### 9.9.1 Not every setting is persisted locally - some exist only in the log
+
+Operator-attested 2026-08-09: they swapped the primary and secondary attack
+binds (right click as primary) and turned **off** invert-look.
+
+Both statements are confirmed by first-party data, and the two settings behave
+completely differently:
+
+**The keybind swap is in the save.** `EnhancedInputUserSettings.sav` persists
+exactly three mapping rows - `KB_Blackarrow_Major_Action -> RightMouseButton`,
+`KB_Blackarrow_Minor_Action -> LeftMouseButton`, and one unbound row - while the
+log carries 81 default pairs. **The operator changing exactly those binds
+confirms the save stores only OVERRIDES**, which had previously been recorded as
+a strong reading rather than an established fact. It is now attested.
+
+**The invert setting is nowhere on disk.** `InvertCameraYAxis` appears in
+`TS.Settings: [Settings]InvertCameraYAxis changed:` - set to `1`, then to `0`,
+matching the operator turning it on and back off - and is then reported through
+`[GSDKAnalytics] Report setting`. A search of the entire `Saved` tree finds it
+in **one** file: the log. It is absent from `UserSettings_v1.sav`, from
+`EnhancedInputUserSettings.sav`, and from `Config\Windows\GameUserSettings.ini`.
+
+So it is most likely held **server-side**, against the account. That is a
+design constraint, not a curiosity:
+
+> **A settings reader built on the `.sav` files alone is silently incomplete.**
+> Some settings never touch local storage, and the log is their only local
+> witness. Worse, the log is the *transient* surface - it rotates - so a setting
+> observed once may become unobservable.
+
+Full local property inventory, measured, so the gap is visible rather than
+assumed:
+
+| File | Properties |
+|---|---|
+| `UserSettings_v1.sav` | 14 graphics and gameplay flags (`bEnableDLSS`, `bMotionBlurEnabled`, `bWarehouseAutomation`, `bHurtedAutoCloseInventory`, `bEnableCrossPlay`, ...) |
+| `LoginOptions.sav` | `SelectedServer`, `SDKType`, `AccountName` |
+| `EnhancedInputUserSettings.sav` | `CurrentProfileIdentifierString` plus the key-profile object |
+| `CampData_<userId>.sav` | `LevelModeMap` |
+| `Notice.sav` | `readedGameBulletinId` |
+
+Also attested and not yet located in any surface: the operator owns the **Deluxe
+edition**, has claimed **three Twitch drops**, and has linked Discord for its
+drop. No entitlement, DLC or drop id has been observed in the log or the saves.
+Recorded as unmeasured, not absent.
+
 ### 9.10 PvP is still a clean null, and how that was got wrong twice
 
 This section previously claimed a second player was present and that PvP had

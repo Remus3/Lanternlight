@@ -82,6 +82,38 @@ logs/**
 *.sav
 *.sav.bak
 *.savegame
+
+# An ENCODED copy of a save is the same hazard wearing a different extension,
+# and blocking only `*.sav` is what creates the pressure to make one. Measured
+# 2026-08-09: the repository's own GVAS fixtures exist as base64 precisely
+# because `*.sav` is blocked here. So the encoded forms are blocked too.
+*.sav.b64
+*.sav.base64
+*.sav.hex
+*.sav.txt
+*.sav.gz
+*.sav.zip
+*.gvas
+*.gvas.b64
+*.gvas.base64
+*.gvas.hex
+
+# ...with one carve-out. `tests/fixtures/` is where REVIEWED, redacted fixtures
+# live, and everything there is content-scanned by `tests/test_no_pii.py`,
+# which now decodes base64 and hex rather than being blind to them. A fixture
+# that reaches this directory has been through the redactor; a `.gvas.b64`
+# anywhere else has not, and that is exactly the distinction the path rule can
+# make and a content scan cannot.
+!tests/fixtures/**/*.gvas.b64
+
+# The same family for logs. The game log carries the operator's SteamID64,
+# persona, platform ids and an IP-resolved location - encoding it changes
+# nothing about that.
+*.log.b64
+*.log.base64
+*.log.hex
+*.log.gz
+
 data/mhdata/
 data/mhdata/**
 data/extracted/
