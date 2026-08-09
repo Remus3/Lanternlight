@@ -42,7 +42,10 @@ Touch these paths and nothing else. Every other path in the repository belongs t
 - `docs/OPERATIONS.md`
 - `WAKEUP_NOTES.md`
 - `NEXT_SESSION_PROMPT.md`
-- `.claude/commands/lane-*.md`
+- `.claude/commands/*.md`
+- `.claude/agents/*.md`
+- `docs/ARCHITECTURE.md`
+- `tests/test_lane_*.py`
 - `scripts/write_lane_contracts.py`
 
 

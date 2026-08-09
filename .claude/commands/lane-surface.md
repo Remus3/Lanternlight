@@ -35,6 +35,7 @@ Touch these paths and nothing else. Every other path in the repository belongs t
 - `overlay/**`
 - `tests/test_overlay_*.py`
 - `dashboard/**`
+- `docs/OVERLAY.md`
 
 
 ## Session shape - the default, not an escalation
