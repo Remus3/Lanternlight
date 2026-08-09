@@ -424,6 +424,89 @@ class TestOwnershipMatchesTheRoster:
         assert lanes.owner_of("docs/LEDGER.md") == "ops"
 
 
+class TestReadOnlyRefusalCannotBeBypassedWithAPath:
+    """Found by the refutation pass, and it was a real door left open.
+
+    The refusal lived only in :func:`state_path` and :func:`fragment_path`, so
+    every default route raised - and every route that took an explicit ``path``
+    sailed straight past it. ``save(LaneState(lane_id="verify"), somewhere)``
+    and ``append_fragment("verify", entry, path=somewhere)`` both wrote files,
+    and ``load`` read one back. Eight entry points raising is not the same
+    property as "verify writes nothing, ever", and only the second one is the
+    guarantee that lets a read-only lane grade other lanes' work.
+    """
+
+    def test_save_refuses_a_read_only_lane_even_with_an_explicit_path(self, tmp_path):
+        target = tmp_path / "verify.STATE.json"
+        with pytest.raises(lane_state.ReadOnlyLane):
+            lane_state.save(lane_state.LaneState(lane_id="verify"), target)
+        assert not target.exists(), "the refusal must happen BEFORE anything is written"
+
+    def test_append_fragment_refuses_a_read_only_lane_even_with_an_explicit_path(self, tmp_path):
+        target = tmp_path / "verify.LEDGER.md"
+        with pytest.raises(lane_state.ReadOnlyLane):
+            lane_state.append_fragment("verify", _entry("LL-0100"), path=target)
+        assert not target.exists()
+
+    def test_load_refuses_a_read_only_lane_even_with_an_explicit_path(self, tmp_path):
+        with pytest.raises(lane_state.ReadOnlyLane):
+            lane_state.load("verify", tmp_path / "anything.json")
+
+    def test_the_open_item_helpers_refuse_a_read_only_lane_too(self, tmp_path):
+        with pytest.raises(lane_state.ReadOnlyLane):
+            lane_state.add_open_item("verify", "X-1", "nope", path=tmp_path / "s.json")
+        with pytest.raises(lane_state.ReadOnlyLane):
+            lane_state.start_session("verify", "nope", tmp_path / "s.json")
+
+    def test_a_writing_lane_is_still_allowed_a_path(self, tmp_path):
+        # The refusal must be about read-only, not about passing a path at all.
+        target = tmp_path / "ingest.STATE.json"
+        lane_state.save(lane_state.LaneState(lane_id="ingest"), target)
+        assert target.exists()
+
+
+class TestIntegrationOrderIsActuallyChecked:
+    """Also from the refutation pass: ``reversed()`` had ZERO coverage.
+
+    ``integrate`` inserts oldest-first so the newest entry ends up on top, and
+    every existing test used a single-entry fragment - so removing
+    ``reversed()`` left the entire suite green. A docstring promise with no
+    test behind it is decoration, which is exactly what this repository means
+    by a vacuous guard.
+    """
+
+    def _seeded(self, tmp_path: Path) -> Path:
+        book = tmp_path / "LEDGER.md"
+        body = [
+            "# Ledger",
+            "",
+            ledger.ENTRIES_MARKER,
+            "",
+            "### LL-0001 - 2026-08-01 - oldest",
+            "",
+            "**Evidence:**",
+            "- seeded",
+            "",
+        ]
+        book.write_text("\n".join(body), encoding="utf-8", newline="\n")
+        return book
+
+    def test_a_multi_entry_fragment_lands_newest_first(self, tmp_path):
+        book = self._seeded(tmp_path)
+        frag = tmp_path / "frag.md"
+        for item in ("LL-0100", "LL-0101", "LL-0102"):
+            lane_state.append_fragment("ingest", _entry(item), path=frag)
+        assert lane_state.fragment_entry_ids(frag) == ["LL-0102", "LL-0101", "LL-0100"]
+
+        assert lane_state.integrate(frag, book) == ["LL-0102", "LL-0101", "LL-0100"]
+        text = book.read_text(encoding="utf-8")
+        positions = [text.index(f"### {i}") for i in ("LL-0102", "LL-0101", "LL-0100", "LL-0001")]
+        assert positions == sorted(positions), (
+            "the repository ledger promises newest first - integrating a "
+            f"multi-entry fragment broke that ordering: {positions}"
+        )
+
+
 class TestLaneStateIsVisibleToGit:
     """A state file git cannot see is a lane that silently resets to zero.
 
@@ -569,7 +652,14 @@ class TestSharedLedgerRacesAndFragmentsDoNot:
             "expected to conflict - if git now merges this cleanly, the "
             "fragment design's justification has changed and needs re-measuring"
         )
-        assert "CONFLICT" in (second.stdout + second.stderr).upper()
+        # Match git's own marker line, not the bare word: git's advice text
+        # says "fix conflicts", which an uppercased substring check also
+        # matches, so the loose form could pass on a non-conflict message.
+        assert "CONFLICT (" in (second.stdout + second.stderr), (
+            "expected git to report a real content conflict, got: "
+            + second.stdout
+            + second.stderr
+        )
         _git(repo, "merge", "--abort")
 
     def test_two_branches_appending_to_their_own_fragments_merge_cleanly(self, tmp_path):
@@ -580,7 +670,7 @@ class TestSharedLedgerRacesAndFragmentsDoNot:
 
         for branch, lane_id, item in (("lane/a", "a", "LL-0100"), ("lane/b", "b", "LL-0101")):
             _git(repo, "checkout", "-b", branch, "main")
-            frag = repo / "lanes" / lane_id / "LEDGER.md"
+            frag = repo / "lanes" / f"{lane_id}.LEDGER.md"
             frag.parent.mkdir(parents=True, exist_ok=True)
             lane_state.append_fragment("ingest", _entry(item, f"work from {branch}"), path=frag)
             _commit_all(repo, f"{branch} ledgers {item}")
@@ -594,8 +684,8 @@ class TestSharedLedgerRacesAndFragmentsDoNot:
             "per-lane fragments are disjoint files and must merge without a "
             "conflict:\n" + second.stdout + second.stderr
         )
-        assert (repo / "lanes" / "a" / "LEDGER.md").exists()
-        assert (repo / "lanes" / "b" / "LEDGER.md").exists()
+        assert (repo / "lanes" / "a.LEDGER.md").exists()
+        assert (repo / "lanes" / "b.LEDGER.md").exists()
 
     def test_the_integrator_then_folds_both_fragments_into_one_ledger(self, tmp_path):
         # The fragments merged cleanly; a single writer on main composes them.
@@ -604,7 +694,7 @@ class TestSharedLedgerRacesAndFragmentsDoNot:
         book = repo / "LEDGER.md"
         moved = []
         for lane_id, item in (("a", "LL-0100"), ("b", "LL-0101")):
-            frag = repo / "lanes" / lane_id / "LEDGER.md"
+            frag = repo / "lanes" / f"{lane_id}.LEDGER.md"
             frag.parent.mkdir(parents=True, exist_ok=True)
             lane_state.append_fragment("ingest", _entry(item), path=frag)
             moved.extend(lane_state.integrate(frag, book))

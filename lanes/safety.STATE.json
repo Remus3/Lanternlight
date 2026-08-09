@@ -36,10 +36,16 @@
       "item_id": "SAF-6",
       "opened": "2026-08-09",
       "text": "GAP MEASURED 2026-08-09: the pre-commit hook ACCEPTED a commit that tests/test_no_pii.py then rejected - the hook is less strict than the test, so a hazard can land and only fail later in the suite. Decide whether the hook should run the same detectors"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "SAF-7",
+      "opened": "2026-08-09",
+      "text": "MEASURED: .githooks/pre-commit ASCII arm does not cover *.json - a json em-dash gives HOOK EXIT 0 while the same bytes in a .md are BLOCKED. lanes/*.STATE.json are the repo first tracked agent-written json, so this gap is now load-bearing"
     }
   ],
   "resume_note": "no lane session yet - last worked as a sub-slice of the 2026-08-09b session",
   "schema": 1,
   "sessions": 0,
-  "updated": "2026-08-09T23:06:54+00:00"
+  "updated": "2026-08-09T23:16:04+00:00"
 }
