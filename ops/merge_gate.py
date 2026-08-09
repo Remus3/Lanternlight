@@ -264,12 +264,44 @@ def check_per_file_counts(
     return findings
 
 
+def _claim_parts(claim: object) -> tuple[str, tuple[str, ...]]:
+    """Split a claim into (path, required fragments).
+
+    Accepts a plain path or a mapping such as
+    ``{"path": "a.py", "must_contain": ["def parse"]}``. A bare string keeps
+    working unchanged, because ``verify(claimed_paths=[...])`` is quoted
+    verbatim in ``CLAUDE.md`` and in all eight generated lane contracts - this
+    feature is additive or it is a breaking change to nine documents.
+    """
+    if isinstance(claim, dict):
+        path = str(claim.get("path", ""))
+        required = claim.get("must_contain") or ()
+        if isinstance(required, str):
+            required = (required,)
+        return path, tuple(str(r) for r in required)
+    return str(claim), ()
+
+
 def check_claimed_paths(
-    paths: Iterable[str | Path], root: Path = REPO_ROOT
+    paths: Iterable[object], root: Path = REPO_ROOT
 ) -> list[Finding]:
-    """Confirm every path an agent claimed to deliver is a non-empty file."""
+    """Confirm every claimed path is a non-empty file, and optionally that it
+    actually contains what was claimed.
+
+    Existence is a weak signal on its own. An agent that wrote a stub, edited
+    the wrong file, or created the right filename with the wrong content passes
+    an exists-and-is-non-empty check cleanly - which is precisely the shape of
+    "the subagent said it did this and it did not". ``must_contain`` re-reads
+    the file and asserts the claimed content is present, turning the claim into
+    something the gate can actually refute.
+
+    Fragments are matched as plain substrings, not regexes. A caller quoting a
+    function signature should not have to escape it, and a regex typo would
+    fail open.
+    """
     findings: list[Finding] = []
-    for raw in paths:
+    for claim in paths:
+        raw, required = _claim_parts(claim)
         target = Path(raw)
         resolved = target if target.is_absolute() else root / target
         if not resolved.exists():
@@ -286,6 +318,27 @@ def check_claimed_paths(
             findings.append(
                 Finding(kind="empty", detail=f"{raw} exists but is zero bytes")
             )
+            continue
+        if not required:
+            continue
+        try:
+            text = resolved.read_text(encoding="utf-8", errors="replace")
+        except OSError as exc:
+            findings.append(
+                Finding(kind="unreadable", detail=f"{raw} could not be read ({exc})")
+            )
+            continue
+        findings.extend(
+            Finding(
+                kind="missing-content",
+                detail=(
+                    f"{raw} exists but does not contain {fragment!r} - the file "
+                    "was delivered, the claimed work was not"
+                ),
+            )
+            for fragment in required
+            if fragment not in text
+        )
     return findings
 
 

@@ -178,6 +178,79 @@ class TestClaimedPaths:
         assert findings and findings[0].kind == "not-a-file"
 
 
+class TestMustContain:
+    """A file existing is not evidence the claimed work is in it.
+
+    The gate previously asked only: does this path exist, is it non-empty, is
+    it a file. An agent that wrote a stub, edited the wrong file, or created the
+    right file with the wrong content passed cleanly. `must_contain` closes
+    that by re-reading the file and asserting the claimed content is actually
+    present.
+
+    The whole feature is ADDITIVE. `verify(claimed_paths=[...], baseline=...)`
+    is quoted verbatim in CLAUDE.md and in all eight generated lane contracts,
+    so a plain string must keep working exactly as before.
+    """
+
+    def test_a_plain_string_claim_still_works(self, tmp_path):
+        (tmp_path / "a.py").write_text("x = 1\n", encoding="utf-8")
+        assert merge_gate.check_claimed_paths(["a.py"], root=tmp_path) == []
+
+    def test_a_dict_claim_passes_when_the_content_is_present(self, tmp_path):
+        (tmp_path / "a.py").write_text("def parse_gvas():\n    pass\n", encoding="utf-8")
+        claims = [{"path": "a.py", "must_contain": ["def parse_gvas"]}]
+        assert merge_gate.check_claimed_paths(claims, root=tmp_path) == []
+
+    def test_a_stub_that_lacks_the_claimed_content_is_a_finding(self, tmp_path):
+        (tmp_path / "a.py").write_text("pass\n", encoding="utf-8")
+        claims = [{"path": "a.py", "must_contain": ["def parse_gvas"]}]
+        findings = merge_gate.check_claimed_paths(claims, root=tmp_path)
+        assert findings
+        assert findings[0].kind == "missing-content"
+        assert "parse_gvas" in findings[0].detail
+
+    def test_every_missing_fragment_is_reported_not_just_the_first(self, tmp_path):
+        (tmp_path / "a.py").write_text("nothing here\n", encoding="utf-8")
+        claims = [{"path": "a.py", "must_contain": ["alpha", "beta", "gamma"]}]
+        findings = merge_gate.check_claimed_paths(claims, root=tmp_path)
+        assert len(findings) == 3
+
+    def test_a_single_string_fragment_is_accepted_not_only_a_list(self, tmp_path):
+        (tmp_path / "a.py").write_text("hello\n", encoding="utf-8")
+        claims = [{"path": "a.py", "must_contain": "hello"}]
+        assert merge_gate.check_claimed_paths(claims, root=tmp_path) == []
+
+    def test_a_missing_file_is_reported_as_missing_not_as_missing_content(self, tmp_path):
+        claims = [{"path": "gone.py", "must_contain": ["anything"]}]
+        findings = merge_gate.check_claimed_paths(claims, root=tmp_path)
+        assert len(findings) == 1
+        assert findings[0].kind == "missing"
+
+    def test_an_unreadable_binary_does_not_crash_the_gate(self, tmp_path):
+        (tmp_path / "b.bin").write_bytes(b"\xff\xfe\x00\x01")
+        claims = [{"path": "b.bin", "must_contain": ["text"]}]
+        findings = merge_gate.check_claimed_paths(claims, root=tmp_path)
+        assert findings and findings[0].kind == "missing-content"
+
+    def test_a_dict_without_must_contain_behaves_like_a_plain_path(self, tmp_path):
+        (tmp_path / "a.py").write_text("x\n", encoding="utf-8")
+        assert merge_gate.check_claimed_paths([{"path": "a.py"}], root=tmp_path) == []
+
+    def test_mixed_plain_and_dict_claims_are_both_honoured(self, tmp_path):
+        (tmp_path / "a.py").write_text("alpha\n", encoding="utf-8")
+        (tmp_path / "b.py").write_text("nothing\n", encoding="utf-8")
+        claims = ["a.py", {"path": "b.py", "must_contain": ["beta"]}]
+        findings = merge_gate.check_claimed_paths(claims, root=tmp_path)
+        assert len(findings) == 1
+        assert "b.py" in findings[0].detail
+
+    def test_the_finding_names_the_file_and_the_fragment(self, tmp_path):
+        (tmp_path / "a.py").write_text("x\n", encoding="utf-8")
+        claims = [{"path": "a.py", "must_contain": ["needle"]}]
+        detail = merge_gate.check_claimed_paths(claims, root=tmp_path)[0].detail
+        assert "a.py" in detail and "needle" in detail
+
+
 class TestAgainstTheRealSuite:
     """The parsers must work on what this machine actually prints, today."""
 
