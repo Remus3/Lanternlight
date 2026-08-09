@@ -129,11 +129,15 @@ from lanternlight.gvas import (  # noqa: E402
     EPILOGUE_SIZE,
     KNOWN_PROPERTY_TYPES,
     MAGIC,
+    MAX_VALUE_DEPTH,
+    MEASURED_BARE_TYPES,
+    MEASURED_NATIVE_STRUCTS,
     MEASURED_TEXT_HISTORIES,
     MEASURED_TRAILING_OBJECT_CLASS,
     GvasParseError,
     GvasSave,
     SourceText,
+    UndecodedStruct,
     UnknownPropertyTypeError,
     load,
     parse,
@@ -212,6 +216,27 @@ def _header(class_name: str = _SYNTHETIC_CLASS) -> bytes:
     )
 
 
+def _type(name: str, *params: bytes | str) -> bytes:
+    """Serialise a recursive property type name: name, param count, params.
+
+    A parameter may be a bare string, which becomes a leaf type name, or bytes
+    already produced by this function, which is how the nested shapes the game
+    actually writes get built - a struct spells its own name, and that name
+    spells its package path, and only then does the GUID follow.
+    """
+    parts = [_fstring(name), struct.pack("<i", len(params))]
+    for param in params:
+        parts.append(param if isinstance(param, bytes) else _type(param))
+    return b"".join(parts)
+
+
+def _prop_typed(name: str, type_bytes: bytes, value: bytes = b"", flags: int = 0) -> bytes:
+    """One tagged property whose type name is already serialised."""
+    return b"".join(
+        (_fstring(name), type_bytes, struct.pack("<i", len(value)), bytes([flags]), value)
+    )
+
+
 def _prop(
     name: str,
     type_name: str,
@@ -220,14 +245,7 @@ def _prop(
     flags: int = 0,
 ) -> bytes:
     """One tagged property: name, type name, type params, size, flags, value."""
-    parts = [_fstring(name), _fstring(type_name), struct.pack("<i", len(params))]
-    for param in params:
-        parts.append(_fstring(param))
-        parts.append(struct.pack("<i", 0))
-    parts.append(struct.pack("<i", len(value)))
-    parts.append(bytes([flags]))
-    parts.append(value)
-    return b"".join(parts)
+    return _prop_typed(name, _type(type_name, *params), value, flags)
 
 
 def _save(
@@ -259,6 +277,92 @@ def _text_prop(name: str, namespace: str, key: str, source: str) -> bytes:
         )
     )
     return _prop(name, "TextProperty", body)
+
+
+#: A stand-in for the dashed hex string the engine writes as a game struct's
+#: second type parameter. Authored: the real ones are this game's Blueprint
+#: struct GUIDs and nothing here depends on their values.
+_STRUCT_GUID = "1234abcd-5678-ef90-1234-56789abcdef0"
+
+
+def _struct_type(
+    struct_name: str = "F_TestData",
+    path: str = "/Game/Test/F_TestData",
+    guid: str | None = _STRUCT_GUID,
+) -> bytes:
+    """A StructProperty type name, in the shape measured off StandaloneSlot.
+
+    Two forms occur there and both are built here. A game struct spells its
+    name, that name's package path, and then a GUID as a second parameter; an
+    engine core struct (Vector, Quat, Transform) spells only the first, with no
+    GUID parameter at all. Pass ``guid=None`` for the engine form.
+    """
+    params: list[bytes] = [_type(struct_name, _type(path))]
+    if guid is not None:
+        params.append(_type(guid))
+    return _type("StructProperty", *params)
+
+
+def _struct_body(*properties: bytes) -> bytes:
+    """A struct payload: a tagged property list closed by "None".
+
+    Deliberately no epilogue. The four-byte epilogue follows the outer object's
+    property list and a trailing object's, and measurably does NOT follow a
+    nested struct's - the struct lands exactly on its tag's Size.
+    """
+    return b"".join((*properties, _fstring("None")))
+
+
+def _struct_prop(
+    name: str,
+    *properties: bytes,
+    struct_name: str = "F_TestData",
+    path: str = "/Game/Test/F_TestData",
+    guid: str | None = _STRUCT_GUID,
+    body: bytes | None = None,
+    flags: int = 0,
+) -> bytes:
+    """A tagged StructProperty whose value is a nested property list."""
+    payload = _struct_body(*properties) if body is None else body
+    return _prop_typed(name, _struct_type(struct_name, path, guid), payload, flags)
+
+
+def _map_prop(name: str, key_type: bytes, value_type: bytes, body: bytes) -> bytes:
+    """A tagged MapProperty. ``body`` is keys-to-remove, count, then pairs."""
+    return _prop_typed(name, _type("MapProperty", key_type, value_type), body)
+
+
+def _map_body(*pairs: bytes, count: int | None = None, removes: int = 0) -> bytes:
+    return b"".join(
+        (
+            struct.pack("<i", removes),
+            struct.pack("<i", len(pairs) if count is None else count),
+            *pairs,
+        )
+    )
+
+
+def _array_prop(name: str, element_type: bytes, *elements: bytes) -> bytes:
+    """A tagged ArrayProperty: an int32 count, then bare elements."""
+    body = struct.pack("<i", len(elements)) + b"".join(elements)
+    return _prop_typed(name, _type("ArrayProperty", element_type), body)
+
+
+def _byte_prop(
+    name: str,
+    enumerator: str,
+    enum_name: str = "E_TestState",
+    path: str = "/Game/Test/E_TestState",
+    with_enum_param: bool = True,
+) -> bytes:
+    """A tagged ByteProperty, whose value is the qualified enumerator name.
+
+    The engine writes the enumerator as an FString here rather than as a raw
+    byte, and names the enum as the type's one parameter. ``with_enum_param``
+    builds the parameterless form, which has never been observed.
+    """
+    params = (_type(enum_name, _type(path)),) if with_enum_param else ()
+    return _prop_typed(name, _type("ByteProperty", *params), _fstring(enumerator))
 
 
 def _mapping(name: str, keys: tuple[str, str, str], tail: bytes = b"\0" * 6) -> bytes:
@@ -554,14 +658,17 @@ def test_unknown_property_type_is_not_a_partial_parse():
 
 
 def test_unknown_map_parameterisation_raises():
-    # MapProperty is known, but only with int keys and int values. A different
-    # parameterisation is a different encoding, and decoding it as the measured
-    # one would produce confidently wrong numbers.
+    # This test used to use MapProperty<StrProperty, IntProperty> as its
+    # never-measured example. StandaloneSlot_<roleId>.sav, captured 2026-08-09,
+    # writes exactly that parameterisation, so the premise was falsified by the
+    # game and the example had to move. FloatProperty is the replacement for
+    # the same reason it is used above: a real Unreal type this game has never
+    # been observed writing.
     body = struct.pack("<ii", 0, 0)
-    blob = _save(_prop("Odd", "MapProperty", body, params=("StrProperty", "IntProperty")))
+    blob = _save(_prop("Odd", "MapProperty", body, params=("FloatProperty", "IntProperty")))
     with pytest.raises(UnknownPropertyTypeError) as excinfo:
         parse(blob)
-    assert "StrProperty" in str(excinfo.value)
+    assert "FloatProperty" in str(excinfo.value)
 
 
 def test_unknown_text_history_raises():
@@ -623,12 +730,23 @@ def test_non_strict_still_reads_the_property_after_an_unknown_one():
 def test_known_property_types_is_exactly_what_was_measured():
     # Pinned so that adding a type is a deliberate act with a measurement
     # behind it, not something that drifts in.
+    #
+    # These are type constructors now, not fully rendered names. They used to
+    # be rendered, which meant MapProperty could only be spelled one way;
+    # StandaloneSlot writes seven parameterisations of it, and a struct's
+    # rendered name embeds a per-struct GUID that nothing should be pinned to.
+    # What gates a container now is its ELEMENT types, which is a stricter
+    # statement and not a looser one: an element type nobody has measured still
+    # raises, and MEASURED_BARE_TYPES gates the container position separately.
     assert sorted(KNOWN_PROPERTY_TYPES) == [
+        "ArrayProperty",
         "BoolProperty",
+        "ByteProperty",
         "DoubleProperty",
         "IntProperty",
-        "MapProperty<IntProperty, IntProperty>",
+        "MapProperty",
         "StrProperty",
+        "StructProperty",
         "TextProperty",
     ]
 
@@ -1050,6 +1168,522 @@ def test_measured_text_histories_is_exactly_what_was_measured():
     # Pinned for the same reason KNOWN_PROPERTY_TYPES is: a history byte gets
     # added because it was observed, not because a spec lists it.
     assert sorted(MEASURED_TEXT_HISTORIES) == [0x00, 0xFF]
+
+
+# --------------------------------------------------------------------------
+# StructProperty and the container types, measured off StandaloneSlot
+#
+# StandaloneSlot_<roleId>.sav is the game's in-run level save. It is NOT
+# committed as a fixture: its filename embeds the operator's roleId, and four
+# of its properties carry ids derived from it - two of which no detector in
+# lanternlight.redact fires on in the raw file. So the shapes below are
+# synthetic blobs built to the layout measured off the live capture on
+# 2026-08-09, in the same spirit as the other synthetic tests here: the real
+# file was the measurement source, and the fixtures that ARE committed are what
+# stop these builders from drifting into a private dialect.
+# --------------------------------------------------------------------------
+
+
+def test_a_struct_property_decodes_into_a_nested_dict():
+    # The headline shape. A StructProperty's value is a nested tagged property
+    # list closed by "None", using the same tag grammar as the outer object,
+    # with no epilogue and no length of its own beyond the tag's Size.
+    blob = _save(
+        _struct_prop(
+            "PlayzoneData",
+            _int_prop("Wave", 3),
+            _prop("Label", "StrProperty", _fstring("zone")),
+        )
+    )
+    save = parse(blob)
+    assert save.properties["PlayzoneData"] == {"Wave": 3, "Label": "zone"}
+    assert save.property_types["PlayzoneData"] == (
+        "StructProperty<F_TestData</Game/Test/F_TestData>, "
+        "1234abcd-5678-ef90-1234-56789abcdef0>"
+    )
+    assert save.is_complete
+
+
+def test_a_struct_type_name_without_a_guid_parameter_decodes():
+    # Engine core structs spell only their name and path; game structs add a
+    # GUID. Both forms occur in the same file, so both have to parse.
+    blob = _save(
+        _struct_prop(
+            "Transform",
+            _int_prop("Slot", 1),
+            struct_name="Transform",
+            path="/Script/CoreUObject",
+            guid=None,
+        )
+    )
+    save = parse(blob)
+    assert save.properties["Transform"] == {"Slot": 1}
+    assert save.property_types["Transform"] == (
+        "StructProperty<Transform</Script/CoreUObject>>"
+    )
+
+
+def test_a_struct_nested_inside_a_struct_decodes():
+    # Measured max nesting is five property-list levels deep. Two is enough to
+    # prove the recursion; the cap is tested separately.
+    inner = _struct_prop("Rotation", _int_prop("Yaw", 90), struct_name="F_Inner")
+    blob = _save(_struct_prop("Outer", inner, _int_prop("Tag", 5)))
+    assert parse(blob).properties["Outer"] == {"Rotation": {"Yaw": 90}, "Tag": 5}
+
+
+def test_a_struct_that_does_not_fill_its_tag_size_raises():
+    # The check that keeps a wrong reading of a nested shape from passing
+    # silently: the nested list has to land exactly on the tag's Size.
+    body = _struct_body(_int_prop("Wave", 3)) + b"\x01\x02\x03"
+    blob = _save(_struct_prop("PlayzoneData", body=body))
+    with pytest.raises(UnknownPropertyTypeError) as excinfo:
+        parse(blob)
+    assert "3" in str(excinfo.value)
+
+
+def test_a_struct_missing_its_none_terminator_raises():
+    blob = _save(_struct_prop("PlayzoneData", body=_int_prop("Wave", 3)))
+    with pytest.raises(GvasParseError):
+        parse(blob)
+
+
+# --------------------------------------------------------------------------
+# natively serialised structs: handed back, named, never guessed at
+# --------------------------------------------------------------------------
+
+
+def test_a_native_struct_is_handed_back_verbatim_and_named_undecoded():
+    # Vector, Vector2D and Quat are written with tag flag 0x08 and their
+    # payload is NOT a property list. The tag's Size bounds it exactly, so
+    # handing the bytes back is a fact; reading them as doubles would not be.
+    payload = bytes(range(24))
+    blob = _save(
+        _struct_prop(
+            "Translation",
+            body=payload,
+            struct_name="Vector",
+            path="/Script/CoreUObject",
+            guid=None,
+            flags=0x08,
+        )
+    )
+    value = parse(blob).properties["Translation"]
+    assert isinstance(value, UndecodedStruct)
+    assert value.struct_name == "Vector"
+    assert value.struct_path == "/Script/CoreUObject"
+    assert value.data == payload
+    assert "Vector" in value.describe()
+    assert "undecoded" in value.describe()
+
+
+def test_a_native_struct_is_not_mistaken_for_a_decoded_one():
+    # The distinction this type exists to preserve. A caller that treats a
+    # native struct as a decoded struct gets a type error, not a wrong number.
+    payload = struct.pack("<ddd", 1.0, 2.0, 3.0)
+    blob = _save(
+        _struct_prop(
+            "Translation",
+            body=payload,
+            struct_name="Vector",
+            path="/Script/CoreUObject",
+            guid=None,
+            flags=0x08,
+        )
+    )
+    value = parse(blob).properties["Translation"]
+    assert not isinstance(value, dict)
+    # Three doubles fit the 24 bytes, and the reader still refuses to say so.
+    assert value.data == payload
+    with pytest.raises(FrozenInstanceError):
+        value.data = b""  # type: ignore[misc]
+
+
+def test_a_native_struct_nested_in_a_decoded_struct_stays_undecoded():
+    # Exactly the Transform shape: an ordinary property list whose Rotation is
+    # a native Quat and whose Translation is a native Vector.
+    rotation = _struct_prop(
+        "Rotation",
+        body=bytes(32),
+        struct_name="Quat",
+        path="/Script/CoreUObject",
+        guid=None,
+        flags=0x08,
+    )
+    blob = _save(
+        _struct_prop(
+            "Transform",
+            rotation,
+            struct_name="Transform",
+            path="/Script/CoreUObject",
+            guid=None,
+        )
+    )
+    transform = parse(blob).properties["Transform"]
+    assert isinstance(transform, dict)
+    assert isinstance(transform["Rotation"], UndecodedStruct)
+    assert transform["Rotation"].struct_name == "Quat"
+    assert len(transform["Rotation"].data) == 32
+
+
+def test_measured_native_structs_is_exactly_what_was_measured():
+    # Recorded because they were watched being emitted, not because a spec
+    # lists them. The set does NOT gate the decode - an unlisted native struct
+    # is still handed back whole, because opaque bytes are never a guess.
+    assert sorted(MEASURED_NATIVE_STRUCTS) == ["Quat", "Rotator", "Vector", "Vector2D"]
+
+
+def test_two_native_structs_of_the_same_size_stay_distinguishable():
+    # Vector and Rotator both carry 24 bytes. Whatever those bytes mean, the
+    # only thing telling the two apart is the name, which is the argument
+    # against decoding either from its length.
+    def native(name: str) -> UndecodedStruct:
+        blob = _save(
+            _struct_prop(
+                "Value",
+                body=bytes(24),
+                struct_name=name,
+                path="/Script/CoreUObject",
+                guid=None,
+                flags=0x08,
+            )
+        )
+        return parse(blob).properties["Value"]
+
+    vector, rotator = native("Vector"), native("Rotator")
+    assert vector.data == rotator.data
+    assert vector != rotator
+    assert (vector.struct_name, rotator.struct_name) == ("Vector", "Rotator")
+
+
+# --------------------------------------------------------------------------
+# ByteProperty: an enum written as its qualified enumerator name
+# --------------------------------------------------------------------------
+
+
+def test_a_byte_property_decodes_to_its_qualified_enumerator_name():
+    # Not a raw byte. The engine writes an FString here, and the enum's own
+    # name is the type's one parameter.
+    blob = _save(_byte_prop("Opened", "E_TestState::NewEnumerator1"))
+    save = parse(blob)
+    assert save.properties["Opened"] == "E_TestState::NewEnumerator1"
+    assert save.property_types["Opened"] == (
+        "ByteProperty<E_TestState</Game/Test/E_TestState>>"
+    )
+
+
+def test_the_enumerator_prefix_is_kept_rather_than_stripped():
+    # Stripping "E_TestState::" would drop a measured string for cosmetics, and
+    # would make two enums that both spell NewEnumerator1 indistinguishable.
+    value = parse(_save(_byte_prop("Locked", "E_TestState::NewEnumerator2"))).properties[
+        "Locked"
+    ]
+    assert value.startswith("E_TestState::")
+
+
+def test_a_byte_property_without_an_enum_parameter_raises():
+    # A parameterless ByteProperty is a raw byte in Unreal, and that form has
+    # never been observed here. Decoding this one as an FString would invent a
+    # string out of whatever followed.
+    blob = _save(_byte_prop("Raw", "x", with_enum_param=False))
+    with pytest.raises(UnknownPropertyTypeError) as excinfo:
+        parse(blob)
+    assert "enum" in str(excinfo.value)
+
+
+# --------------------------------------------------------------------------
+# maps and arrays, generalised over their measured element types
+# --------------------------------------------------------------------------
+
+
+def test_a_map_of_strings_to_structs_decodes():
+    # DoorData, MonsterData, BotData and TreasureBoxMap are all this shape.
+    # Map elements are BARE: no tag, no size, just the value encoding, and a
+    # struct element is a bare property list closed by "None".
+    body = _map_body(
+        _fstring("door_1") + _struct_body(_int_prop("Hp", 10)),
+        _fstring("door_2") + _struct_body(_int_prop("Hp", 0)),
+    )
+    blob = _save(_map_prop("DoorData", _type("StrProperty"), _struct_type(), body))
+    doors = parse(blob).properties["DoorData"]
+    assert doors == {"door_1": {"Hp": 10}, "door_2": {"Hp": 0}}
+    # Measured zero, not absent. The second door really is at zero.
+    assert doors["door_2"]["Hp"] == 0
+
+
+def test_a_map_of_ints_to_doubles_decodes():
+    body = _map_body(
+        struct.pack("<i", 3) + struct.pack("<d", 34.0),
+        struct.pack("<i", 101) + struct.pack("<d", 0.0),
+    )
+    blob = _save(
+        _map_prop("LevelDetail", _type("IntProperty"), _type("DoubleProperty"), body)
+    )
+    assert parse(blob).properties["LevelDetail"] == {3: 34.0, 101: 0.0}
+
+
+def test_a_map_of_ints_to_strings_decodes():
+    body = _map_body(struct.pack("<i", 1) + _fstring("first"))
+    blob = _save(
+        _map_prop("NumIdToUUID", _type("IntProperty"), _type("StrProperty"), body)
+    )
+    assert parse(blob).properties["NumIdToUUID"] == {1: "first"}
+
+
+def test_a_map_of_strings_to_ints_decodes():
+    body = _map_body(_fstring("spawner") + struct.pack("<i", 7))
+    blob = _save(_map_prop("Counts", _type("StrProperty"), _type("IntProperty"), body))
+    assert parse(blob).properties["Counts"] == {"spawner": 7}
+
+
+def test_an_empty_map_is_measured_empty_not_absent():
+    blob = _save(_map_prop("Empty", _type("StrProperty"), _type("IntProperty"), _map_body()))
+    save = parse(blob)
+    assert save.properties["Empty"] == {}
+    assert "Empty" in save.properties
+
+
+def test_a_duplicate_map_key_raises_rather_than_dropping_a_pair():
+    # A dict would silently keep the last pair and lose the first, which is a
+    # measurement disappearing without anyone being told. Same reasoning as the
+    # repeated-property-name check.
+    body = _map_body(
+        _fstring("same") + struct.pack("<i", 1),
+        _fstring("same") + struct.pack("<i", 2),
+    )
+    blob = _save(_map_prop("Dupes", _type("StrProperty"), _type("IntProperty"), body))
+    with pytest.raises(GvasParseError) as excinfo:
+        parse(blob)
+    assert "same" in str(excinfo.value)
+
+
+def test_a_map_pair_count_the_value_cannot_hold_raises():
+    # Asserted on the message, not just the exception type. Without the
+    # up-front check the loop still dies - on running out of bytes, several
+    # thousand iterations later - so a bare pytest.raises passes either way and
+    # pins nothing. Measured: deleting the check left that version green.
+    blob = _save(
+        _map_prop(
+            "Lying",
+            _type("StrProperty"),
+            _type("IntProperty"),
+            _map_body(_fstring("one") + struct.pack("<i", 1), count=4096),
+        )
+    )
+    with pytest.raises(GvasParseError) as excinfo:
+        parse(blob)
+    assert "4096" in str(excinfo.value)
+
+
+def test_a_map_that_announces_keys_to_remove_raises():
+    body = _map_body(_fstring("k") + struct.pack("<i", 1), removes=1)
+    blob = _save(_map_prop("Odd", _type("StrProperty"), _type("IntProperty"), body))
+    with pytest.raises(UnknownPropertyTypeError):
+        parse(blob)
+
+
+def test_an_array_of_structs_decodes():
+    # ArrayProperty<StructProperty<F_CurrencyInfo<...>, guid>> is the one
+    # parameterisation observed. There is no per-element header at all: the
+    # UE4-era inner struct header is gone, because the UE 5.4 type name already
+    # carries the struct identity.
+    blob = _save(
+        _array_prop(
+            "Currency",
+            _struct_type("F_CurrencyInfo", "/Game/Test/F_CurrencyInfo"),
+            _struct_body(_int_prop("CfgId", 101), _int_prop("Count", 23)),
+            _struct_body(_int_prop("CfgId", 102), _int_prop("Count", 0)),
+        )
+    )
+    value = parse(blob).properties["Currency"]
+    assert value == ({"CfgId": 101, "Count": 23}, {"CfgId": 102, "Count": 0})
+    assert isinstance(value, tuple)
+
+
+def test_an_empty_array_is_measured_empty_not_absent():
+    blob = _save(_array_prop("Currency", _struct_type()))
+    save = parse(blob)
+    assert save.properties["Currency"] == ()
+    assert "Currency" in save.properties
+
+
+def test_an_array_element_count_the_value_cannot_hold_raises():
+    # Same reasoning as the map version above: the count has to appear in the
+    # message, or the test cannot tell the up-front rejection from the loop
+    # eventually running out of bytes.
+    body = struct.pack("<i", 4096)
+    blob = _save(_prop_typed("Lying", _type("ArrayProperty", _type("IntProperty")), body))
+    with pytest.raises(GvasParseError) as excinfo:
+        parse(blob)
+    assert "4096" in str(excinfo.value)
+
+
+# --------------------------------------------------------------------------
+# what stays refused: positions and element types nobody has measured
+# --------------------------------------------------------------------------
+
+
+def test_an_element_type_never_measured_bare_raises():
+    # A tagged BoolProperty carries its value in flag 0x10 with a zero-byte
+    # payload. A bool inside a map has no tag and therefore no flags, so its
+    # encoding would have to be something else, and nothing has been observed.
+    #
+    # The pair below is deliberately a key and NOTHING else. An earlier version
+    # gave the bool a spare byte, and deleting the gate left that byte over, so
+    # the leftover-bytes check raised and the test passed while guarding
+    # nothing - measured, by removing the gate and watching it stay green. With
+    # a zero-byte payload the map decodes cleanly to {"k": False} once the gate
+    # is gone, so this now fails when the thing it protects is broken.
+    body = _map_body(_fstring("k"))
+    blob = _save(_map_prop("Odd", _type("StrProperty"), _type("BoolProperty"), body))
+    with pytest.raises(UnknownPropertyTypeError) as excinfo:
+        parse(blob)
+    message = str(excinfo.value)
+    assert "BoolProperty" in message
+    assert "outside a property tag" in message
+
+
+def test_a_map_of_doubles_to_structs_decodes():
+    # DropItemMap really is keyed by a double: the keys observed were 5.0, 6.0,
+    # 30.0 and friends, integer item ids carried as doubles because the save
+    # class is a TypeScript module and a TypeScript number is a double.
+    body = _map_body(
+        struct.pack("<d", 35.0) + _struct_body(_int_prop("Slot", 6)),
+        struct.pack("<d", 5.0) + _struct_body(_int_prop("Slot", 0)),
+    )
+    blob = _save(_map_prop("DropItemMap", _type("DoubleProperty"), _struct_type(), body))
+    drops = parse(blob).properties["DropItemMap"]
+    assert drops == {35.0: {"Slot": 6}, 5.0: {"Slot": 0}}
+    # Python hashes 35.0 and 35 alike, which is worth a caller knowing.
+    assert drops[35] == {"Slot": 6}
+
+
+def test_a_map_key_type_never_measured_as_a_key_raises():
+    # A struct is measured BARE - it is what every DoorData value is - and has
+    # still never been measured as a KEY. That is the case this gate exists
+    # for: without it the decode would get as far as building the dict and then
+    # die on an unhashable key, from somewhere with nothing useful to say.
+    body = _map_body(_struct_body(_int_prop("K", 1)) + struct.pack("<i", 1))
+    blob = _save(_map_prop("Odd", _struct_type(), _type("IntProperty"), body))
+    with pytest.raises(UnknownPropertyTypeError) as excinfo:
+        parse(blob)
+    assert "StructProperty" in str(excinfo.value)
+
+
+def test_a_struct_with_no_type_parameters_raises():
+    # Every StructProperty measured names its struct. One that names nothing
+    # is a shape nobody has seen, and without the check the reader would reach
+    # for params[0] and raise IndexError - a crash rather than a parse error,
+    # and one a non-strict caller could not record.
+    blob = _save(_prop_typed("Odd", _type("StructProperty"), _fstring("None")))
+    with pytest.raises(UnknownPropertyTypeError) as excinfo:
+        parse(blob)
+    assert "type parameters" in str(excinfo.value)
+
+
+def test_a_struct_with_more_type_parameters_than_measured_raises():
+    # Name plus path plus GUID is two parameters; three is a shape that has
+    # never been written. Without the check the extras would be ignored, which
+    # is a reader deciding on its own that it understood something new.
+    type_bytes = _type(
+        "StructProperty",
+        _type("F_TestData", _type("/Game/Test/F_TestData")),
+        _type(_STRUCT_GUID),
+        _type("SomethingElse"),
+    )
+    blob = _save(_prop_typed("Odd", type_bytes, _fstring("None")))
+    with pytest.raises(UnknownPropertyTypeError) as excinfo:
+        parse(blob)
+    assert "type parameters" in str(excinfo.value)
+
+
+def test_a_struct_naming_more_than_one_package_path_raises():
+    type_bytes = _type(
+        "StructProperty",
+        _type("F_TestData", _type("/Game/Test/A"), _type("/Game/Test/B")),
+    )
+    blob = _save(_prop_typed("Odd", type_bytes, _fstring("None")))
+    with pytest.raises(UnknownPropertyTypeError) as excinfo:
+        parse(blob)
+    assert "package path" in str(excinfo.value)
+
+
+def test_a_leaf_type_carrying_type_parameters_raises():
+    # ByteProperty is the only leaf measured with a parameter, and its
+    # parameter is the enum whose enumerator it writes. An IntProperty that
+    # grew one is not the IntProperty that was measured, and decoding it as
+    # though the parameter were decoration would report a number for a shape
+    # nobody has seen.
+    blob = _save(_prop_typed("Odd", _type("IntProperty", "Weird"), struct.pack("<i", 5)))
+    with pytest.raises(UnknownPropertyTypeError) as excinfo:
+        parse(blob)
+    assert "type parameters" in str(excinfo.value)
+
+
+def test_a_map_with_the_wrong_number_of_type_parameters_raises():
+    blob = _save(_prop_typed("Odd", _type("MapProperty", _type("StrProperty")), b""))
+    with pytest.raises(UnknownPropertyTypeError):
+        parse(blob)
+
+
+def test_an_array_with_the_wrong_number_of_type_parameters_raises():
+    blob = _save(_prop_typed("Odd", _type("ArrayProperty"), struct.pack("<i", 0)))
+    with pytest.raises(UnknownPropertyTypeError):
+        parse(blob)
+
+
+def test_a_struct_nested_deeper_than_the_cap_raises():
+    # A corrupt length can spell an arbitrarily deep type, and unbounded
+    # recursion on a hostile file is a crash rather than a parse error.
+    # Measured depth in the real save is 5.
+    inner = _struct_prop("Leaf", _int_prop("X", 1))
+    for _ in range(MAX_VALUE_DEPTH + 2):
+        inner = _struct_prop("Nest", inner)
+    with pytest.raises(GvasParseError) as excinfo:
+        parse(_save(inner))
+    assert "deep" in str(excinfo.value) or "depth" in str(excinfo.value)
+
+
+def test_measured_bare_types_is_exactly_what_was_measured():
+    # The types observed as a container element rather than under a property
+    # tag. Pinned for the same reason KNOWN_PROPERTY_TYPES is.
+    assert sorted(MEASURED_BARE_TYPES) == [
+        "DoubleProperty",
+        "IntProperty",
+        "StrProperty",
+        "StructProperty",
+    ]
+
+
+def test_non_strict_records_a_struct_whose_nested_property_is_unmeasured():
+    # A struct is decoded or it is not. An unmeasured property anywhere inside
+    # it makes the whole top-level property unknown rather than handing back a
+    # dict that is quietly missing a field.
+    blob = _save(
+        _int_prop("Before", 7),
+        _struct_prop(
+            "PlayerData",
+            _int_prop("Level", 4),
+            _prop("Mystery", "FloatProperty", struct.pack("<f", 1.5)),
+        ),
+        _int_prop("After", 9),
+    )
+    with pytest.raises(UnknownPropertyTypeError):
+        parse(blob)
+
+    save = parse(blob, strict=False)
+    assert save.properties == {"Before": 7, "After": 9}
+    assert "PlayerData" not in save.properties
+    assert [u.name for u in save.unknown_properties] == ["PlayerData"]
+    assert "FloatProperty" in save.unknown_properties[0].reason
+
+
+def test_a_native_serialised_non_struct_still_raises():
+    # Every flag-0x08 property in the capture is a StructProperty, so the
+    # native branch is measured for structs and for nothing else. An
+    # IntProperty written natively is a layout nobody here has seen.
+    blob = _save(_prop("Odd", "IntProperty", struct.pack("<i", 5), flags=0x08))
+    with pytest.raises(UnknownPropertyTypeError):
+        parse(blob)
 
 
 # --------------------------------------------------------------------------
