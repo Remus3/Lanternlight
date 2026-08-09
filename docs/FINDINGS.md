@@ -527,6 +527,18 @@ assumed:
 | `Notice.sav` | `readedGameBulletinId` |
 | `Deck.sav` | `DeckDefaultOpenPage`, a `MapProperty<IntProperty, IntProperty>` |
 
+**Updated the same day, twice more.** A seventh save,
+`StandaloneSlot_<roleId>.sav`, appeared at 15:39 at **41,564 bytes** and had
+grown to 46,619 bytes minutes later while still being written. It is twenty
+times larger than any other save and its **filename embeds the operator's
+roleId**, so it carries the same name-level PII hazard as `CampData_<userId>.sav`.
+
+It does **not** parse: it uses `StructProperty<F_PlayzoneSaveData>`, a property
+type never measured here, and `lanternlight/gvas.py` **raises** on it rather
+than returning a partial parse. That is the raise-on-unknown guard being
+validated in the wild by a genuinely new type - better evidence than any test
+could give, and the reason the guard exists.
+
 `Deck.sav` did not exist before this session. It appeared at 14:36 local, during the mail-and-equip sequence, and `CampData_<userId>.sav` was rewritten at 14:41. **The set of save files is not fixed** - a reader must enumerate the directory rather than expect a known list, and a fixture set pinned to five files silently stops covering the surface.
 
 Also attested and not yet located in any surface: the operator owns the **Deluxe

@@ -29,7 +29,8 @@ writes into user-writable space, plus passive reading of the operator's own
 screen:
 
 - the live-appending log at `%LOCALAPPDATA%\MistfallHunter\Saved\Logs\MistfallHunter.log`
-- four unencrypted UE GVAS `.sav` files under the same tree
+- a growing set of unencrypted UE GVAS `.sav` files under the same tree - four at
+  first probe, seven a day later, so a reader enumerates rather than assumes
 - `AvgPrice_937566.ini`, a market and trade-price cache
 - passive desktop screen capture, on the operator's own display, with no overlay
 
@@ -60,7 +61,7 @@ Honest as of 2026-08-09. This project is days old and most of it does not exist.
 | Market cache | **Parser done** | `AvgPrice_937566.ini` filled. `lanternlight.avgprice` parses it; watcher not built |
 | Dungeon data | **Prologue measured** | Lifecycle, escape portals, loot, death and escape states all observed. `docs/FINDINGS.md` section 9 |
 | Raid / PvP data | **Unmeasured** | Only the Prologue has been entered (`matchId=0`, no second player). Unmeasured, not absent |
-| GVAS `.sav` reader | **Done** | All five files parse. Published parsers do not work on this build - UE 5.4+ changed the property tag |
+| GVAS `.sav` reader | **Partial** | Six of seven saves parse with zero undecoded bytes. The seventh appeared mid-session and uses a `StructProperty` the reader has never measured, so it **raises** rather than guessing. Published parsers do not work on this build - UE 5.4+ changed the property tag |
 | Live log tail | **Not started** | Port 8811 reserved, nothing listening |
 | **Emberforge** | **Empty** | The package exists. It **computes nothing.** No formulas are published anywhere, so there is nothing yet to encode |
 | Dashboard | **Does not exist** | Port 8810 reserved. See `BACKLOG.md` |

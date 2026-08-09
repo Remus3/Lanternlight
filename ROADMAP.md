@@ -111,7 +111,7 @@ work, passing its own merge gate, committing to its branch and pushing, with the
 primary checkout untouched throughout - demonstrated end to end for one lane,
 not described.
 
-## 2. GVAS `.sav` reader - CLOSED 2026-08-09
+## 2. GVAS `.sav` reader - REOPENED, a new property type appeared
 
 Ledger `LL-0011`. `lanternlight/gvas.py` parses every `.sav` file. There were five when the reader was written and there are now **six** - `Deck.sav` appeared mid-session and parses cleanly, but no fixture pins it. Published
 GVAS parsers do not work on this build: UE 5.4+ replaced `FPropertyTag`'s
@@ -119,6 +119,22 @@ GVAS parsers do not work on this build: UE 5.4+ replaced `FPropertyTag`'s
 flags byte. All 627 trailing bytes of `EnhancedInputUserSettings.sav` decode,
 and the result cross-corroborates the log - save and log independently agree
 that `KB_Blackarrow_Major_Action` is bound to `RightMouseButton`.
+
+**Reopened the same day.** A seventh save, `StandaloneSlot_<roleId>.sav`,
+appeared at 15:39 and does not parse: it uses
+`StructProperty<F_PlayzoneSaveData>`, never measured here. The reader **raises**
+rather than guessing, which is the correct behaviour and is why this is an open
+item rather than a silent partial parse.
+
+It is 46 KB and growing while written - twenty times any other save - so it is
+very likely the real character and progression store, and therefore the most
+valuable save surface for Emberforge. Its filename also embeds the operator's
+roleId, so any fixture must be renamed, not just redacted.
+
+**Acceptance:** `StructProperty` decoded far enough to parse this save with
+`undecoded_trailing == 0`, a sanitised fixture pinning it, and every newly
+observed property type recorded. If a nested struct cannot be decoded, it is
+handed back verbatim and named as undecoded - never guessed.
 
 **Still unidentified:** the 4 zero bytes after every tagged property list. An
 `int32` zero, an empty FString and four zero flag bytes all fit and nothing

@@ -56,6 +56,25 @@ four records to each other.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0015 - 2026-08-09 - Fixtures made authored artifacts, orphaned files given owners, a seventh save reopened the GVAS item
+
+**Evidence:**
+- no committed fixture is byte-identical to any live save - merger re-derived by sha256 over all six fixtures against all live saves
+- merger's own non-vacuity probe: planting a RAW live save as a fixture is CAUGHT by the guard; restore returns green
+- all six fixtures parse with undecoded_trailing 0, zero unknown properties, and zero redactor findings under ALL_LABELS
+- sanitisation preserved property names, type names, header and class paths - only values moved, asserted equal before each splice
+- orphan guard added: every tracked file must be owned by exactly one lane or listed in CROSS_CUTTING, no third state
+- 94 tracked files: 82 owned, 12 cross-cutting, 0 orphaned - was 10 orphaned
+- orphan guard proven non-vacuous: removing one assignment turns it red naming exactly that file
+- lane commit 60cf878 touched 7 files, ownership resolves all 7 to ingest - zero violations
+- merged suite 685 passed 0 failed with caches purged, ruff clean
+
+A SEVENTH save appeared mid-verification: StandaloneSlot_<roleId>.sav, 41,564 bytes at 15:39 and 46,619 minutes later while still being written - twenty times any other save, so very likely the real character and progression store.
+It does NOT parse. It uses StructProperty<F_PlayzoneSaveData>, never measured here, and the reader RAISES rather than returning a partial parse. That is the raise-on-unknown guard validated in the wild by a genuinely new type - better evidence than any test. ROADMAP item 2 reopened with an acceptance criterion.
+Its filename embeds the operator's roleId, the same name-level hazard as CampData. A fixture must be renamed, not merely redacted.
+The ingest lane observed that the live UserSettings_v1.sav changed size mid-session because the operator is playing, so the byte-identical guard is a SNAPSHOT check that can go green on its own. That is the argument for sanitising rather than relying on the guard, and it is why both were done.
+The save set is not fixed: four at first probe, five, six, then seven within a day. Any helper assuming a known list silently stops covering the surface.
+
 ### LL-0014 - 2026-08-09 - Session wrap - refutation pass held, two filed counts were wrong
 
 **Evidence:**
