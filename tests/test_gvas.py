@@ -3,11 +3,31 @@
 Fixtures - what they are, and what was done to them
 --------------------------------------------------
 
-``tests/fixtures/gvas/*.gvas.b64`` are the five files the game writes into
-``%LOCALAPPDATA%/MistfallHunter/Saved/SaveGames/``, measured on 2026-08-09,
-base64-encoded, with two value splices and one rename. Everything else - the
-1760-byte custom-version table, every property name, every setting - is the
-engine's own bytes.
+``tests/fixtures/gvas/*.gvas.b64`` are derived from the files the game writes
+into ``%LOCALAPPDATA%/MistfallHunter/Saved/SaveGames/``, measured on
+2026-08-09, base64-encoded. The **structure** is the engine's - the 1760-byte
+custom-version table, every property name, every type name, every length - and
+the **values** are this repository's, spliced over the engine's wherever the
+engine's value described the operator's machine, account or progress rather
+than the format.
+
+A fixture is an authored artifact, not a raw dump. For one commit three of
+these were byte-identical to the live saves; they scanned clean, which is
+exactly the trap, because "clean" is a claim about the shapes
+:mod:`lanternlight.redact` knows rather than about the bytes. A dump publishes
+every field the game writes, including the ones nobody has decoded.
+``tests/test_gvas_fixtures.py`` is the mechanical guard that keeps them from
+drifting back into copies; the splices themselves are listed below.
+
+The save set is not fixed
+-------------------------
+
+``Deck.sav`` did not exist when this reader was written. It appeared during a
+session, making a five-file save set a six-file one, and the fixture set that
+had been pinned at five silently stopped covering the surface. So every check
+here that ranges over "the fixtures" enumerates the directory, and
+:data:`FIXTURES` is a registry the enumeration is checked against rather than
+the list the tests walk.
 
 Why base64 rather than the files themselves
 -------------------------------------------
@@ -29,29 +49,56 @@ nothing, because base64 hides every shape its detectors look for.
 :func:`test_fixtures_carry_no_identifiers` decodes first and is the only real
 coverage this directory has.
 
-The three redactions
---------------------
+The redactions and the splices
+------------------------------
+
+Found by scanning, and therefore also caught by the repo-wide guards:
 
 1. ``CampData_<19-digit userId>.sav`` -> ``camp_data.gvas.b64``. **The userId is
    in the FILENAME**, not in the contents, so content-only redaction would have
-   published it in the directory listing. Its contents needed no change.
-2. ``LoginOptions.sav``, the account-name property: the ``TextProperty``
+   published it in the directory listing.
+2. ``Notice.sav`` ``readedGameBulletinId``: a 19-digit id, replaced with
+   ``<LONG_ID>``, Size patched from 24 to 14. The ``LONG_ID`` detector fires on
+   it. It is very likely a bulletin id rather than operator data, and it is
+   redacted anyway - over-redaction costs a duller fixture, and under-redaction
+   costs a permanent public record.
+
+Found by parsing, which is the only way they could be found:
+
+3. ``LoginOptions.sav``, the account-name property: the ``TextProperty``
    payload string was replaced with the placeholder below and the tag's 4-byte
    Size patched from 23 to 28. **No detector in lanternlight.redact fires on
    that value in the raw file** - GVAS separates a key from its value by a type
-   name and a tag, so the keyed shape the redactor looks for never occurs. It
-   was found by parsing, not by scanning, which is precisely why a binary
-   fixture cannot be cleared by running the text guards over it.
-3. ``Notice.sav`` ``readedGameBulletinId``: a 19-digit id, replaced with
-   ``<LONG_ID>``, Size patched from 24 to 14. This one the ``LONG_ID`` detector
-   did fire on. It is very likely a bulletin id rather than operator data, and
-   it is redacted anyway - over-redaction costs a duller fixture, and
-   under-redaction costs a permanent public record.
+   name and a tag, so the keyed shape the redactor looks for never occurs.
+4. ``CampData`` ``LevelModeMap``: progression state. One int->int pair kept, so
+   the shape is the engine's; the pair is now ``{3: 5}`` rather than two equal
+   numbers, so a decoder that swapped key and value would fail here.
+5. ``Deck`` ``DeckDefaultOpenPage``: UI state. Two pairs kept - the only
+   capture that runs the pair loop more than once - values authored, one of
+   them zero so "measured zero" stays covered.
+6. ``UserSettings_v1``: ``AutoDetectedBenchmarkCPUResult`` and
+   ``...GPUResult`` are hardware fingerprints, the quality levels are derived
+   from them, and DLSS and ray-tracing settings name a GPU class. Every number
+   in the file is authored (a rising ladder, so a mis-offset read is obvious,
+   with one non-integer double so an int decoder could not masquerade as the
+   double one), and two bools are flipped so the set is not the operator's
+   preferences. Both bool states are still present, in both directions, because
+   the value of a ``BoolProperty`` lives in tag flag ``0x10`` and nothing else
+   pins that decode.
+7. ``EnhancedInputUserSettings``: the ``EnhancedPlayerMappableKeyProfile_``
+   instance suffix is a runtime object id, and the two bound keys are the
+   operator's own configuration. All three replacements are the **same length**
+   as what they replaced, so no ``Size`` moved and the 627-byte trailing block
+   is still 627 bytes. The replacement keys are real Unreal ``EKeys`` names, so
+   the fixture still says something true about the format's vocabulary, and two
+   rows stay bound so the key-profile decode stays under test.
 
-Deliberately NOT redacted: ``SelectedServer`` is ``official_NA``, a server
+Deliberately NOT changed: ``SelectedServer`` is ``official_NA``, a server
 region the game offers to everyone. It names a continent-sized region and no
 person, and a fixture carrying one real ``TextProperty`` value is worth more
-than one with a placeholder in every string.
+than one with a placeholder in every string. Property names, type names, the
+header and the class paths are the game's vocabulary rather than the operator's
+data, and replacing those would leave a fixture that pins nothing.
 
 Synthetic saves
 ---------------
@@ -95,10 +142,17 @@ from lanternlight.redact import ALL_LABELS, iter_sensitive  # noqa: E402
 
 FIXTURE_DIR = REPO_ROOT / "tests" / "fixtures" / "gvas"
 
-#: Every fixture, with the Blueprint class path the game recorded in it.
+#: Every fixture, with the Blueprint class path the game recorded in it. This
+#: is a registry, not the list the tests walk: ``test_the_fixture_registry_and
+#: _the_directory_agree`` enumerates the directory and fails if the two drift,
+#: so a fixture added without a class path here is a failure rather than an
+#: uncovered file.
 FIXTURES: dict[str, str] = {
     "camp_data.gvas.b64": (
         "/Game/Blueprints/TypeScript/module/Camp/CampSaveData.CampSaveData_C"
+    ),
+    "deck.gvas.b64": (
+        "/Game/Blueprints/TypeScript/module/Deck/DeckSaveData.DeckSaveData_C"
     ),
     "enhanced_input_user_settings.gvas.b64": (
         "/Game/Project/Misc/Input/BP_InputSettings.BP_InputSettings_C"
@@ -283,20 +337,27 @@ def test_no_fixture_is_gitignored(name: str):
 
 
 @pytest.mark.parametrize("name", sorted(FIXTURES))
-def test_all_five_files_parse_into_plain_dicts(name: str):
+def test_every_file_parses_into_plain_dicts(name: str):
     save = _fixture(name)
     assert isinstance(save, GvasSave)
     assert save.header.save_game_class_name == FIXTURES[name]
     assert save.save_game_class_name == FIXTURES[name]
     assert type(save.properties) is dict
-    assert save.properties, "every one of the five files carries at least one property"
+    assert save.properties, "every one of these files carries at least one property"
     assert save.is_complete
     assert save.unknown_properties == ()
 
 
-def test_there_are_exactly_five_fixtures():
+def test_the_fixture_registry_and_the_directory_agree():
+    # Enumerated rather than counted. The set of save files the game writes is
+    # not fixed - Deck.sav appeared mid-session - so a test asserting "there
+    # are exactly five" both fails for the right reason and, once somebody
+    # bumps the number, stops being a check that each fixture is registered.
     found = sorted(p.name for p in FIXTURE_DIR.iterdir() if p.is_file())
-    assert found == sorted(FIXTURES)
+    assert found == sorted(FIXTURES), (
+        "a fixture on disk has no class path registered in FIXTURES, or a "
+        "registered fixture is missing from the directory"
+    )
 
 
 @pytest.mark.parametrize("name", sorted(FIXTURES))
@@ -330,31 +391,75 @@ def test_login_options_values():
 
 
 def test_user_settings_values():
+    # Every number here is authored - see the module docstring. What the file
+    # pins is the *encoding*: a DoubleProperty is 8 little-endian IEEE-754
+    # bytes and an IntProperty is 4, at the offsets the engine's own property
+    # names and Size fields put them. The values rise so a read that landed one
+    # property off would come back with a neighbour's number rather than a
+    # plausible one, and lowQualityResLimit is deliberately not a whole number
+    # so an int decoder could not pass as the double one.
     props = _fixture("user_settings_v1.gvas.b64").properties
     assert props["bWarehouseAutomation"] is True
     assert props["bHasFirstSetup"] is True
     assert props["bEnableCrossPlay"] is True
-    assert props["DLSSMode"] == 6
-    assert props["AnimationQuality"] == 2
-    assert props["AutoDetectedBenchmarkCPUResult"] == -1.0
-    assert props["FirstTimeAutoSetQualityLevel"] == -2.0
-    assert props["RayTracingQuality"] == 1.0
+    assert props["DLSSMode"] == 7
+    assert props["AnimationQuality"] == 8
+    assert props["AutoDetectedBenchmarkCPUResult"] == 1.0
+    assert props["AutoDetectedBenchmarkGPUResult"] == 2.0
+    assert props["FirstTimeAutoSetQualityLevel"] == 3.0
+    assert props["LatestManualLevel"] == 4.0
+    assert props["RayTracingQuality"] == 5.0
+    assert props["lowQualityResLimit"] == 6.5
     assert len(props) == 14
 
 
+def test_user_settings_property_types_are_the_engines():
+    # The splices moved values, never types. This is the assertion that would
+    # catch a sanitising pass that quietly turned a double into something else
+    # and left a fixture pinning a format the game does not write.
+    types = _fixture("user_settings_v1.gvas.b64").property_types
+    assert types["bWarehouseAutomation"] == "BoolProperty"
+    assert types["DLSSMode"] == "IntProperty"
+    assert types["AutoDetectedBenchmarkCPUResult"] == "DoubleProperty"
+    assert sorted(set(types.values())) == ["BoolProperty", "DoubleProperty", "IntProperty"]
+
+
 def test_a_false_bool_is_a_measurement_not_an_absence():
-    # bMotionBlurEnabled is the only False bool in the capture. It has to come
-    # back present-and-False; a reader that dropped it would be reporting
-    # "unmeasured" for something the file plainly states.
+    # A False bool has to come back present-and-False; a reader that dropped it
+    # would be reporting "unmeasured" for something the file plainly states.
+    # bMotionBlurEnabled is the engine's own False - it was False in the capture
+    # and was left alone - and the sanitising pass kept both bool states present
+    # deliberately, because a BoolProperty's value lives in tag flag 0x10 and a
+    # fixture with only True bools would not pin the other branch.
     props = _fixture("user_settings_v1.gvas.b64").properties
     assert "bMotionBlurEnabled" in props
     assert props["bMotionBlurEnabled"] is False
+    bools = {k: v for k, v in props.items() if isinstance(v, bool)}
+    assert True in bools.values()
+    assert False in bools.values()
 
 
 def test_camp_data_map_property():
+    # One pair, as the engine wrote it. The pair itself is authored, and the
+    # key and the value are different numbers on purpose: the real file carried
+    # equal ones, which a decoder that swapped them would have passed.
     save = _fixture("camp_data.gvas.b64")
-    assert save.properties == {"LevelModeMap": {1: 1}}
+    assert save.properties == {"LevelModeMap": {3: 5}}
     assert save.property_types["LevelModeMap"] == "MapProperty<IntProperty, IntProperty>"
+
+
+def test_deck_map_property_carries_more_than_one_pair():
+    # Deck.sav is the only capture whose map runs the pair loop more than once,
+    # which is what makes it worth a fixture of its own rather than a second
+    # copy of CampData's shape. The zero value is kept: a MapProperty that
+    # decoded an absent pair and a zero-valued one the same way would be
+    # conflating "unmeasured" with "measured zero".
+    save = _fixture("deck.gvas.b64")
+    assert save.properties == {"DeckDefaultOpenPage": {2: 3, 4: 0}}
+    assert (
+        save.property_types["DeckDefaultOpenPage"] == "MapProperty<IntProperty, IntProperty>"
+    )
+    assert save.properties["DeckDefaultOpenPage"][4] == 0
 
 
 def test_notice_and_enhanced_input_values():
@@ -366,19 +471,23 @@ def test_notice_and_enhanced_input_values():
     }
 
 
+#: The one fixture that serialises objects after its tagged properties. Named
+#: once, and every "all the quiet files" check below is the enumerated set
+#: minus this one - so a new save file joins those checks by existing rather
+#: than by being added to a list.
+NOISY = "enhanced_input_user_settings.gvas.b64"
+
+#: Every other fixture, derived rather than listed.
+QUIET = sorted(set(FIXTURES) - {NOISY})
+
+
 def test_trailing_bytes_are_exposed_rather_than_dropped():
-    # Four of the five files carry exactly four zero bytes after the None
+    # Every file but one carries exactly four zero bytes after the None
     # terminator. EnhancedInputUserSettings carries 627, because that object
     # serialises its key profiles after its tagged properties and ends with a
-    # literal ObjectEnd. This reader decodes neither, and the point of this
-    # test is that it does not pretend they are absent.
-    quiet = (
-        "camp_data.gvas.b64",
-        "login_options.gvas.b64",
-        "notice.gvas.b64",
-        "user_settings_v1.gvas.b64",
-    )
-    for name in quiet:
+    # literal ObjectEnd. The point of this test is that the reader does not
+    # pretend either region is absent.
+    for name in QUIET:
         save = _fixture(name)
         assert save.trailing == b"\0\0\0\0"
         assert save.has_trailing_bytes
@@ -693,19 +802,29 @@ def test_a_truncated_epilogue_raises():
 
 
 def test_the_trailing_block_decodes_into_one_key_profile():
+    # The instance suffix is authored. Unreal builds these with
+    # MakeUniqueObjectName, so the real one is a per-run counter value and says
+    # nothing about the format beyond "the name ends in an underscore and
+    # digits" - which this one still does, at the same length.
     save = _fixture("enhanced_input_user_settings.gvas.b64")
     assert len(save.key_profiles) == 1
     profile = save.key_profiles[0]
     assert profile.class_path == MEASURED_TRAILING_OBJECT_CLASS
-    assert profile.object_name == "EnhancedPlayerMappableKeyProfile_2147482261"
+    assert profile.object_name == "EnhancedPlayerMappableKeyProfile_0000000001"
     assert profile.identifier == "InputUserSettings.Profiles.Default"
 
 
 def test_key_profile_mapping_rows():
-    # Corroborated out of band: the game log writes
-    # "decode key mapping KB_Blackarrow_Major_Action RightMouseButton" and
-    # "... KB_Blackarrow_Minor_Action LeftMouseButton", naming the same pairs
-    # the first slot of each row carries here.
+    # The mapping NAMES are the game's own input actions and are untouched.
+    # The bound keys are the operator's configuration and are authored: two
+    # rows stay bound, so the slot-0 decode is still exercised, and both
+    # replacements are real Unreal EKeys names of exactly the length they
+    # replaced - so no FString length and no enclosing block size moved.
+    #
+    # What binds slot 0 to a real binding is out of band and remains true of
+    # the file this fixture came from: the game log writes "decode key mapping
+    # KB_Blackarrow_Major_Action <key>", pairing the same mapping names with
+    # the same slot the reader reads.
     profile = _fixture("enhanced_input_user_settings.gvas.b64").key_profiles[0]
     assert [m.name for m in profile.mappings] == [
         "KB_Blackarrow_Major_Action",
@@ -713,8 +832,8 @@ def test_key_profile_mapping_rows():
         "KB_EmptyHands_Minor_Action",
     ]
     assert [m.key_names[0] for m in profile.mappings] == [
-        "RightMouseButton",
-        "LeftMouseButton",
+        "ThumbMouseButton",
+        "MouseScrollDown",
         "None",
     ]
     assert all(m.key_names[1:] == ("None", "None") for m in profile.mappings)
@@ -771,16 +890,8 @@ def test_the_section_header_is_not_the_object_count():
     assert len(save.key_profiles) == 1
 
 
-@pytest.mark.parametrize(
-    "name",
-    [
-        "camp_data.gvas.b64",
-        "login_options.gvas.b64",
-        "notice.gvas.b64",
-        "user_settings_v1.gvas.b64",
-    ],
-)
-def test_the_other_four_files_wrote_no_object_section(name: str):
+@pytest.mark.parametrize("name", QUIET)
+def test_the_other_files_wrote_no_object_section(name: str):
     # An empty object_section_header is how "the file wrote no section" stays
     # distinguishable from "a section was there and did not decode", which
     # would leave undecoded_trailing non-empty instead.
