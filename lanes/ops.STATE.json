@@ -32,8 +32,8 @@
       "text": "The git-visibility guard skips paths that do not exist, so with fragments created lazily it currently checks exactly one real fragment. It also cannot catch an ignore rule added after a file is already tracked"
     }
   ],
-  "resume_note": "ROADMAP 1b - per-lane state and commit serialisation landed; integrator flow next",
+  "resume_note": "ROADMAP 2b next - safety lane owns it. main is merged and pushed at 58ff2e7",
   "schema": 1,
-  "sessions": 1,
-  "updated": "2026-08-09T23:16:04+00:00"
+  "sessions": 2,
+  "updated": "2026-08-09T23:24:38+00:00"
 }
