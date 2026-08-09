@@ -246,7 +246,7 @@ than named.
 ## Blackarrow talent tree - 2026-08-09, complete for a level-2 character
 
 **Method: pixel capture joined to operator attestation.** `tools/frame_poller.py`
-captured the TALENTS screen every 2s from 16:01:06 to 16:09:16 local while the
+captured the TALENTS screen every 2s from 16:01:15 to 16:09:16 local while the
 operator hovered each node in turn; the operator then named which frame showed
 which node, and every name and description below was **read off the rendered
 tooltip in that frame**. No wiki, no inference from the icon.
@@ -258,8 +258,15 @@ a running game shows the account panel.
 every other cluster displays `Unlocks at Lv. N`.
 
 **Nodes within a cluster are linked, and the links are prerequisites.**
-Operator-attested: at level 2 only **Measured Pace** and **Battle-fed** are
-selectable, and they are **mutually exclusive** - one or the other, not both.
+At level 2 only **Measured Pace** and **Battle-fed** are selectable, and this
+half IS frame-supported: those two render a grey `Activate` footer bar and the
+other four render none.
+
+**Mutual exclusivity is operator-attested and NOT visible in any frame.** The
+ring shows a common entry marker feeding two disjoint chains - a branch
+structure. A branch from a shared root is not the same fact as "one or the
+other, forever"; with more points both branches might be reachable. Only one
+talent point existed at capture time, so no frame can separate the readings.
 The remaining four Battle Hardened nodes are visible and readable but not yet
 takeable. The connecting lines drawn between nodes are that structure; an
 earlier reading of this screen treated them as decoration and wrongly presented
@@ -278,7 +285,7 @@ all six as available choices.
 | Predator's Stealth | Lv. 10 | 2 |
 | Woodling Expert | Lv. 10 | 2 |
 | Hunter's Arrow Enhancement 2 | Lv. 12 | 2 |
-| Way of the Gylden Hunt | Lv. 12 | 2 |
+| Way of Gylden Hunt | Lv. 12 | 2 |
 
 ### Battle Hardened - the six nodes, with tooltip text
 
@@ -288,8 +295,8 @@ all six as available choices.
 | Battle-fed | When carrying at least 2 Hunter's Arrows, hitting an enemy with a shot reduces the remaining cooldown of all skills. |
 | Lasting Pain | After hitting an enemy with a shot, increases the duration of all active debuffs on that enemy. |
 | Marksman | Fully-drawn arrows will home in on enemies near the crosshairs. |
-| Dodge Rapid Shot | Changes roll into dodge and unlocks Dodge Rapid Shot: shoot immediately after dodging, consuming additional Energy to quickly fire both the currently loaded arrow and a normal arrow toward enemies near the crosshairs. This skill has a cooldown. |
-| Dodge Power Shot | Changes roll into dodge and unlocks Dodge Power Shot: shoot immediately after dodging, consuming additional Energy to quickly fire the currently loaded quick-charge arrow. Quick-charge arrows can activate all special effects of fully drawn arrows but have a lower Damage Multiplier. This skill has a cooldown. |
+| Dodge Rapid Shot | Changes roll into dodge and unlocks Dodge Rapid Shot.<br>Dodge Rapid Shot: Shoot immediately after dodging, consuming additional Energy to quickly fire both the currently loaded arrow and a normal arrow toward enemies near the crosshairs. This skill has a cooldown. |
+| Dodge Power Shot | Changes roll into dodge and unlocks Dodge Power Shot.<br>Dodge Power Shot: Shoot immediately after dodging, consuming additional Energy to quickly fire the currently loaded quick-charge arrow toward enemies near the crosshairs. Quick-charge arrows can activate all special effects of fully drawn arrows but have a lower Damage Multiplier. This skill has a cooldown. |
 
 ### The level-2 choice is inert, and that is the finding
 
@@ -349,7 +356,11 @@ five-slot rows - which is the ammo-family split made visible as UI, not
 inferred. At level 2: **2 of 5 Archer's Arrows owned, 3 locked; 0 of 5 Hunter's
 Arrows, all locked.**
 
-Owned: **Steel Arrow** and **Concussive Arrow**.
+Owned: **Steel Arrow** and **Concussive Arrow**. Only the Concussive Arrow
+tooltip is displayed in the capture - **"Steel Arrow" is operator-attested, not
+read off a frame.** Flagged because that name also appears in an established-
+outlet list in `docs/CLASSES.md`, and a T3 name presented as a frame reading is
+the restating-one-source trap this repo warns about.
 
 **Archer's Arrows are charge-based, not consumable stock.** Operator-attested:
 they apply a special effect to the next nocked arrow, start at 3 uses, may be
@@ -389,14 +400,18 @@ previously support only from player testimony:**
 Note the corroboration direction: this is the developer's own UI agreeing with
 first-party player testimony, against a wiki tier that carried neither claim.
 
-**Still no numbers.** "Physical Damage", "stagger", "knock back", "within range"
-- no magnitude, no duration, no radius. Consistent with every other tooltip
-captured today.
+**No magnitudes.** "Physical Damage", "stagger", "knock back", "within range" -
+no damage figure, no duration, no radius. Consistent with every other tooltip
+captured today. Note the precise claim: unquantified **effects**, not an absence
+of all digits - see the Pursuit Mark counterexample above.
 
 ### Node names in the remaining clusters
 
-Names and icons operator-attested per frame; tooltip text captured only where
-noted, so these are **names, not effects**.
+Names and icons operator-attested per frame. **Essentially every one of the 36
+tooltips was captured** - the starred entries below are simply the ones
+transcribed here, not the only ones on disk. An earlier version said "tooltip
+text captured only where noted", which understated the evidence and is how
+Pursuit Mark's stack cap went unnoticed long enough to be denied in print.
 
 | Cluster | Nodes |
 |---|---|
@@ -410,16 +425,19 @@ noted, so these are **names, not effects**.
 | Predator's Stealth | Steady Stealth, Heightened Senses |
 | Bomb Engineering | Crippling Pain*, Cold Infusion |
 | Woodling Expert | Woodling Bane, Swift Exit*, Regular |
-| Way of the Gylden Hunt | Death Sense, Greed is Good, Gyldenmist Tolerance, Monster Hunter |
+| Way of Gylden Hunt | Death Sense, Greed is Good, Gyldenmist Tolerance, Monster Hunter |
 
 `*` tooltip text also captured:
 
+- **Pursuit Mark** - Enemies hit by normal arrows have reduced Movement Speed
+  for a period of time. This effect can stack up to 3 times.
 - **Full Draw** - Increases the Damage Multiplier of fully drawn arrows.
 - **Blood Infection** - Upon hitting an enemy, Bloodfly Arrow deals reduced DoT
   but inflicts bonus Swarm stacks. Hitting an enemy that has Swarm stacks with
   any fully drawn arrow other than Bloodfly Arrow will detonate the Swarm,
-  dealing bonus damage. The more Swarm stacks, the higher the damage. The swarm
-  detonation deals Critical Damage, with a portion converted to True Damage.
+  dealing bonus damage. The more Swarm stacks the target has, the higher the
+  damage dealt. The swarm detonation deals Critical Damage, with a portion
+  converted to True Damage.
 - **Crippling Pain** - Enemies damaged by Impact Grenade have reduced Movement
   Speed for a period of time.
 - **Swift Exit** - Allows you to learn the spawn location of the Smuggler
@@ -439,11 +457,29 @@ invulnerability is **unmeasured**, and it matters - the class's effective
 heavy-shot range was reported at roughly two dodge-lengths, so the dodge is the
 unit its spacing is counted in.
 
-**No numbers appear anywhere in these tooltips.** Every effect is qualitative -
-"recovers Energy", "reduces the remaining cooldown", "lower Damage Multiplier" -
-with not one magnitude given. That is consistent with the project's founding
-measurement: this game publishes no coefficients, and any source quoting one is
-fabricating it.
+**Numbers are rare but they DO appear - an earlier version of this section
+claimed otherwise and was wrong three ways.** It read: "No numbers appear
+anywhere in these tooltips." Counterexamples, all from captured frames:
+
+- **Pursuit Mark** - "This effect can stack up to 3 times." A stack cap.
+- **Measured Pace** - "When carrying **at least 2** Archer's Arrows..."
+- **Battle-fed** - "When carrying **at least 2** Hunter's Arrows..."
+
+The last two are quoted verbatim in the table above this one, so the document
+denied the existence of numbers it had itself transcribed 155 lines earlier.
+
+**The surviving, narrower and still useful claim:** no tooltip gives a
+**magnitude of an effect** - no damage figure, no percentage, no duration in
+seconds, no radius. "Recovers Energy", "reduces the remaining cooldown",
+"reduced Movement Speed for a period of time", "lower Damage Multiplier" are all
+unquantified. The numbers that do appear are **thresholds and caps** - how many
+arrows you must carry, how many times a debuff stacks - never the size of what
+happens.
+
+That narrower claim still supports the project's founding measurement: the
+quantities Emberforge needs are not published, and a source quoting one is
+fabricating it. It just is not the sweeping negative first written, and a
+sweeping negative is exactly the shape that turns out to have a counterexample.
 
 ### UI facts observed in passing
 
