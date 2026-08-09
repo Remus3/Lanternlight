@@ -79,10 +79,14 @@ if str(REPO_ROOT) not in sys.path:
 import pytest  # noqa: E402  (path bootstrap must run first)
 
 from lanternlight.gvas import (  # noqa: E402
+    EPILOGUE_SIZE,
     KNOWN_PROPERTY_TYPES,
     MAGIC,
+    MEASURED_TEXT_HISTORIES,
+    MEASURED_TRAILING_OBJECT_CLASS,
     GvasParseError,
     GvasSave,
+    SourceText,
     UnknownPropertyTypeError,
     load,
     parse,
@@ -187,6 +191,66 @@ def _int_prop(name: str, value: int) -> bytes:
 
 def _bool_prop(name: str, value: bool) -> bytes:
     return _prop(name, "BoolProperty", b"", flags=0x10 if value else 0x00)
+
+
+def _text_prop(name: str, namespace: str, key: str, source: str) -> bytes:
+    """A TextProperty carrying a source history: namespace, key, source."""
+    body = b"".join(
+        (
+            struct.pack("<i", 8),  # FText flags
+            bytes([0x00]),  # history: source
+            _fstring(namespace),
+            _fstring(key),
+            _fstring(source),
+        )
+    )
+    return _prop(name, "TextProperty", body)
+
+
+def _mapping(name: str, keys: tuple[str, str, str], tail: bytes = b"\0" * 6) -> bytes:
+    """One row of a key profile's mapping table."""
+    return b"".join((_fstring(name), *(_fstring(k) for k in keys), tail))
+
+
+def _profile(
+    *properties: bytes,
+    class_path: str = MEASURED_TRAILING_OBJECT_CLASS,
+    object_name: str = "EnhancedPlayerMappableKeyProfile_1",
+    mappings: tuple[bytes, ...] = (),
+    mapping_count: int | None = None,
+    identifier: str = "InputUserSettings.Profiles.Default",
+    epilogue: bytes = b"\0\0\0\0",
+    sentinel: str = "ObjectEnd",
+) -> bytes:
+    """One serialised object of the kind the trailing section carries."""
+    count = len(mappings) if mapping_count is None else mapping_count
+    return b"".join(
+        (
+            _fstring(class_path),
+            _fstring(object_name),
+            struct.pack("<i", count),
+            *mappings,
+            _fstring(identifier),
+            b"\0",  # tag-extension byte
+            *properties,
+            _fstring("None"),
+            epilogue,
+            _fstring(sentinel),
+        )
+    )
+
+
+def _trailing(
+    *profiles: bytes,
+    epilogue: bytes = b"\0\0\0\0",
+    header: int = 2,
+    object_count: int | None = None,
+) -> bytes:
+    """A whole trailing region: epilogue, section header, objects."""
+    count = len(profiles) if object_count is None else object_count
+    return b"".join(
+        (epilogue, struct.pack("<i", header), struct.pack("<i", count), *profiles)
+    )
 
 
 # --------------------------------------------------------------------------
@@ -392,10 +456,11 @@ def test_unknown_map_parameterisation_raises():
 
 
 def test_unknown_text_history_raises():
-    # The only TextProperty history shape ever measured here is the
-    # culture-invariant "none" history. Anything else is a layout this reader
-    # has not seen, and guessing at it would fabricate a string.
-    body = struct.pack("<i", 2) + bytes([0x00]) + struct.pack("<i", 1) + _fstring("x")
+    # Two TextProperty history shapes have been measured here: the
+    # culture-invariant "none" history (0xff) and the source history (0x00).
+    # Anything else is a layout this reader has not seen, and guessing at it
+    # would fabricate a string.
+    body = struct.pack("<i", 2) + bytes([0x03]) + struct.pack("<i", 1) + _fstring("x")
     blob = _save(_prop("Odd", "TextProperty", body))
     with pytest.raises(UnknownPropertyTypeError):
         parse(blob)
@@ -578,6 +643,302 @@ def test_a_parsed_save_is_frozen():
     save = parse(_save(_int_prop("Zero", 0)))
     with pytest.raises(FrozenInstanceError):
         save.header = None  # type: ignore[misc]
+
+
+# --------------------------------------------------------------------------
+# the epilogue that follows every property terminator
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("name", sorted(FIXTURES))
+def test_every_file_carries_a_four_byte_epilogue(name: str):
+    save = _fixture(name)
+    assert save.epilogue == b"\0\0\0\0"
+    assert len(save.epilogue) == EPILOGUE_SIZE
+
+
+def test_the_epilogue_is_not_end_of_file_padding():
+    # The reason this field is called an epilogue and not padding: the same
+    # four bytes appear after the key profile's OWN property terminator, 21
+    # bytes before the end of the file rather than at it. Six occurrences in
+    # total across the five files, all zero, none of them at EOF but four.
+    profile = _fixture("enhanced_input_user_settings.gvas.b64").key_profiles[0]
+    assert profile.epilogue == b"\0\0\0\0"
+
+
+def test_the_epilogue_is_handed_back_as_bytes_not_a_number():
+    # Every reading that fits - int32 zero, an empty FString, four flag bytes -
+    # consumes exactly four bytes, and nothing observed tells them apart. A
+    # named guess would be worse than the honest opaque field.
+    save = _fixture("notice.gvas.b64")
+    assert isinstance(save.epilogue, bytes)
+
+
+def test_a_file_that_ends_without_an_epilogue_raises():
+    blob = _save(_int_prop("Zero", 0), trailing=b"")
+    with pytest.raises(GvasParseError) as excinfo:
+        parse(blob)
+    assert "epilogue" in str(excinfo.value)
+
+
+def test_a_truncated_epilogue_raises():
+    blob = _save(_int_prop("Zero", 0), trailing=b"\0\0")
+    with pytest.raises(GvasParseError):
+        parse(blob)
+
+
+# --------------------------------------------------------------------------
+# the 627 trailing bytes: one serialised key profile
+# --------------------------------------------------------------------------
+
+
+def test_the_trailing_block_decodes_into_one_key_profile():
+    save = _fixture("enhanced_input_user_settings.gvas.b64")
+    assert len(save.key_profiles) == 1
+    profile = save.key_profiles[0]
+    assert profile.class_path == MEASURED_TRAILING_OBJECT_CLASS
+    assert profile.object_name == "EnhancedPlayerMappableKeyProfile_2147482261"
+    assert profile.identifier == "InputUserSettings.Profiles.Default"
+
+
+def test_key_profile_mapping_rows():
+    # Corroborated out of band: the game log writes
+    # "decode key mapping KB_Blackarrow_Major_Action RightMouseButton" and
+    # "... KB_Blackarrow_Minor_Action LeftMouseButton", naming the same pairs
+    # the first slot of each row carries here.
+    profile = _fixture("enhanced_input_user_settings.gvas.b64").key_profiles[0]
+    assert [m.name for m in profile.mappings] == [
+        "KB_Blackarrow_Major_Action",
+        "KB_Blackarrow_Minor_Action",
+        "KB_EmptyHands_Minor_Action",
+    ]
+    assert [m.key_names[0] for m in profile.mappings] == [
+        "RightMouseButton",
+        "LeftMouseButton",
+        "None",
+    ]
+    assert all(m.key_names[1:] == ("None", "None") for m in profile.mappings)
+
+
+def test_an_unbound_slot_is_the_string_none_not_python_none():
+    # "None" is Unreal's unbound-key sentinel and it is what the file says.
+    # Translating it to Python None would turn a measured "no key here" into
+    # something a caller reads as "not measured".
+    profile = _fixture("enhanced_input_user_settings.gvas.b64").key_profiles[0]
+    unbound = profile.mappings[2]
+    assert unbound.key_names == ("None", "None", "None")
+    assert all(k is not None for k in unbound.key_names)
+
+
+def test_key_mapping_rows_keep_their_undecoded_tail():
+    # Six bytes end every row and they are zero in all three. An empty FString
+    # plus two bytes fits, an int32 plus two bytes fits, six flag bytes fit,
+    # and nothing observed separates them - so the bytes are handed back.
+    profile = _fixture("enhanced_input_user_settings.gvas.b64").key_profiles[0]
+    assert all(m.undecoded == b"\0" * 6 for m in profile.mappings)
+
+
+def test_key_profile_tagged_properties():
+    # Written as subscripts rather than a dict literal on purpose. A literal
+    # puts a quoted key ending in Name immediately before a colon and a quoted
+    # value, which is the keyed shape the PERSONA detector in
+    # lanternlight.redact hunts for - and it fires on it, measured.
+    profile = _fixture("enhanced_input_user_settings.gvas.b64").key_profiles[0]
+    props = profile.properties
+    assert sorted(props) == ["DisplayName", "ProfileIdentifierString"]
+    assert props["ProfileIdentifierString"] == "InputUserSettings.Profiles.Default"
+    assert props["DisplayName"] == "Default Profile"
+    assert profile.property_types["ProfileIdentifierString"] == "StrProperty"
+    assert profile.property_types["DisplayName"] == "TextProperty"
+    assert profile.is_complete
+
+
+def test_the_whole_627_byte_block_is_accounted_for():
+    # The acceptance criterion for this slice: nothing in the block is left
+    # over. The grammar has to land exactly on the end of the file.
+    save = _fixture("enhanced_input_user_settings.gvas.b64")
+    assert len(save.trailing) == 627
+    assert save.undecoded_trailing == b""
+    assert save.object_section_header == struct.pack("<i", 2)
+
+
+def test_the_section_header_is_not_the_object_count():
+    # Stated because it is the reading that had to be ruled out. The header
+    # int32 is 2; taking it for the object count demands a second object, and
+    # the block ends on the first one's sentinel with zero bytes to spare.
+    save = _fixture("enhanced_input_user_settings.gvas.b64")
+    assert struct.unpack("<i", save.object_section_header)[0] == 2
+    assert len(save.key_profiles) == 1
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "camp_data.gvas.b64",
+        "login_options.gvas.b64",
+        "notice.gvas.b64",
+        "user_settings_v1.gvas.b64",
+    ],
+)
+def test_the_other_four_files_wrote_no_object_section(name: str):
+    # An empty object_section_header is how "the file wrote no section" stays
+    # distinguishable from "a section was there and did not decode", which
+    # would leave undecoded_trailing non-empty instead.
+    save = _fixture(name)
+    assert save.trailing == b"\0\0\0\0"
+    assert save.object_section_header == b""
+    assert save.key_profiles == ()
+    assert save.undecoded_trailing == b""
+
+
+def test_an_unmeasured_trailing_object_class_raises():
+    blob = _save(trailing=_trailing(_profile(class_path="/Script/Other.SomethingElse")))
+    with pytest.raises(GvasParseError) as excinfo:
+        parse(blob)
+    assert "SomethingElse" in str(excinfo.value)
+
+
+def test_a_missing_object_end_sentinel_raises():
+    blob = _save(trailing=_trailing(_profile(sentinel="NotTheSentinel")))
+    with pytest.raises(GvasParseError) as excinfo:
+        parse(blob)
+    assert "ObjectEnd" in str(excinfo.value)
+
+
+def test_an_object_count_the_block_cannot_hold_raises():
+    blob = _save(trailing=_trailing(_profile(), object_count=2))
+    with pytest.raises(GvasParseError):
+        parse(blob)
+
+
+def test_a_mapping_count_the_block_cannot_hold_raises():
+    blob = _save(trailing=_trailing(_profile(mapping_count=64)))
+    with pytest.raises(GvasParseError):
+        parse(blob)
+
+
+def test_bytes_left_over_after_the_last_object_raise():
+    blob = _save(trailing=_trailing(_profile()) + b"\x01\x02\x03")
+    with pytest.raises(GvasParseError) as excinfo:
+        parse(blob)
+    assert "3" in str(excinfo.value)
+
+
+def test_a_key_profile_carries_its_mappings_and_properties():
+    blob = _save(
+        trailing=_trailing(
+            _profile(
+                _prop("ProfileIdentifierString", "StrProperty", _fstring("Tag.Name")),
+                object_name="Profile_7",
+                mappings=(_mapping("Act", ("A", "None", "None")),),
+                identifier="Tag.Name",
+            )
+        )
+    )
+    profile = parse(blob).key_profiles[0]
+    assert profile.object_name == "Profile_7"
+    assert profile.identifier == "Tag.Name"
+    assert profile.mappings[0].name == "Act"
+    assert profile.mappings[0].key_names == ("A", "None", "None")
+    assert profile.properties == {"ProfileIdentifierString": "Tag.Name"}
+
+
+def test_two_objects_in_the_section_both_decode():
+    # The count drives the loop rather than the one object ever observed.
+    blob = _save(trailing=_trailing(_profile(object_name="P1"), _profile(object_name="P2")))
+    assert [p.object_name for p in parse(blob).key_profiles] == ["P1", "P2"]
+
+
+def test_non_strict_keeps_an_undecodable_trailing_region_verbatim():
+    # Same contract as an unmeasured property: omitted rather than faked, and
+    # the bytes handed back so the caller can see what was refused.
+    section = _trailing(_profile(class_path="/Script/Other.SomethingElse"))
+    blob = _save(trailing=section)
+    save = parse(blob, strict=False)
+    assert save.key_profiles == ()
+    assert save.undecoded_trailing == section[EPILOGUE_SIZE:]
+    assert save.object_section_header == b""
+
+
+def test_non_strict_records_an_unknown_property_inside_a_key_profile():
+    blob = _save(
+        trailing=_trailing(
+            _profile(_prop("Mystery", "FloatProperty", struct.pack("<f", 1.5)))
+        )
+    )
+    with pytest.raises(UnknownPropertyTypeError):
+        parse(blob)
+    profile = parse(blob, strict=False).key_profiles[0]
+    assert "Mystery" not in profile.properties
+    assert [u.name for u in profile.unknown_properties] == ["Mystery"]
+    assert not profile.is_complete
+
+
+def test_a_key_profile_is_frozen():
+    profile = _fixture("enhanced_input_user_settings.gvas.b64").key_profiles[0]
+    with pytest.raises(FrozenInstanceError):
+        profile.identifier = "x"  # type: ignore[misc]
+    with pytest.raises(FrozenInstanceError):
+        profile.mappings[0].name = "x"  # type: ignore[misc]
+
+
+# --------------------------------------------------------------------------
+# FText carrying its own source string
+# --------------------------------------------------------------------------
+
+
+def test_a_source_history_text_decodes_to_its_source_string():
+    profile = _fixture("enhanced_input_user_settings.gvas.b64").key_profiles[0]
+    assert profile.properties["DisplayName"] == "Default Profile"
+    assert isinstance(profile.properties["DisplayName"], str)
+
+
+def test_a_source_history_text_keeps_its_namespace_and_key():
+    # Dropping these would lose two measured strings for no reason. They are
+    # what the file says the text is looked up by.
+    display = _fixture("enhanced_input_user_settings.gvas.b64").key_profiles[0].properties[
+        "DisplayName"
+    ]
+    assert isinstance(display, SourceText)
+    assert display.namespace == "EnhancedInputMappableUserSettings"
+    assert display.key == "Default_Profile_name"
+
+
+def test_a_source_history_text_is_still_a_plain_string_to_a_caller():
+    blob = _save(_text_prop("Label", "NS", "KEY", "Hello"))
+    value = parse(blob).properties["Label"]
+    assert value == "Hello"
+    assert value.upper() == "HELLO"
+    assert f"{value}!" == "Hello!"
+
+
+def test_an_invariant_text_is_not_a_source_text():
+    # The two histories are different facts and stay distinguishable: only the
+    # source history carries a namespace and a key at all.
+    value = _fixture("login_options.gvas.b64").properties["SelectedServer"]
+    assert value == "official_NA"
+    assert not isinstance(value, SourceText)
+
+
+def test_a_source_history_text_with_trailing_bytes_raises():
+    body = b"".join(
+        (
+            struct.pack("<i", 8),
+            bytes([0x00]),
+            _fstring("NS"),
+            _fstring("KEY"),
+            _fstring("Hello"),
+            b"\x01\x02",
+        )
+    )
+    with pytest.raises(UnknownPropertyTypeError):
+        parse(_save(_prop("Label", "TextProperty", body)))
+
+
+def test_measured_text_histories_is_exactly_what_was_measured():
+    # Pinned for the same reason KNOWN_PROPERTY_TYPES is: a history byte gets
+    # added because it was observed, not because a spec lists it.
+    assert sorted(MEASURED_TEXT_HISTORIES) == [0x00, 0xFF]
 
 
 # --------------------------------------------------------------------------

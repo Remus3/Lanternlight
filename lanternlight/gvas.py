@@ -60,12 +60,50 @@ types as parameters rather than as extra tag fields; and ``ArrayIndex`` is now
 optional, announced by a flag, while a bool's value is carried in flag bit
 ``0x10`` with a payload size of zero.
 
-After the ``"None"`` terminator the files carry trailing bytes: exactly four
-zero bytes in four of the five, and 627 in ``EnhancedInputUserSettings.sav``,
-which serialises its key profiles after its tagged properties and ends with the
-literal ``ObjectEnd``. **This module does not decode them.** They are handed
-back verbatim as :attr:`GvasSave.trailing` because pretending they are not
-there is how a reader starts lying about what a file contains.
+After the ``"None"`` terminator
+------------------------------
+
+Four of the five files carry exactly four bytes there; ``EnhancedInputUserSettings.sav``
+carries 627. The whole 627 decodes, and the grammar is::
+
+    4 bytes                        epilogue - see below
+    int32                          section header, 2 here, NOT the object count
+    int32                          object count, 1 here
+    per object:
+      FString class path           "/Script/EnhancedInput.EnhancedPlayerMappableKeyProfile"
+      FString instance name        "EnhancedPlayerMappableKeyProfile_<uniqueness suffix>"
+      int32   key mapping count    3 here
+      per mapping:
+        FString mapping name       "KB_Blackarrow_Major_Action"
+        FString x3                 FName-shaped key slots, "None" when unbound
+        6 bytes                    undecoded, zero in all three rows
+      FString profile identifier   "InputUserSettings.Profiles.Default"
+      uint8   tag extension byte   0, exactly as the outer object writes it
+      tagged properties            the same tag layout as the outer object
+      FString "None"
+      4 bytes                      epilogue again
+      FString "ObjectEnd"          sentinel; the only end-of-object marker there is
+
+That grammar lands exactly on the end of the file, and :func:`parse` raises if
+it does not - a section it cannot consume whole is a section it has misread.
+Slot 0 of a mapping is corroborated out of band: the game log writes
+``decode key mapping KB_Blackarrow_Major_Action RightMouseButton``, naming the
+same pairs slot 0 carries.
+
+**The four-byte epilogue is not identified, and it is not padding.** It follows
+*every* tagged property list, not only the file's last one: the nested key
+profile carries its own, 21 bytes before EOF rather than at it. Six occurrences
+observed - one per file plus the nested object - and all six are zero. An int32
+zero fits, an empty FString fits, four zero flag bytes fit, and nothing observed
+tells those readings apart, so it is handed back as :attr:`GvasSave.epilogue`
+and left unnamed. The section header is unidentified for the same reason, with
+one thing ruled out: it is **not** the object count, because reading it as one
+demands a second object and the block ends on the first sentinel with nothing
+to spare.
+
+:attr:`GvasSave.trailing` still hands back every one of those bytes verbatim
+regardless, because pretending they are not there is how a reader starts lying
+about what a file contains.
 
 Unknown means unknown
 ---------------------
@@ -88,14 +126,25 @@ Type                                 Python                     Seen in
 ``IntProperty``                      ``int``                    LoginOptions
 ``DoubleProperty``                   ``float``                  UserSettings
 ``StrProperty``                      ``str``                    Notice
-``TextProperty``                     ``str``                    LoginOptions
+``TextProperty`` history ``0xff``    ``str``                    LoginOptions
+``TextProperty`` history ``0x00``    :class:`SourceText`        EnhancedInput
 ``MapProperty<IntProperty, ...>``    ``dict[int, int]``         CampData
 ===================================  =========================  ==============
 
-``FloatProperty``, ``NameProperty``, ``ArrayProperty``, ``StructProperty`` and
-the rest are absent from that table on purpose. The encodings are published, but
-this project's rule is that a value it has not watched being emitted is not a
-value it reports.
+That is the complete set of type names present: grepping all five files for
+``[A-Za-z]+Property`` yields ``Bool``, ``Double``, ``Int``, ``Map``, ``Str``
+and ``Text`` and nothing else. ``FloatProperty``, ``NameProperty``,
+``ArrayProperty``, ``StructProperty`` and the rest are absent from the table on
+purpose. Their encodings are published, but this project's rule is that a value
+it has not watched being emitted is not a value it reports - and an unused
+parser branch is an untested claim about a file nobody has.
+
+The two ``TextProperty`` rows are two encodings behind one type name, and both
+were observed. The invariant history is a bare string; the source history
+writes a namespace, a localisation key and the source text, and decodes to a
+:class:`SourceText` - a ``str`` carrying the other two, so no caller has to
+branch on Unreal's text serialisation to read a label and no measured string is
+dropped.
 
 ``strict=False`` records instead of raising, for the same reason
 :mod:`lanternlight.avgprice` offers it: this file is written by a live game and
@@ -126,15 +175,21 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 __all__ = [
+    "EPILOGUE_SIZE",
     "KNOWN_PROPERTY_TYPES",
     "MAGIC",
     "MEASURED_CUSTOM_VERSION_FORMAT",
     "MEASURED_SAVE_GAME_VERSION",
+    "MEASURED_TEXT_HISTORIES",
+    "MEASURED_TRAILING_OBJECT_CLASS",
     "CustomVersion",
     "EngineVersion",
     "GvasHeader",
     "GvasParseError",
     "GvasSave",
+    "KeyMapping",
+    "KeyProfile",
+    "SourceText",
     "UnknownProperty",
     "UnknownPropertyTypeError",
     "load",
@@ -165,9 +220,45 @@ _UNDERSTOOD_FLAGS = _FLAG_HAS_ARRAY_INDEX | _FLAG_HAS_PROPERTY_GUID | _FLAG_BOOL
 # The one tag-extension byte value seen in every file: no extension follows.
 _NO_TAG_EXTENSION = 0x00
 
-# FText history type for a culture-invariant literal. It is the only history
-# this game has been observed writing, and it is stored as a signed byte.
+# FText history bytes. 0xff is a culture-invariant literal with no localisation
+# identity; 0x00 is a text that carries its own namespace, key and source
+# string. Both were observed - 0xff in LoginOptions' SelectedServer, 0x00 in
+# the key profile's DisplayName inside EnhancedInputUserSettings' trailing
+# block - and nothing else has been.
 _TEXT_HISTORY_NONE = 0xFF
+_TEXT_HISTORY_SOURCE = 0x00
+
+#: FText history bytes whose payload layout has been measured. Pinned for the
+#: same reason :data:`KNOWN_PROPERTY_TYPES` is: a history is added because it
+#: was watched being emitted, never because a spec lists it.
+MEASURED_TEXT_HISTORIES: frozenset[int] = frozenset(
+    {_TEXT_HISTORY_SOURCE, _TEXT_HISTORY_NONE}
+)
+
+#: Bytes of epilogue written after every tagged-property ``"None"``
+#: terminator. See :attr:`GvasSave.epilogue` for what is and is not known
+#: about them.
+EPILOGUE_SIZE = 4
+
+#: The only object class observed in a save's trailing object section. The
+#: body layout is measured per class, so a different one is refused rather
+#: than parsed as this one.
+MEASURED_TRAILING_OBJECT_CLASS = "/Script/EnhancedInput.EnhancedPlayerMappableKeyProfile"
+
+#: The literal FString that closes a trailing object.
+_OBJECT_END = "ObjectEnd"
+
+#: FName-shaped slots per key mapping row. Fixed: the row carries no count,
+#: and this is the only width on which the block lands exactly on its end.
+_KEY_SLOTS = 3
+
+#: Undecoded bytes closing each key mapping row. See :class:`KeyMapping`.
+_KEY_MAPPING_TAIL = 6
+
+#: Smallest a serialised trailing object can be: two FStrings, a count, an
+#: identifier, a tag-extension byte, a "None", an epilogue and the sentinel.
+#: Used only to reject a count the block cannot hold before looping on it.
+_MIN_TRAILING_OBJECT = 40
 
 #: A type parameter list longer than this is a corrupt length, not a type.
 #: Nothing in Unreal's tagged-property format nests anywhere near it.
@@ -192,6 +283,40 @@ class UnknownPropertyTypeError(GvasParseError):
     complete one. ``strict=False`` turns it into an :class:`UnknownProperty`
     record instead of letting it propagate.
     """
+
+
+class SourceText(str):
+    """An ``FText`` that carried its own localisation identity.
+
+    The engine writes two ``FText`` shapes here. The culture-invariant one
+    (history ``0xff``) is a bare string and decodes to a plain :class:`str`.
+    The source history (``0x00``) writes three strings - a namespace, a
+    localisation key, and the source text itself - and this class is the second
+    one: a ``str`` holding the source text, with the other two attached.
+
+    It subclasses ``str`` on purpose. Returning a bespoke record for one
+    history and a ``str`` for the other would make every caller branch on a
+    detail of Unreal's text serialisation before it could read a label, and
+    returning only the source string would silently drop two measured values.
+    ``isinstance(value, SourceText)`` is the honest test for "did this text
+    carry a namespace and a key"; ``==``, formatting and every other ``str``
+    operation behave exactly as they do for the invariant history.
+    """
+
+    namespace: str
+    key: str
+
+    def __new__(cls, source: str, *, namespace: str, key: str) -> SourceText:
+        text = super().__new__(cls, source)
+        text.namespace = namespace
+        text.key = key
+        return text
+
+    def __repr__(self) -> str:
+        return (
+            f"SourceText({str.__str__(self)!r}, namespace={self.namespace!r}, "
+            f"key={self.key!r})"
+        )
 
 
 @dataclass(frozen=True)
@@ -259,6 +384,60 @@ class UnknownProperty:
 
 
 @dataclass(frozen=True)
+class KeyMapping:
+    """One row of a key profile's mapping table.
+
+    ``name`` is the mapping's name and ``key_names`` the three FName-shaped
+    slots that follow it. Unreal's unbound-key sentinel is the *string*
+    ``"None"``, and that is what this reports - translating it to Python
+    ``None`` would turn a measured "no key bound here" into something a caller
+    reads as "not measured".
+
+    Only slot 0 has ever been observed carrying a key. The game log names the
+    same pairs slot 0 holds ("decode key mapping KB_Blackarrow_Major_Action
+    RightMouseButton"), which is what binds slot 0 to a real binding; slots 1
+    and 2 are named by position and have never been seen holding anything.
+
+    ``undecoded`` is the six bytes that close the row, zero in all three rows
+    of the only capture. An empty FString plus two bytes fits them, an int32
+    plus two bytes fits them, and six flag bytes fit them. Nothing observed
+    separates those readings, so the bytes are handed back rather than named.
+    """
+
+    name: str
+    key_names: tuple[str, ...]
+    undecoded: bytes
+
+
+@dataclass(frozen=True)
+class KeyProfile:
+    """One object serialised into a save's trailing section.
+
+    Structurally this is a whole nested object: a class path, an instance
+    name, its natively written body, and then a tagged property list closed by
+    the same ``"None"`` terminator and four-byte epilogue the outer file uses.
+
+    ``properties`` follows exactly the contract :class:`GvasSave` sets - a
+    property this reader could not decode is absent from it rather than
+    ``None``, and recorded in ``unknown_properties``.
+    """
+
+    class_path: str
+    object_name: str
+    identifier: str
+    mappings: tuple[KeyMapping, ...] = ()
+    properties: dict[str, object] = field(default_factory=dict)
+    property_types: dict[str, str] = field(default_factory=dict)
+    unknown_properties: tuple[UnknownProperty, ...] = ()
+    epilogue: bytes = b""
+
+    @property
+    def is_complete(self) -> bool:
+        """True when every property in this object was decoded."""
+        return not self.unknown_properties
+
+
+@dataclass(frozen=True)
 class GvasSave:
     """One parsed save file.
 
@@ -270,8 +449,30 @@ class GvasSave:
     ``property_types`` records the rendered type name each decoded property
     came from, so "what was this" survives the decode.
 
-    ``trailing`` is every byte after the ``"None"`` terminator, undecoded. See
-    the module docstring.
+    ``trailing`` is every byte after the ``"None"`` terminator, verbatim and
+    unparsed. It is the escape hatch: whatever this reader does or does not
+    make of that region, the bytes themselves stay available. The fields below
+    are that same region decoded.
+
+    ``epilogue`` is the first :data:`EPILOGUE_SIZE` of them. It is written
+    after *every* tagged property list, not only the file's last one - the key
+    profile nested in ``EnhancedInputUserSettings.sav`` carries its own, 21
+    bytes before EOF rather than at it - so it is an object epilogue and not
+    end-of-file padding. All six observed occurrences are zero. An int32 zero
+    fits, an empty FString fits, four zero flag bytes fit, and nothing observed
+    tells them apart, so the bytes are handed back and **not named**.
+
+    ``object_section_header`` is the four bytes that open the object section,
+    and is **empty when the file wrote no object section at all**. That is how
+    "this file has no such section" stays distinguishable from "a section was
+    there and did not decode", which leaves ``undecoded_trailing`` non-empty
+    instead. Its value is 2 as a little-endian int32 in the only capture.
+    Reading it as the object count is ruled out: that demands a second object,
+    and the block ends on the first one's sentinel with nothing to spare.
+
+    ``key_profiles`` holds the decoded objects. ``undecoded_trailing`` holds
+    the object section verbatim when a non-strict parse refused it, and is
+    empty otherwise.
     """
 
     header: GvasHeader
@@ -279,6 +480,10 @@ class GvasSave:
     property_types: dict[str, str] = field(default_factory=dict)
     unknown_properties: tuple[UnknownProperty, ...] = ()
     trailing: bytes = b""
+    epilogue: bytes = b""
+    object_section_header: bytes = b""
+    key_profiles: tuple[KeyProfile, ...] = ()
+    undecoded_trailing: bytes = b""
 
     @property
     def save_game_class_name(self) -> str:
@@ -442,18 +647,25 @@ def _decode_text(value: bytes, flags: int) -> str:
     reader = _Reader(value)
     reader.int32()  # FText flags; carries no value this module reports
     history = reader.uint8()
-    if history != _TEXT_HISTORY_NONE:
+    if history not in MEASURED_TEXT_HISTORIES:
         raise UnknownPropertyTypeError(
-            f"TextProperty history type {history} has not been measured; only "
-            f"{_TEXT_HISTORY_NONE} (none, culture-invariant) has"
+            f"TextProperty history type {history} has not been measured; "
+            f"measured histories are {sorted(MEASURED_TEXT_HISTORIES)}"
         )
-    has_culture_invariant = reader.int32()
-    if has_culture_invariant != 1:
-        raise UnknownPropertyTypeError(
-            f"TextProperty culture-invariant flag {has_culture_invariant} has "
-            "not been measured; only 1 has"
-        )
-    text = reader.fstring()
+    if history == _TEXT_HISTORY_NONE:
+        has_culture_invariant = reader.int32()
+        if has_culture_invariant != 1:
+            raise UnknownPropertyTypeError(
+                f"TextProperty culture-invariant flag {has_culture_invariant} "
+                "has not been measured; only 1 has"
+            )
+        text: str = reader.fstring()
+    else:
+        # A source history spells the text's localisation identity before the
+        # text: namespace, key, then the source string itself.
+        namespace = reader.fstring()
+        key = reader.fstring()
+        text = SourceText(reader.fstring(), namespace=namespace, key=key)
     if reader.remaining:
         raise UnknownPropertyTypeError(
             f"TextProperty left {reader.remaining} undecoded trailing bytes"
@@ -560,34 +772,14 @@ def _read_header(reader: _Reader) -> GvasHeader:
 
 
 # --------------------------------------------------------------------------
-# public entry points
+# tagged property list - the outer file and every nested object share it
 # --------------------------------------------------------------------------
 
 
-def parse(data: bytes, *, strict: bool = True) -> GvasSave:
-    """Parse GVAS bytes into a :class:`GvasSave`.
-
-    Raises :class:`UnknownPropertyTypeError` on the first property whose type
-    or value encoding has not been measured. Pass ``strict=False`` to collect
-    those into :attr:`GvasSave.unknown_properties` instead; the property is
-    then omitted from :attr:`GvasSave.properties` rather than given a stand-in
-    value. See the module docstring for why both modes exist.
-
-    :class:`GvasParseError` is raised in either mode for a file that is not
-    GVAS, is truncated, carries a header version this reader has not measured,
-    or announces a length it cannot honour.
-    """
-    reader = _Reader(data)
-    header = _read_header(reader)
-
-    extension = reader.uint8()
-    if extension != _NO_TAG_EXTENSION:
-        raise GvasParseError(
-            f"property tag extension {extension:#04x} has not been measured; "
-            f"only {_NO_TAG_EXTENSION:#04x} (none) has, and an extension "
-            "changes the length of every tag that follows"
-        )
-
+def _read_properties(
+    reader: _Reader, *, strict: bool
+) -> tuple[dict[str, object], dict[str, str], tuple[UnknownProperty, ...]]:
+    """Read tagged properties up to and including the ``"None"`` terminator."""
     properties: dict[str, object] = {}
     property_types: dict[str, str] = {}
     unknowns: list[UnknownProperty] = []
@@ -651,9 +843,7 @@ def parse(data: bytes, *, strict: bool = True) -> GvasSave:
             value = decoder(value_bytes, flags)
         except UnknownPropertyTypeError as exc:
             if strict:
-                raise UnknownPropertyTypeError(
-                    f"{name!r} at offset {name_offset}: {exc}"
-                ) from exc
+                raise UnknownPropertyTypeError(f"{name!r} at offset {name_offset}: {exc}") from exc
             unknowns.append(
                 UnknownProperty(
                     name=name,
@@ -668,12 +858,171 @@ def parse(data: bytes, *, strict: bool = True) -> GvasSave:
         properties[name] = value
         property_types[name] = type_name
 
+    return properties, property_types, tuple(unknowns)
+
+
+# --------------------------------------------------------------------------
+# the trailing object section
+# --------------------------------------------------------------------------
+
+
+def _read_key_profile(reader: _Reader, *, strict: bool) -> KeyProfile:
+    """Read one serialised object out of the trailing section."""
+    start = reader.offset
+    class_path = reader.fstring()
+    if class_path != MEASURED_TRAILING_OBJECT_CLASS:
+        # The body layout below was measured for exactly one class. Another
+        # class writes a different body, and there is no length to skip it by.
+        raise UnknownPropertyTypeError(
+            f"trailing object class {class_path!r} at offset {start} has not "
+            f"been measured; only {MEASURED_TRAILING_OBJECT_CLASS!r} has"
+        )
+    object_name = reader.fstring()
+
+    count = reader.int32()
+    if count < 0:
+        raise GvasParseError(f"negative key mapping count {count} at offset {start}")
+    # Cheapest possible row is a name, three slots and the tail: 4 empty
+    # FStrings would still be 16 bytes plus 6. Reject a count the block cannot
+    # hold before looping on it.
+    if count * (4 * (_KEY_SLOTS + 1) + _KEY_MAPPING_TAIL) > reader.remaining:
+        raise GvasParseError(
+            f"key mapping count {count} needs more bytes than the block has"
+        )
+    mappings = tuple(
+        KeyMapping(
+            name=reader.fstring(),
+            key_names=tuple(reader.fstring() for _ in range(_KEY_SLOTS)),
+            undecoded=reader.take(_KEY_MAPPING_TAIL),
+        )
+        for _ in range(count)
+    )
+
+    identifier = reader.fstring()
+    extension = reader.uint8()
+    if extension != _NO_TAG_EXTENSION:
+        raise GvasParseError(
+            f"property tag extension {extension:#04x} in trailing object "
+            f"{object_name!r} has not been measured"
+        )
+
+    properties, property_types, unknowns = _read_properties(reader, strict=strict)
+    epilogue = reader.take(EPILOGUE_SIZE)
+    sentinel = reader.fstring()
+    if sentinel != _OBJECT_END:
+        # The sentinel is the only end-of-object marker there is. Without it
+        # the reader cannot tell a decoded object from a lucky alignment.
+        raise GvasParseError(
+            f"trailing object {object_name!r} ended with {sentinel!r}, not the "
+            f"measured {_OBJECT_END!r} sentinel"
+        )
+
+    return KeyProfile(
+        class_path=class_path,
+        object_name=object_name,
+        identifier=identifier,
+        mappings=mappings,
+        properties=properties,
+        property_types=property_types,
+        unknown_properties=unknowns,
+        epilogue=epilogue,
+    )
+
+
+def _read_object_section(
+    section: bytes, *, strict: bool
+) -> tuple[bytes, tuple[KeyProfile, ...]]:
+    """Decode the object section that follows a file's epilogue.
+
+    Returns the section's four unidentified header bytes and its objects.
+    Raises rather than returning a partial section: a half-read object section
+    is the same failure as a half-read property list.
+    """
+    reader = _Reader(section)
+    header = reader.take(EPILOGUE_SIZE)
+    count = reader.int32()
+    if count < 0:
+        raise GvasParseError(f"negative trailing object count {count}")
+    if count * _MIN_TRAILING_OBJECT > reader.remaining:
+        raise GvasParseError(
+            f"trailing object count {count} needs more bytes than the section has"
+        )
+    profiles = tuple(_read_key_profile(reader, strict=strict) for _ in range(count))
+    if reader.remaining:
+        raise GvasParseError(
+            f"{reader.remaining} bytes left undecoded after the last trailing "
+            "object, so the section is not the shape it was read as"
+        )
+    return header, profiles
+
+
+# --------------------------------------------------------------------------
+# public entry points
+# --------------------------------------------------------------------------
+
+
+def parse(data: bytes, *, strict: bool = True) -> GvasSave:
+    """Parse GVAS bytes into a :class:`GvasSave`.
+
+    Raises :class:`UnknownPropertyTypeError` on the first property whose type
+    or value encoding has not been measured. Pass ``strict=False`` to collect
+    those into :attr:`GvasSave.unknown_properties` instead; the property is
+    then omitted from :attr:`GvasSave.properties` rather than given a stand-in
+    value. See the module docstring for why both modes exist.
+
+    :class:`GvasParseError` is raised in either mode for a file that is not
+    GVAS, is truncated, carries a header version this reader has not measured,
+    or announces a length it cannot honour.
+    """
+    reader = _Reader(data)
+    header = _read_header(reader)
+
+    extension = reader.uint8()
+    if extension != _NO_TAG_EXTENSION:
+        raise GvasParseError(
+            f"property tag extension {extension:#04x} has not been measured; "
+            f"only {_NO_TAG_EXTENSION:#04x} (none) has, and an extension "
+            "changes the length of every tag that follows"
+        )
+
+    properties, property_types, unknowns = _read_properties(reader, strict=strict)
+
+    trailing = reader.take(reader.remaining)
+    if len(trailing) < EPILOGUE_SIZE:
+        # All six observed property lists - one per file, plus the key profile
+        # nested in EnhancedInputUserSettings - are followed by exactly four
+        # bytes. Fewer means this is not the stream it appears to be, and a
+        # short epilogue reported as the whole one would be a quiet lie.
+        raise GvasParseError(
+            f"only {len(trailing)} bytes follow the property terminator; every "
+            f"measured property list is followed by a {EPILOGUE_SIZE}-byte epilogue"
+        )
+    epilogue = trailing[:EPILOGUE_SIZE]
+    section = trailing[EPILOGUE_SIZE:]
+
+    section_header = b""
+    profiles: tuple[KeyProfile, ...] = ()
+    undecoded_trailing = b""
+    if section:
+        try:
+            section_header, profiles = _read_object_section(section, strict=strict)
+        except GvasParseError:
+            if strict:
+                raise
+            # Same contract as an unmeasured property: nothing invented, and
+            # the refused bytes handed back so the caller can see what they were.
+            undecoded_trailing = section
+
     return GvasSave(
         header=header,
         properties=properties,
         property_types=property_types,
-        unknown_properties=tuple(unknowns),
-        trailing=reader.take(reader.remaining),
+        unknown_properties=unknowns,
+        trailing=trailing,
+        epilogue=epilogue,
+        object_section_header=section_header,
+        key_profiles=profiles,
+        undecoded_trailing=undecoded_trailing,
     )
 
 
