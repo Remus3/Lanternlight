@@ -15,7 +15,8 @@ Own passive screen capture and the frame-to-log wall-clock join that binds rende
 Your working directory is **`C:\ll-worktrees\ll-lane-capture`** on branch
 **`lane/capture`**.
 
-You may **never** write into `C:\Lanternlight`. A live session may
+You may **never** write into `C:\Lanternlight`. A live
+session may
 own it, and two writers in one working directory corrupt the git index
 - which is not recoverable by retrying. Create your worktree and assert
 you are in it before writing anything:

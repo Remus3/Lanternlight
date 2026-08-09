@@ -52,11 +52,48 @@ __all__ = [
     "by_id",
     "is_cross_cutting",
     "owner_of",
+    "primary_checkout",
     "tracked_files",
 ]
 
-#: Repository root, resolved from this file's location: ops/lanes.py.
+#: The checkout this code is running FROM. Inside a lane worktree this is that
+#: worktree, which is usually what a local operation wants - reading the local
+#: contract files, walking the local tree. It is emphatically NOT "the main
+#: checkout"; for that, use :func:`primary_checkout`.
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def primary_checkout(start: Path | None = None) -> Path:
+    """Return the MAIN checkout, identically from every worktree.
+
+    ``REPO_ROOT`` is derived from ``__file__``, so a lane running in its own
+    worktree sees ``REPO_ROOT`` as that worktree - and every check of the form
+    "a lane worktree is not the primary checkout" silently inverts, because for
+    the lane you are inside, the two are the same directory. That bug was found
+    by actually running a lane end to end, not by reading the code.
+
+    ``git rev-parse --git-common-dir`` answers with the same absolute path from
+    the main checkout and from every linked worktree, so it is a fact about the
+    repository rather than about where this process happens to be.
+
+    Falls back to ``REPO_ROOT`` when git cannot answer - a source tarball has no
+    ``.git``, and returning something usable beats raising.
+    """
+    root = REPO_ROOT if start is None else Path(start)
+    try:
+        proc = subprocess.run(
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return root
+    if proc.returncode != 0 or not proc.stdout.strip():
+        return root
+    return Path(proc.stdout.strip()).parent
 
 #: Where lane worktrees live. Deliberately a SIBLING of the checkout, never a
 #: subdirectory of it - a worktree nested inside the main tree would be walked

@@ -15,7 +15,8 @@ Own the loop, the lane machinery, the merge gate, and the durable record that le
 Your working directory is **`C:\ll-worktrees\ll-lane-ops`** on branch
 **`lane/ops`**.
 
-You may **never** write into `C:\Lanternlight`. A live session may
+You may **never** write into `C:\Lanternlight`. A live
+session may
 own it, and two writers in one working directory corrupt the git index
 - which is not recoverable by retrying. Create your worktree and assert
 you are in it before writing anything:

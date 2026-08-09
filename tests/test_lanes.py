@@ -19,8 +19,11 @@ removes a safety property rather than breaking anything visibly:
 """
 
 import re
+import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -105,6 +108,46 @@ class TestCrossCuttingFilesAreUnowned:
         assert not lanes.is_cross_cutting("lanternlight/redact.py")
 
 
+class TestPrimaryCheckoutIsStableFromEveryWorktree:
+    """Found by actually running a lane, which is why the run was worth doing.
+
+    ``REPO_ROOT`` is derived from ``__file__``, so inside a lane worktree it
+    resolves to *that worktree* - and every assertion of the form "a lane
+    worktree is not the primary checkout" silently inverts, because for the
+    lane whose worktree you are in, they are the same directory.
+
+    ``primary_checkout()`` asks git instead. ``--git-common-dir`` returns the
+    same absolute path from the main checkout and from every linked worktree,
+    so it is a fact about the repository rather than about where the code
+    happens to be executing.
+    """
+
+    def test_primary_checkout_matches_gits_own_answer(self):
+        proc = subprocess.run(
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if proc.returncode != 0:
+            pytest.skip("git unavailable")
+        expected = Path(proc.stdout.strip()).parent.resolve()
+        assert lanes.primary_checkout().resolve() == expected
+
+    def test_the_primary_checkout_is_never_a_lane_worktree(self):
+        primary = lanes.primary_checkout().resolve()
+        for lane in lanes.LANES:
+            assert primary != lane.worktree_path().resolve(), (
+                f"primary checkout resolved to lane {lane.lane_id}'s worktree - "
+                "this is the worktree-relative bug"
+            )
+
+    def test_it_falls_back_rather_than_raising_without_git(self, tmp_path):
+        # A source tarball has no .git. Returning something sane beats raising.
+        assert lanes.primary_checkout(start=tmp_path) is not None
+
+
 class TestIsolation:
     def test_every_lane_has_a_unique_worktree_path(self):
         paths = [lane.worktree_path() for lane in lanes.LANES]
@@ -116,9 +159,12 @@ class TestIsolation:
 
     def test_no_lane_worktree_is_inside_the_main_checkout(self):
         # Two writers in one working directory is the unrecoverable class.
+        # Compared against primary_checkout(), NOT REPO_ROOT - inside a lane
+        # worktree the latter is that worktree and this assertion inverts.
+        primary = lanes.primary_checkout().resolve()
         for lane in lanes.LANES:
-            assert REPO_ROOT not in lane.worktree_path().parents
-            assert lane.worktree_path() != REPO_ROOT
+            assert primary not in lane.worktree_path().resolve().parents
+            assert lane.worktree_path().resolve() != primary
 
     def test_branches_are_namespaced_so_they_never_collide_with_main(self):
         for lane in lanes.LANES:
