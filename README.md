@@ -54,12 +54,13 @@ Honest as of 2026-08-09. This project is days old and most of it does not exist.
 | Class id table | **Done** | Ids 10-15 bound to class names by a log-to-pixel join. `docs/OBSERVED_IDS.md` |
 | Weapon config ids | **Partial** | Creation-preview ids recorded. The live id space is now **joined**: it is the same space as item cfgIds |
 | Class reference | **Done** | All six researched independently and adjudicated into `docs/CLASSES.md` |
+| Specialist lanes | **Proven** | Eight lanes, ownership enforced by tests, worktree-isolated. Two have been run end to end |
 | Log parsing | **Early** | `lanternlight.logparse` reads the surfaces named above |
-| Redaction | **Mandatory, being hardened** | `lanternlight.redact` gates every fixture. A persona leak found 2026-08-09 is the current P0 - see `ROADMAP.md` item 0 |
+| Redaction | **Hardened** | Sees through base64, hex and raw UTF-16, scans binaries, and refuses to certify what it cannot assess. `ROADMAP.md` item 0 |
 | Market cache | **Parser done** | `AvgPrice_937566.ini` filled. `lanternlight.avgprice` parses it; watcher not built |
 | Dungeon data | **Prologue measured** | Lifecycle, escape portals, loot, death and escape states all observed. `docs/FINDINGS.md` section 9 |
 | Raid / PvP data | **Unmeasured** | Only the Prologue has been entered (`matchId=0`, no second player). Unmeasured, not absent |
-| GVAS `.sav` reader | **Not started** | Five files confirmed unencrypted; no reader written |
+| GVAS `.sav` reader | **Done** | All five files parse. Published parsers do not work on this build - UE 5.4+ changed the property tag |
 | Live log tail | **Not started** | Port 8811 reserved, nothing listening |
 | **Emberforge** | **Empty** | The package exists. It **computes nothing.** No formulas are published anywhere, so there is nothing yet to encode |
 | Dashboard | **Does not exist** | Port 8810 reserved. See `BACKLOG.md` |

@@ -11,27 +11,21 @@ Status vocabulary: **NEXT** (the current item), **READY** (specified, unblocked)
 
 ---
 
-## 0. Redactor persona leak - P0, IN FLIGHT
+## 0. Redactor persona leak - CLOSED 2026-08-09
 
-Found 2026-08-09 while preparing the item 1 fixture. Running the current
-redactor over the real log leaves **684 of 686 occurrences of the operator's
-Steam persona in place**, and `assert_clean()` returns cleanly on a line that
-still contains it - so the guard is vacuous for this shape. Two root causes:
-keyed rules stop their value match at whitespace so a two-token display name is
-half-masked, and the persona also appears with no key at all, as a positional
-comma-separated field and after verbs such as `PlayerOpenTreasureBox`.
+Ledger `LL-0004` and `LL-0013`. Left here as a closed item rather than deleted,
+because the shape of the bug is the useful part.
 
-This **blocks item 1's acceptance outright**, because that criterion requires
-committing a redacted log excerpt and the excerpt carries the persona.
+The redactor left **684 of 686** occurrences of the operator's persona in the
+live log, and `assert_clean()` returned cleanly on a leaking line - so the guard
+was vacuous for that shape. Three separate root causes, found one at a time:
+keyed rules stopped their value match at whitespace so a two-token display name
+was half masked; the persona also appears with **no key at all**; and discovery
+was **scope-dependent**, returning empty on an isolated excerpt - which is
+exactly what a test fixture is.
 
-**Acceptance:** zero surviving persona occurrences when the new redactor is run
-over the full live log, measured and reported as a count; `assert_clean` fails
-on a persona-carrying line, proven by breaking the check and watching a test go
-red; `tests/test_no_pii.py` still passes; no existing test weakened.
-
-Related, not yet done: `CampData_<userId>.sav` embeds the operator's numeric
-userId **in its filename**, so any `.sav` fixture must have its name rewritten,
-not just its contents.
+Now 0 of 686, raw UTF-16 included, and `assert_clean` has a **cannot-certify**
+state so it refuses to approve text it has no basis to approve.
 
 ## 1. Raid recon pass - PARTLY DONE, remainder is BLOCKED on a real raid
 
@@ -74,7 +68,7 @@ is what distinguishes the Prologue from a real raid is itself a result worth
 recording. Blocked only on the operator entering one - nothing here needs a
 deliberate capture session any more, because the log is sufficient on its own.
 
-## 1b. Specialist lane build-out - READY, roster landed, machinery missing
+## 1b. Specialist lane build-out - NEXT, machinery landed and proven
 
 Decided with the operator 2026-08-09. Eight persistent specialist lanes, each
 owning a disjoint file set, each running its own orchestrated sub-agents and
@@ -117,20 +111,19 @@ work, passing its own merge gate, committing to its branch and pushing, with the
 primary checkout untouched throughout - demonstrated end to end for one lane,
 not described.
 
-## 2. GVAS `.sav` reader - READY
+## 2. GVAS `.sav` reader - CLOSED 2026-08-09
 
-Four `.sav` files under `%LOCALAPPDATA%\MistfallHunter\Saved\SaveGames\`, 2-2.7
-KB each, plain UE GVAS with magic `47 56 41 53` and no encryption. Measured, not
-hoped for. `LoginOptions.sav` yields `SelectedServer` and `AccountName`;
-`UserSettings_v1.sav` yields the settings block including `bWarehouseAutomation`.
+Ledger `LL-0011`. `lanternlight/gvas.py` parses all five `.sav` files. Published
+GVAS parsers do not work on this build: UE 5.4+ replaced `FPropertyTag`'s
+`FName Type; int32 Size; int32 ArrayIndex` with a recursive type name plus a
+flags byte. All 627 trailing bytes of `EnhancedInputUserSettings.sav` decode,
+and the result cross-corroborates the log - save and log independently agree
+that `KB_Blackarrow_Major_Action` is bound to `RightMouseButton`.
 
-Write the reader in-repo rather than taking a dependency - GVAS is a small
-format and a vendored parser would need a license review for no real gain.
-
-**Acceptance:** `lanternlight` parses all four files into plain dicts; a test
-runs against a **redacted** committed fixture (`AccountName` is PII, so this
-file cannot be committed raw); an unknown property type raises rather than
-silently returning a partial parse.
+**Still unidentified:** the 4 zero bytes after every tagged property list. An
+`int32` zero, an empty FString and four zero flag bytes all fit and nothing
+observed separates them, so they are handed back as `GvasSave.epilogue` rather
+than named.
 
 ## 3. Live log tail - READY
 
@@ -215,10 +208,14 @@ toggle may be more legible in a raid than on the creation screen.
 
 ## Ordering note
 
-Items 2, 3 and 4 are independent of each other and could run in any order or in
-parallel. Item 1 is first because it is the only one that can invalidate the
-design of the others. Items 5 and 6 are cheap, and both are best folded into
-whichever session next has the game open rather than scheduled on their own.
+Item 1b is next because it is the only item that makes every other item cheaper:
+lanes are how work gets parallelised here, and two of them have now been run end
+to end. Items 3 and 4's watcher are independent of everything and of each other.
+
+Item 1's remainder, and items 5 and 6, all need the client open. None of them
+needs a *deliberate* capture session any more - the 2026-08-09 pass showed the
+log alone was sufficient - so fold them into whichever session next has the game
+running rather than scheduling them.
 
 ## Deliberately not on this list
 
