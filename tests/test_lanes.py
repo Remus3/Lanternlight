@@ -91,6 +91,50 @@ class TestOwnershipIsDisjoint:
             assert owner is None or owner in {lane.lane_id for lane in lanes.LANES}
 
 
+class TestNoFileIsOrphaned:
+    """Unowned must be a DECISION, never an oversight.
+
+    ``test_no_real_repo_file_is_owned_by_more_than_one_lane`` is satisfied by a
+    file with zero owners just as happily as by one with exactly one, so the
+    ownership map could silently develop holes while every ownership test
+    stayed green. Measured 2026-08-09: ten tracked files were neither owned by
+    a lane nor declared cross-cutting, including ``lanternlight/__init__.py``
+    and two of the lane machinery's own test files. Nothing arbitrated a
+    concurrent edit to any of them.
+
+    So there are exactly two legitimate states - owned by one lane, or listed
+    in ``CROSS_CUTTING`` - and this test rejects the third.
+    """
+
+    def test_every_tracked_file_is_owned_or_explicitly_cross_cutting(self):
+        orphans = [
+            path.as_posix()
+            for path in lanes.tracked_files(REPO_ROOT)
+            if lanes.owner_of(path) is None and not lanes.is_cross_cutting(path)
+        ]
+        assert not orphans, (
+            f"{len(orphans)} file(s) are neither lane-owned nor declared "
+            "cross-cutting, so nothing arbitrates a concurrent edit to them. "
+            "Give each one an owner in ops/lanes.py, or add it to CROSS_CUTTING "
+            "if it is genuinely governed rather than worked:\n  "
+            + "\n  ".join(orphans)
+        )
+
+    def test_the_two_states_are_mutually_exclusive(self):
+        # A file cannot be both owned and cross-cutting - owns_path() already
+        # refuses cross-cutting paths, and this pins that it stays true.
+        for path in lanes.tracked_files(REPO_ROOT):
+            if lanes.is_cross_cutting(path):
+                assert lanes.owner_of(path) is None, path
+
+    def test_the_orphan_check_would_actually_notice_one(self):
+        # A guard over a set that happens to be empty proves nothing. Confirm
+        # the predicate fires on a path that is deliberately neither.
+        probe = "definitely/not/owned/by/anyone.txt"
+        assert lanes.owner_of(probe) is None
+        assert not lanes.is_cross_cutting(probe)
+
+
 class TestCrossCuttingFilesAreUnowned:
     def test_the_governing_files_belong_to_no_lane(self):
         for name in lanes.CROSS_CUTTING:

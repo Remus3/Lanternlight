@@ -120,6 +120,9 @@ CROSS_CUTTING: frozenset[str] = frozenset(
         # by design, which is how its PreToolUse matcher sat at "Bash" alone on
         # a PowerShell-primary machine without anyone owning the question.
         ".claude/settings.json",
+        # The package marker is re-exported from by several lanes' modules and
+        # belongs to none of them.
+        "lanternlight/__init__.py",
     }
 )
 
@@ -283,7 +286,10 @@ LANES: tuple[Lane, ...] = (
             "docs/OPERATIONS.md",
             "WAKEUP_NOTES.md",
             "NEXT_SESSION_PROMPT.md",
-            ".claude/commands/lane-*.md",
+            ".claude/commands/*.md",
+            ".claude/agents/*.md",
+            "docs/ARCHITECTURE.md",
+            "tests/test_lane_*.py",
             "scripts/write_lane_contracts.py",
         ),
     ),
@@ -323,7 +329,12 @@ LANES: tuple[Lane, ...] = (
             "surface. An ordinary window of our own - never an overlay hooked "
             "into the game."
         ),
-        owns=("overlay/**", "tests/test_overlay_*.py", "dashboard/**"),
+        owns=(
+            "overlay/**",
+            "tests/test_overlay_*.py",
+            "dashboard/**",
+            "docs/OVERLAY.md",
+        ),
     ),
     Lane(
         lane_id="capture",
