@@ -51,14 +51,30 @@ SAVE_GAMES_DIR_NAME = "SaveGames"
 #: Unreal config directory name.
 CONFIG_DIR_NAME = "Config"
 
-#: Platform-flavoured config subdirectory used by a packaged UE5 Windows client.
-#: UNVERIFIED against a live install - see :func:`avg_price_ini`.
-CONFIG_PLATFORM_DIR_NAME = "WindowsClient"
+#: Platform-flavoured config subdirectory. MEASURED on a live install
+#: 2026-08-09: the tree is ``<Saved>/Config/Windows``, beside
+#: ``CrashReportClient``. A previous value of ``WindowsClient`` was a guess and
+#: was wrong.
+CONFIG_PLATFORM_DIR_NAME = "Windows"
 
-#: Market average-price ini written alongside the other client config.
-AVG_PRICE_INI_NAME = "AvgPrice.ini"
+#: Market average-price ini. MEASURED on a live install 2026-08-09: it is
+#: written **directly into** ``<Saved>``, not under ``Config``, and its name
+#: carries the publisher app id. The previous value of ``AvgPrice.ini`` under
+#: ``Config/WindowsClient`` was a guess and was wrong in the directory and in
+#: the name, so the finder below could never match it.
+#:
+#: ``937566`` is the publisher app id, already public in ``docs/FINDINGS.md``
+#: and in the game's own GSDK config. It is not operator PII.
+AVG_PRICE_INI_NAME = "AvgPrice_937566.ini"
+
+#: Glob for the same file. Only one app id has ever been observed, so the exact
+#: name above is the expectation - but matching a pattern in the search path
+#: costs nothing and avoids silently returning ``None`` if the publisher ever
+#: ships a different id.
+AVG_PRICE_INI_GLOB = "AvgPrice_*.ini"
 
 __all__ = [
+    "AVG_PRICE_INI_GLOB",
     "AVG_PRICE_INI_NAME",
     "CONFIG_DIR_NAME",
     "CONFIG_PLATFORM_DIR_NAME",
@@ -147,29 +163,45 @@ def config_dir(env: _Env | None = None) -> Path:
 
 
 def avg_price_ini(env: _Env | None = None) -> Path:
-    """Return the expected path of ``AvgPrice.ini``.
+    """Return the path of the market average-price ini.
 
-    The filename is known. The subdirectory is the stock UE5 packaged-client
-    location, ``<Saved>/Config/WindowsClient``, and is **UNVERIFIED** against a
-    live Mistfall Hunter install as of 2026-08-09. If a caller needs the real
-    location rather than the expected one, use :func:`find_avg_price_ini`,
-    which searches the tree instead of assuming.
+    ``<Saved>/AvgPrice_937566.ini``, MEASURED on a live install 2026-08-09.
+
+    This function previously returned ``<Saved>/Config/WindowsClient/
+    AvgPrice.ini``, which was a guess and was wrong three separate ways - wrong
+    parent directory, wrong platform subdirectory name (the real one is
+    ``Windows``), and wrong filename. The guess was honestly labelled
+    UNVERIFIED in its docstring, and labelling it is what made the correction
+    cheap when the file finally appeared.
+
+    Prefer :func:`find_avg_price_ini` when the app id might differ from the one
+    observed here; this function returns the expected path without touching the
+    filesystem.
     """
-    return config_dir(env) / CONFIG_PLATFORM_DIR_NAME / AVG_PRICE_INI_NAME
+    return saved_dir(env) / AVG_PRICE_INI_NAME
 
 
 def find_avg_price_ini(env: _Env | None = None) -> Path | None:
-    """Search the Saved tree for ``AvgPrice.ini`` and return the first hit.
+    """Search the Saved tree for the market ini and return the first hit.
 
-    This is the only function in the module that touches the filesystem, and
-    it does so only when called. Returns ``None`` when the Saved tree is absent
-    or the file is not present anywhere under it.
+    Globs :data:`AVG_PRICE_INI_GLOB` rather than an exact filename, because the
+    name carries a publisher app id. The previous implementation searched for
+    the literal string ``AvgPrice.ini`` and so could never match the real
+    ``AvgPrice_937566.ini`` - it returned ``None`` on a machine where the file
+    plainly existed, which is the worst kind of negative: a confident one.
+
+    Results are sorted, so a tree containing more than one match resolves
+    deterministically instead of depending on directory iteration order.
+
+    This is the only function in the module that touches the filesystem, and it
+    does so only when called. Returns ``None`` when the Saved tree is absent or
+    nothing matches.
     """
     root = saved_dir(env)
     try:
         if not root.is_dir():
             return None
-        for candidate in sorted(root.rglob(AVG_PRICE_INI_NAME)):
+        for candidate in sorted(root.rglob(AVG_PRICE_INI_GLOB)):
             if candidate.is_file():
                 return candidate
     except OSError:

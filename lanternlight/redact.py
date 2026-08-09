@@ -22,13 +22,86 @@ capture, so the scrubber must never emit a counter, a hash or a random token.
 Redaction is idempotent - running :func:`redact` on already-redacted text
 returns it unchanged.
 
-Two limits, stated rather than hidden:
+Display names - three mechanisms, on purpose
+--------------------------------------------
 
-- A bare persona name with no surrounding key cannot be detected by pattern.
-  Only ``key=value`` and ``key: value`` shapes are caught. Free-text chat lines
-  are not safe to publish on the strength of this module alone.
-- City/state/country are not pattern-detectable either. Redact geolocation
-  lines by dropping the line, not by trusting a regex.
+The 2026-08-09 capture carries the operator's two-token display name 686
+times, in 40-odd distinct shapes. A single mechanism cannot reach all of them,
+so there are three, and which mechanism a pattern belongs to is a decision
+about blast radius, not about taste.
+
+1. :data:`RULES` - structural detectors. Some are keyed on *distinctive* names
+   such as ``onelineDisplayName``, ``PlayerName`` or ``uName``; the rest are
+   keyless slots the game is measured to fill with a display name and nothing
+   else, such as ``PlayerOpenTreasureBox <PERSONA>`` or the actor token
+   ``<PERSONA>_<19-digit role id>``. These also run over every tracked file in
+   the repository (``tests/test_no_pii.py``), so nothing generic enough to fire
+   on ordinary source or prose is allowed in here.
+
+2. :data:`LOG_TEXT_RULES` - the same idea for keys that are far too generic to
+   point at a source tree, above all a bare lowercase ``name``. Masking is
+   local: the value next to the key is replaced and nothing else. These never
+   run over repository files.
+
+3. Persona discovery - :func:`discover_personas` harvests candidate display
+   names from every shape in (1) and (2), and :func:`redact` then masks every
+   literal occurrence of each candidate anywhere in the text. This is what
+   reaches an occurrence in no key and no known slot at all: one keyed line
+   anywhere in a document cleans the rest of it. Discovery is never wired into
+   :data:`RULES`: the file scanner would harvest ordinary identifiers out of
+   source code and then flag every occurrence of them, and the guard would be
+   useless within a day.
+
+The keyless rules and discovery overlap deliberately. Removing the rules leaves
+the isolated shapes still masked - discovery harvests from the same slots - but
+it blinds the repository scan, which only ever sees :data:`RULES`. Removing
+discovery leaves anything outside an enumerated slot exposed. Both were
+mutation-tested; neither is decoration.
+
+Discovery is deliberately narrow about *which* keys it trusts. A key that
+carries names and also carries other things - ``instigator`` also carries
+``true``, a bare ``name`` also carries the product name - is a masking key at
+most, never a harvesting key, because a harvested candidate is masked
+everywhere in the document. The candidate filter refuses booleans, pure digit
+runs, Unreal class instances and anything with no letter in it.
+
+Excerpts - read this before committing a fixture
+------------------------------------------------
+
+Discovery is scope-dependent by construction: it learns the name from a keyed
+occurrence, and an excerpt of a dozen interesting dungeon lines may contain
+none. The keyless rules in (1) cover every slot measured in this capture, but
+they cover an enumerated list, and a build the game ships next month can add a
+slot nobody has seen. So the safe order is:
+
+    clean = redact(whole_log)       # the login line is in here
+    excerpt = pick_lines(clean)     # cut AFTER redacting, never before
+    assert_clean(excerpt)
+
+If the excerpt has to be cut first, name the personas explicitly::
+
+    names = discover_personas(whole_log)
+    clean = redact(excerpt, personas=names)
+    assert_clean(clean, personas=names)
+
+:func:`assert_clean` enforces this rather than trusting anyone to remember it.
+Given text that sits in a known name slot but from which no name could be
+determined, it raises instead of reporting clean - "I could not tell" is a
+different fact from "it is safe", and only one of them is recoverable after a
+push.
+
+Limits, stated rather than hidden:
+
+- **The keyless rules are an enumerated list, not a general solution.** A name
+  slot this capture does not contain will not be masked, and if the surrounding
+  text carries no other signal it will not be discovered either. The
+  cannot-certify path narrows this to slots that share a marker with a known
+  one; an entirely novel shape in otherwise unremarkable text is still a silent
+  pass.
+- A display name shorter than three characters is not literal-masked; masking a
+  two-character token by substring would shred ordinary words.
+- City/state/country are not pattern-detectable. Redact geolocation lines by
+  dropping the line, not by trusting a regex.
 
 Typical use::
 
@@ -43,10 +116,13 @@ from dataclasses import dataclass
 __all__ = [
     "ALL_LABELS",
     "FILE_SCAN_LABELS",
+    "LOG_TEXT_RULES",
+    "PERSONA_PLACEHOLDER",
     "RedactionError",
     "Rule",
     "RULES",
     "assert_clean",
+    "discover_personas",
     "iter_sensitive",
     "redact",
 ]
@@ -65,21 +141,228 @@ class Rule:
     replacement: str
 
 
+#: The one placeholder this module emits for a display name.
+PERSONA_PLACEHOLDER = "<PERSONA>"
+
 # A value that is already a placeholder, so rules skip it and stay idempotent.
 _PLACEHOLDER = r"<[A-Z0-9_]+>"
 
+# One unquoted value token: everything up to whitespace or a structural
+# delimiter.
+_WORD = r'[^\s,;&\]\}"\r\n]+'
+
 # The value side of a key=value pair. Accepts a quoted string or a bare run,
 # but never an existing placeholder.
-_VALUE = rf'(?!{_PLACEHOLDER})(?:"[^"\r\n]*"|[^\s,;&\]\}}"\r\n]+)'
+_VALUE = rf'(?!{_PLACEHOLDER})(?:"[^"\r\n]*"|{_WORD})'
+
+# A Steam display name is several words - "<first> <second>" in this capture -
+# and the old single-token value pattern published the second half of it. This
+# one keeps going past a space, but stops at the next ``key=`` or ``key:``, so
+# ``PlayerName=<PERSONA> TagName=Game.PlayState.Gaming`` masks the name and
+# leaves the tag alone.
+#
+# The repeat is bounded rather than open. A display name is a handful of
+# tokens; an unbounded run would swallow the whole tail of any line that
+# happens to end in prose, and a fixture nobody can read is a fixture nobody
+# checks.
+_MAX_TRAILING_NAME_WORDS = 3
+_DISPLAY_VALUE = (
+    rf'(?!{_PLACEHOLDER})'
+    rf'(?:"[^"\r\n]*"'
+    rf"|{_WORD}(?:[ \t]+(?![^\s]*[=:]){_WORD}){{0,{_MAX_TRAILING_NAME_WORDS}}})"
+)
+
+# ``key=``, ``key:``, and the JSON ``"key":`` the game's telemetry blobs use.
+#
+# Horizontal whitespace only. The game never splits a key from its value across
+# a line, but prose does: a sentence ending in a word this module treats as a
+# key, followed by a blank line and a table, used to match as a key/value pair
+# and fail the repository scan on an innocent document.
+_KEY_SEP = r'"?[ \t]*[=:][ \t]*'
+
+# A token that could be a display name: starts with a letter in any script -
+# the capture contains a CJK player name - and runs to the next delimiter.
+# ``:`` and ``=`` are excluded so a name token can never swallow the next
+# field, and a leading digit is excluded so a count is never mistaken for a
+# person.
+_NAME_TOKEN = r'[^\W\d_][^\s,;:=&\]\}"\r\n]*'
+
+# One name token, or two when the second ends cleanly at a delimiter. The
+# second-token branch is what keeps ``Controller <PERSONA>`` from publishing a
+# surname, while the end assertion is what stops ``uiProxy <PERSONA> Result:``
+# from eating the word Result.
+_POSITIONAL_VALUE = rf'(?!{_PLACEHOLDER}){_NAME_TOKEN}'
+_POSITIONAL_PAIR_VALUE = (
+    rf'(?!{_PLACEHOLDER}){_NAME_TOKEN}(?:[ \t]+{_NAME_TOKEN}(?=[\s,;&\]\}}"]|$))?'
+)
 
 
-def _keyed(label: str, keys: Iterable[str], placeholder: str) -> Rule:
+def _keyed(
+    label: str, keys: Iterable[str], placeholder: str, value: str = _VALUE
+) -> Rule:
     """Build a ``key=value`` rule that preserves the key and masks the value."""
     alternation = "|".join(keys)
     pattern = re.compile(
-        rf"(?P<key>\b(?:{alternation})\b)(?P<sep>\s*[=:]\s*)(?P<value>{_VALUE})"
+        rf"(?P<key>\b(?:{alternation})\b)(?P<sep>{_KEY_SEP})(?P<value>{value})"
     )
     return Rule(label=label, pattern=pattern, replacement=rf"\g<key>\g<sep>{placeholder}")
+
+
+def _positional(anchors: Iterable[str], value: str) -> Rule:
+    """Build a rule for a name that follows a fixed phrase and carries no key.
+
+    The game writes the operator's display name into a set of fixed slots -
+    ``PlayerOpenTreasureBox <PERSONA>`` and friends - with nothing to mark it
+    as a name. Those slots are enumerable, and every one of them was measured
+    before being listed: on the 2026-08-09 capture each anchor below is
+    occupied by the operator's name in 100 percent of its occurrences.
+
+    This is what makes an *excerpt* safe. Discovery needs a keyed occurrence
+    somewhere in the same text to learn the name from; a handful of dungeon
+    lines lifted out of the middle of a log has none, and before these rules
+    existed that excerpt came back from :func:`redact` unchanged and passed
+    :func:`assert_clean`.
+    """
+    alternation = "|".join(anchors)
+    pattern = re.compile(
+        rf"(?P<key>\b(?:{alternation}))(?P<sep>[ \t]+)(?P<value>{value})"
+    )
+    return Rule(
+        label="PERSONA",
+        pattern=pattern,
+        replacement=rf"\g<key>\g<sep>{PERSONA_PLACEHOLDER}",
+    )
+
+
+def _dashed(label: str, keys: Iterable[str], placeholder: str) -> Rule:
+    """Build a ``key-value`` rule. The game emits this shape for names.
+
+    The dash carries no surrounding whitespace on purpose. ``displayName-x`` is
+    a field; ``persona - x`` is a sentence, and this module has no business
+    rewriting sentences.
+    """
+    alternation = "|".join(keys)
+    pattern = re.compile(
+        rf"(?P<key>\b(?:{alternation})\b)(?P<sep>-)(?P<value>{_DISPLAY_VALUE})"
+    )
+    return Rule(label=label, pattern=pattern, replacement=rf"\g<key>\g<sep>{placeholder}")
+
+
+#: Display-name keys distinctive enough to be safe over a source tree. Every
+#: one of these was checked against the tracked files before being added.
+_DISTINCTIVE_PERSONA_KEYS: tuple[str, ...] = (
+    "onelineDisplayName",
+    "OnelineDisplayName",
+    "oneline_display_name",
+    "OnlineDisplayName",
+    "onlineDisplayName",
+    "online_display_name",
+    "displayName",
+    "DisplayName",
+    "display_name",
+    "personaName",
+    "PersonaName",
+    "persona_name",
+    "persona",
+    "nickName",
+    "nickname",
+    "NickName",
+    "PlayerName",
+    "playerName",
+    "player_name",
+    "memberName",
+    "MemberName",
+    "member_name",
+    "roleName",
+    "RoleName",
+    "role_name",
+    "uName",
+    "uname",
+    "userName",
+    "UserName",
+    "user_name",
+    "username",
+)
+
+#: Capitalised ``Name`` is generic, but it carries no value under any
+#: separator anywhere in the tracked tree, and the game uses it for the URL
+#: option and the player-state dump. It masks locally and is never a discovery
+#: source - harvesting from it would pick up the product name and the word
+#: "Player", each of which occurs in the hundreds.
+_GENERIC_PERSONA_KEYS: tuple[str, ...] = ("Name",)
+
+#: Lowercase ``name`` fires 20 times in this repository's own tracked files
+#: (``name: str``, ``name="reticle"``, agent front-matter). It can never enter
+#: :data:`RULES`, so it lives in :data:`LOG_TEXT_RULES` instead.
+_LOG_ONLY_PERSONA_KEYS: tuple[str, ...] = ("name",)
+
+#: Keys that carry a display name often enough to harvest from, but that are
+#: not safe to mask wholesale. ``instigator`` also carries ``true``, ``false``
+#: and Unreal class instances; ``role_id`` normally carries a digit run. The
+#: candidate filter throws those away, and what is left is a name.
+_HARVEST_ONLY_KEYS: tuple[str, ...] = ("instigator", "role_id")
+
+#: ``channel-`` carries the display name in this capture. The colon form
+#: (``"channel":"Steam"``) does not, so only the dash form is masked.
+_DASH_ONLY_PERSONA_KEYS: tuple[str, ...] = ("channel",)
+
+# An actor token: a display name welded to a 15-or-more-digit role id, which
+# the game writes as ``actor:<PERSONA>_<LONG_ID>``. Before this rule the
+# generic long-digit rule ate the id and left the name standing, which is
+# exactly backwards - the id is replaceable and the name is not.
+#
+# The ``(?<!_C)`` carve-out keeps Unreal class instances intact: a token like
+# ``BP_Adventurer_C_<id>`` falls through to LONG_ID, which masks the id and
+# leaves the class name readable. Measured cost of the rule on the 2026-08-09
+# capture: 165 tokens match, 164 of them the operator's name and one an engine
+# object (``CampData``), so one legitimate name is lost to over-redaction. At a
+# 10-digit threshold the same rule would have collided with 8158 ``_C_``
+# instance tokens; 15 digits is the threshold that separates a role id from an
+# Unreal object id, and it is the same threshold LONG_ID already uses.
+_ACTOR_TOKEN_NAME = r"(?<![A-Za-z0-9_])(?P<value>[A-Za-z][A-Za-z0-9_]*)(?<!_C)"
+_ACTOR_TOKEN = re.compile(rf"{_ACTOR_TOKEN_NAME}_\d{{15,}}(?!\d)")
+
+#: Fixed phrases the game follows with a bare display name. Occurrences on the
+#: 2026-08-09 capture, every one of them the operator's name and nothing else:
+#: PlayerOpenTreasureBox 20, PlayerKillMonster 9, uiProxy 5, ResponseInitInventory
+#: 4, playerStartPoint 2 (a third occurrence has an empty slot, which the
+#: leading-letter requirement skips), onAdventurerInited 2,
+#: LeaderRankScoreComponent 2.
+_POSITIONAL_ANCHORS: tuple[str, ...] = (
+    "PlayerOpenTreasureBox",
+    "PlayerKillMonster",
+    "onAdventurerInited",
+    "uiProxy",
+    "playerStartPoint",
+    "ResponseInitInventory",
+    r"LeaderRankScoreComponent\]",
+)
+
+#: The one anchor whose slot holds the full two-token display name (6 of 6).
+_POSITIONAL_PAIR_ANCHORS: tuple[str, ...] = ("PossessedBy Controller",)
+
+# ``<UnrealClass>_C_<id>,<PERSONA>,<digits>`` - the ammunition telemetry writes
+# the firing player's name into a bare CSV field. 134 occurrences on the
+# capture, all 134 the operator's name, which is why this is a rule and not a
+# guess.
+_CSV_NAME_SLOT = re.compile(
+    rf'(?P<key>\b[A-Za-z][A-Za-z0-9_]*_C_\d{{6,}},)(?P<value>(?!{_PLACEHOLDER})[^\s,\r\n]+)(?=,\d)'
+)
+
+# ``Player <PERSONA>'s state ...``. The possessive is what makes this specific
+# enough to be safe; a bare ``Player <word>`` is not.
+_POSSESSIVE_NAME = re.compile(
+    rf"(?P<key>\bPlayer)(?P<sep>[ \t]+)(?P<value>{_POSITIONAL_VALUE})(?=')"
+)
+
+# ``BP_Adventurer_C_<id>__<PERSONA>enter portal``. The game concatenates the
+# actor label, the name and sometimes the next word with no separator at all,
+# so there is no token boundary to find the end of the name by. Masking the
+# whole run takes a word of ordinary text with it - measured cost on the
+# capture: the word "enter", once - and that is the right direction to err in.
+_WELDED_NAME = re.compile(
+    rf"(?P<key>_C_\d{{6,}}__)(?P<value>{_POSITIONAL_VALUE})"
+)
 
 
 #: Ordered detection rules. Order is significant: the most specific shapes run
@@ -125,22 +408,28 @@ RULES: tuple[Rule, ...] = (
     ),
     _keyed(
         "PERSONA",
-        (
-            "onelineDisplayName",
-            "OnelineDisplayName",
-            "oneline_display_name",
-            "displayName",
-            "DisplayName",
-            "display_name",
-            "personaName",
-            "PersonaName",
-            "persona_name",
-            "persona",
-            "nickName",
-            "nickname",
-            "NickName",
-        ),
-        "<PERSONA>",
+        _DISTINCTIVE_PERSONA_KEYS + _GENERIC_PERSONA_KEYS,
+        PERSONA_PLACEHOLDER,
+        value=_DISPLAY_VALUE,
+    ),
+    # Keyless name slots. These are what make a redacted excerpt safe without
+    # a login line in it - see _positional().
+    _positional(_POSITIONAL_ANCHORS, _POSITIONAL_VALUE),
+    _positional(_POSITIONAL_PAIR_ANCHORS, _POSITIONAL_PAIR_VALUE),
+    Rule(
+        label="PERSONA",
+        pattern=_CSV_NAME_SLOT,
+        replacement=rf"\g<key>{PERSONA_PLACEHOLDER}",
+    ),
+    Rule(
+        label="PERSONA",
+        pattern=_POSSESSIVE_NAME,
+        replacement=rf"\g<key>\g<sep>{PERSONA_PLACEHOLDER}",
+    ),
+    Rule(
+        label="PERSONA",
+        pattern=_WELDED_NAME,
+        replacement=rf"\g<key>{PERSONA_PLACEHOLDER}",
     ),
     _keyed(
         "PRODUCTUSERID",
@@ -165,12 +454,31 @@ RULES: tuple[Rule, ...] = (
         pattern=re.compile(r"(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?![\d.])"),
         replacement="<IPV4>",
     ),
+    # Name welded to a role id. Must precede LONG_ID, or LONG_ID masks the id
+    # and publishes the name.
+    Rule(label="ACTOR", pattern=_ACTOR_TOKEN, replacement="<ACTOR>"),
     # Any remaining bare digit run of 15 or more. Catches GSDK ids that arrive
     # under a key this module has never seen.
     Rule(
         label="LONG_ID",
         pattern=re.compile(r"(?<!\d)\d{15,}(?!\d)"),
         replacement="<LONG_ID>",
+    ),
+)
+
+#: Rules for log text only. These keys are too generic to point at a source
+#: tree, so they are kept out of :data:`RULES` and therefore out of the
+#: repository scan in ``tests/test_no_pii.py``. :func:`redact` and
+#: :func:`assert_clean` apply them; :func:`iter_sensitive` does not.
+LOG_TEXT_RULES: tuple[Rule, ...] = (
+    _keyed("PERSONA", _LOG_ONLY_PERSONA_KEYS, PERSONA_PLACEHOLDER, value=_DISPLAY_VALUE),
+    _dashed(
+        "PERSONA",
+        _LOG_ONLY_PERSONA_KEYS
+        + _DASH_ONLY_PERSONA_KEYS
+        + _DISTINCTIVE_PERSONA_KEYS
+        + _GENERIC_PERSONA_KEYS,
+        PERSONA_PLACEHOLDER,
     ),
 )
 
@@ -185,8 +493,171 @@ ALL_LABELS: frozenset[str] = frozenset(rule.label for rule in RULES)
 FILE_SCAN_LABELS: frozenset[str] = ALL_LABELS - {"IPV4"}
 
 
-def redact(text: str) -> str:
+# --------------------------------------------------------------------------
+# persona discovery
+# --------------------------------------------------------------------------
+
+#: Shapes a display name can be harvested from. Every one of these is a key
+#: the game uses for a person, or the actor token, which is a person's name
+#: welded to their role id.
+_DISCOVERY_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(
+        rf"\b(?:{'|'.join(_DISTINCTIVE_PERSONA_KEYS + _HARVEST_ONLY_KEYS)})\b"
+        rf"(?:{_KEY_SEP}|-)(?P<value>{_DISPLAY_VALUE})"
+    ),
+    # The role blob spells the display name under a bare ``name``, but only in
+    # its JSON form. The unquoted form of that same key carries the product
+    # name and device strings, so it is not harvested.
+    re.compile(r'"names?"[ \t]*:[ \t]*(?P<value>"[^"\r\n]*")'),
+    _ACTOR_TOKEN,
+    # The keyless slots harvest as well as mask. One dungeon line is then
+    # enough to clean every other occurrence in the same excerpt, including
+    # shapes that carry no anchor of their own.
+    _positional(_POSITIONAL_ANCHORS, _POSITIONAL_VALUE).pattern,
+    _positional(_POSITIONAL_PAIR_ANCHORS, _POSITIONAL_PAIR_VALUE).pattern,
+    _CSV_NAME_SLOT,
+    _POSSESSIVE_NAME,
+    _WELDED_NAME,
+)
+
+#: Contexts this log is measured to fill with a bare display name. Their
+#: presence is what turns "nothing found" into "nothing could be determined" -
+#: see :func:`assert_clean`.
+_POSITIONAL_RISK = re.compile(
+    "|".join(
+        (
+            rf"\b(?:{'|'.join(_POSITIONAL_ANCHORS + _POSITIONAL_PAIR_ANCHORS)})[ \t]",
+            r"_C_\d{6,}[,_]",
+            r"\bactor:",
+            r"\binstigator[-=:]",
+        )
+    )
+)
+
+#: Evidence that a persona pass has already run over this text.
+_PERSONA_EVIDENCE = re.compile(r"<PERSONA>|<ACTOR>")
+
+#: Values a name-shaped key carries that are not people.
+_NON_PERSON_VALUES: frozenset[str] = frozenset(
+    {"true", "false", "null", "none", "nil", "undefined", "nan", "unknown"}
+)
+
+# ``BP_Warden_C_2147408590``, ``DungeonPlayerState_C_2147446955``: an Unreal
+# class instance, never a player.
+_UNREAL_INSTANCE = re.compile(r"_C_\d|_\d{6,}")
+
+#: Shorter than this and a candidate is not literal-masked. Masking a
+#: two-character token by substring would shred ordinary words, and the cure
+#: would be worse than the leak.
+_MIN_PERSONA_LENGTH = 3
+
+
+def _clean_candidate(raw: str) -> str:
+    """Strip quoting and trailing punctuation off a harvested value."""
+    value = raw.strip()
+    if len(value) >= 2 and value.startswith('"') and value.endswith('"'):
+        value = value[1:-1]
+    return value.strip().strip(".,;:!?")
+
+
+def _is_persona_candidate(value: str) -> bool:
+    """Return whether ``value`` is name-shaped enough to mask everywhere.
+
+    A candidate is masked at every literal occurrence in the document, so a
+    wrong one is expensive: harvesting ``true`` once would blank every ``true``
+    in the log. This filter is the thing standing between a name-shaped key and
+    that outcome.
+    """
+    if len(value) < _MIN_PERSONA_LENGTH:
+        return False
+    if not any(char.isalpha() for char in value):
+        return False
+    if any(char in value for char in '<>="\\/'):
+        return False
+    if value.lower() in _NON_PERSON_VALUES:
+        return False
+    return not _UNREAL_INSTANCE.search(value)
+
+
+def _normalise_personas(values: Iterable[str]) -> tuple[str, ...]:
+    """Deduplicate and order candidates longest first.
+
+    Longest first is not cosmetic. ``<first> <second>`` has to be matched
+    before ``<first>``, or a two-token name comes out half-masked with the
+    surname still readable.
+    """
+    seen = {value.strip() for value in values if value and value.strip()}
+    return tuple(sorted(seen, key=lambda name: (-len(name), name)))
+
+
+def discover_personas(text: str) -> tuple[str, ...]:
+    """Return display-name candidates harvested from ``text``, longest first.
+
+    Both the whole value and each of its whitespace-separated tokens are
+    returned, because the log spells the name both ways - ``uName`` carries
+    ``<first> <second>`` while ``instigator-`` carries ``<first>`` alone.
+    """
+    if not text:
+        return ()
+    found: set[str] = set()
+    for pattern in _DISCOVERY_PATTERNS:
+        for match in pattern.finditer(text):
+            candidate = _clean_candidate(match.group("value"))
+            if not _is_persona_candidate(candidate):
+                continue
+            found.add(candidate)
+            if " " in candidate:
+                for token in candidate.split():
+                    cleaned = _clean_candidate(token)
+                    if _is_persona_candidate(cleaned):
+                        found.add(cleaned)
+    return _normalise_personas(found)
+
+
+def _persona_pattern(personas: tuple[str, ...]) -> re.Pattern[str] | None:
+    """Compile one alternation over ``personas`` that steps over placeholders.
+
+    The placeholder branch comes first and is echoed back unchanged, so a name
+    that happens to sit inside ``<...>`` is never masked twice. That is what
+    keeps :func:`redact` idempotent when the caller passes the same names in
+    again.
+    """
+    if not personas:
+        return None
+    alternation = "|".join(re.escape(name) for name in personas)
+    return re.compile(rf"(?P<placeholder>{_PLACEHOLDER})|(?P<hit>{alternation})")
+
+
+def _mask_personas(text: str, personas: tuple[str, ...]) -> str:
+    """Replace every literal occurrence of each name with the placeholder.
+
+    Matching is plain substring, not word-bounded. The capture contains a line
+    where the game welds the name to the following word with no separator at
+    all, and a word-bounded pass walks straight past it.
+    """
+    pattern = _persona_pattern(personas)
+    if pattern is None:
+        return text
+
+    def _replace(match: re.Match[str]) -> str:
+        placeholder = match.group("placeholder")
+        return placeholder if placeholder is not None else PERSONA_PLACEHOLDER
+
+    return pattern.sub(_replace, text)
+
+
+# --------------------------------------------------------------------------
+# public entry points
+# --------------------------------------------------------------------------
+
+
+def redact(text: str, personas: Iterable[str] | None = None) -> str:
     """Return ``text`` with every recognised sensitive value masked.
+
+    ``personas`` names display names to mask literally. Leave it at ``None`` to
+    discover them from ``text`` itself; pass a sequence to use exactly those,
+    which is what a caller redacting a fragment of a larger log should do. An
+    empty sequence disables the literal pass entirely.
 
     Replacements are stable labelled placeholders, so redacting the same input
     twice produces byte-identical output and redacting already-redacted text
@@ -194,10 +665,15 @@ def redact(text: str) -> str:
     """
     if not text:
         return text
+    candidates = (
+        discover_personas(text) if personas is None else _normalise_personas(personas)
+    )
     result = text
     for rule in RULES:
         result = rule.pattern.sub(rule.replacement, result)
-    return result
+    for rule in LOG_TEXT_RULES:
+        result = rule.pattern.sub(rule.replacement, result)
+    return _mask_personas(result, candidates)
 
 
 def iter_sensitive(
@@ -208,6 +684,10 @@ def iter_sensitive(
     ``labels`` restricts the scan to a subset of rule labels; the default is
     every rule. Matches are yielded in rule order, then in text order within a
     rule, so output is deterministic.
+
+    This walks :data:`RULES` only. :data:`LOG_TEXT_RULES` and persona discovery
+    are log-text mechanisms and are deliberately absent, because this function
+    is also what scans the repository tree - see the module docstring.
     """
     if not text:
         return
@@ -219,15 +699,79 @@ def iter_sensitive(
             yield rule.label, match.group(0), match.start()
 
 
-def assert_clean(text: str, labels: Iterable[str] | None = None) -> None:
+def _raise_leak(text: str, label: str, matched: str, offset: int) -> None:
+    """Raise a :class:`RedactionError` that points at the leak.
+
+    A display name is described rather than quoted. This message can end up in
+    CI output or a bug report, and echoing the very name the guard exists to
+    protect would hand it over at the moment the guard fires.
+    """
+    line_no = text.count("\n", 0, offset) + 1
+    if label == "PERSONA":
+        detail = (
+            f"a {len(matched)}-character display name, not quoted here because "
+            "this message travels"
+        )
+    else:
+        detail = repr(matched)
+    raise RedactionError(f"unredacted {label} at offset {offset} (line {line_no}): {detail}")
+
+
+def assert_clean(
+    text: str,
+    labels: Iterable[str] | None = None,
+    personas: Iterable[str] | None = None,
+) -> None:
     """Raise :class:`RedactionError` if anything sensitive survives in ``text``.
 
-    The exception message names the label, the offending match, the byte
-    offset and the 1-based line number, so a failure points at the leak rather
-    than merely announcing one.
+    Three passes, matching the three mechanisms in :func:`redact`: the
+    structural rules, the log-text-only rules, and a persona pass that
+    rediscovers display names from ``text`` and fails if any of them is still
+    readable. Skipping that third pass is what made this guard vacuous for
+    every unkeyed shape in the log.
+
+    ``personas`` supplies names instead of rediscovering them. Use it whenever
+    the names are known, because a redacted fragment no longer carries the keys
+    discovery works from - which is the one hole this function cannot close on
+    its own.
+
+    The exception message names the label, the byte offset and the 1-based line
+    number. It quotes the offending match for every label except ``PERSONA``.
     """
-    for label, matched, offset in iter_sensitive(text, labels):
-        line_no = text.count("\n", 0, offset) + 1
-        raise RedactionError(
-            f"unredacted {label} at offset {offset} (line {line_no}): {matched!r}"
-        )
+    wanted = ALL_LABELS if labels is None else frozenset(labels)
+    for label, matched, offset in iter_sensitive(text, wanted):
+        _raise_leak(text, label, matched, offset)
+
+    if "PERSONA" not in wanted:
+        return
+
+    for rule in LOG_TEXT_RULES:
+        match = rule.pattern.search(text)
+        if match is not None:
+            _raise_leak(text, rule.label, match.group("value"), match.start("value"))
+
+    supplied = personas is not None
+    candidates = _normalise_personas(personas) if supplied else discover_personas(text)
+    pattern = _persona_pattern(candidates)
+    if pattern is not None:
+        for match in pattern.finditer(text):
+            if match.group("hit") is not None:
+                _raise_leak(text, "PERSONA", match.group("hit"), match.start("hit"))
+
+    # The third outcome. Everything above answers "did I find a name"; none of
+    # it answers "was there a name to find". Text that sits in a slot the log
+    # fills with a bare display name, from which nothing could be discovered
+    # and for which the caller named nothing, is text this function cannot
+    # certify - and reporting it clean is the one failure that cannot be undone
+    # once it reaches a public history.
+    if supplied or candidates:
+        return
+    if _PERSONA_EVIDENCE.search(text) or not _POSITIONAL_RISK.search(text):
+        return
+    raise RedactionError(
+        "cannot certify: this text sits in a context the log fills with a bare "
+        "display name, no name could be discovered from it, and none was "
+        "supplied. Redact the whole log and take the excerpt from the redacted "
+        "text, or pass personas=[...]. Pass personas=[] to assert there is no "
+        "display name in it."
+    )

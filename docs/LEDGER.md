@@ -56,6 +56,80 @@ four records to each other.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0007 - 2026-08-09 - Hygiene guards were blind to every uncommitted file
+
+**Evidence:**
+- tests/_tracked.py walked git ls-files, which lists TRACKED paths only, so a new file was unscanned until after it was committed
+- measured: docs/CLASSES.md, lanternlight/avgprice.py and every other file created this session were invisible to both guards
+- two independent agents hit this the same day - one had 21 long-id hits in an unscanned draft
+- walker now includes git ls-files --others --exclude-standard, so .gitignore stays authoritative and ops/runtime stays out
+- tests/test_tracked_walker.py 8 passed, covering a new untracked file, a gitignored file, and no double-yield
+
+A guard against leaked identifiers went blind at exactly the moment a new file is written, which is when it is needed.
+
+### LL-0006 - 2026-08-09 - Single-source class reference and third-party ecosystem survey
+
+**Evidence:**
+- six independent research passes, one per class, adjudicated by a seventh agent that wrote none of them
+- docs/CLASSES.md, 1996 lines: 13 genuine contradictions, 4 resolved and 9 left explicitly open
+- 10 circulating fabrications routed to their own section, kept separate from 7 unpublished guide numbers and 9 unverified names
+- the Sorcerer single-weapon question deliberately left OPEN as the repo requires
+- docs/ECOSYSTEM.md records the third-party landscape, including two named tools that inject or hook and must never be imitated
+- hygiene guards pass over both new documents
+
+No tier list verifiably dated after the 2026-08-06 patch exists for any class, so every current-standing claim anywhere is inference.
+
+### LL-0005 - 2026-08-09 - Dungeon recon from disk, and nine corrections to it after adversarial review
+
+**Evidence:**
+- no capture session was needed - the log had grown 567 KB to 6.1 MB over 3h44m and already held the data
+- measured: dungeon lifecycle across two runs, escape-portal mechanic, Game.PlayState tag namespace, six inventory opcodes, four loot contexts, 35 TS.Inventory cfgIds
+- the live holding- id space and the item cfgId space proven to be one space: 3020401 held 23 times AND priced at 31, anchored on 1269 of 1269 server_refreshKnightFeature lines
+- vocabulary corrected: the words raid and extract appear ZERO times; the game says dungeon and escape
+- an independent verifier was dispatched to REFUTE these findings and returned nine defects, all fixed
+- most serious: a death filed as the operator's belongs to a second player - the operator has no Death tag at all
+- scope defect: cfgId:(\d+) with no space silently dropped every TS.FTE line, 35 vs 45 distinct ids
+- docs/FINDINGS.md section 9, docs/OBSERVED_IDS.md, ROADMAP.md updated with the corrections stated rather than silently edited
+
+PvP moved from clean null to contact observed, mechanics unmeasured - pvp was never grepped before being filed absent.
+
+### LL-0004 - 2026-08-09 - P0 - redactor left 684 of 686 persona occurrences in the log
+
+**Evidence:**
+- measured against the live log: 686 occurrences before, 0 after; second token of the two-word display name 28 to 0
+- assert_clean previously returned cleanly on a persona-carrying line - the guard was vacuous for that shape
+- two root causes: keyed rules stopped at whitespace so a two-token name was half masked, and the persona also appears with no key at all
+- a second, scope-dependent defect was found on review and fixed: discovery returned empty on an ISOLATED excerpt, so the keyless shapes passed through and assert_clean approved them
+- all six measured leak shapes re-verified IN ISOLATION by the merger, independently of the implementing agent: 0 still leaking
+- assert_clean gained a cannot-certify path so it refuses to approve text it has no basis to approve
+- tests/test_redact.py grew 23 to 140 passed; 8 mutation checks each turned it red and restored byte-identical
+
+A third party's persona is also in the log and is non-ASCII. Discovery masks it, 16 occurrences.
+
+### LL-0003 - 2026-08-09 - AvgPrice market cache parser, and a three-way path defect fixed
+
+**Evidence:**
+- AvgPrice_937566.ini filled: 37 bytes to 343, 30 cfgId=price rows, PriceTime epoch 1786285800 = 2026-08-09T14:30:00Z
+- lanternlight/avgprice.py parses it; configparser verified to REJECT the keyless stamp line, and to silently misread it as a key under allow_no_value
+- tests/fixtures/avgprice_sample.ini byte-identical to the live file, verified by sha256 and length
+- lanternlight/paths.py pointed at Config/WindowsClient/AvgPrice.ini - wrong parent dir, wrong platform subdir (real is Windows) and wrong filename, so find_avg_price_ini returned None on a machine where the file existed
+- tests/test_paths_avgprice.py 11 passed, including a live-install test that fails against the old implementation
+- tests/test_avgprice.py 32 passed
+
+The old 37-byte state was never an empty file: two section headers plus a 10-digit stamp is exactly 37 bytes under LF.
+
+### LL-0002 - 2026-08-09 - Merge gate and the eight-lane specialist roster
+
+**Evidence:**
+- ops/merge_gate.py re-probes agent claims: file existence, real pytest summary parsing, per-file count regression
+- per-file guard added after finding the global-total check is unsafe once lanes commit concurrently - a lane adding 20 tests masks a sibling deleting 15
+- non-vacuity proven twice by mutation: disabling the total branch and the per-file branch each turned the guard red, restore returned green
+- ops/lanes.py declares 8 lanes with path-based ownership; tests/test_lanes.py walks the real tree and asserts no file has two owners
+- safety lane holds a veto; verify lane owns nothing and is read-only, both asserted
+- tests/test_merge_gate.py 23 passed, tests/test_lanes.py 23 passed
+
+Parsers built against MEASURED pytest output: CR-terminated lines, no trailing newline, and --collect-only prints no grand total.
+
 ### LL-0001 - 2026-08-09 - Repository scaffold and autonomy stack
 
 **Evidence:**

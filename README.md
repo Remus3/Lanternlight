@@ -52,14 +52,17 @@ Honest as of 2026-08-09. This project is days old and most of it does not exist.
 | Feasibility probe | **Done** | Anti-cheat and encryption measured, not assumed. `docs/FINDINGS.md` |
 | Pak / encryption probe | **Done** | 15/15 chunks encrypted, 101,500 TOC entries |
 | Class id table | **Done** | Ids 10-15 bound to class names by a log-to-pixel join. `docs/OBSERVED_IDS.md` |
-| Weapon config ids | **Partial** | Creation-preview ids recorded; the live-character id space is different and unjoined |
+| Weapon config ids | **Partial** | Creation-preview ids recorded. The live id space is now **joined**: it is the same space as item cfgIds |
+| Class reference | **Done** | All six researched independently and adjudicated into `docs/CLASSES.md` |
 | Log parsing | **Early** | `lanternlight.logparse` reads the surfaces named above |
-| Redaction | **Early, and mandatory** | `lanternlight.redact` gates every fixture. Tested |
-| GVAS `.sav` reader | **Not started** | Files confirmed unencrypted; no reader written |
+| Redaction | **Mandatory, being hardened** | `lanternlight.redact` gates every fixture. A persona leak found 2026-08-09 is the current P0 - see `ROADMAP.md` item 0 |
+| Market cache | **Parser done** | `AvgPrice_937566.ini` filled. `lanternlight.avgprice` parses it; watcher not built |
+| Dungeon data | **Prologue measured** | Lifecycle, escape portals, loot, death and escape states all observed. `docs/FINDINGS.md` section 9 |
+| Raid / PvP data | **Unmeasured** | Only the Prologue has been entered (`matchId=0`, no second player). Unmeasured, not absent |
+| GVAS `.sav` reader | **Not started** | Five files confirmed unencrypted; no reader written |
 | Live log tail | **Not started** | Port 8811 reserved, nothing listening |
 | **Emberforge** | **Empty** | The package exists. It **computes nothing.** No formulas are published anywhere, so there is nothing yet to encode |
 | Dashboard | **Does not exist** | Port 8810 reserved. See `BACKLOG.md` |
-| Raid / loot / extraction data | **Unmeasured** | No raid has been entered yet. Unmeasured, not absent |
 | Packaged release | **None** | No wheel, no installer, no tagged version |
 
 If a row above says "not started", believe it. Nothing here is oversold.
@@ -92,7 +95,8 @@ never cloned. See `docs/OPERATIONS.md`.
 |---|---|
 | [`docs/FINDINGS.md`](docs/FINDINGS.md) | The feasibility probe. Every line is a measurement, and where something was not measured it says so |
 | [`docs/OBSERVED_IDS.md`](docs/OBSERVED_IDS.md) | First-party id observations, each with the method that established it |
-| [`docs/CLASS_RESEARCH.md`](docs/CLASS_RESEARCH.md) | Blackarrow vs Shadowstrix, adjudicated across two independent research passes |
+| [`docs/CLASSES.md`](docs/CLASSES.md) | **Single source of truth for all six classes.** Six independent research passes, adjudicated by a seventh agent that wrote none of them |
+| [`docs/CLASS_RESEARCH.md`](docs/CLASS_RESEARCH.md) | Blackarrow vs Shadowstrix, the earlier decision record behind the operator's class choice |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Module map, the three data surfaces, and where the redactor sits |
 | [`docs/OPERATIONS.md`](docs/OPERATIONS.md) | How to run things, plus the safety boundary as an operational rule |
 | [`docs/adr/README.md`](docs/adr/README.md) | Architectural decisions, indexed |

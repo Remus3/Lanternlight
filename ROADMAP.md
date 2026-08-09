@@ -11,26 +11,68 @@ Status vocabulary: **NEXT** (the current item), **READY** (specified, unblocked)
 
 ---
 
-## 1. Raid recon pass - NEXT
+## 0. Redactor persona leak - P0, IN FLIGHT
 
-The single biggest unknown in the project. The 2026-08-09 probe reached camp and
-character creation only, so loot names, extraction events, match results, death
-and downed states, party composition and any in-raid economy line are
-**unmeasured, not absent** (`docs/FINDINGS.md` section 4). Everything downstream
-of this - the save reader's schema guesses, the market watcher's assumptions,
-Emberforge's first question - is being designed in the dark until it is run.
+Found 2026-08-09 while preparing the item 1 fixture. Running the current
+redactor over the real log leaves **684 of 686 occurrences of the operator's
+Steam persona in place**, and `assert_clean()` returns cleanly on a line that
+still contains it - so the guard is vacuous for this shape. Two root causes:
+keyed rules stop their value match at whitespace so a two-token display name is
+half-masked, and the persona also appears with no key at all, as a positional
+comma-separated field and after verbs such as `PlayerOpenTreasureBox`.
 
-Do it as a deliberate capture session, not opportunistically: start the frame
-poller, note the wall-clock at raid entry, play one full raid to a successful
-extraction, then play one to a death. Two runs, two outcomes, because the log
-almost certainly distinguishes them and we need both sides to know which field
-carries it.
+This **blocks item 1's acceptance outright**, because that criterion requires
+committing a redacted log excerpt and the excerpt carries the persona.
 
-**Acceptance:** a redacted log excerpt covering entry, at least one loot or
-inventory event, and both a successful extraction and a death, committed as a
-test fixture; plus new rows in `docs/OBSERVED_IDS.md` for every id observed,
-each with its method named. If a category yields nothing, that null result is
-written down explicitly rather than left silent.
+**Acceptance:** zero surviving persona occurrences when the new redactor is run
+over the full live log, measured and reported as a count; `assert_clean` fails
+on a persona-carrying line, proven by breaking the check and watching a test go
+red; `tests/test_no_pii.py` still passes; no existing test weakened.
+
+Related, not yet done: `CampData_<userId>.sav` embeds the operator's numeric
+userId **in its filename**, so any `.sav` fixture must have its name rewritten,
+not just its contents.
+
+## 1. Raid recon pass - PARTLY DONE, remainder is BLOCKED on a real raid
+
+Reframed 2026-08-09 after the data turned out to be on disk already. No capture
+session was needed: the operator had played 3h44m and the log had grown from
+567 KB to 6.1 MB. Section 7's "unmeasured" was a statement about the world at
+08:28, not about the game.
+
+**What is now measured** and written up in `docs/FINDINGS.md` section 9 and
+`docs/OBSERVED_IDS.md`: the dungeon lifecycle across two runs, both outcomes
+(one disconnect, one successful escape), the escape-portal mechanic, the
+`Game.PlayState.*` tag namespace including `Death` and `Escape`, six inventory
+opcodes, four loot source contexts, 35 item cfgIds, and the join proving the
+live `holding-` id space and the item cfgId space are the same space.
+
+Also corrected here: the game's own nouns are **dungeon** and **escape**. The
+words `raid` and `extract` appear **zero** times in the log. A grep for the
+wrong word returns a clean negative that means nothing.
+
+**What is still unmeasured, and why this item is not closed:** everything above
+is the **Prologue**, which runs at `matchId=0`. No matchmade raid, and only one
+escape type (`GroveSprite`) has ever been seen.
+
+**The operator has never been observed dying.** The log's single
+`Game.PlayState.Death` belongs to a second player, not to them
+(`docs/FINDINGS.md` 9.3). So the original "one run to an extraction, one to a
+death" pairing is still half open, and no amount of re-reading this log will
+close it.
+
+A second player and PvP analytics events **were** present, so PvP is no longer a
+clean null - it is "contact observed, mechanics unmeasured" (`docs/FINDINGS.md`
+9.10). That also means captures can contain a third party's identity, which the
+safety item above now has to cover.
+
+**Acceptance for the remainder:** a redacted log excerpt from a run with a
+**non-zero `matchId`**, committed as a fixture, covering entry, at least one
+loot event, and an outcome; plus new `docs/OBSERVED_IDS.md` rows for every id
+observed, each with its method named. Confirming or refuting that `matchId=0`
+is what distinguishes the Prologue from a real raid is itself a result worth
+recording. Blocked only on the operator entering one - nothing here needs a
+deliberate capture session any more, because the log is sufficient on its own.
 
 ## 2. GVAS `.sav` reader - READY
 
@@ -65,21 +107,32 @@ sublevel transitions), and passes every event through the redactor before it
 reaches any sink. Tested against a synthetic appending file, so the suite does
 not need the game.
 
-## 4. `AvgPrice` market watcher - READY, but low-yield until it fills
+## 4. `AvgPrice` market cache - PARSER DONE, watcher still to build
 
-`AvgPrice_937566.ini` is a market and trade-price cache the game maintains
-itself. At the time of measurement it was **37 bytes and empty** - the operator
-had not traded. The file existing at all is the finding; its contents are not
-yet a data source.
+**The file filled.** Measured 2026-08-09: 37 bytes to 343 bytes, carrying
+`[PriceTime]` plus 30 `cfgId=price` rows. The moment that only happens once has
+happened, and the schema is now known rather than awaited.
 
-This is cheap to build and cheap to leave running, so build the watcher now and
-let it capture the moment the file first fills. That first non-empty write tells
-us the schema, and it is a moment that only happens once.
+Landed this cycle: `lanternlight/avgprice.py`, tests, and a committed fixture
+byte-identical to the real file. Also fixed `lanternlight/paths.py`, which
+pointed at `<Saved>/Config/WindowsClient/AvgPrice.ini` - wrong parent directory,
+wrong platform subdirectory (the real one is `Windows`) and wrong filename - so
+`find_avg_price_ini()` returned `None` on a machine where the file plainly
+existed.
 
-**Acceptance:** a watcher that snapshots the file on change with a timestamp and
-never writes to it; a parser that is written **after** a non-empty sample
-exists, not before. If the file is still empty, the acceptance for this item is
-the snapshot history, not a parser.
+Two findings worth keeping. The old "37 bytes and empty" state was **not** an
+empty file: `[PriceTime]` + a 10-digit stamp + `[TradePrices]` is exactly 37
+bytes under LF, so it always had both headers and a stamp with zero rows.
+And the write is triggered by **returning to camp**, not by trading and not
+continuously - the file was written **0.975s** after the camp level-switch that
+followed a successful escape (14:53:35.681 to 14:53:36.656), with
+`CampData_<userId>.sav` 1.010s after that. An earlier draft said 1.7s, which
+came from subtracting a truncated whole second from a fractional one.
+
+**Remaining acceptance:** a watcher that snapshots the file on change with a
+timestamp and never writes to it. Given the measured trigger, it should expect a
+burst at camp re-entry and silence otherwise, and a poll interval chosen against
+that rather than against a guess.
 
 ## 5. Sorcerer single-weapon question - OPEN
 
