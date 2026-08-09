@@ -126,9 +126,14 @@ branches appending to one shared ledger **conflict**, and that two branches
 appending to their own fragments **do not**. Proving only the second would have
 shown the change happened without showing it mattered.
 
-## 2. GVAS `.sav` reader - REOPENED, a new property type appeared
+## 2. GVAS `.sav` reader - DECODED 2026-08-09, fixture split out to 2b
 
-Ledger `LL-0011`. `lanternlight/gvas.py` parses every `.sav` file. There were five when the reader was written and there are now **six** - `Deck.sav` appeared mid-session and parses cleanly, but no fixture pins it. Published
+Ledger `LL-0011`. `lanternlight/gvas.py` parses every `.sav` file. The save set
+keeps growing and any count written here goes stale within the day: four at
+first probe, then five, six, seven, and as of 2026-08-09 **eight distinct
+names** - `Scav.sav` appeared at 17:51 local mid-session and parses cleanly
+with one property, `bIsMaskReward`. A reader must enumerate the directory,
+never assume a list. Published
 GVAS parsers do not work on this build: UE 5.4+ replaced `FPropertyTag`'s
 `FName Type; int32 Size; int32 ArrayIndex` with a recursive type name plus a
 flags byte. All 627 trailing bytes of `EnhancedInputUserSettings.sav` decode,
@@ -172,10 +177,51 @@ lost the file entirely. It came from arming a watcher **before** the file
 existed, which is the whole lesson of this item and the reason
 `lanternlight/savewatch.py` now exists rather than a scratch script.
 
-**Acceptance:** `StructProperty` decoded far enough to parse this save with
-`undecoded_trailing == 0`, a sanitised fixture pinning it, and every newly
-observed property type recorded. If a nested struct cannot be decoded, it is
-handed back verbatim and named as undecoded - never guessed.
+**Acceptance - THREE OF FOUR MET 2026-08-09.** Ledger `LL-0019`, `LL-0020`.
+
+- **Decoded.** All **263** captured generations, 105 distinct sizes up to
+  177,878 bytes, parse in strict mode with `undecoded_trailing == 0` and zero
+  unknown properties. Re-measured by the merger rather than relayed. All seven
+  live saves still parse, so nothing regressed.
+- **Types recorded.** A struct value is a nested tagged property list closed by
+  `"None"` - no epilogue, no inner length, bounded by the tag's `Size`. New:
+  `ByteProperty<Enum>` is an FString of the qualified enumerator and **not** a
+  raw byte, plus `ArrayProperty`, generic `MapProperty`, and `StructProperty`.
+- **Undecoded is named, not guessed.** Natively serialised structs (tag flag
+  `0x08`) - `Vector` (24 bytes), `Rotator` (24), `Quat` (32), `Vector2D` (16) -
+  come back verbatim as `UndecodedStruct`. 401 leaves, 10,600 bytes, in the
+  largest capture. `Vector` and `Rotator` share a width, so they are separable
+  only by name: the concrete case against guessing.
+- **NOT met: no fixture.** See item 2b - it is safety-lane work, not ingest's,
+  and doing it quietly here would be exactly the wrong move.
+
+The reader **raised twice** on genuinely new things mid-work rather than
+misreading them - a `MapProperty` keyed by `DoubleProperty`, and `Rotator`.
+That is the raise-on-unknown guard validated in the wild for the second time,
+which is better evidence than any test.
+
+## 2b. Sanitised fixture for the transient save - READY, safety lane
+
+Split out of item 2 rather than left implied, because it is a different lane's
+work and a different risk.
+
+The captured bytes are held **outside** the repository and are not committed.
+A fixture cannot be a copy: the filename embeds the operator's roleId, so it
+needs a **rename**, not merely redaction. Inside, it carries `BattleId`, the
+`AutoSaveTempSlot` / `FinalSlot` names, a 23-entry
+`IdGeneratorData.NumIdToUUID` map, and `ownerRoleId` inside the `ItemCell`
+JSON - and **several of those fire no existing `lanternlight.redact`
+detector**. It is also ~177 KB raw, so it needs size reduction as well.
+
+Related and newly measured (`SAF-3`): inventory instance ids share a
+**12-digit prefix** with the operator's roleId, so masking the roleId alone
+does not mask them and each one leaks that prefix.
+
+**Acceptance:** a renamed, sanitised, size-reduced fixture that parses with
+`undecoded_trailing == 0`, is not byte-identical to any live save, passes
+`tests/test_no_pii.py` under `ALL_LABELS`, and carries a redact detector for
+every id shape found above - with the detectors proven non-vacuous against a
+positive control.
 
 **Still unidentified:** the 4 zero bytes after every tagged property list. An
 `int32` zero, an empty FString and four zero flag bytes all fit and nothing
@@ -285,8 +331,8 @@ toggle may be more legible in a raid than on the creation screen.
 
 ## Ordering note
 
-Item 1b is CLOSED, so **item 2 is NEXT** - the transient save is captured and
-the bytes are on disk, which is what was blocking it. Items 3 and 4's watcher
+Item 1b is CLOSED and item 2's decode landed the same day, so **item 2b is
+NEXT** - the sanitised fixture, which is safety-lane work. Items 3 and 4's watcher
 are independent of everything and of each other.
 
 Each lane now carries its own queue in `lanes/<lane_id>.STATE.json`, so the
