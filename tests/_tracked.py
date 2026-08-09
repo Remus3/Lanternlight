@@ -78,11 +78,11 @@ SKIP_DIRS = frozenset(
 MIN_EXPECTED_FILES = 40
 
 
-def _git_tracked(root: Path) -> list[Path] | None:
-    """Return tracked paths under ``root``, or None when git cannot answer."""
+def _git_listing(root: Path, extra_args: list[str]) -> list[str] | None:
+    """Run one ``git ls-files`` variant, returning names or None on failure."""
     try:
         proc = subprocess.run(
-            ["git", "ls-files", "-z"],
+            ["git", "ls-files", "-z", *extra_args],
             cwd=root,
             capture_output=True,
             timeout=30,
@@ -92,7 +92,29 @@ def _git_tracked(root: Path) -> list[Path] | None:
         return None
     if proc.returncode != 0:
         return None
-    names = [n for n in proc.stdout.decode("utf-8", "replace").split("\0") if n]
+    return [n for n in proc.stdout.decode("utf-8", "replace").split("\0") if n]
+
+
+def _git_tracked(root: Path) -> list[Path] | None:
+    """Return tracked AND untracked-but-not-ignored paths, or None.
+
+    **Untracked files are included deliberately, and it is the whole point.**
+    A plain ``git ls-files`` lists only what is already committed, so a
+    brand-new file was invisible to both hygiene guards until after it had
+    landed in history - which is the exact moment they stop being able to help.
+    Measured on 2026-08-09: two separate agents wrote new files containing
+    18-digit identifiers, ran the guards, and got green solely because nothing
+    looked at those files.
+
+    ``--exclude-standard`` keeps ``.gitignore`` authoritative, so ``ops/runtime``
+    and the caches stay out. The guards therefore scan what is about to be
+    published, not merely what already was.
+    """
+    tracked = _git_listing(root, [])
+    if tracked is None:
+        return None
+    untracked = _git_listing(root, ["--others", "--exclude-standard"]) or []
+    names = list(dict.fromkeys([*tracked, *untracked]))
     if not names:
         return None
     return [root / n for n in names]

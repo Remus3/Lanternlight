@@ -101,6 +101,123 @@ character uses a 7-digit id (`3010401`). These are different id spaces - most
 likely a weapon config id versus an item instance or item config id. Do not join
 them without evidence.
 
+## Dungeon session ids - 2026-08-09, second pass
+
+Everything below was established by **log inspection alone** over the 3h44m
+session log (13:18:57Z to 17:03:01Z), with no screen capture required. Where a
+binding needed a pixel join it is not claimed. Method is named per row.
+
+### The live holding id space IS the item cfgId space
+
+This **resolves the "do not join them without evidence" caution** in the
+Post-creation section above. The evidence now exists.
+
+Three ids appear both as a live `holding-` value on `server_refreshKnightFeature`
+and as an item `cfgId` in the loot stream and in `AvgPrice_937566.ini`:
+
+| id | Seen as `holding-` | Priced in AvgPrice | Reading |
+|---|---|---|---|
+| 3020401 | 23 times, `class-12` | yes, 31 | the equipped weapon, and it is tradeable |
+| 901205 | 1 time, `class-12` | yes, 29 | held briefly - consistent with a consumable |
+| 901207 | 1 time, `class-12` | yes, 33 | held briefly - consistent with a consumable |
+
+Method: exact-value intersection of three independently produced id sets, then
+each hit re-read on its original `TS.Avatar: [AvatarComponent]
+server_refreshKnightFeature` line to confirm it was not a parser artefact.
+
+**The caution still stands for the 5-digit ids.** Creation-preview ids (30401
+through 30508) show **no** overlap with any item cfgId. So there are two spaces,
+not one: a creation-preview weapon-config space, and a live item space shared by
+equipment, consumables and market prices. `3010401` and `3010501` are live-space
+ids that are **not** priced, so not every live id is tradeable.
+
+### Item cfgIds observed in the loot and inventory stream
+
+35 distinct on `TS.Inventory` lines, which write `cfgId:` with no space. Allowing
+a space widens this to 45 by picking up the `TS.FTE` stream - see
+`docs/FINDINGS.md` section 9.6 for the ten extra ids and why the narrow pattern
+was misleading. All numeric; **no item names appear anywhere in the log**:
+
+```
+101      901101   901201   901205   901206   901207   901208   901301
+903201   903202   903203   903205   903302   903303   903306   903307
+903308   903401   903402   903405   903501   904202   904203   904204
+904205   904206   904302   904303   904307   904403   999998   1110301
+1310301  1720201  3020401
+```
+
+30 of these carry a price in `AvgPrice_937566.ini`. The 5 that do not are `101`,
+`901101`, `999998`, `1110301`, `1310301`. **No id-to-item-name binding is
+recorded, because none was observed** - a name would need a screen capture
+joined on wall clock, exactly as the class ids were.
+
+Scope matters and is easy to get wrong: only **31** of the 35 appear on an
+actual `RequestPickupLoot` line (89 such lines). The others arrive through other
+inventory operations. Of the 30 priced ids, **28 were picked up**; `1720201` and
+`3020401` never were - `3020401` being the id the character was observed
+*holding*, so an equipped weapon carries a market price without ever having been
+looted.
+
+### Loot source contexts
+
+Log field: `context:` on `TS.Inventory: [DungeonInventoryComponent]` lines.
+
+| context | on `RequestPickupLoot` only | on all `[DungeonInventoryComponent]` |
+|---|---|---|
+| `Bot` | 17 | 18 |
+| `EnemyCorpse` | 15 | 17 |
+| `TreasureBox` | 13 | 14 |
+| `Pickup` | 1 | 1 |
+| **total** | **46** | **50** |
+
+Both columns are log-observed. The first version of this table printed the
+right-hand numbers under the left-hand label; the four-line difference is
+`RequestLootAndEquip`, a different operation. Same class of scope error as the
+`cfgId:` one in `docs/FINDINGS.md` section 9.6 - the counts were real, the scope
+sentence beside them was not.
+
+### Gameplay state tags
+
+Not numeric ids, but the same rule applies - recorded when observed.
+
+| Tag | count |
+|---|---|
+| `Game.PlayState.Gaming` | 13 |
+| `Game.PlayState.Spiritual` | 12 |
+| `Game.Net.Online` | 6 |
+| `Game.PlayState.WaitSpiritual` | 6 |
+| `Game.PlayState.Escape` | 5 |
+| `Game.PlayState.Death` | 1 |
+| `Game.EscapeType.GroveSprite` | 1 |
+
+`Spiritual` and `WaitSpiritual` are **unexplained**. They are not recorded as a
+downed state, because nothing observed establishes that.
+
+### Dungeon URL parameters
+
+`TS.Utils: [LevelSwitch] openLevelDirect ... options=levelId=1&roomModeId=9&matchId=0`
+
+| Parameter | Value seen | count |
+|---|---|---|
+| `levelId` | 1 | 14 |
+| `roomModeId` | 9 | 14 |
+| `matchId` | 0 | 14 |
+
+Only the Prologue was entered, so all three are single-valued. `matchId=0` is
+expected to distinguish the non-matchmade Prologue from a real raid - that is a
+**prediction to test**, not an observation.
+
+### classId 13 is now live, not just previewed
+
+`"classId":12` appears 16 times and `"classId":13` twice in the `roleInfo` JSON
+that `TS.Dungeon` emits on adventurer init. Method: log-observed. So a second
+character exists on the account beyond the class-12 main.
+
+Recorded because it was nearly misread: the id sits inside a long JSON payload,
+and reading a truncated copy of that line makes `"classId":12` look like
+`classId 1`. The value was re-extracted with an anchored pattern over the whole
+file before being written here.
+
 ## Rule
 
 Every future id binding gets recorded here at the moment it is observed, with

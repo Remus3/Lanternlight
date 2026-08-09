@@ -69,6 +69,61 @@ slices agree, that is a hypothesis, not a verification.
 The only exception is genuinely trivial work - a one-line cosmetic edit, a doc
 typo, a conversational answer. Substance decides, not file count.
 
+### Never file a suggestion - do it, or write it down as an open item
+
+**No agent in this project spawns a background task, a suggestion chip, or a
+"someone should look at this" note.** If you find work worth doing: either do it
+now, or add it to `ROADMAP.md` with an acceptance criterion, or add it to the
+ledger as a recorded question. Those are the only three destinations.
+
+A suggestion that lives outside `ROADMAP.md` and the ledger is invisible to the
+next cold session, which is the one failure this project's whole continuity
+design exists to prevent. It also quietly moves the work onto the operator, who
+is playing the game and is the one person who cannot action it right now.
+
+### Re-probe every subagent claim - `ops/merge_gate.py`
+
+The recurring failure is not a subagent lying, it is a subagent being **skipped
+or believed**. A green suite does not prove work landed: `pytest` exits 0 just
+as happily on 181 tests as on 182, so an agent that deletes or weakens a test to
+go green is invisible to an exit code.
+
+Before relaying any agent's "done", run the gate:
+
+```python
+from ops import merge_gate
+report = merge_gate.verify(
+    claimed_paths=["the/files/it/said/it/wrote.py"],
+    baseline=COUNT_MEASURED_BEFORE_DISPATCHING,
+)
+print(report.format())
+```
+
+It asks the filesystem whether the files exist and are non-empty, re-runs the
+suite, parses the real summary line, and **fails if the collected test count
+dropped below the baseline**. The baseline is a parameter, never a stored
+constant - measure it with `python -m pytest --collect-only -q` before
+dispatching work, because a count checked into a file goes stale and becomes a
+confident lie.
+
+The gate is necessary, not sufficient. It cannot tell you a claim is *true* -
+only that the mechanical parts of it are not obviously false. A claim about what
+the game does still needs re-measuring against the log.
+
+### Keep the merger's context sane
+
+The merger holds the plan, so the merger is the context that must not fill.
+
+- Agents doing research or bulk analysis **write their full output to a file
+  under the session scratchpad and return a short summary** - a few hundred
+  words at most. Six 33 KB research documents must never be pasted back through
+  chat.
+- The merger reads those files only when it needs them, or hands them to a
+  composing agent that reads them instead.
+- Pick the model per slice rather than uniformly. Security-critical or subtle
+  logic gets the strongest model; broad web research and mechanical sweeps do
+  not need it.
+
 ## TDD - not optional
 
 Every feature and every bugfix starts with a failing test.
