@@ -23,13 +23,15 @@ than importing it, so that neither guard can be disabled by breaking the
 other.
 """
 
-import os
 import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
+
+import _tracked  # noqa: E402  (sits beside this file in tests/)
 
 from lanternlight.redact import (  # noqa: E402  (path bootstrap must run first)
     ALL_LABELS,
@@ -37,44 +39,18 @@ from lanternlight.redact import (  # noqa: E402  (path bootstrap must run first)
     iter_sensitive,
 )
 
-TEXT_EXTENSIONS = frozenset(
-    {".py", ".md", ".toml", ".ini", ".txt", ".sh", ".yml", ".yaml"}
-)
-
-SKIP_DIRS = frozenset(
-    {
-        ".git",
-        ".hg",
-        ".svn",
-        ".idea",
-        ".vscode",
-        ".venv",
-        "venv",
-        "env",
-        ".mypy_cache",
-        ".pytest_cache",
-        ".ruff_cache",
-        "__pycache__",
-        "node_modules",
-        "build",
-        "dist",
-        "scratchpad",
-        "frames",
-    }
-)
-
-#: A walk that silently finds nothing would pass forever. Guard against it.
-MIN_EXPECTED_FILES = 5
+MIN_EXPECTED_FILES = _tracked.MIN_EXPECTED_FILES
 
 
 def iter_text_files(root: Path = REPO_ROOT):
-    """Yield every authored text file under ``root``, pruning skipped trees."""
-    for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = sorted(d for d in dirnames if d not in SKIP_DIRS)
-        for name in sorted(filenames):
-            path = Path(dirpath) / name
-            if path.suffix.lower() in TEXT_EXTENSIONS:
-                yield path
+    """Yield every authored text file that would be published from ``root``.
+
+    Delegates to :mod:`tests._tracked` - one walker, shared with the ASCII
+    guard, so the two cannot drift apart. It asks git what is tracked rather
+    than filtering on extensions, which is what let LICENSE, NOTICE and the
+    dotfiles escape this scan entirely.
+    """
+    return _tracked.iter_authored_files(root)
 
 
 def _scan(path: Path):

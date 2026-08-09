@@ -17,52 +17,24 @@ the codepoint and the character itself, and it shows the surrounding text. A
 lint failure that says only "non-ASCII found" costs more than it saves.
 """
 
-import os
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
-#: Authored text extensions. Binaries, images and lockfiles are out of scope.
-TEXT_EXTENSIONS = frozenset(
-    {".py", ".md", ".toml", ".ini", ".txt", ".sh", ".yml", ".yaml"}
-)
+import _tracked  # noqa: E402  (sits beside this file in tests/)
 
-#: Directories never walked. ``scratchpad`` and ``frames`` hold captured and
-#: throwaway material that is not authored content and is not published.
-SKIP_DIRS = frozenset(
-    {
-        ".git",
-        ".hg",
-        ".svn",
-        ".idea",
-        ".vscode",
-        ".venv",
-        "venv",
-        "env",
-        ".mypy_cache",
-        ".pytest_cache",
-        ".ruff_cache",
-        "__pycache__",
-        "node_modules",
-        "build",
-        "dist",
-        "scratchpad",
-        "frames",
-    }
-)
-
-#: A walk that silently finds nothing would pass forever. Guard against it.
-MIN_EXPECTED_FILES = 5
+MIN_EXPECTED_FILES = _tracked.MIN_EXPECTED_FILES
 
 
 def iter_text_files(root: Path = REPO_ROOT):
-    """Yield every authored text file under ``root``, pruning skipped trees."""
-    for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = sorted(d for d in dirnames if d not in SKIP_DIRS)
-        for name in sorted(filenames):
-            path = Path(dirpath) / name
-            if path.suffix.lower() in TEXT_EXTENSIONS:
-                yield path
+    """Yield every authored text file that would be published from ``root``.
+
+    Delegates to :mod:`tests._tracked`, which asks git what is tracked instead
+    of guessing from file extensions. The previous extension allowlist here
+    silently skipped LICENSE, NOTICE, .gitignore, .gitattributes and the
+    .githooks scripts - all suffixless, all published, none ever scanned.
+    """
+    return _tracked.iter_authored_files(root)
 
 
 def _offenses(data: bytes, limit: int = 5):
@@ -147,4 +119,13 @@ def test_walker_actually_reaches_this_test_file():
 def test_walker_prunes_skipped_directories():
     for path in iter_text_files():
         parts = set(path.relative_to(REPO_ROOT).parts[:-1])
-        assert not (parts & SKIP_DIRS), path
+        assert not (parts & _tracked.SKIP_DIRS), path
+
+
+def test_walker_reaches_the_suffixless_published_files():
+    # The regression this guards: both hygiene walkers used to filter on a
+    # file-extension allowlist, so LICENSE, NOTICE and the dotfiles were
+    # published without ever being scanned. Green, and blind.
+    seen = {p.relative_to(REPO_ROOT).as_posix() for p in iter_text_files()}
+    for expected in ("LICENSE", "NOTICE", ".gitignore", ".gitattributes"):
+        assert expected in seen, f"{expected} is published but not scanned"

@@ -7,9 +7,11 @@ and save files plus passive screen capture, computes build and combat math in
 upstream `github.com/Remus3/Lanternlight`.
 
 **Standalone.** Lanternlight shares no code, no ports, no scheduled-task
-namespace and no API keys with any other project on this machine. If you find
-yourself importing from `C:\Riot Commander` or `C:\RedMoon`, stop - copy the idea,
-never the wire.
+namespace and no API keys with any other project on this machine. Sibling
+projects exist locally and some of their patterns are worth reusing. If you find
+yourself importing from one of them, stop - copy the idea, never the wire. A
+shared import is a shared failure, and this repo is public while they may not
+be.
 
 > **Living docs, read at session start:** [`README.md`](README.md) -
 > [`docs/FINDINGS.md`](docs/FINDINGS.md) - [`docs/OBSERVED_IDS.md`](docs/OBSERVED_IDS.md) -
@@ -108,9 +110,10 @@ Related traps this repo has already hit or inherited:
 
 ## Ports
 
-Reserved for this project only. Chosen to avoid Riot Commander (8860, 8888, 8889,
-8895) and Red Moon (8777, 8778, 8779, 8780, 8783). Do not allocate outside this
-block, and do not bind at import time.
+Reserved for this project only. Chosen to sit clear of every port already in use
+by other local projects on this machine (the occupied set includes 8777-8783 and
+8860, 8888, 8889, 8895). Do not allocate outside this block, and do not bind at
+import time.
 
 | Port | Service | State |
 |---|---|---|
@@ -229,9 +232,10 @@ plus a SQLite file under `~/.perseus-vault/`, no cloud, no API key), wired as th
 ignorance, it is REDISCOVERY - redoing closed work, re-pitching a refuted idea,
 or acting on a stale doc.
 
-- The vault on this machine is currently scoped to **Riot Commander**, a
-  different project. Do not write Lanternlight facts into it and do not treat
-  anything recalled from it as authority here.
+- The vault on this machine is currently scoped to a **different project**. Do
+  not write Lanternlight facts into it and do not treat anything recalled from
+  it as authority here - a hit from another project's vault is someone else's
+  context wearing a confident tone.
 - If a Lanternlight vault is stood up later, it is a **MIRROR, never the source
   of truth**. Source of truth stays this file, `docs/`, `ROADMAP.md` and the
   ledger. Never fix a fact only in the vault.
