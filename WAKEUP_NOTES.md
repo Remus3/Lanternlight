@@ -8,9 +8,10 @@ fidelity and archive older ones rather than deleting them.
 # Session 2026-08-09c - the lane machinery finished, and a save caught mid-flight
 
 Orchestrated and multi-agent throughout. Branch
-`session/2026-08-09c-lane-state-and-capture`, **not merged to `main`**. Ledger
-`LL-0018` through `LL-0020`. 685 tests at the start, **801** at the end, all
-green from purged caches, ruff clean.
+`session/2026-08-09c-lane-state-and-capture`, **merged to `main` at the
+operator's instruction** and pushed - `main` is `58ff2e7`. Ledger `LL-0018`
+through `LL-0022`. 685 tests at the start, **807** at the end, all green from
+purged caches on `main` after the merge, ruff clean.
 
 ## The thing that mattered most, and it was luck plus ten minutes
 
