@@ -1,0 +1,51 @@
+{
+  "lane_id": "safety",
+  "open_items": [
+    {
+      "blocked_on": "a candidate fixture existing",
+      "item_id": "SAF-1",
+      "opened": "2026-08-09",
+      "text": "Review a sanitised StandaloneSlot fixture before it is committed - the filename embeds the operator roleId, so it needs a rename not just redaction"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "SAF-2",
+      "opened": "2026-08-09",
+      "text": "Capture safety depends on a privacy toggle in the game menu and nothing here can detect its state - decide whether that is documentable or guardable"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "SAF-3",
+      "opened": "2026-08-09",
+      "text": "PII-ADJACENT: inventory instance ids share a 12-digit prefix with the operator roleId (an id seen in onEquipPackUpdate vs the roleId in the save filename). Redacting the roleId alone does NOT mask instance ids, and each instance id leaks that prefix. Check whether lanternlight.redact covers this shape"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "SAF-4",
+      "opened": "2026-08-09",
+      "text": "ENCODING: some TS.UI log lines carry CJK text, so a log excerpt is not ASCII and not single-byte. Confirm the redactor and every excerpt path handle it, and that the ASCII hygiene guard can never be fed raw log text"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "SAF-5",
+      "opened": "2026-08-09",
+      "text": "Dungeon log lines carry the operator persona under a player-name key AND the roleid in the SAME line as loot values, so any dungeon excerpt is dense with PII. Verify the redactor covers both key shapes before item 1 commits a fixture"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "SAF-6",
+      "opened": "2026-08-09",
+      "text": "GAP MEASURED 2026-08-09: the pre-commit hook ACCEPTED a commit that tests/test_no_pii.py then rejected - the hook is less strict than the test, so a hazard can land and only fail later in the suite. Decide whether the hook should run the same detectors"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "SAF-7",
+      "opened": "2026-08-09",
+      "text": "MEASURED: .githooks/pre-commit ASCII arm does not cover *.json - a json em-dash gives HOOK EXIT 0 while the same bytes in a .md are BLOCKED. lanes/*.STATE.json are the repo first tracked agent-written json, so this gap is now load-bearing"
+    }
+  ],
+  "resume_note": "no lane session yet - last worked as a sub-slice of the 2026-08-09b session",
+  "schema": 1,
+  "sessions": 0,
+  "updated": "2026-08-09T23:16:04+00:00"
+}

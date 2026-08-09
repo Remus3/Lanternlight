@@ -1,0 +1,39 @@
+{
+  "lane_id": "ops",
+  "open_items": [
+    {
+      "blocked_on": "",
+      "item_id": "OPS-1",
+      "opened": "2026-08-09",
+      "text": "ops/loop/ledger.py has no test module of its own - confirm and close the gap"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "OPS-2",
+      "opened": "2026-08-09",
+      "text": "A lane adding a NEW file cannot go green alone - the orphan guard needs ownership declared in ops/lanes.py, which the ops lane owns. Measured on lane/ingest with savewatch.py. Decide: ops declares ownership first, or the integrator declares it at merge"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "OPS-3",
+      "opened": "2026-08-09",
+      "text": "lanes/<id>.LEDGER.md fragments are created lazily on first entry, so six of seven lanes have no fragment yet and the git-visibility guard skips a file that does not exist"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "OPS-4",
+      "opened": "2026-08-09",
+      "text": "tests/test_lane_contract.py::test_the_files_on_disk_equal_what_the_roster_renders is PATH-DEPENDENT - the contract text embeds primary_checkout(), so a clone at any other path renders different bytes and the test fails. Pre-existing, reproduced at bfda016, not from this session"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "OPS-5",
+      "opened": "2026-08-09",
+      "text": "The git-visibility guard skips paths that do not exist, so with fragments created lazily it currently checks exactly one real fragment. It also cannot catch an ignore rule added after a file is already tracked"
+    }
+  ],
+  "resume_note": "ROADMAP 1b - per-lane state and commit serialisation landed; integrator flow next",
+  "schema": 1,
+  "sessions": 1,
+  "updated": "2026-08-09T23:16:04+00:00"
+}

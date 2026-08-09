@@ -1,0 +1,705 @@
+"""Per-lane on-disk state, and the reason lanes never share one ledger file.
+
+Two separate guarantees are tested here, and they are the two halves of
+ROADMAP item 1b.
+
+**Persistence.** A lane is described as a "persistent specialist", but agent
+context does not survive a session, so without something on disk every lane
+silently resets to zero each time it starts. ``ops/lane_state.py`` gives each
+lane a state file it alone owns.
+
+**Non-collision.** Eight lanes on eight branches cannot all append to
+``docs/LEDGER.md``. The interesting part is that this is not fixed by a lock,
+and the test class at the bottom of this file demonstrates why by measuring
+both shapes against real git merges: two branches appending at the same anchor
+in one shared file CONFLICT, and two branches appending to their own fragment
+files DO NOT. A lock serialises writes in time; git merges content. Those are
+different axes, so serialising the writes leaves the conflict exactly where it
+was.
+
+That differential is the point. A test that only showed fragments merging
+cleanly would prove the change happened without proving it mattered.
+"""
+
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from ops import lane_state, lanes  # noqa: E402
+from ops.loop import ledger  # noqa: E402
+
+
+def _entry(item_id: str, summary: str = "did a thing") -> ledger.LedgerEntry:
+    return ledger.LedgerEntry(
+        item_id=item_id,
+        summary=summary,
+        evidence=["a test that proves it"],
+        date="2026-08-09",
+    )
+
+
+class TestPaths:
+    def test_each_lane_gets_its_own_directory(self):
+        seen = {lane_state.lane_prefix(lane.lane_id) for lane in lanes.LANES}
+        assert len(seen) == len(lanes.LANES)
+
+    def test_both_files_live_flat_in_the_lanes_directory(self):
+        assert lane_state.state_path("ingest").parent == lane_state.lanes_dir()
+        assert lane_state.fragment_path("ingest").parent == lane_state.lanes_dir()
+
+    def test_no_lane_file_sits_in_a_subdirectory(self):
+        # Measured 2026-08-09: a directory per lane put `lanes/capture/` in
+        # front of two independent PII guards - .gitignore's bare `capture/`
+        # rule and the pre-commit hook's `*/capture/*` rule - both of which
+        # were behaving correctly. `logs`, `frames`, `private` and `tmp` are
+        # blocked the same way, so any lane named after one would have failed
+        # identically. Flat files remove the collision class, not one instance.
+        for lane in lanes.LANES:
+            if lane.read_only:
+                continue
+            for chooser in (lane_state.state_path, lane_state.fragment_path):
+                rel = chooser(lane.lane_id).relative_to(lane_state.REPO_ROOT)
+                assert len(rel.parts) == 2, (
+                    f"{rel} is nested - a lane id that collides with a blocked "
+                    "directory name would be silently unstageable"
+                )
+
+    def test_the_state_and_the_fragment_are_different_files(self):
+        assert lane_state.state_path("ops") != lane_state.fragment_path("ops")
+
+    def test_lane_directories_sit_outside_ops_so_ownership_stays_disjoint(self):
+        # ops/** belongs to the ops lane. A per-lane state file under ops/ would
+        # therefore have two owners and turn tests/test_lanes.py red.
+        rel = lane_state.lanes_dir().relative_to(lane_state.REPO_ROOT)
+        assert rel.parts[0] != "ops"
+        assert rel.parts[0] != "docs"
+
+
+class TestStateRoundTrip:
+    def test_save_then_load_returns_what_was_saved(self, tmp_path):
+        target = tmp_path / "STATE.json"
+        state = lane_state.LaneState(lane_id="ingest", sessions=3, resume_note="mid-parse")
+        lane_state.save(state, target)
+        again = lane_state.load("ingest", target)
+        assert again.lane_id == "ingest"
+        assert again.sessions == 3
+        assert again.resume_note == "mid-parse"
+
+    def test_saving_stamps_the_update_time(self, tmp_path):
+        target = tmp_path / "STATE.json"
+        state = lane_state.LaneState(lane_id="ingest")
+        assert state.updated == ""
+        lane_state.save(state, target)
+        assert state.updated
+
+    def test_the_write_goes_through_a_temporary_file(self, tmp_path):
+        # Same reasoning as ops/loop/state.py - a reader may poll this file, and
+        # open(path, "w") truncates the target before writing a byte.
+        target = tmp_path / "STATE.json"
+        lane_state.save(lane_state.LaneState(lane_id="ingest"), target)
+        assert target.exists()
+        leftovers = [p.name for p in tmp_path.iterdir() if p.name.startswith(".")]
+        assert leftovers == [], f"temporary debris left behind: {leftovers}"
+
+    def test_the_file_is_ascii_and_newline_terminated(self, tmp_path):
+        target = tmp_path / "STATE.json"
+        lane_state.save(lane_state.LaneState(lane_id="ingest"), target)
+        raw = target.read_bytes()
+        assert raw.decode("ascii")
+        assert raw.endswith(b"\n")
+
+
+class TestLoadNeverRaises:
+    """A lane that crashes on a damaged state file is a lane that needs a human."""
+
+    def test_a_missing_file_yields_a_usable_default(self, tmp_path):
+        state = lane_state.load("ingest", tmp_path / "nope.json")
+        assert state.lane_id == "ingest"
+        assert state.sessions == 0
+        assert state.recovery_note
+        assert not state.recovered
+
+    def test_invalid_json_is_recovered_and_reported(self, tmp_path):
+        target = tmp_path / "STATE.json"
+        target.write_text("{not json", encoding="utf-8")
+        state = lane_state.load("ingest", target)
+        assert state.recovered
+        assert "json" in state.recovery_note.lower()
+
+    def test_an_unknown_schema_is_treated_as_unreadable(self, tmp_path):
+        target = tmp_path / "STATE.json"
+        target.write_text(json.dumps({"schema": 999, "lane_id": "ingest"}), encoding="utf-8")
+        state = lane_state.load("ingest", target)
+        assert state.recovered
+        assert "schema" in state.recovery_note.lower()
+
+    def test_a_wrong_shape_is_recovered_rather_than_crashing(self, tmp_path):
+        target = tmp_path / "STATE.json"
+        target.write_text(json.dumps({"schema": 1, "sessions": "many"}), encoding="utf-8")
+        state = lane_state.load("ingest", target)
+        assert state.recovered
+
+    def test_a_state_file_for_the_wrong_lane_is_refused(self, tmp_path):
+        # Loading ingest's state out of ops's file would silently graft one
+        # lane's open items onto another.
+        target = tmp_path / "STATE.json"
+        lane_state.save(lane_state.LaneState(lane_id="ops"), target)
+        state = lane_state.load("ingest", target)
+        assert state.recovered
+        assert "ops" in state.recovery_note
+
+    def test_recovery_flags_are_not_persisted(self, tmp_path):
+        target = tmp_path / "STATE.json"
+        state = lane_state.load("ingest", tmp_path / "nope.json")
+        lane_state.save(state, target)
+        payload = json.loads(target.read_text(encoding="utf-8"))
+        assert "recovered" not in payload
+        assert "recovery_note" not in payload
+
+
+class TestUnknownLaneIsRefused:
+    def test_an_unknown_lane_id_raises(self):
+        with pytest.raises(KeyError):
+            lane_state.state_path("no-such-lane")
+
+    def test_the_read_only_lane_gets_no_state_file(self):
+        # verify writes nothing, ever. Handing it somewhere to write would be
+        # the first crack in that.
+        with pytest.raises(lane_state.ReadOnlyLane):
+            lane_state.state_path("verify")
+
+    def test_the_read_only_lane_gets_no_ledger_fragment_either(self):
+        with pytest.raises(lane_state.ReadOnlyLane):
+            lane_state.fragment_path("verify")
+
+
+class TestSessionsAndOpenItems:
+    def test_starting_a_session_bumps_the_counter(self, tmp_path):
+        target = tmp_path / "STATE.json"
+        first = lane_state.start_session("ingest", "reading the save", target)
+        second = lane_state.start_session("ingest", "still reading", target)
+        assert first.sessions == 1
+        assert second.sessions == 2
+
+    def test_starting_a_session_records_where_to_resume(self, tmp_path):
+        target = tmp_path / "STATE.json"
+        state = lane_state.start_session("ingest", "decoding StructProperty", target)
+        assert state.resume_note == "decoding StructProperty"
+        assert lane_state.load("ingest", target).resume_note == "decoding StructProperty"
+
+    def test_an_open_item_survives_a_reload(self, tmp_path):
+        target = tmp_path / "STATE.json"
+        lane_state.add_open_item("ingest", "OI-1", "decode the nested struct", path=target)
+        state = lane_state.load("ingest", target)
+        assert [item.item_id for item in state.open_items] == ["OI-1"]
+        assert state.open_items[0].text == "decode the nested struct"
+
+    def test_an_open_item_can_record_what_it_is_blocked_on(self, tmp_path):
+        target = tmp_path / "STATE.json"
+        lane_state.add_open_item(
+            "ingest", "OI-2", "pin a fixture", blocked_on="safety review", path=target
+        )
+        assert lane_state.load("ingest", target).open_items[0].blocked_on == "safety review"
+
+    def test_closing_an_open_item_removes_it(self, tmp_path):
+        target = tmp_path / "STATE.json"
+        lane_state.add_open_item("ingest", "OI-1", "a", path=target)
+        lane_state.add_open_item("ingest", "OI-2", "b", path=target)
+        lane_state.close_open_item("ingest", "OI-1", path=target)
+        assert [i.item_id for i in lane_state.load("ingest", target).open_items] == ["OI-2"]
+
+    def test_closing_an_unknown_item_raises_rather_than_passing_quietly(self, tmp_path):
+        target = tmp_path / "STATE.json"
+        with pytest.raises(KeyError):
+            lane_state.close_open_item("ingest", "OI-9", path=target)
+
+    def test_adding_a_duplicate_open_item_id_raises(self, tmp_path):
+        target = tmp_path / "STATE.json"
+        lane_state.add_open_item("ingest", "OI-1", "a", path=target)
+        with pytest.raises(ValueError):
+            lane_state.add_open_item("ingest", "OI-1", "different text", path=target)
+
+
+class TestAsciiIsEnforcedAtTheWrite:
+    """Catch it where the field is named, not later where only the file is.
+
+    The offending characters are written as escapes rather than as literals.
+    That is not squeamishness - ``tests/test_ascii_hygiene.py`` scans this file
+    too, so a literal em-dash here would fail the repository hygiene guard
+    while trying to test the lane-level one. Measured this session: it did.
+    """
+
+    EM_DASH = chr(0x2014)
+    LEFT_QUOTE = chr(0x201C)
+    RIGHT_QUOTE = chr(0x201D)
+
+    def test_a_non_ascii_resume_note_raises(self, tmp_path):
+        target = tmp_path / "STATE.json"
+        state = lane_state.LaneState(lane_id="ingest", resume_note=f"em{self.EM_DASH}dash")
+        with pytest.raises(ValueError):
+            lane_state.save(state, target)
+
+    def test_a_non_ascii_open_item_raises(self, tmp_path):
+        target = tmp_path / "STATE.json"
+        text = f"smart {self.LEFT_QUOTE}quotes{self.RIGHT_QUOTE}"
+        with pytest.raises(ValueError):
+            lane_state.add_open_item("ingest", "OI-1", text, path=target)
+
+    def test_the_error_names_the_offending_codepoint(self, tmp_path):
+        target = tmp_path / "STATE.json"
+        state = lane_state.LaneState(lane_id="ingest", resume_note=f"a{self.EM_DASH}b")
+        with pytest.raises(ValueError, match="U\\+2014"):
+            lane_state.save(state, target)
+
+
+class TestRenderIsReadableCold:
+    def test_the_render_names_the_lane_and_its_open_items(self, tmp_path):
+        target = tmp_path / "STATE.json"
+        lane_state.start_session("ingest", "mid-parse", target)
+        lane_state.add_open_item("ingest", "OI-1", "decode the struct", path=target)
+        text = lane_state.render(lane_state.load("ingest", target))
+        assert "ingest" in text
+        assert "OI-1" in text
+        assert "decode the struct" in text
+        assert "mid-parse" in text
+
+    def test_the_render_is_ascii(self, tmp_path):
+        target = tmp_path / "STATE.json"
+        lane_state.add_open_item("ingest", "OI-1", "a thing", path=target)
+        assert lane_state.render(lane_state.load("ingest", target)).isascii()
+
+    def test_no_open_items_says_so_rather_than_rendering_an_empty_list(self, tmp_path):
+        text = lane_state.render(lane_state.load("ingest", tmp_path / "nope.json"))
+        assert "none" in text.lower()
+
+
+class TestLedgerFragment:
+    def test_appending_creates_the_fragment_with_its_marker(self, tmp_path):
+        target = tmp_path / "LEDGER.md"
+        lane_state.append_fragment("ingest", _entry("LL-0100"), path=target)
+        assert lane_state.FRAGMENT_MARKER in target.read_text(encoding="utf-8")
+
+    def test_a_second_entry_preserves_the_first_byte_for_byte(self, tmp_path):
+        target = tmp_path / "LEDGER.md"
+        lane_state.append_fragment("ingest", _entry("LL-0100", "first"), path=target)
+        after_first = target.read_text(encoding="utf-8")
+        first_block = after_first.split(lane_state.FRAGMENT_MARKER, 1)[1]
+        lane_state.append_fragment("ingest", _entry("LL-0101", "second"), path=target)
+        assert first_block.strip() in target.read_text(encoding="utf-8")
+
+    def test_entries_are_newest_first(self, tmp_path):
+        target = tmp_path / "LEDGER.md"
+        lane_state.append_fragment("ingest", _entry("LL-0100"), path=target)
+        lane_state.append_fragment("ingest", _entry("LL-0101"), path=target)
+        text = target.read_text(encoding="utf-8")
+        assert text.index("LL-0101") < text.index("LL-0100")
+
+    def test_reading_back_returns_the_entry_ids_newest_first(self, tmp_path):
+        target = tmp_path / "LEDGER.md"
+        lane_state.append_fragment("ingest", _entry("LL-0100"), path=target)
+        lane_state.append_fragment("ingest", _entry("LL-0101"), path=target)
+        assert lane_state.fragment_entry_ids(target) == ["LL-0101", "LL-0100"]
+
+    def test_an_entry_with_no_evidence_is_refused(self, tmp_path):
+        target = tmp_path / "LEDGER.md"
+        bad = ledger.LedgerEntry(item_id="LL-0100", summary="s", evidence=[])
+        with pytest.raises(ValueError):
+            lane_state.append_fragment("ingest", bad, path=target)
+
+    def test_a_missing_fragment_reads_as_empty_rather_than_raising(self, tmp_path):
+        assert lane_state.fragment_entry_ids(tmp_path / "nope.md") == []
+
+
+class TestIntegrateIntoTheRepositoryLedger:
+    def _seeded_ledger(self, tmp_path: Path) -> Path:
+        target = tmp_path / "LEDGER.md"
+        target.write_text(
+            "# Ledger\n\nPreamble with a template:\n\n"
+            "```\n### LL-0000 - YYYY-MM-DD - one-line summary\n```\n\n"
+            f"{ledger.ENTRIES_MARKER}\n\n"
+            "### LL-0099 - 2026-08-08 - something older\n\n"
+            "**Evidence:**\n- it happened\n",
+            encoding="utf-8",
+        )
+        return target
+
+    def test_a_fragment_entry_lands_in_the_repository_ledger(self, tmp_path):
+        book = self._seeded_ledger(tmp_path)
+        frag = tmp_path / "frag.md"
+        lane_state.append_fragment("ingest", _entry("LL-0100", "from the lane"), path=frag)
+        moved = lane_state.integrate(frag, book)
+        assert moved == ["LL-0100"]
+        assert "from the lane" in book.read_text(encoding="utf-8")
+
+    def test_integration_preserves_the_existing_entries(self, tmp_path):
+        book = self._seeded_ledger(tmp_path)
+        frag = tmp_path / "frag.md"
+        lane_state.append_fragment("ingest", _entry("LL-0100"), path=frag)
+        lane_state.integrate(frag, book)
+        assert "LL-0099 - 2026-08-08 - something older" in book.read_text(encoding="utf-8")
+
+    def test_integration_is_idempotent(self, tmp_path):
+        book = self._seeded_ledger(tmp_path)
+        frag = tmp_path / "frag.md"
+        lane_state.append_fragment("ingest", _entry("LL-0100"), path=frag)
+        lane_state.integrate(frag, book)
+        again = lane_state.integrate(frag, book)
+        assert again == []
+        assert book.read_text(encoding="utf-8").count("### LL-0100") == 1
+
+    def test_the_template_in_the_preamble_does_not_count_as_an_entry(self, tmp_path):
+        # Measured trap, ledger LL-0014: a naive count of '### LL-' headers in
+        # docs/LEDGER.md is one too high, because the Format section contains a
+        # LL-0000 template inside a code fence. An idempotence check that
+        # searched the whole file would refuse to integrate a real LL-0000.
+        book = self._seeded_ledger(tmp_path)
+        frag = tmp_path / "frag.md"
+        lane_state.append_fragment("ingest", _entry("LL-0000", "a real entry"), path=frag)
+        assert lane_state.integrate(frag, book) == ["LL-0000"]
+        assert "a real entry" in book.read_text(encoding="utf-8")
+
+    def test_a_ledger_without_the_marker_is_refused(self, tmp_path):
+        book = tmp_path / "LEDGER.md"
+        book.write_text("# Ledger\n\nno marker here\n", encoding="utf-8")
+        frag = tmp_path / "frag.md"
+        lane_state.append_fragment("ingest", _entry("LL-0100"), path=frag)
+        with pytest.raises(ledger.MarkerMissingError):
+            lane_state.integrate(frag, book)
+
+    def test_integrating_several_fragments_keeps_every_entry(self, tmp_path):
+        book = self._seeded_ledger(tmp_path)
+        one = tmp_path / "a.md"
+        two = tmp_path / "b.md"
+        lane_state.append_fragment("ingest", _entry("LL-0100"), path=one)
+        lane_state.append_fragment("ops", _entry("LL-0101"), path=two)
+        lane_state.integrate(one, book)
+        lane_state.integrate(two, book)
+        text = book.read_text(encoding="utf-8")
+        assert "### LL-0100" in text
+        assert "### LL-0101" in text
+        assert "### LL-0099" in text
+
+
+class TestOwnershipMatchesTheRoster:
+    def test_every_writing_lane_owns_its_own_lane_directory(self):
+        for lane in lanes.LANES:
+            if lane.read_only:
+                continue
+            rel = lane_state.state_path(lane.lane_id).relative_to(lane_state.REPO_ROOT)
+            assert lanes.owner_of(rel) == lane.lane_id, (
+                f"{rel} must be owned by {lane.lane_id} alone - a lane state "
+                "file with another owner reintroduces the shared-file race"
+            )
+
+    def test_one_lane_never_owns_another_lanes_state(self):
+        for lane in lanes.LANES:
+            if lane.read_only:
+                continue
+            rel = lane_state.state_path(lane.lane_id).relative_to(lane_state.REPO_ROOT)
+            others = [
+                other.lane_id
+                for other in lanes.LANES
+                if other.lane_id != lane.lane_id and other.owns_path(rel)
+            ]
+            assert others == [], f"{rel} is also claimed by {others}"
+
+    def test_the_fragment_is_owned_by_the_same_lane(self):
+        for lane in lanes.LANES:
+            if lane.read_only:
+                continue
+            rel = lane_state.fragment_path(lane.lane_id).relative_to(lane_state.REPO_ROOT)
+            assert lanes.owner_of(rel) == lane.lane_id
+
+    def test_the_repository_ledger_is_still_owned_by_exactly_one_lane(self):
+        # docs/LEDGER.md keeps a single writer - the integrator. Fragments exist
+        # so that the other seven lanes never need to touch it.
+        assert lanes.owner_of("docs/LEDGER.md") == "ops"
+
+
+class TestReadOnlyRefusalCannotBeBypassedWithAPath:
+    """Found by the refutation pass, and it was a real door left open.
+
+    The refusal lived only in :func:`state_path` and :func:`fragment_path`, so
+    every default route raised - and every route that took an explicit ``path``
+    sailed straight past it. ``save(LaneState(lane_id="verify"), somewhere)``
+    and ``append_fragment("verify", entry, path=somewhere)`` both wrote files,
+    and ``load`` read one back. Eight entry points raising is not the same
+    property as "verify writes nothing, ever", and only the second one is the
+    guarantee that lets a read-only lane grade other lanes' work.
+    """
+
+    def test_save_refuses_a_read_only_lane_even_with_an_explicit_path(self, tmp_path):
+        target = tmp_path / "verify.STATE.json"
+        with pytest.raises(lane_state.ReadOnlyLane):
+            lane_state.save(lane_state.LaneState(lane_id="verify"), target)
+        assert not target.exists(), "the refusal must happen BEFORE anything is written"
+
+    def test_append_fragment_refuses_a_read_only_lane_even_with_an_explicit_path(self, tmp_path):
+        target = tmp_path / "verify.LEDGER.md"
+        with pytest.raises(lane_state.ReadOnlyLane):
+            lane_state.append_fragment("verify", _entry("LL-0100"), path=target)
+        assert not target.exists()
+
+    def test_load_refuses_a_read_only_lane_even_with_an_explicit_path(self, tmp_path):
+        with pytest.raises(lane_state.ReadOnlyLane):
+            lane_state.load("verify", tmp_path / "anything.json")
+
+    def test_the_open_item_helpers_refuse_a_read_only_lane_too(self, tmp_path):
+        with pytest.raises(lane_state.ReadOnlyLane):
+            lane_state.add_open_item("verify", "X-1", "nope", path=tmp_path / "s.json")
+        with pytest.raises(lane_state.ReadOnlyLane):
+            lane_state.start_session("verify", "nope", tmp_path / "s.json")
+
+    def test_a_writing_lane_is_still_allowed_a_path(self, tmp_path):
+        # The refusal must be about read-only, not about passing a path at all.
+        target = tmp_path / "ingest.STATE.json"
+        lane_state.save(lane_state.LaneState(lane_id="ingest"), target)
+        assert target.exists()
+
+
+class TestIntegrationOrderIsActuallyChecked:
+    """Also from the refutation pass: ``reversed()`` had ZERO coverage.
+
+    ``integrate`` inserts oldest-first so the newest entry ends up on top, and
+    every existing test used a single-entry fragment - so removing
+    ``reversed()`` left the entire suite green. A docstring promise with no
+    test behind it is decoration, which is exactly what this repository means
+    by a vacuous guard.
+    """
+
+    def _seeded(self, tmp_path: Path) -> Path:
+        book = tmp_path / "LEDGER.md"
+        body = [
+            "# Ledger",
+            "",
+            ledger.ENTRIES_MARKER,
+            "",
+            "### LL-0001 - 2026-08-01 - oldest",
+            "",
+            "**Evidence:**",
+            "- seeded",
+            "",
+        ]
+        book.write_text("\n".join(body), encoding="utf-8", newline="\n")
+        return book
+
+    def test_a_multi_entry_fragment_lands_newest_first(self, tmp_path):
+        book = self._seeded(tmp_path)
+        frag = tmp_path / "frag.md"
+        for item in ("LL-0100", "LL-0101", "LL-0102"):
+            lane_state.append_fragment("ingest", _entry(item), path=frag)
+        assert lane_state.fragment_entry_ids(frag) == ["LL-0102", "LL-0101", "LL-0100"]
+
+        assert lane_state.integrate(frag, book) == ["LL-0102", "LL-0101", "LL-0100"]
+        text = book.read_text(encoding="utf-8")
+        positions = [text.index(f"### {i}") for i in ("LL-0102", "LL-0101", "LL-0100", "LL-0001")]
+        assert positions == sorted(positions), (
+            "the repository ledger promises newest first - integrating a "
+            f"multi-entry fragment broke that ordering: {positions}"
+        )
+
+
+class TestLaneStateIsVisibleToGit:
+    """A state file git cannot see is a lane that silently resets to zero.
+
+    Measured 2026-08-09, and it was live: ``.gitignore`` carries a bare
+    ``capture/`` rule for directories of captured frames, and a bare pattern
+    matches a directory of that name at ANY depth - so it swallowed
+    ``lanes/capture/``, the capture lane's own state directory. The file was
+    written, the seeding script reported success, and git never saw it.
+
+    Nothing existing could have caught this. The orphan guard in
+    ``tests/test_lanes.py`` walks ``git ls-files``, so a path git is ignoring
+    is invisible to the exact check meant to notice an unowned file - the
+    blind spot and the bug were the same shape. This class asks git directly
+    instead.
+
+    The bug had a second layer worth recording, because it is the reason the
+    first fix looked applied and was not: the negation lines were written with
+    CRLF endings while the rest of the file was LF, so each pattern carried a
+    trailing carriage return and matched nothing at all. ``.gitignore`` read
+    back as correct. Only the byte count showed it.
+
+    Do not probe this with ``git check-ignore``. Measured while writing this
+    class: ``check-ignore -q`` exits 0 when ANY pattern matches the path,
+    **including a negation**, so a correctly re-included file reports exactly
+    like an excluded one and the test passes or fails for the wrong reason.
+    The question that matters is not "did a pattern match" but "will git take
+    this file", so that is what is asked - a path is acceptable when git lists
+    it as tracked, or as untracked-and-not-excluded.
+    """
+
+    def _git_lines(self, *args: str) -> list[str] | None:
+        proc = subprocess.run(
+            ["git", *args], cwd=REPO_ROOT, capture_output=True, text=True, check=False
+        )
+        if proc.returncode != 0:
+            return None
+        return [line.replace("\\", "/") for line in proc.stdout.splitlines() if line]
+
+    def _acceptable(self) -> set[str] | None:
+        tracked = self._git_lines("ls-files")
+        untracked = self._git_lines("ls-files", "--others", "--exclude-standard")
+        if tracked is None or untracked is None:
+            return None
+        return set(tracked) | set(untracked)
+
+    def test_the_probe_itself_can_tell_an_ignored_path_from_a_kept_one(self):
+        # Without this, both tests below would pass vacuously on any machine
+        # where git declines to answer.
+        acceptable = self._acceptable()
+        if acceptable is None:
+            pytest.skip("git unavailable")
+        assert "ops/lanes.py" in acceptable, "git is not listing a file it tracks"
+        assert not any(p.endswith(".pyc") for p in acceptable), (
+            "compiled bytecode is excluded, so this probe should never see it - "
+            "if it does, the probe is not measuring exclusion at all"
+        )
+
+    def _assert_git_would_take(self, chooser) -> None:
+        acceptable = self._acceptable()
+        if acceptable is None:
+            pytest.skip("git unavailable")
+        missing = []
+        for lane in lanes.LANES:
+            if lane.read_only:
+                continue
+            rel = (
+                chooser(lane.lane_id)
+                .relative_to(lane_state.REPO_ROOT)
+                .as_posix()
+            )
+            if rel not in acceptable and Path(REPO_ROOT / rel).exists():
+                missing.append(rel)
+        assert not missing, (
+            "git will not take these files, so the lanes owning them silently "
+            "reset to zero every session and nothing warns:\n  "
+            + "\n  ".join(missing)
+        )
+
+    def test_git_would_take_every_writing_lanes_state_file(self):
+        self._assert_git_would_take(lane_state.state_path)
+
+    def test_git_would_take_every_writing_lanes_ledger_fragment(self):
+        self._assert_git_would_take(lane_state.fragment_path)
+
+
+def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["git", *args], cwd=repo, capture_output=True, text=True, check=False
+    )
+
+
+def _new_repo(root: Path) -> Path:
+    root.mkdir(parents=True, exist_ok=True)
+    _git(root, "init", "-b", "main")
+    _git(root, "config", "user.email", "lane@example.invalid")
+    _git(root, "config", "user.name", "Lane Test")
+    # core.hooksPath is local config and is not inherited, so no repository hook
+    # fires in here. That is deliberate: this test is about merge behaviour.
+    return root
+
+
+def _commit_all(repo: Path, message: str) -> None:
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-m", message)
+
+
+@pytest.mark.slow
+class TestSharedLedgerRacesAndFragmentsDoNot:
+    """The differential that justifies the whole fragment design.
+
+    Both halves run real git merges. The first half is the status quo and is
+    expected to CONFLICT - if it ever stops conflicting, the second half is no
+    longer proving anything and this file should be revisited rather than
+    trusted.
+    """
+
+    def _seed(self, repo: Path) -> None:
+        book = repo / "LEDGER.md"
+        book.write_text(
+            f"# Ledger\n\n{ledger.ENTRIES_MARKER}\n\n"
+            "### LL-0001 - 2026-08-01 - the entry that was already there\n\n"
+            "**Evidence:**\n- seeded\n",
+            encoding="utf-8",
+        )
+        _commit_all(repo, "seed")
+
+    def test_two_branches_appending_to_one_shared_ledger_conflict(self, tmp_path):
+        repo = _new_repo(tmp_path / "shared")
+        self._seed(repo)
+        book = repo / "LEDGER.md"
+
+        for branch, item in (("lane/a", "LL-0100"), ("lane/b", "LL-0101")):
+            _git(repo, "checkout", "-b", branch, "main")
+            ledger.append_entry(_entry(item, f"work from {branch}"), book)
+            _commit_all(repo, f"{branch} ledgers {item}")
+
+        _git(repo, "checkout", "main")
+        assert _git(repo, "merge", "--no-edit", "lane/a").returncode == 0
+        second = _git(repo, "merge", "--no-edit", "lane/b")
+
+        assert second.returncode != 0, (
+            "two lanes appending at the same anchor in one shared ledger were "
+            "expected to conflict - if git now merges this cleanly, the "
+            "fragment design's justification has changed and needs re-measuring"
+        )
+        # Match git's own marker line, not the bare word: git's advice text
+        # says "fix conflicts", which an uppercased substring check also
+        # matches, so the loose form could pass on a non-conflict message.
+        assert "CONFLICT (" in (second.stdout + second.stderr), (
+            "expected git to report a real content conflict, got: "
+            + second.stdout
+            + second.stderr
+        )
+        _git(repo, "merge", "--abort")
+
+    def test_two_branches_appending_to_their_own_fragments_merge_cleanly(self, tmp_path):
+        repo = _new_repo(tmp_path / "fragments")
+        self._seed(repo)
+        (repo / "lanes").mkdir()
+        _commit_all(repo, "add lanes dir")
+
+        for branch, lane_id, item in (("lane/a", "a", "LL-0100"), ("lane/b", "b", "LL-0101")):
+            _git(repo, "checkout", "-b", branch, "main")
+            frag = repo / "lanes" / f"{lane_id}.LEDGER.md"
+            frag.parent.mkdir(parents=True, exist_ok=True)
+            lane_state.append_fragment("ingest", _entry(item, f"work from {branch}"), path=frag)
+            _commit_all(repo, f"{branch} ledgers {item}")
+
+        _git(repo, "checkout", "main")
+        first = _git(repo, "merge", "--no-edit", "lane/a")
+        second = _git(repo, "merge", "--no-edit", "lane/b")
+
+        assert first.returncode == 0, first.stdout + first.stderr
+        assert second.returncode == 0, (
+            "per-lane fragments are disjoint files and must merge without a "
+            "conflict:\n" + second.stdout + second.stderr
+        )
+        assert (repo / "lanes" / "a.LEDGER.md").exists()
+        assert (repo / "lanes" / "b.LEDGER.md").exists()
+
+    def test_the_integrator_then_folds_both_fragments_into_one_ledger(self, tmp_path):
+        # The fragments merged cleanly; a single writer on main composes them.
+        repo = _new_repo(tmp_path / "integrate")
+        self._seed(repo)
+        book = repo / "LEDGER.md"
+        moved = []
+        for lane_id, item in (("a", "LL-0100"), ("b", "LL-0101")):
+            frag = repo / "lanes" / f"{lane_id}.LEDGER.md"
+            frag.parent.mkdir(parents=True, exist_ok=True)
+            lane_state.append_fragment("ingest", _entry(item), path=frag)
+            moved.extend(lane_state.integrate(frag, book))
+
+        assert moved == ["LL-0100", "LL-0101"]
+        text = book.read_text(encoding="utf-8")
+        for item in ("LL-0001", "LL-0100", "LL-0101"):
+            assert f"### {item}" in text

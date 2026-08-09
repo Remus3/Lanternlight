@@ -45,9 +45,42 @@ Also corrected here: the game's own nouns are **dungeon** and **escape**. The
 words `raid` and `extract` appear **zero** times in the log. A grep for the
 wrong word returns a clean negative that means nothing.
 
-**What is still unmeasured, and why this item is not closed:** everything above
-is the **Prologue**, which runs at `matchId=0`. No matchmade raid, and only one
-escape type (`GroveSprite`) has ever been seen.
+**PARTLY REFUTED 2026-08-09c, by an operator attestation plus a log join.** The
+operator named the mode - "Hallowgrove, Normal, Solo explore" - and the log was
+checked against it immediately. What that overturned:
+
+- **Non-zero `matchId` values EXIST**: `11111` and `11112`. This item's
+  acceptance treated "non-zero `matchId`" as a proxy for "a real matchmade
+  raid". **That proxy is refuted.** Both belong to *solo explores*. `matchId=0`
+  is the Prologue; a solo explore gets a low sequential id. Whatever
+  distinguishes a matchmade run, it is not simply a non-zero `matchId`.
+- **A better discriminator is available**, straight from the map URL:
+  `?levelId=119&roomModeId=0&matchType=1&matchId=11112`. Four axes, not one.
+- **A second escape type exists.** `FixEscapeBell` / `WindChime` appears
+  alongside `GroveSprite` in one run, so "only one escape type has ever been
+  seen" is no longer true.
+- **The player-facing and internal names differ.** "Hallowgrove" is the name
+  the operator sees; the map loaded is `/Game/Project/Maps/Map_2/Whitewoods_Day`
+  with sublevel `WhiteWoods_Level_Easy2`. A grep for the player-facing name
+  finds only cosmetics.
+- **Match state machine**, observed in order: `onRequestMatch`, `InMatch`,
+  `MatchSuccessful`, `EnterBattle`, `NotMatch`.
+- **A loot pity system exists** - `OnHandleFirstLoot` carries `dropValue`,
+  `dropPity` and `addPityDropValue exceed threshold`. Unmeasured beyond its
+  existence; no coefficient is claimed here.
+
+**What is still unmeasured:** a run with another player in it. Everything above
+is solo. PvP mechanics remain a clean null.
+
+**And the transient save's trigger is now known.** `StandaloneSlot_<roleId>.sav`
+is created at match start and destroyed when the run ends - it is not on a
+timer at all. Measured on two independent runs: `matchId=11112` entered battle
+at 22:27:00 UTC and the file appeared 17 seconds later at 22:27:17; the run
+ended around 22:46 and the file was gone by 22:48:48. The previous session's
+file, which appeared at 20:39 UTC, fits `matchId=11111` starting at 20:38:19.
+The "about 13 minutes" lifetime was never a timer - it was simply how long that
+run lasted. Its producer is named too: `StandaloneLevelCtrl.battleSnapUpdate`
+emits battle snapshots throughout, and the controller name matches the file.
 
 **The operator has never been observed dying.** The log's single
 `Game.PlayState.Death` belongs to a second player, not to them
@@ -68,7 +101,7 @@ is what distinguishes the Prologue from a real raid is itself a result worth
 recording. Blocked only on the operator entering one - nothing here needs a
 deliberate capture session any more, because the log is sufficient on its own.
 
-## 1b. Specialist lane build-out - NEXT, machinery landed and proven
+## 1b. Specialist lane build-out - CLOSED 2026-08-09
 
 Decided with the operator 2026-08-09. Eight persistent specialist lanes, each
 owning a disjoint file set, each running its own orchestrated sub-agents and
@@ -91,29 +124,49 @@ contracts **from the roster**, so ownership cannot drift out of sync with the
 prose describing it, and the drift guard is proven non-vacuous. The contracts
 live in `.claude/commands/`, so each lane is also a slash command.
 
-**Not built yet, and this is the whole remaining item:**
+**Both remaining pieces landed 2026-08-09.** Ledger `LL-0018`.
 
-1. **Per-lane on-disk state.** Agent context does not survive a session, so
-   "persistent specialist" has to mean a charter plus a work log plus open items
-   on disk, or every lane silently resets to zero each time it starts. This is
-   the piece that makes the lanes actually persistent rather than merely
-   well-described.
-2. **A commit-serialisation answer.** Eight lanes and one `docs/LEDGER.md` will
-   race. `ops/loop/ledger.py` is atomic per write, which prevents a torn read
-   but does nothing about two lanes appending in separate worktrees and
-   conflicting at merge. Options worth weighing: a per-lane ledger fragment
-   merged on integration, or a lock modelled on `ops/loop/guard.py`.
-3. **Nobody has actually run a lane yet.** Everything above is tested, and
-   none of it has been exercised by a real slice of work.
+1. **Per-lane on-disk state - DONE.** `ops/lane_state.py` gives every writing
+   lane `lanes/<lane_id>.STATE.json`, holding a session counter, a one-line
+   resume note and its open items. Each file has exactly one owner, so it
+   cannot race. All seven writing lanes are seeded from this roadmap, so a lane
+   starting cold reads its own queue instead of the whole document. `verify` is
+   read-only and is refused a state file rather than given one it must remember
+   not to use.
+2. **Commit serialisation - DONE, and the lock option is refuted.** A lock does
+   **not** fix this, and that is worth keeping so nobody re-proposes it: a lock
+   serialises writes *in time*, but the lanes are on different branches and git
+   merges *content*. Two lanes can append perfectly serialised, an hour apart,
+   and still conflict, because both inserted text below the same anchor of the
+   same file. So the shared mutable file is removed instead - each lane appends
+   only to `lanes/<lane_id>.LEDGER.md`, and `docs/LEDGER.md` keeps exactly one
+   writer forever: the integrator on `main`, calling `lane_state.integrate`,
+   which is idempotent.
+3. **Nobody has actually run a lane yet - THIS WAS ALREADY STALE when written.**
+   Two lanes had run end to end before this line was committed: `ingest` built
+   the GVAS reader and `safety` closed the base64 hole, both in their own
+   worktrees on their own branches, both merged (`Merge branch 'lane/ingest'`,
+   `Merge branch 'lane/safety'`). Running them is what found the
+   `primary_checkout()` bug that reading the code never would.
 
-**Acceptance:** a lane launched into its own worktree, doing a slice of real
-work, passing its own merge gate, committing to its branch and pushing, with the
-primary checkout untouched throughout - demonstrated end to end for one lane,
-not described.
+**Acceptance - MET.** A lane launched into its own worktree, doing real work,
+committing to its branch, primary checkout untouched: demonstrated by the two
+lanes above, and again this session by `lane/ingest`.
 
-## 2. GVAS `.sav` reader - REOPENED, a new property type appeared
+The differential that justifies the fragment design is measured rather than
+argued: `tests/test_lane_state.py` runs **real git merges** and asserts that two
+branches appending to one shared ledger **conflict**, and that two branches
+appending to their own fragments **do not**. Proving only the second would have
+shown the change happened without showing it mattered.
 
-Ledger `LL-0011`. `lanternlight/gvas.py` parses every `.sav` file. There were five when the reader was written and there are now **six** - `Deck.sav` appeared mid-session and parses cleanly, but no fixture pins it. Published
+## 2. GVAS `.sav` reader - DECODED 2026-08-09, fixture split out to 2b
+
+Ledger `LL-0011`. `lanternlight/gvas.py` parses every `.sav` file. The save set
+keeps growing and any count written here goes stale within the day: four at
+first probe, then five, six, seven, and as of 2026-08-09 **eight distinct
+names** - `Scav.sav` appeared at 17:51 local mid-session and parses cleanly
+with one property, `bIsMaskReward`. A reader must enumerate the directory,
+never assume a list. Published
 GVAS parsers do not work on this build: UE 5.4+ replaced `FPropertyTag`'s
 `FName Type; int32 Size; int32 ArrayIndex` with a recursive type name plus a
 flags byte. All 627 trailing bytes of `EnhancedInputUserSettings.sav` decode,
@@ -126,15 +179,82 @@ appeared at 15:39 and does not parse: it uses
 rather than guessing, which is the correct behaviour and is why this is an open
 item rather than a silent partial parse.
 
-It is 46 KB and growing while written - twenty times any other save - so it is
-very likely the real character and progression store, and therefore the most
-valuable save surface for Emberforge. Its filename also embeds the operator's
-roleId, so any fixture must be renamed, not just redacted.
+It is the real character and progression store's best candidate, and therefore
+the most valuable save surface for Emberforge. Its filename also embeds the
+operator's roleId, so any fixture must be renamed, not just redacted.
 
-**Acceptance:** `StructProperty` decoded far enough to parse this save with
-`undecoded_trailing == 0`, a sanitised fixture pinning it, and every newly
-observed property type recorded. If a nested struct cannot be decoded, it is
-handed back verbatim and named as undecoded - never guessed.
+**CAPTURED 2026-08-09, whole lifetime, and three filed claims are corrected.**
+A snapshotter was armed at 17:27:14 local, before the file existed. It took
+**263 generations** across **105 distinct sizes**, from first appearance to
+deletion. The bytes are held outside the repository at `C:\ll-captures\saves\`
+and are **not committed** - the filename embeds the operator's roleId.
+
+Measured, first-party, this session:
+
+- **It is not 46 KB.** It appeared at 17:27:17 at **2,190** bytes and was last
+  seen at 17:46:54 at **177,878** bytes - about **62 times** the next largest
+  save (`UserSettings_v1.sav`, 2,867 bytes), not twenty. The earlier "46 KB"
+  was a reading of a file mid-write, mistaken for its size.
+- **It is not append-only.** At 17:40:02 it measured 125,765 bytes, *smaller*
+  than the 126,078-byte peak recorded 50 seconds earlier. It is rewritten in
+  place with a varying size, so a reader must not assume a prefix stays put
+  between two polls, and a single snapshot can be a torn read.
+- **It does not live about 13 minutes.** It was still being written **19
+  minutes 37 seconds** after appearing, and was gone by 17:48:48 - a lifetime
+  of roughly 20 to 21 minutes. Whatever removes it is not a simple elapsed-time
+  rule from creation. Leaving the mode remains the more likely trigger, and is
+  still unmeasured.
+
+None of this was reachable by re-reading a document, and the previous session
+lost the file entirely. It came from arming a watcher **before** the file
+existed, which is the whole lesson of this item and the reason
+`lanternlight/savewatch.py` now exists rather than a scratch script.
+
+**Acceptance - THREE OF FOUR MET 2026-08-09.** Ledger `LL-0019`, `LL-0020`.
+
+- **Decoded.** All **263** captured generations, 105 distinct sizes up to
+  177,878 bytes, parse in strict mode with `undecoded_trailing == 0` and zero
+  unknown properties. Re-measured by the merger rather than relayed. All seven
+  live saves still parse, so nothing regressed.
+- **Types recorded.** A struct value is a nested tagged property list closed by
+  `"None"` - no epilogue, no inner length, bounded by the tag's `Size`. New:
+  `ByteProperty<Enum>` is an FString of the qualified enumerator and **not** a
+  raw byte, plus `ArrayProperty`, generic `MapProperty`, and `StructProperty`.
+- **Undecoded is named, not guessed.** Natively serialised structs (tag flag
+  `0x08`) - `Vector` (24 bytes), `Rotator` (24), `Quat` (32), `Vector2D` (16) -
+  come back verbatim as `UndecodedStruct`. 401 leaves, 10,600 bytes, in the
+  largest capture. `Vector` and `Rotator` share a width, so they are separable
+  only by name: the concrete case against guessing.
+- **NOT met: no fixture.** See item 2b - it is safety-lane work, not ingest's,
+  and doing it quietly here would be exactly the wrong move.
+
+The reader **raised twice** on genuinely new things mid-work rather than
+misreading them - a `MapProperty` keyed by `DoubleProperty`, and `Rotator`.
+That is the raise-on-unknown guard validated in the wild for the second time,
+which is better evidence than any test.
+
+## 2b. Sanitised fixture for the transient save - READY, safety lane
+
+Split out of item 2 rather than left implied, because it is a different lane's
+work and a different risk.
+
+The captured bytes are held **outside** the repository and are not committed.
+A fixture cannot be a copy: the filename embeds the operator's roleId, so it
+needs a **rename**, not merely redaction. Inside, it carries `BattleId`, the
+`AutoSaveTempSlot` / `FinalSlot` names, a 23-entry
+`IdGeneratorData.NumIdToUUID` map, and `ownerRoleId` inside the `ItemCell`
+JSON - and **several of those fire no existing `lanternlight.redact`
+detector**. It is also ~177 KB raw, so it needs size reduction as well.
+
+Related and newly measured (`SAF-3`): inventory instance ids share a
+**12-digit prefix** with the operator's roleId, so masking the roleId alone
+does not mask them and each one leaks that prefix.
+
+**Acceptance:** a renamed, sanitised, size-reduced fixture that parses with
+`undecoded_trailing == 0`, is not byte-identical to any live save, passes
+`tests/test_no_pii.py` under `ALL_LABELS`, and carries a redact detector for
+every id shape found above - with the detectors proven non-vacuous against a
+positive control.
 
 **Still unidentified:** the 4 zero bytes after every tagged property list. An
 `int32` zero, an empty FString and four zero flag bytes all fit and nothing
@@ -244,14 +364,23 @@ toggle may be more legible in a raid than on the creation screen.
 
 ## Ordering note
 
-Item 1b is next because it is the only item that makes every other item cheaper:
-lanes are how work gets parallelised here, and two of them have now been run end
-to end. Items 3 and 4's watcher are independent of everything and of each other.
+Item 1b is CLOSED and item 2's decode landed the same day, so **item 2b is
+NEXT** - the sanitised fixture, which is safety-lane work. Items 3 and 4's watcher
+are independent of everything and of each other.
+
+Each lane now carries its own queue in `lanes/<lane_id>.STATE.json`, so the
+right way to pick work is to read the state file of the lane that owns the
+files, not to re-read this whole document. This list stays the single place an
+item's acceptance criterion is defined; the lane files say who holds it and
+what is blocked.
 
 Item 1's remainder, and items 5 and 6, all need the client open. None of them
 needs a *deliberate* capture session any more - the 2026-08-09 pass showed the
 log alone was sufficient - so fold them into whichever session next has the game
-running rather than scheduling them.
+running rather than scheduling them. **Item 4b and items 5 and 6 are held as
+open items on the `research` and `capture` lanes**, each naming what it is
+blocked on, so they are no longer only a paragraph in a document nobody reads
+mid-session.
 
 ## Deliberately not on this list
 

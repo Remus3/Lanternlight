@@ -1,0 +1,15 @@
+{
+  "lane_id": "emberforge",
+  "open_items": [
+    {
+      "blocked_on": "ROADMAP 1 - a matchmade raid with a non-zero matchId",
+      "item_id": "EMB-1",
+      "opened": "2026-08-09",
+      "text": "Encode nothing until a measured number exists; omit the field rather than guess, and keep unmeasured distinguishable from measured zero"
+    }
+  ],
+  "resume_note": "computes nothing on purpose - no cooldown, damage or duration value is published anywhere",
+  "schema": 1,
+  "sessions": 0,
+  "updated": "2026-08-09T22:47:43+00:00"
+}

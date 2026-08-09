@@ -1,0 +1,81 @@
+{
+  "lane_id": "research",
+  "open_items": [
+    {
+      "blocked_on": "the client running, operator at level 2 has both so the capture cannot separate them",
+      "item_id": "RES-1",
+      "opened": "2026-08-09",
+      "text": "ROADMAP 4b - whether 'at least 2 Archer's Arrows' counts equipped TYPES or CHARGES"
+    },
+    {
+      "blocked_on": "the client running",
+      "item_id": "RES-2",
+      "opened": "2026-08-09",
+      "text": "ROADMAP 4b - how arrows are acquired at all: loot, craft or vendor"
+    },
+    {
+      "blocked_on": "the client running",
+      "item_id": "RES-3",
+      "opened": "2026-08-09",
+      "text": "ROADMAP 4b - how roll differs from dodge; the class effective range is counted in dodge-lengths"
+    },
+    {
+      "blocked_on": "a Sorcerer creation re-walk",
+      "item_id": "RES-4",
+      "opened": "2026-08-09",
+      "text": "ROADMAP 5 - Sorcerer surfaced one weapon config id and has no published explanation, unlike Blackarrow; until settled nothing may call Blackarrow the only single-weapon class"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "RES-5",
+      "opened": "2026-08-09",
+      "text": "Scav.sav and its bIsMaskReward property are observed but uninterpreted - record in OBSERVED_IDS.md with the method, do not guess what Scav or Mask mean"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "RES-6",
+      "opened": "2026-08-09",
+      "text": "NEW log shape binds ammo to slots: [SkillSlotView::OnRequestEquipAmmo] Equip ammo: ammoId: <id>, destSlot: <n>. Four ammoIds seen (120501, 120502, 120508, 120510) - a 1205xx space distinct from item cfgIds. Record in OBSERVED_IDS.md with method named"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "RES-7",
+      "opened": "2026-08-09",
+      "text": "Operator-attested 2026-08-09: at level 3 the talent Marksman was the ONLY choice at that tier, and Lightning Arrow was equipped to the C slot. Attestation is a weaker evidence class than a frame read - label it as such, per LL-0017"
+    },
+    {
+      "blocked_on": "confirming the Z/X/C to 0/1/2 mapping directly",
+      "item_id": "RES-8",
+      "opened": "2026-08-09",
+      "text": "destSlot 2 is the ONLY slot ever equipped in the whole log, and it happened at level 3 - independent corroboration that the C arrow slot unlocks at Lv. 3 (LL-0016), from the log rather than the screen"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "RES-9",
+      "opened": "2026-08-09",
+      "text": "Bind player-facing to internal names: Hallowgrove is Map_2/Whitewoods_Day, sublevel WhiteWoods_Level_Easy2, and the operator calls that difficulty Normal while the asset says Easy2 - record both, interpret neither"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "RES-10",
+      "opened": "2026-08-09",
+      "text": "Record the map URL grammar levelId/roomModeId/matchType/matchId and the match state machine onRequestMatch-InMatch-MatchSuccessful-EnterBattle-NotMatch in OBSERVED_IDS.md with the method named"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "RES-11",
+      "opened": "2026-08-09",
+      "text": "A loot PITY system exists - OnHandleFirstLoot carries dropValue, dropPity and addPityDropValue exceed threshold. Existence only; claim no coefficient"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "RES-12",
+      "opened": "2026-08-09",
+      "text": "Second escape type FixEscapeBell / WindChime seen alongside GroveSprite - the one-escape-type claim is refuted and FINDINGS.md section 9 needs correcting"
+    }
+  ],
+  "resume_note": "no lane session yet - docs/CLASSES.md and OBSERVED_IDS.md are current to 2026-08-09",
+  "schema": 1,
+  "sessions": 0,
+  "updated": "2026-08-09T23:05:24+00:00"
+}
