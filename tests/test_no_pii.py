@@ -457,6 +457,7 @@ def _attempt_commit(repo: Path, relpath: str, payload: bytes = b"probe\n"):
         target.unlink(missing_ok=True)
 
 
+@pytest.mark.slow
 def test_the_hook_is_actually_wired_in_the_probe_repository(hooked_repo):
     # Everything below is meaningless if the hook is not running. Prove it
     # fires by tripping a rule that predates this section entirely.
@@ -467,6 +468,7 @@ def test_the_hook_is_actually_wired_in_the_probe_repository(hooked_repo):
 
 
 @pytest.mark.parametrize("relpath", REFUSED_ANYWHERE)
+@pytest.mark.slow
 def test_the_hook_refuses_a_save_or_log_shape_anywhere(hooked_repo, relpath):
     before = _head(hooked_repo)
     result = _attempt_commit(hooked_repo, relpath)
@@ -478,6 +480,7 @@ def test_the_hook_refuses_a_save_or_log_shape_anywhere(hooked_repo, relpath):
 
 
 @pytest.mark.parametrize("relpath", REFUSED_OUTSIDE_FIXTURES)
+@pytest.mark.slow
 def test_the_hook_refuses_an_encoded_blob_outside_the_fixture_tree(
     hooked_repo, relpath
 ):
@@ -491,6 +494,7 @@ def test_the_hook_refuses_an_encoded_blob_outside_the_fixture_tree(
 
 
 @pytest.mark.parametrize("relpath", PERMITTED_FIXTURES)
+@pytest.mark.slow
 def test_the_hook_permits_a_reviewed_fixture(hooked_repo, relpath):
     # The specific regression to avoid. A rule that blocks the reviewed
     # fixtures is a broken rule, not a strict one.
@@ -505,6 +509,7 @@ def test_the_hook_permits_a_reviewed_fixture(hooked_repo, relpath):
     _git(hooked_repo, "commit", "-q", "-m", "probe: cleanup")
 
 
+@pytest.mark.slow
 def test_the_hook_still_permits_the_existing_gvas_fixtures(hooked_repo):
     """The committed fixtures, byte for byte, must still be committable.
 
@@ -525,6 +530,7 @@ def test_the_hook_still_permits_the_existing_gvas_fixtures(hooked_repo):
         _git(hooked_repo, "commit", "-q", "-m", "probe: cleanup")
 
 
+@pytest.mark.slow
 def test_the_hook_still_refuses_non_ascii_in_authored_text(hooked_repo):
     # An existing rule, pinned here so a path-rule edit cannot quietly drop it.
     before = _head(hooked_repo)
@@ -535,6 +541,7 @@ def test_the_hook_still_refuses_non_ascii_in_authored_text(hooked_repo):
     assert _head(hooked_repo) == before
 
 
+@pytest.mark.slow
 def test_the_hook_still_permits_an_ordinary_source_file(hooked_repo):
     # The other half of the same claim. A guard that refuses everything is not
     # a guard, it is an outage.
@@ -546,6 +553,7 @@ def test_the_hook_still_permits_an_ordinary_source_file(hooked_repo):
     _git(hooked_repo, "commit", "-q", "-m", "probe: cleanup")
 
 
+@pytest.mark.slow
 def test_the_hook_scripts_carry_no_carriage_return():
     # Git for Windows runs these through sh, which chokes on a CR in the
     # shebang. `.gitattributes` says eol=lf; this checks the bytes on disk,
