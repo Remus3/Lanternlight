@@ -145,23 +145,32 @@ It is the real character and progression store's best candidate, and therefore
 the most valuable save surface for Emberforge. Its filename also embeds the
 operator's roleId, so any fixture must be renamed, not just redacted.
 
-**Captured 2026-08-09, and three filed claims about it are now corrected.** A
-snapshotter armed at 17:27 local took 170 generations of it. Measured:
+**CAPTURED 2026-08-09, whole lifetime, and three filed claims are corrected.**
+A snapshotter was armed at 17:27:14 local, before the file existed. It took
+**263 generations** across **105 distinct sizes**, from first appearance to
+deletion. The bytes are held outside the repository at `C:\ll-captures\saves\`
+and are **not committed** - the filename embeds the operator's roleId.
 
-- **It is not 46 KB.** It appeared at 2,190 bytes and reached **126,078** bytes
-  in twelve minutes - about 44 times the next largest save, not twenty. The
-  earlier "46 KB" was a reading of a file mid-write, not its size.
+Measured, first-party, this session:
+
+- **It is not 46 KB.** It appeared at 17:27:17 at **2,190** bytes and was last
+  seen at 17:46:54 at **177,878** bytes - about **62 times** the next largest
+  save (`UserSettings_v1.sav`, 2,867 bytes), not twenty. The earlier "46 KB"
+  was a reading of a file mid-write, mistaken for its size.
 - **It is not append-only.** At 17:40:02 it measured 125,765 bytes, *smaller*
-  than the 126,078-byte peak twelve minutes in. It is rewritten in place with a
-  varying size, so a reader must not assume a prefix stays put between polls.
-- **The "deletes itself after about 13 minutes" timer did not fire.** It was
-  still present 13 minutes after appearing. Whatever removes it is not a simple
-  elapsed-time rule from creation; the previous session's disappearance is more
-  likely tied to leaving the mode. This is a correction to a claim carried in
-  the session hand-off, and it is why the item stayed open.
+  than the 126,078-byte peak recorded 50 seconds earlier. It is rewritten in
+  place with a varying size, so a reader must not assume a prefix stays put
+  between two polls, and a single snapshot can be a torn read.
+- **It does not live about 13 minutes.** It was still being written **19
+  minutes 37 seconds** after appearing, and was gone by 17:48:48 - a lifetime
+  of roughly 20 to 21 minutes. Whatever removes it is not a simple elapsed-time
+  rule from creation. Leaving the mode remains the more likely trigger, and is
+  still unmeasured.
 
-None of that was reachable by re-reading a document. It came from arming a
-watcher before the file existed, which is the whole lesson of this item.
+None of this was reachable by re-reading a document, and the previous session
+lost the file entirely. It came from arming a watcher **before** the file
+existed, which is the whole lesson of this item and the reason
+`lanternlight/savewatch.py` now exists rather than a scratch script.
 
 **Acceptance:** `StructProperty` decoded far enough to parse this save with
 `undecoded_trailing == 0`, a sanitised fixture pinning it, and every newly
