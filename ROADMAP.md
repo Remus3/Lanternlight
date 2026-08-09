@@ -74,6 +74,41 @@ is what distinguishes the Prologue from a real raid is itself a result worth
 recording. Blocked only on the operator entering one - nothing here needs a
 deliberate capture session any more, because the log is sufficient on its own.
 
+## 1b. Specialist lane build-out - READY, roster landed, machinery missing
+
+Decided with the operator 2026-08-09. Eight persistent specialist lanes, each
+owning a disjoint file set, each running its own orchestrated sub-agents and
+verifying their claims with `ops/merge_gate.py`, each in **its own git worktree
+on its own branch**, and **none of them ever merging to `main`** - a human
+merges after an out-of-domain check.
+
+**Landed:** `ops/lanes.py` declares the roster and `tests/test_lanes.py` enforces
+the invariants that actually matter - no repo file has two owners (walked over
+the real tree, not compared as pattern strings), cross-cutting files such as
+`CLAUDE.md` and `pytest.ini` are owned by nobody, every lane has a unique
+worktree outside the main checkout, `safety` holds a veto, and `verify` owns
+nothing and is read-only.
+
+**Not built yet, and this is the whole remaining item:**
+
+1. A launcher that creates `<worktree>/ll-lane-<id>` on `lane/<id>` and refuses
+   to run a lane anywhere else. Two writers in one working directory corrupts
+   the git index and is not recoverable by retrying.
+2. One contract file per lane under `.claude/commands/`, carrying its mandate,
+   its owned paths, its prohibitions, and the stop conditions from
+   `docs/HEADLESS.md` section 6 verbatim.
+3. Per-lane on-disk state, because agent context does not survive a session -
+   "persistent specialist" has to mean a charter plus a work log plus open items
+   on disk, or every lane silently resets.
+4. A commit-serialisation answer. Eight lanes and one ledger file will race;
+   `ops/loop/ledger.py` is atomic per write but that does not prevent two lanes
+   conflicting at merge time.
+
+**Acceptance:** a lane can be launched into its own worktree, do a slice of real
+work, pass its own merge gate, commit to its branch and push, with the primary
+checkout untouched throughout - demonstrated end to end for one lane, not
+described.
+
 ## 2. GVAS `.sav` reader - READY
 
 Four `.sav` files under `%LOCALAPPDATA%\MistfallHunter\Saved\SaveGames\`, 2-2.7
