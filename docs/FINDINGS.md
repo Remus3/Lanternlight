@@ -531,6 +531,59 @@ edition**, has claimed **three Twitch drops**, and has linked Discord for its
 drop. No entitlement, DLC or drop id has been observed in the log or the saves.
 Recorded as unmeasured, not absent.
 
+### 9.9.2 Camp is a different surface, and the log is not an inventory ledger
+
+Measured over a 953 KB log segment bracketed by wall clock around the
+operator's first NPC quest turn-in - talking to the camp NPC, opening mail,
+claiming rewarded items, equipping some, and a currency change.
+
+The headline is a **measured negative** and it constrains everything downstream:
+
+| Marker | Before the segment | During |
+|---|---|---|
+| `IvtrOperation` | 55 | **0** |
+| `DungeonInventoryComponent` | present | **0** |
+| `TS.Camp` | 109 | 340 |
+| `TS.NPC` | 137 | 324 |
+
+**The inventory-mutation line is dungeon-only.** Items granted by mail arrived
+with no logged `cfgId` at all - not one new item id appears in the whole
+segment, even though items were received and equipped. `TS.Inventory` still
+appears, but carries UI and state rather than mutations.
+
+> A tracker built on the log would silently miss **everything** granted outside
+> a dungeon. The log records loot picked up in a raid; it does not record what
+> the game hands you.
+
+What camp does emit, via `TS.Camp: [CampPlayerController]`:
+
+```
+server_ApplyEquipData {"cfgId":1110301}
+server_ApplyEquipData {"slot":1,"cfgId":1210301}
+```
+
+and an equipment slot array from `TS.Avatar`:
+
+```
+server_EquipArmors: <actor> cfgIds-[1110301,1210301,1310301,1410301,1510301,0,1720201]
+```
+
+Seven slots, slot index 5 empty (`0`). Every id in it was already known from the
+dungeon and market surfaces, which is further evidence for the single shared
+item id space in 9.6.
+
+NPC interaction ids observed: `npcId` values 1, 2, 4, 5, 6, 18, 22; dialog ids
+10001 through 10004, each followed by `deliver award`; greeting ids 820105,
+820402, 820504, 821305, 829002, 901011. **No npcId is bound to a name** - that
+needs a screen capture joined on wall clock, exactly as the class ids were, and
+was not done.
+
+**A caution about how this was nearly miscounted.** The first pass reported "no
+new item ids" using `cfgIds?[:\-]\s*(\d+)`, which cannot match
+`cfgIds-[1110301,...]` because of the bracket. The conclusion happened to be
+right and the evidence for it was worthless. Third time this session that a
+pattern, not the codebase, was the thing being measured.
+
 ### 9.10 PvP is still a clean null, and how that was got wrong twice
 
 This section previously claimed a second player was present and that PvP had
