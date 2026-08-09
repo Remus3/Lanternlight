@@ -89,6 +89,75 @@ class TestIgnoredFilesStayOut:
         assert "scratchpad" in _tracked.SKIP_DIRS
 
 
+class TestBinariesAreScannedForPii:
+    """A binary is where an identifier hides best, so it must not be skipped.
+
+    `iter_authored_files` filters on BINARY_SUFFIXES because the ASCII guard
+    cannot do anything sensible with a PNG. The PII guard can: a SteamID64
+    written into a save, a screenshot's EXIF, or a base64 blob inside a zip
+    entry is an identifier like any other. `.gitignore` blocks `*.sav`, which
+    is exactly the pressure that produces an encoded or renamed copy instead.
+
+    So there are two views of the tree, and this pins the difference.
+    """
+
+    def test_a_binary_file_is_scannable_even_though_it_is_not_authored_text(self):
+        target = REPO_ROOT / "_walker_probe_binary.zip"
+        target.write_bytes(b"PK\x03\x04\x00\x01binary probe\x00\x02")
+        try:
+            scannable = {
+                p.resolve().as_posix()
+                for p in _tracked.iter_scannable_files(REPO_ROOT)
+            }
+            authored = {
+                p.resolve().as_posix()
+                for p in _tracked.iter_authored_files(REPO_ROOT)
+            }
+            key = target.resolve().as_posix()
+            assert key in scannable, "a publishable binary must still be scanned for PII"
+            assert key not in authored, "the ASCII guard must still skip binaries"
+        finally:
+            target.unlink(missing_ok=True)
+
+    def test_a_save_file_would_be_scanned_if_it_ever_reached_the_tree(self, tmp_path):
+        # `*.sav` is gitignored, so the repository walker never sees one unless
+        # somebody force-adds it - and if they do, `git ls-files` lists it and
+        # it is scanned. That path cannot be exercised against the real
+        # repository without writing to its index, so it is exercised against
+        # the filesystem fallback, which applies the same suffix policy.
+        if _tracked._git_tracked(tmp_path) is not None:
+            import pytest
+
+            pytest.skip("tmp_path is inside a git work tree; fallback not exercised")
+        (tmp_path / "role.sav").write_bytes(b"GVAS\x00\x02\x00\x00\x00")
+        scannable = {p.name for p in _tracked.iter_scannable_files(tmp_path)}
+        authored = {p.name for p in _tracked.iter_authored_files(tmp_path)}
+        assert "role.sav" in scannable, (
+            "a save that reaches the published tree must be scanned - it is the "
+            "single file most likely to carry the operator's account id"
+        )
+        assert "role.sav" not in authored
+
+    def test_the_scannable_view_is_a_superset_of_the_authored_view(self):
+        scannable = {p.resolve().as_posix() for p in _tracked.iter_scannable_files(REPO_ROOT)}
+        authored = {p.resolve().as_posix() for p in _tracked.iter_authored_files(REPO_ROOT)}
+        assert authored <= scannable
+
+    def test_ignored_files_stay_out_of_the_scannable_view_too(self):
+        runtime = REPO_ROOT / "ops" / "runtime"
+        runtime.mkdir(parents=True, exist_ok=True)
+        probe = runtime / "_walker_probe_ignored.bin"
+        probe.write_bytes(b"\x00\x01")
+        try:
+            scannable = {
+                p.resolve().as_posix()
+                for p in _tracked.iter_scannable_files(REPO_ROOT)
+            }
+            assert probe.resolve().as_posix() not in scannable
+        finally:
+            probe.unlink(missing_ok=True)
+
+
 class TestWalkerStillSane:
     def test_tracked_files_are_still_scanned(self):
         walked = _walked()
