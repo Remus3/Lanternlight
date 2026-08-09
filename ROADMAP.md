@@ -113,7 +113,7 @@ not described.
 
 ## 2. GVAS `.sav` reader - CLOSED 2026-08-09
 
-Ledger `LL-0011`. `lanternlight/gvas.py` parses all five `.sav` files. Published
+Ledger `LL-0011`. `lanternlight/gvas.py` parses every `.sav` file. There were five when the reader was written and there are now **six** - `Deck.sav` appeared mid-session and parses cleanly, but no fixture pins it. Published
 GVAS parsers do not work on this build: UE 5.4+ replaced `FPropertyTag`'s
 `FName Type; int32 Size; int32 ArrayIndex` with a recursive type name plus a
 flags byte. All 627 trailing bytes of `EnhancedInputUserSettings.sav` decode,
