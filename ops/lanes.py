@@ -235,6 +235,8 @@ LANES: tuple[Lane, ...] = (
             "docs/OPERATIONS.md",
             "WAKEUP_NOTES.md",
             "NEXT_SESSION_PROMPT.md",
+            ".claude/commands/lane-*.md",
+            "scripts/write_lane_contracts.py",
         ),
     ),
     Lane(
