@@ -1,22 +1,31 @@
 """Read Mistfall Hunter's Unreal GVAS save files.
 
 The game writes into ``%LOCALAPPDATA%/MistfallHunter/Saved/SaveGames/``.
-Measured 2026-08-09, six files, all plain unencrypted UE GVAS with magic
+Measured 2026-08-09, seven files, all plain unencrypted UE GVAS with magic
 ``47 56 41 53``::
 
-    CampData_<19-digit userId>.sav    1986 bytes
-    Deck.sav                          2001
-    EnhancedInputUserSettings.sav     2603
-    LoginOptions.sav                  2067
-    Notice.sav                        1968
-    UserSettings_v1.sav               2668
+    CampData_<19-digit userId>.sav       1986 bytes
+    Deck.sav                             2001
+    EnhancedInputUserSettings.sav        2603
+    LoginOptions.sav                     2067
+    Notice.sav                           1968
+    StandaloneSlot_<19-digit roleId>.sav 2190 and climbing
+    UserSettings_v1.sav                  2668
 
-**That list is a snapshot, not the set.** Both halves of it have already moved
-under observation: ``Deck.sav`` did not exist when this module was written and
-appeared mid-session, and ``UserSettings_v1.sav`` was 2668 bytes when it was
-captured and 2713 an hour later, because the operator was playing. A caller
+**That list is a snapshot, not the set.** Every part of it has moved under
+observation: ``Deck.sav`` did not exist when this module was written and
+appeared mid-session; ``UserSettings_v1.sav`` was 2668 bytes when captured and
+2713 an hour later; and ``StandaloneSlot`` went from 2190 bytes to 172823
+during a single run, gaining four whole top-level properties on the way,
+because it is the live in-run level save and the operator was playing. A caller
 that expects a known list of filenames, or a known size, is writing down a
 guess about a live directory. Enumerate it.
+
+That growth is not a curiosity, it is the reason this reader raises. 249
+generations of ``StandaloneSlot`` were captured while the game wrote it, and a
+property type that had never appeared in the first 200 - a ``MapProperty``
+keyed by ``DoubleProperty`` - turned up in the rest. The reader refused it,
+which is how it got measured instead of being silently misread.
 
 This module only ever reads them. The save directory is operator data, and a
 reader that writes into it is a bug with a permanent cost.
@@ -138,18 +147,56 @@ Type                                 Python                     Seen in
 ``IntProperty``                      ``int``                    LoginOptions
 ``DoubleProperty``                   ``float``                  UserSettings
 ``StrProperty``                      ``str``                    Notice
+``ByteProperty<Enum>``               ``str`` enumerator name    StandaloneSlot
 ``TextProperty`` history ``0xff``    ``str``                    LoginOptions
 ``TextProperty`` history ``0x00``    :class:`SourceText`        EnhancedInput
-``MapProperty<IntProperty, ...>``    ``dict[int, int]``         CampData, Deck
+``StructProperty``                   ``dict[str, object]``      StandaloneSlot
+``StructProperty`` flag ``0x08``     :class:`UndecodedStruct`   StandaloneSlot
+``MapProperty<K, V>``                ``dict``                   CampData, Deck
+``ArrayProperty<E>``                 ``tuple``                  StandaloneSlot
 ===================================  =========================  ==============
 
-That is the complete set of type names present: grepping all six files for
-``[A-Za-z]+Property`` yields ``Bool``, ``Double``, ``Int``, ``Map``, ``Str``
-and ``Text`` and nothing else. ``FloatProperty``, ``NameProperty``,
-``ArrayProperty``, ``StructProperty`` and the rest are absent from the table on
-purpose. Their encodings are published, but this project's rule is that a value
-it has not watched being emitted is not a value it reports - and an unused
-parser branch is an untested claim about a file nobody has.
+That is the complete set of type names present: grepping all seven files for
+``[A-Za-z]+Property`` yields ``Array``, ``Bool``, ``Byte``, ``Double``,
+``Int``, ``Map``, ``Str``, ``Struct`` and ``Text`` and nothing else.
+``FloatProperty``, ``NameProperty``, ``SetProperty``, ``ObjectProperty`` and
+the rest are absent from the table on purpose. Their encodings are published,
+but this project's rule is that a value it has not watched being emitted is not
+a value it reports - and an unused parser branch is an untested claim about a
+file nobody has.
+
+Nested values, and where the measurement actually stops
+-------------------------------------------------------
+
+``StandaloneSlot`` is the first save here that nests. A ``StructProperty``'s
+value is a nested tagged property list closed by the FString ``"None"``, in
+exactly the outer grammar, with **no epilogue** and no length of its own - the
+enclosing tag's ``Size`` is what bounds it. Containers hold their elements
+**bare**: a map is keys-to-remove, a count, then that many key/value pairs with
+no tag, no flags and no ``Size`` between them, and an array is a count then its
+elements, with none of the inner struct header UE4 used to write.
+
+Because containers are decoded generically over their element types rather than
+by a pinned rendered name, this reader decodes *compositions* of measured
+pieces - it will read an ``ArrayProperty<IntProperty>`` that no capture
+contains, because the array header and a bare ``IntProperty`` were each
+measured separately. Two things keep that from being a guess dressed up as a
+measurement. :data:`MEASURED_BARE_TYPES` and :data:`MEASURED_MAP_KEY_TYPES`
+refuse an element type nobody has watched in that POSITION, which is a real
+distinction - a tagged ``BoolProperty`` has a zero-byte payload and lives in
+flag ``0x10``, so a bare one cannot be the same thing. And every value is
+decoded through a reader sliced to exactly the property's ``Size``, so a
+composition that is wrong stops short or overruns and is reported instead of
+being believed. Across 249 captured generations, every value landed exactly on
+its bound.
+
+What is **not** decoded is the natively serialised struct. ``Vector``,
+``Vector2D``, ``Quat`` and ``Rotator`` carry tag flag ``0x08``, their payload
+is not a property list, and this module hands the bytes back as an
+:class:`UndecodedStruct` naming the struct rather than reading numbers out of
+them. 24 bytes divides by 8 three times and the samples look like world
+coordinates, and none of that is the file saying so - ``Vector`` and
+``Rotator`` are both 24 bytes and mean different things.
 
 The two ``TextProperty`` rows are two encodings behind one type name, and both
 were observed. The invariant history is a bare string; the source history
@@ -167,6 +214,11 @@ save. In that mode an unreadable property is **omitted from**
 :attr:`GvasSave.unknown_properties`, so "unmeasured" stays distinguishable from
 "measured zero". Structural damage still raises in both modes, because there is
 no way to skip past a length you cannot trust.
+
+A property is decoded whole or not at all, however deep it goes. An unmeasured
+value five levels down inside ``MonsterData`` makes ``MonsterData`` unknown; it
+does not yield a dict quietly missing a field, because a caller cannot tell a
+dict with a field missing from a dict that never had one.
 
 Header versions are pinned, not guessed. Only ``save_game_version`` 3 and
 ``custom_version_format`` 3 have ever been observed here, and both select the
@@ -190,7 +242,11 @@ __all__ = [
     "EPILOGUE_SIZE",
     "KNOWN_PROPERTY_TYPES",
     "MAGIC",
+    "MAX_VALUE_DEPTH",
+    "MEASURED_BARE_TYPES",
     "MEASURED_CUSTOM_VERSION_FORMAT",
+    "MEASURED_MAP_KEY_TYPES",
+    "MEASURED_NATIVE_STRUCTS",
     "MEASURED_SAVE_GAME_VERSION",
     "MEASURED_TEXT_HISTORIES",
     "MEASURED_TRAILING_OBJECT_CLASS",
@@ -202,6 +258,7 @@ __all__ = [
     "KeyMapping",
     "KeyProfile",
     "SourceText",
+    "UndecodedStruct",
     "UnknownProperty",
     "UnknownPropertyTypeError",
     "load",
@@ -272,12 +329,69 @@ _KEY_MAPPING_TAIL = 6
 #: Used only to reject a count the block cannot hold before looping on it.
 _MIN_TRAILING_OBJECT = 40
 
+#: Smallest a container element can be in any measured position: an int32, or
+#: an empty FString's length. Used only to reject an element count the value
+#: cannot possibly hold before looping on it.
+_MIN_CONTAINER_ELEMENT = 4
+
 #: A type parameter list longer than this is a corrupt length, not a type.
 #: Nothing in Unreal's tagged-property format nests anywhere near it.
 _MAX_TYPE_PARAMS = 8
 
 #: Recursion cap on nested type names, for the same reason.
 _MAX_TYPE_DEPTH = 8
+
+#: Recursion cap on nested VALUES - a struct inside a struct inside a map.
+#: Measured maximum in ``StandaloneSlot_<roleId>.sav`` on 2026-08-09 is 5
+#: property-list levels; this is that with headroom, and exists only so a
+#: corrupt length cannot recurse until the interpreter dies. Reaching it is a
+#: structural failure, not an unmeasured type.
+MAX_VALUE_DEPTH = 32
+
+#: Types measured OUTSIDE a property tag - as a map key, a map value or an
+#: array element, where there is no tag, no flags and no Size.
+#:
+#: Position matters because it changes the encoding. A tagged ``BoolProperty``
+#: has a zero-byte payload and carries its value in flag ``0x10``; a bare one
+#: would have to spell its value some other way, and nothing has been observed
+#: doing so. ``ByteProperty`` and ``TextProperty`` are absent for the same
+#: reason: measured under a tag, never bare.
+MEASURED_BARE_TYPES: frozenset[str] = frozenset(
+    {"IntProperty", "DoubleProperty", "StrProperty", "StructProperty"}
+)
+
+#: Types measured as a ``MapProperty`` KEY. Narrower than
+#: :data:`MEASURED_BARE_TYPES` on purpose - a struct has been observed as a map
+#: value and never as a map key, and a dict cannot hold an unhashable one
+#: anyway, so letting one through would turn a parse error into a ``TypeError``
+#: from somewhere much less informative.
+#:
+#: ``DoubleProperty`` looks wrong for a key and is not. ``DropItemMap`` is
+#: keyed by one, and the keys observed were 5.0, 6.0, 30.0, 32.0, 35.0 and 38.0
+#: - integer item ids carried as doubles. The save class is
+#: ``.../TypeScript/module/Level/StandaloneLevelSaveData``, and a TypeScript
+#: number is a double, so this is the game's scripting layer showing through
+#: rather than a misread. Callers should know that Python hashes ``35.0`` and
+#: ``35`` alike, so ``m[35]`` finds such a key.
+MEASURED_MAP_KEY_TYPES: frozenset[str] = frozenset(
+    {"IntProperty", "StrProperty", "DoubleProperty"}
+)
+
+#: Struct types observed written through a native serializer (tag flag
+#: ``0x08``), whose payload is therefore NOT a tagged property list.
+#:
+#: This set is a record, not a gate. It does not decide anything: a native
+#: struct is handed back whole whatever its name, because the tag's Size bounds
+#: the payload exactly and returning opaque bytes is never a guess. Payload
+#: sizes observed on 2026-08-09 were 24 bytes for ``Vector``, 24 for
+#: ``Rotator``, 32 for ``Quat`` and 16 for ``Vector2D``. Those are byte COUNTS
+#: and nothing more - they are not a claim that the fields are doubles, and
+#: this module does not make one. ``Vector`` and ``Rotator`` sharing a count is
+#: the reason why: two different meanings behind identical bytes, told apart
+#: only by the name.
+MEASURED_NATIVE_STRUCTS: frozenset[str] = frozenset(
+    {"Vector", "Vector2D", "Quat", "Rotator"}
+)
 
 
 class GvasParseError(ValueError):
@@ -392,6 +506,42 @@ class UnknownProperty:
         return (
             f"{self.name!r} ({self.type_name}, {self.size} bytes at offset "
             f"{self.offset}): {self.reason}"
+        )
+
+
+@dataclass(frozen=True)
+class UndecodedStruct:
+    """A struct the engine wrote natively, handed back whole and named as such.
+
+    Three struct types in ``StandaloneSlot_<roleId>.sav`` carry tag flag
+    ``0x08``: ``Vector``, ``Vector2D`` and ``Quat``. That flag says the value
+    went through a native serializer, so the payload is **not** a tagged
+    property list and there is nothing inside it to read. What the file does
+    state is the payload's exact length, because the tag's ``Size`` bounds it -
+    so handing the bytes back is a fact, and this class is that fact with the
+    struct's identity attached.
+
+    It is deliberately not a tuple of numbers. 24 bytes divides by 8 three
+    times, the sampled values read as plausible world coordinates, and a
+    sampled ``Quat`` has unit norm - none of which is the file saying so. A
+    caller that wants those numbers can take :attr:`data` and say out loud that
+    it is guessing; a caller that gets a ``dict`` from a decoded struct and an
+    ``UndecodedStruct`` from this one cannot confuse the two by accident.
+
+    ``struct_path`` is the package path the type name carried, which is what
+    distinguishes ``/Script/CoreUObject`` ``Vector`` from any Blueprint struct
+    that happens to share the name.
+    """
+
+    struct_name: str
+    struct_path: str
+    data: bytes
+
+    def describe(self) -> str:
+        """Return a one-line human-readable rendering of this value."""
+        return (
+            f"{self.struct_name} ({self.struct_path}): {len(self.data)} bytes "
+            "left undecoded, written by a native serializer"
         )
 
 
@@ -625,40 +775,66 @@ def _read_type_name(reader: _Reader, depth: int = 0) -> _TypeName:
 # --------------------------------------------------------------------------
 
 
-def _expect_size(type_name: str, value: bytes, size: int) -> None:
-    if len(value) != size:
+def _take_fixed(reader: _Reader, count: int, type_name: str) -> bytes:
+    """Take a fixed-width value, or say the width disagrees with the type.
+
+    A short fixed-width payload is an unmeasured ENCODING rather than a torn
+    file - the tag's Size was honoured, the bytes inside it just are not the
+    shape this type was measured to have - so it raises the recoverable error
+    and a non-strict parse can record the property instead of losing the save.
+    """
+    if reader.remaining < count:
         raise UnknownPropertyTypeError(
-            f"{type_name} carried {len(value)} bytes, not the measured {size}"
+            f"{type_name} needs {count} bytes and only {reader.remaining} remain"
         )
+    return reader.take(count)
 
 
-def _decode_bool(value: bytes, flags: int) -> bool:
-    _expect_size("BoolProperty", value, 0)
+def _decode_bool(reader: _Reader, flags: int) -> bool:
+    # Reads nothing. A tagged bool has a zero-byte payload and carries its
+    # value in flag 0x10, so a non-zero Size is caught by the caller's
+    # "left N undecoded trailing bytes" check rather than here.
     return bool(flags & _FLAG_BOOL_TRUE)
 
 
-def _decode_int(value: bytes, flags: int) -> int:
-    _expect_size("IntProperty", value, 4)
-    return struct.unpack("<i", value)[0]
+def _decode_int(reader: _Reader) -> int:
+    return struct.unpack("<i", _take_fixed(reader, 4, "IntProperty"))[0]
 
 
-def _decode_double(value: bytes, flags: int) -> float:
-    _expect_size("DoubleProperty", value, 8)
-    return struct.unpack("<d", value)[0]
+def _decode_double(reader: _Reader) -> float:
+    return struct.unpack("<d", _take_fixed(reader, 8, "DoubleProperty"))[0]
 
 
-def _decode_str(value: bytes, flags: int) -> str:
-    reader = _Reader(value)
-    text = reader.fstring()
-    if reader.remaining:
+def _decode_str(reader: _Reader) -> str:
+    return reader.fstring()
+
+
+def _decode_byte(reader: _Reader, type_name: _TypeName) -> str:
+    """Decode a ``ByteProperty``, which this game writes as an enumerator name.
+
+    Measured 2026-08-09 in ``StandaloneSlot_<roleId>.sav``: every
+    ``ByteProperty`` there names its enum as its one type parameter and writes
+    an FString of the qualified enumerator - ``E_DoorState::NewEnumerator1``,
+    32 bytes for a Size, which is the 4-byte length plus 28 bytes of string.
+    Nothing raw-byte-shaped has ever been seen.
+
+    The prefix is kept rather than stripped. It is measured text, and two enums
+    in this file both spell ``NewEnumerator1``, so dropping it would make two
+    different states compare equal.
+    """
+    if len(type_name.params) != 1:
+        # Unreal's parameterless ByteProperty is a single raw byte. That form
+        # has never been observed here, and reading one as an FString would
+        # invent a string out of whatever followed it.
         raise UnknownPropertyTypeError(
-            f"StrProperty left {reader.remaining} undecoded trailing bytes"
+            f"a ByteProperty with {len(type_name.params)} type parameters has not "
+            "been measured; the only form observed names its enum and writes the "
+            "enumerator as an FString"
         )
-    return text
+    return reader.fstring()
 
 
-def _decode_text(value: bytes, flags: int) -> str:
-    reader = _Reader(value)
+def _decode_text(reader: _Reader, flags: int) -> str:
     reader.int32()  # FText flags; carries no value this module reports
     history = reader.uint8()
     if history not in MEASURED_TEXT_HISTORIES:
@@ -687,41 +863,239 @@ def _decode_text(value: bytes, flags: int) -> str:
     return text
 
 
-def _decode_int_int_map(value: bytes, flags: int) -> dict[int, int]:
-    reader = _Reader(value)
+def _struct_identity(type_name: _TypeName) -> tuple[str, str]:
+    """Pull a struct's name and package path out of its type name.
+
+    Two shapes occur, both measured on 2026-08-09. A game struct spells
+    ``StructProperty<F_DoorSaveData</Game/.../F_DoorSaveData>, <guid>>`` - the
+    struct, its package path, and a dashed hex GUID as a second parameter. An
+    engine core struct spells ``StructProperty<Vector</Script/CoreUObject>>``
+    with no GUID parameter at all.
+
+    The GUID is read past rather than returned. It identifies the struct
+    DEFINITION for the engine's own versioning and says nothing about the
+    value, so surfacing it would add a field every caller has to ignore.
+    """
+    if not 1 <= len(type_name.params) <= 2:
+        raise UnknownPropertyTypeError(
+            f"a StructProperty with {len(type_name.params)} type parameters has "
+            "not been measured; the measured forms are <Name<Path>> and "
+            "<Name<Path>, Guid>"
+        )
+    struct_type = type_name.params[0]
+    if len(struct_type.params) != 1:
+        raise UnknownPropertyTypeError(
+            f"struct {struct_type.name!r} named {len(struct_type.params)} package "
+            "paths; every struct measured names exactly one"
+        )
+    return struct_type.name, struct_type.params[0].name
+
+
+def _read_struct(
+    reader: _Reader, type_name: _TypeName, *, flags: int, tagged: bool, depth: int
+) -> object:
+    """Decode a ``StructProperty`` value in place.
+
+    Measured 2026-08-09 across 78 generations of
+    ``StandaloneSlot_<roleId>.sav``: a struct's value is a nested tagged
+    property list closed by the FString ``"None"``, using exactly the tag
+    grammar the outer object uses. There is no length inside it - the
+    enclosing tag's ``Size``, or the enclosing container, is what bounds it -
+    and there is **no epilogue**, unlike the outer property list and a trailing
+    object's. Every value in every generation landed exactly on its bound,
+    which is what turns that from a plausible reading into a measured one.
+    """
+    struct_name, struct_path = _struct_identity(type_name)
+    if tagged and flags & _FLAG_BINARY_OR_NATIVE:
+        # The value went through a native serializer, so there is no property
+        # list in there to read. The tag's Size bounds it exactly and the
+        # caller has already sliced the reader to it, so the remaining bytes
+        # ARE the payload - handing them back is a fact rather than a guess.
+        return UndecodedStruct(
+            struct_name=struct_name,
+            struct_path=struct_path,
+            data=reader.take(reader.remaining),
+        )
+    properties, _types, _unknowns = _read_properties(reader, strict=True, depth=depth + 1)
+    return properties
+
+
+def _read_map(reader: _Reader, type_name: _TypeName, *, depth: int) -> dict[object, object]:
+    """Decode a ``MapProperty`` value in place.
+
+    ``int32`` keys-to-remove, ``int32`` pair count, then that many key/value
+    pairs written BARE - no tag, no flags and no Size, just the value encoding
+    for the parameter type. A struct element is therefore a bare property list
+    closed by ``"None"``.
+
+    Seven parameterisations have been measured and this decodes all of them,
+    because it is generic over the element types rather than pinned to a
+    rendered name. That is not a loosening: an element type nobody has measured
+    in a bare position still raises, via :data:`MEASURED_BARE_TYPES`.
+    """
+    if len(type_name.params) != 2:
+        raise UnknownPropertyTypeError(
+            f"a MapProperty with {len(type_name.params)} type parameters has not "
+            "been measured; a map names exactly one key type and one value type"
+        )
+    key_type, value_type = type_name.params
+    if key_type.name not in MEASURED_MAP_KEY_TYPES:
+        raise UnknownPropertyTypeError(
+            f"a MapProperty keyed by {key_type.render()} has not been measured; "
+            f"measured key types are {', '.join(sorted(MEASURED_MAP_KEY_TYPES))}"
+        )
+
     keys_to_remove = reader.int32()
     if keys_to_remove != 0:
         raise UnknownPropertyTypeError(
             f"MapProperty announced {keys_to_remove} keys to remove; only 0 has "
             "been measured, and the removal encoding is unknown"
         )
-    count = reader.int32()
-    if count < 0:
-        raise UnknownPropertyTypeError(f"MapProperty announced {count} pairs")
-    pairs: dict[int, int] = {}
+    count = _element_count(reader, "MapProperty", "pairs")
+
+    pairs: dict[object, object] = {}
     for _ in range(count):
-        key = reader.int32()
-        pairs[key] = reader.int32()
-    if reader.remaining:
-        raise UnknownPropertyTypeError(
-            f"MapProperty left {reader.remaining} undecoded trailing bytes"
-        )
+        key = _read_value(reader, key_type, flags=0, tagged=False, depth=depth + 1)
+        value = _read_value(reader, value_type, flags=0, tagged=False, depth=depth + 1)
+        if key in pairs:
+            # A dict would keep the last pair and drop the first, which is a
+            # measurement disappearing with nobody told. Same reasoning as the
+            # repeated-property-name check, one level down.
+            raise UnknownPropertyTypeError(
+                f"MapProperty repeated the key {key!r}, so one measured pair "
+                "would be lost silently"
+            )
+        pairs[key] = value
     return pairs
 
 
-_DECODERS: dict[str, Callable[[bytes, int], object]] = {
-    "BoolProperty": _decode_bool,
+def _read_array(reader: _Reader, type_name: _TypeName, *, depth: int) -> tuple[object, ...]:
+    """Decode an ``ArrayProperty`` value in place.
+
+    ``int32`` element count, then that many bare elements. There is no
+    per-element header of any kind: UE4 wrote an inner struct header before an
+    array of structs, and UE 5.4 does not, because the recursive type name
+    already carries the struct's identity. Measured on the one parameterisation
+    this game writes, ``ArrayProperty<StructProperty<F_CurrencyInfo<...>, ...>>``.
+    """
+    if len(type_name.params) != 1:
+        raise UnknownPropertyTypeError(
+            f"an ArrayProperty with {len(type_name.params)} type parameters has "
+            "not been measured; an array names exactly one element type"
+        )
+    (element_type,) = type_name.params
+    count = _element_count(reader, "ArrayProperty", "elements")
+    return tuple(
+        _read_value(reader, element_type, flags=0, tagged=False, depth=depth + 1)
+        for _ in range(count)
+    )
+
+
+def _element_count(reader: _Reader, type_name: str, noun: str) -> int:
+    """Read a container's element count and reject one it cannot possibly hold.
+
+    The cheapest element in any measured position is four bytes - an int32, or
+    an empty FString's length. Rejecting before the loop keeps a corrupt length
+    from spending a million iterations on its way to the same error.
+    """
+    count = reader.int32()
+    if count < 0:
+        raise UnknownPropertyTypeError(f"{type_name} announced {count} {noun}")
+    if count * _MIN_CONTAINER_ELEMENT > reader.remaining:
+        raise UnknownPropertyTypeError(
+            f"{type_name} announced {count} {noun}, which needs more bytes than "
+            f"the {reader.remaining} its value has left"
+        )
+    return count
+
+
+def _read_value(
+    reader: _Reader, type_name: _TypeName, *, flags: int, tagged: bool, depth: int
+) -> object:
+    """Decode one value in place, tagged or bare.
+
+    ``tagged`` is False for a container element, which carries no tag and
+    therefore no flags and no Size. That distinction is not cosmetic: a tagged
+    ``BoolProperty`` has a zero-byte payload and lives entirely in flag
+    ``0x10``, so a bare one would have to be encoded some other way, and
+    :data:`MEASURED_BARE_TYPES` is the record of which types have actually been
+    watched in that position.
+    """
+    if depth > MAX_VALUE_DEPTH:
+        raise GvasParseError(
+            f"value nested deeper than {MAX_VALUE_DEPTH}, which is a corrupt "
+            "length rather than a shape this game writes"
+        )
+    name = type_name.name
+    if not tagged and name not in MEASURED_BARE_TYPES:
+        raise UnknownPropertyTypeError(
+            f"{type_name.render()} has never been measured outside a property "
+            f"tag; types measured as a container element are "
+            f"{', '.join(sorted(MEASURED_BARE_TYPES))}"
+        )
+
+    if name == "StructProperty":
+        return _read_struct(reader, type_name, flags=flags, tagged=tagged, depth=depth)
+    if flags & _FLAG_BINARY_OR_NATIVE:
+        # Every natively serialised property in every capture is a struct, so
+        # the branch above is the whole measured extent of this flag. Anything
+        # else carrying it is a layout nobody here has seen.
+        raise UnknownPropertyTypeError(
+            f"{type_name.render()} was written with a native serializer, whose "
+            "layout differs from the tagged one measured here"
+        )
+    if name == "MapProperty":
+        return _read_map(reader, type_name, depth=depth)
+    if name == "ArrayProperty":
+        return _read_array(reader, type_name, depth=depth)
+    if name not in _LEAF_DECODERS:
+        raise UnknownPropertyTypeError(
+            f"property type {type_name.render()} has not been measured for this "
+            f"game; measured types are {', '.join(sorted(KNOWN_PROPERTY_TYPES))}"
+        )
+    if type_name.params and name != "ByteProperty":
+        # A leaf that grew parameters is not the leaf that was measured.
+        raise UnknownPropertyTypeError(
+            f"{type_name.render()} carries type parameters, and only the "
+            f"parameterless {name} has been measured"
+        )
+    if name == "BoolProperty":
+        return _decode_bool(reader, flags)
+    if name == "ByteProperty":
+        return _decode_byte(reader, type_name)
+    if name == "TextProperty":
+        return _decode_text(reader, flags)
+    return _LEAF_DECODERS[name](reader)
+
+
+#: Leaf decoders that need nothing but the reader. ``BoolProperty``,
+#: ``ByteProperty`` and ``TextProperty`` are listed for membership but
+#: dispatched by hand above, because each needs something the others do not -
+#: the tag flags, the type parameters, and the tag flags again.
+_LEAF_DECODERS: dict[str, Callable[[_Reader], object]] = {
     "IntProperty": _decode_int,
     "DoubleProperty": _decode_double,
     "StrProperty": _decode_str,
-    "TextProperty": _decode_text,
-    "MapProperty<IntProperty, IntProperty>": _decode_int_int_map,
+    "BoolProperty": _decode_bool,  # type: ignore[dict-item]
+    "ByteProperty": _decode_byte,  # type: ignore[dict-item]
+    "TextProperty": _decode_text,  # type: ignore[dict-item]
 }
 
 #: Every property type this module has measured and will decode. Anything else
 #: raises. Adding an entry here is a claim that its encoding was observed, not
 #: that it was looked up.
-KNOWN_PROPERTY_TYPES: frozenset[str] = frozenset(_DECODERS)
+#:
+#: These are type CONSTRUCTORS, not fully rendered names. They were rendered
+#: names until ``StandaloneSlot_<roleId>.sav`` was measured, which writes seven
+#: parameterisations of ``MapProperty`` and a dozen struct types whose rendered
+#: names each embed a per-struct GUID. A container is gated by its ELEMENT
+#: types now - see :data:`MEASURED_BARE_TYPES` and
+#: :data:`MEASURED_MAP_KEY_TYPES` - which is a stricter statement than a list of
+#: rendered names, not a looser one, because it also constrains shapes nobody
+#: has written down yet.
+KNOWN_PROPERTY_TYPES: frozenset[str] = frozenset(
+    set(_LEAF_DECODERS) | {"StructProperty", "MapProperty", "ArrayProperty"}
+)
 
 
 # --------------------------------------------------------------------------
@@ -791,9 +1165,14 @@ def _read_header(reader: _Reader) -> GvasHeader:
 
 
 def _read_properties(
-    reader: _Reader, *, strict: bool
+    reader: _Reader, *, strict: bool, depth: int = 0
 ) -> tuple[dict[str, object], dict[str, str], tuple[UnknownProperty, ...]]:
-    """Read tagged properties up to and including the ``"None"`` terminator."""
+    """Read tagged properties up to and including the ``"None"`` terminator.
+
+    ``depth`` counts nested property lists, because a struct's value is one of
+    these too. It is passed on to the value reader and bounded by
+    :data:`MAX_VALUE_DEPTH`.
+    """
     properties: dict[str, object] = {}
     property_types: dict[str, str] = {}
     unknowns: list[UnknownProperty] = []
@@ -811,7 +1190,8 @@ def _read_properties(
                 f"property {name!r} appears twice, the second time at offset {name_offset}"
             )
 
-        type_name = _read_type_name(reader).render()
+        parsed_type = _read_type_name(reader)
+        type_name = parsed_type.render()
         size = reader.int32()
         if size < 0:
             raise GvasParseError(
@@ -840,21 +1220,20 @@ def _read_properties(
         if flags & _FLAG_HAS_PROPERTY_GUID:
             reader.take(16)
 
-        value_bytes = reader.take(size)
+        # Slicing to exactly Size is what keeps a nested decode honest: a
+        # value can never read past its own property, and a value that stops
+        # short is caught below rather than quietly leaving bytes behind.
+        value_reader = _Reader(reader.take(size))
 
         try:
-            if flags & _FLAG_BINARY_OR_NATIVE:
+            value = _read_value(
+                value_reader, parsed_type, flags=flags, tagged=True, depth=depth
+            )
+            if value_reader.remaining:
                 raise UnknownPropertyTypeError(
-                    f"{type_name} was written with a native serializer, whose "
-                    "layout differs from the tagged one measured here"
+                    f"{type_name} left {value_reader.remaining} undecoded "
+                    "trailing bytes"
                 )
-            decoder = _DECODERS.get(type_name)
-            if decoder is None:
-                raise UnknownPropertyTypeError(
-                    f"property type {type_name} has not been measured for this "
-                    f"game; measured types are {', '.join(sorted(KNOWN_PROPERTY_TYPES))}"
-                )
-            value = decoder(value_bytes, flags)
         except UnknownPropertyTypeError as exc:
             if strict:
                 raise UnknownPropertyTypeError(f"{name!r} at offset {name_offset}: {exc}") from exc
