@@ -48,10 +48,34 @@
       "item_id": "RES-8",
       "opened": "2026-08-09",
       "text": "destSlot 2 is the ONLY slot ever equipped in the whole log, and it happened at level 3 - independent corroboration that the C arrow slot unlocks at Lv. 3 (LL-0016), from the log rather than the screen"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "RES-9",
+      "opened": "2026-08-09",
+      "text": "Bind player-facing to internal names: Hallowgrove is Map_2/Whitewoods_Day, sublevel WhiteWoods_Level_Easy2, and the operator calls that difficulty Normal while the asset says Easy2 - record both, interpret neither"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "RES-10",
+      "opened": "2026-08-09",
+      "text": "Record the map URL grammar levelId/roomModeId/matchType/matchId and the match state machine onRequestMatch-InMatch-MatchSuccessful-EnterBattle-NotMatch in OBSERVED_IDS.md with the method named"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "RES-11",
+      "opened": "2026-08-09",
+      "text": "A loot PITY system exists - OnHandleFirstLoot carries dropValue, dropPity and addPityDropValue exceed threshold. Existence only; claim no coefficient"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "RES-12",
+      "opened": "2026-08-09",
+      "text": "Second escape type FixEscapeBell / WindChime seen alongside GroveSprite - the one-escape-type claim is refuted and FINDINGS.md section 9 needs correcting"
     }
   ],
   "resume_note": "no lane session yet - docs/CLASSES.md and OBSERVED_IDS.md are current to 2026-08-09",
   "schema": 1,
   "sessions": 0,
-  "updated": "2026-08-09T22:57:29+00:00"
+  "updated": "2026-08-09T23:05:24+00:00"
 }

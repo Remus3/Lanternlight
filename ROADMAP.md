@@ -45,9 +45,42 @@ Also corrected here: the game's own nouns are **dungeon** and **escape**. The
 words `raid` and `extract` appear **zero** times in the log. A grep for the
 wrong word returns a clean negative that means nothing.
 
-**What is still unmeasured, and why this item is not closed:** everything above
-is the **Prologue**, which runs at `matchId=0`. No matchmade raid, and only one
-escape type (`GroveSprite`) has ever been seen.
+**PARTLY REFUTED 2026-08-09c, by an operator attestation plus a log join.** The
+operator named the mode - "Hallowgrove, Normal, Solo explore" - and the log was
+checked against it immediately. What that overturned:
+
+- **Non-zero `matchId` values EXIST**: `11111` and `11112`. This item's
+  acceptance treated "non-zero `matchId`" as a proxy for "a real matchmade
+  raid". **That proxy is refuted.** Both belong to *solo explores*. `matchId=0`
+  is the Prologue; a solo explore gets a low sequential id. Whatever
+  distinguishes a matchmade run, it is not simply a non-zero `matchId`.
+- **A better discriminator is available**, straight from the map URL:
+  `?levelId=119&roomModeId=0&matchType=1&matchId=11112`. Four axes, not one.
+- **A second escape type exists.** `FixEscapeBell` / `WindChime` appears
+  alongside `GroveSprite` in one run, so "only one escape type has ever been
+  seen" is no longer true.
+- **The player-facing and internal names differ.** "Hallowgrove" is the name
+  the operator sees; the map loaded is `/Game/Project/Maps/Map_2/Whitewoods_Day`
+  with sublevel `WhiteWoods_Level_Easy2`. A grep for the player-facing name
+  finds only cosmetics.
+- **Match state machine**, observed in order: `onRequestMatch`, `InMatch`,
+  `MatchSuccessful`, `EnterBattle`, `NotMatch`.
+- **A loot pity system exists** - `OnHandleFirstLoot` carries `dropValue`,
+  `dropPity` and `addPityDropValue exceed threshold`. Unmeasured beyond its
+  existence; no coefficient is claimed here.
+
+**What is still unmeasured:** a run with another player in it. Everything above
+is solo. PvP mechanics remain a clean null.
+
+**And the transient save's trigger is now known.** `StandaloneSlot_<roleId>.sav`
+is created at match start and destroyed when the run ends - it is not on a
+timer at all. Measured on two independent runs: `matchId=11112` entered battle
+at 22:27:00 UTC and the file appeared 17 seconds later at 22:27:17; the run
+ended around 22:46 and the file was gone by 22:48:48. The previous session's
+file, which appeared at 20:39 UTC, fits `matchId=11111` starting at 20:38:19.
+The "about 13 minutes" lifetime was never a timer - it was simply how long that
+run lasted. Its producer is named too: `StandaloneLevelCtrl.battleSnapUpdate`
+emits battle snapshots throughout, and the controller name matches the file.
 
 **The operator has never been observed dying.** The log's single
 `Game.PlayState.Death` belongs to a second player, not to them

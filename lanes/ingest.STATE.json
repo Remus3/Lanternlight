@@ -36,10 +36,16 @@
       "item_id": "ING-6",
       "opened": "2026-08-09",
       "text": "MEASURED NEGATIVE: the equipped ammo loadout is in NO local save. Searched all 7 saves plus the largest StandaloneSlot capture for 120501/2/8/10 as ASCII, int32, int64 and float64 - zero hits. The log is the only local surface carrying the equip event, so Emberforge cannot read a loadout from disk"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "ING-7",
+      "opened": "2026-08-09",
+      "text": "StandaloneSlot save is created at match start and destroyed at run end, producer StandaloneLevelCtrl.battleSnapUpdate. A watcher should arm on EnterBattle rather than poll blindly"
     }
   ],
   "resume_note": "decoding StructProperty<F_PlayzoneSaveData> against the captured StandaloneSlot save",
   "schema": 1,
   "sessions": 1,
-  "updated": "2026-08-09T22:57:29+00:00"
+  "updated": "2026-08-09T23:05:24+00:00"
 }

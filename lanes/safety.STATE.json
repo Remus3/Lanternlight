@@ -24,10 +24,16 @@
       "item_id": "SAF-4",
       "opened": "2026-08-09",
       "text": "ENCODING: some TS.UI log lines carry CJK text, so a log excerpt is not ASCII and not single-byte. Confirm the redactor and every excerpt path handle it, and that the ASCII hygiene guard can never be fed raw log text"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "SAF-5",
+      "opened": "2026-08-09",
+      "text": "Dungeon log lines carry PlayerName= with the operator persona AND roleid in the same line as loot values, so any dungeon excerpt is dense with PII - verify the redactor covers PlayerName= and roleid keys before item 1 commits any fixture"
     }
   ],
   "resume_note": "no lane session yet - last worked as a sub-slice of the 2026-08-09b session",
   "schema": 1,
   "sessions": 0,
-  "updated": "2026-08-09T22:57:29+00:00"
+  "updated": "2026-08-09T23:05:24+00:00"
 }
