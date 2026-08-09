@@ -30,10 +30,16 @@
       "item_id": "ING-5",
       "opened": "2026-08-09",
       "text": "Scav.sav appeared 2026-08-09 17:51 local, 1937 bytes - an EIGHTH distinct save name. Parses with the existing reader, undecoded_trailing empty, one property bIsMaskReward. No fixture pins it"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "ING-6",
+      "opened": "2026-08-09",
+      "text": "MEASURED NEGATIVE: the equipped ammo loadout is in NO local save. Searched all 7 saves plus the largest StandaloneSlot capture for 120501/2/8/10 as ASCII, int32, int64 and float64 - zero hits. The log is the only local surface carrying the equip event, so Emberforge cannot read a loadout from disk"
     }
   ],
   "resume_note": "decoding StructProperty<F_PlayzoneSaveData> against the captured StandaloneSlot save",
   "schema": 1,
   "sessions": 1,
-  "updated": "2026-08-09T22:52:56+00:00"
+  "updated": "2026-08-09T22:57:29+00:00"
 }
