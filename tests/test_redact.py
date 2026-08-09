@@ -1021,6 +1021,134 @@ def test_findings_are_deduplicated_across_passes():
     assert len(hits) == 1, f"expected one deduplicated finding, got {len(hits)}"
 
 
+# --------------------------------------------------------------------------
+# raw wide-character content - the layer above base64
+# --------------------------------------------------------------------------
+#
+# The gap these pin, measured on 2026-08-09 against the merged tree::
+#
+#     UTF-16 identifier INSIDE a base64 blob -> caught
+#     RAW UTF-16 identifier in a file        -> MISSED
+#
+# The NUL-stripped reading in _views only ever ran on DECODED bytes, so it
+# reached a wide-character string one layer down and never the file's own
+# content. That is backwards for this project: the game's `.sav` files are raw
+# UTF-16 on disk, and Unreal writes any non-ASCII string that way, so the raw
+# case is the likely accident and the encoded one is the exotic one.
+
+
+def _utf16(text: str, big_endian: bool = False) -> str:
+    """Return ``text`` as UTF-16 bytes read back the way a file scan reads them.
+
+    latin-1 because that is exactly what ``tests/test_no_pii.py`` does to a
+    binary: total, length-preserving, one character per byte.
+    """
+    codec = "utf-16-be" if big_endian else "utf-16-le"
+    return text.encode(codec).decode("latin-1")
+
+
+def test_a_raw_utf16_identifier_in_a_file_is_caught():
+    # The reported gap, end to end at the module level. A `.sav` renamed to
+    # `.bin` and committed carries its ids in exactly this shape.
+    raw = _utf16("steamId" + _EQ + FAKE_STEAMID64)
+    assert "\x00" in raw
+    assert not list(iter_sensitive(raw, labels=FILE_SCAN_LABELS)), (
+        "the plain scan is expected to be blind here - that is the defect"
+    )
+    assert "STEAMID64" in _labels(raw, labels=FILE_SCAN_LABELS)
+
+
+def test_a_raw_utf16_identifier_is_caught_big_endian_too():
+    # Unreal writes little-endian, but a hand-converted copy or a UTF-16-BE
+    # export is the same leak with the NUL on the other side of every digit.
+    #
+    # The shape here is deliberate and mutation testing is why. A KEYED value
+    # is caught even with the big-endian pattern deleted, because the
+    # little-endian pattern matches the same bytes one byte in and
+    # the keyed rule does not care how many digits follow. What the
+    # little-endian reading loses is the LAST character of the run - it can only
+    # take whole pairs - so an UNKEYED id that runs to the end of the string
+    # comes back one digit short, which is a LONG_ID and not a SteamID64. That
+    # is the case only the big-endian pattern reaches, so that is the case this
+    # test pins.
+    raw = _utf16("id " + FAKE_STEAMID64, big_endian=True)
+    assert not list(iter_sensitive(raw, labels=FILE_SCAN_LABELS))
+    assert "STEAMID64" in _labels(raw, labels=FILE_SCAN_LABELS)
+
+
+def test_a_raw_utf16_product_user_id_is_caught():
+    raw = _utf16("puid " + FAKE_PRODUCT_USER_ID + " ready")
+    assert "PRODUCTUSERID" in _labels(raw, labels=FILE_SCAN_LABELS)
+
+
+def test_a_raw_utf16_display_name_slot_is_caught():
+    raw = _utf16("PlayerName" + _EQ + FAKE_FULL_NAME + " Tag" + _COLON + "x")
+    assert "PERSONA" in _labels(raw, labels=FILE_SCAN_LABELS)
+
+
+def test_the_wide_reading_does_not_bridge_a_run_of_nul_padding():
+    # The false-positive this rule is shaped to avoid. Stripping every NUL in a
+    # file would weld a digit before a padding run onto a digit after it and
+    # manufacture a long id out of two short numbers that were never adjacent.
+    # Collapsing only (char, NUL) PAIR runs cannot do that, because a pair of
+    # NULs breaks the alternation.
+    text = "12345678" + ("\x00" * 64) + "9012345678"
+    assert not list(iter_sensitive(text, labels=FILE_SCAN_LABELS))
+    assert "LONG_ID" in {
+        label
+        for label, _, _ in iter_sensitive(
+            text.replace("\x00", ""), labels=FILE_SCAN_LABELS
+        )
+    }, "the naive whole-file NUL strip is only a fair comparison if it fires"
+    assert not _labels(text, labels=FILE_SCAN_LABELS)
+
+
+def test_a_wide_run_too_short_to_hold_an_identifier_is_not_read():
+    # Below the shortest identifier that exists there is nothing to find and
+    # only noise to manufacture, so the run is not collapsed at all.
+    short = _utf16("abc1234")
+    assert not _labels(short, labels=FILE_SCAN_LABELS)
+
+
+def test_ordinary_binary_alternating_bytes_produce_no_findings():
+    # An array of little-endian uint16 values looks exactly like UTF-16 to this
+    # pass. Seeded, so a green run today is a green run tomorrow.
+    rng = random.Random(20260810)
+    for _ in range(40):
+        blob = bytes(
+            byte
+            for _ in range(1024)
+            for byte in (rng.randrange(256), 0)
+        )
+        assert not _labels(blob.decode("latin-1"), labels=FILE_SCAN_LABELS)
+
+
+def test_the_wide_reading_reports_a_container_not_the_value():
+    raw = _utf16("steamId" + _EQ + FAKE_STEAMID64)
+    findings = list(iter_encoded_sensitive(raw, labels=FILE_SCAN_LABELS))
+    assert findings
+    for _label, description, _offset in findings:
+        assert FAKE_STEAMID64 not in description
+        assert "wide" in description
+
+
+def test_the_wide_offset_indexes_the_input_text():
+    prefix = "header padding "
+    raw = prefix + _utf16("steamId" + _EQ + FAKE_STEAMID64)
+    findings = list(iter_encoded_sensitive(raw, labels=FILE_SCAN_LABELS))
+    assert findings
+    for _label, _description, offset in findings:
+        assert offset >= len(prefix) - 2
+        assert offset < len(raw)
+
+
+def test_a_base64_wrapped_raw_utf16_file_is_still_caught():
+    # Belt and braces: the previously working path must not regress when the
+    # raw path is added.
+    raw = ("id " + FAKE_STEAMID64).encode("utf-16-le")
+    assert "STEAMID64" in _labels(base64.b64encode(raw).decode("ascii"))
+
+
 def test_a_label_subset_is_respected():
     encoded = _b64("player " + FAKE_STEAMID64 + " connected")
     assert not _labels(encoded, labels={"ACCOUNT_NAME"})

@@ -94,8 +94,16 @@ Encoded content - a fourth mechanism, and a different trade
 -----------------------------------------------------------
 
 Everything above reads plain text, so a single base64 pass defeated all of it
-at once. :func:`iter_encoded_sensitive` closes that: it finds base64 and hex
-runs, decodes them, and re-runs the structural rules on what comes out.
+at once. :func:`iter_encoded_sensitive` closes that: it finds base64, hex and
+raw wide-character runs, decodes them, and re-runs the structural rules on what
+comes out.
+
+The wide-character reading matters most here and it arrived last. Unreal stores
+a save's strings as UTF-16 whenever they are not pure ASCII, so an id inside a
+``.sav`` sits on disk with a NUL between every digit and no digit-run rule can
+see it. Until 2026-08-09 that reading only ran on DECODED bytes, so a UTF-16
+identifier wrapped in base64 was caught and the same identifier written raw
+into a file was not - backwards from how the two actually arrive.
 
 It is a **detector only, and deliberately not wired into** :func:`redact` or
 :func:`assert_clean`. Rewriting bytes inside an encoded blob would corrupt the
@@ -119,12 +127,18 @@ Limits, stated rather than hidden:
   cannot-certify path narrows this to slots that share a marker with a known
   one; an entirely novel shape in otherwise unremarkable text is still a silent
   pass.
-- **The encoded pass reads standard base64 and hex only.** The URL-safe
-  alphabet is not accepted, because ``_`` separates every snake_case identifier
-  in this repository and admitting it would fuse ordinary source into
-  multi-hundred-character "runs". Compression, encryption and any encoding
-  outside those two are likewise out of reach - there is no general answer, and
-  a guard that claimed one would be lying.
+- **The encoded pass reads standard base64, hex and wide characters only.** The
+  URL-safe base64 alphabet is not accepted, because ``_`` separates every
+  snake_case identifier in this repository and admitting it would fuse ordinary
+  source into multi-hundred-character "runs". Compression, encryption and any
+  encoding outside those three are out of reach - there is no general answer,
+  and a guard that claimed one would be lying.
+- **The wide reading sees ASCII inside UTF-16, not UTF-16 in general.** It
+  collapses runs of ``(character, NUL)`` pairs, which is what an ASCII string
+  stored as UTF-16 looks like in either endianness. An identifier written in
+  non-ASCII digits, or a wide string in an encoding with no NUL half, is not
+  reached. Whole-file NUL stripping would reach slightly more and was rejected
+  on measured false positives - see the block above :data:`_WIDE_RUNS`.
 - A display name shorter than three characters is not literal-masked; masking a
   two-character token by substring would shred ordinary words.
 - City/state/country are not pattern-detectable. Redact geolocation lines by
@@ -761,7 +775,9 @@ def iter_sensitive(
 #     characters, so a decoded blob of noise yields nothing.
 #
 # Measured false-positive rate on the tracked tree: 0 findings across every
-# published file. See tests/test_no_pii.py.
+# published file, before and after the wide-character reading was added. See
+# tests/test_no_pii.py, and the block above _WIDE_RUNS for the control-corpus
+# numbers that decided the shape of that rule.
 
 #: Shortest identifier this module knows is 15 digits (``LONG_ID``), which
 #: needs 15 decoded bytes, which needs 20 base64 characters. Below that a run
@@ -789,6 +805,60 @@ _B64_LINE = re.compile(rf"[A-Za-z0-9+/]{{{_B64_MIN_RUN},}}={{0,2}}")
 #: a git sha, which is the shape this will most often decode and discard.
 _HEX_MIN_RUN = _MIN_DECODED_BYTES * 2
 _HEX_RUN = re.compile(rf"(?<![0-9A-Za-z])[0-9a-fA-F]{{{_HEX_MIN_RUN},}}(?![0-9A-Za-z])")
+
+# Wide characters, which is the one encoding this project meets more often than
+# base64. Unreal stores a save's strings as UTF-16 whenever they are not pure
+# ASCII, so a 17-digit id in a `.sav` sits on disk as ``7 NUL 6 NUL 5 NUL ...``
+# and no digit-run rule can see it. Measured 2026-08-09 against the merged
+# tree, which is what makes this a defect rather than a theory::
+#
+#     UTF-16 identifier INSIDE a base64 blob -> caught
+#     RAW UTF-16 identifier in a file        -> MISSED
+#
+# The NUL-stripped reading in _views only ever ran on DECODED bytes, one layer
+# down. It never saw a file's own content, so the exotic case was covered and
+# the likely one was not.
+#
+# WHY PAIRS AND NOT A WHOLE-FILE NUL STRIP. Dropping every NUL in a file is the
+# obvious fix and it is the wrong one: a binary is mostly padding, so stripping
+# welds a digit before a 64-byte run of NULs onto a digit after it and
+# manufactures a 15-digit "identifier" out of two short numbers that were never
+# adjacent. Collapsing only maximal runs of (character, NUL) pairs cannot do
+# that, because two consecutive NULs break the alternation - and two consecutive
+# NULs is exactly what padding is.
+#
+# Measured 2026-08-09, whole-file strip against the pair rule, same harness and
+# same run:
+#
+#   - this repository's own `__pycache__`: naive 32 findings over 4 `.pyc`
+#     files, every one invented by the strip. Pair rule: 0.
+#   - a 22,110-file control corpus (a Python install, deliberately hostile -
+#     compiled `.pyd` and `.dll` binaries full of 16-bit tables that look
+#     exactly like wide characters): naive 5301 findings over 395 files, 12 of
+#     which the existing plain scan does not already flag. Pair rule as shipped:
+#     178 findings over 14 files, 5 of which the plain scan does not already
+#     flag. Every one of those 5 is a compiled extension module whose uint16
+#     lookup tables happen to hold ASCII digit values.
+#   - every published file in this repository, which is the set the guard
+#     actually walks: 0 findings before the change and 0 after.
+#
+# So the marginal cost of this rule, in commits that would newly be refused, is
+# zero here and 5 files in 22,110 on a corpus of a kind this repository does not
+# contain. The rejected alternative costs 2.4 times that in files and 30 times
+# that in findings, and it fires on this project's own build artifacts.
+#
+# The two endiannesses are separate patterns rather than one alternation so
+# that each keeps its own phase. A run is read by taking every second byte,
+# starting at 0 for little-endian and at 1 for big-endian.
+#
+# The minimum is the same 15 bytes the rest of this section uses, expressed in
+# pairs. A shorter run cannot hold the shortest identifier that exists however
+# it is read, so collapsing it can only manufacture noise.
+_WIDE_MIN_PAIRS = _MIN_DECODED_BYTES
+_WIDE_RUNS: tuple[tuple[re.Pattern[str], int, str], ...] = (
+    (re.compile(rf"(?:[^\x00]\x00){{{_WIDE_MIN_PAIRS},}}"), 0, "little-endian"),
+    (re.compile(rf"(?:\x00[^\x00]){{{_WIDE_MIN_PAIRS},}}"), 1, "big-endian"),
+)
 
 #: How many times to peel an encoding. 1 catches base64-of-a-save, which is the
 #: realistic accident; 2 also catches base64-of-hex and the deliberate double
@@ -881,12 +951,32 @@ def _b64_blocks(text: str) -> Iterator[tuple[int, str, int]]:
         yield group[0][0], "".join(part for _, part in group), len(group)
 
 
+def _wide_candidates(text: str) -> Iterator[tuple[int, bytes, str]]:
+    """Yield ``(offset, narrowed_bytes, description)`` for wide-character runs.
+
+    A run is every second byte of a maximal ``(character, NUL)`` alternation -
+    which is what a UTF-16 string of ASCII looks like on disk, in either
+    endianness. See the block above :data:`_WIDE_RUNS` for why the alternation
+    is matched in pairs rather than by stripping every NUL in the file.
+    """
+    for pattern, phase, endianness in _WIDE_RUNS:
+        for match in pattern.finditer(text):
+            run = match.group(0)
+            narrowed = run[phase::2].encode("latin-1")
+            if len(narrowed) >= _MIN_DECODED_BYTES:
+                yield match.start(), narrowed, (
+                    f"a {len(narrowed)}-character {endianness} wide-character run"
+                )
+
+
 def _encoded_candidates(text: str) -> Iterator[tuple[int, bytes, str]]:
     """Yield ``(offset, decoded_bytes, description)`` for every encoded run.
 
     The description never carries the decoded value - see
     :func:`iter_encoded_sensitive`.
     """
+    yield from _wide_candidates(text)
+
     for match in _B64_RUN.finditer(text):
         run = match.group(0)
         raw = _decode_b64(run)
