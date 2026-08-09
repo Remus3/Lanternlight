@@ -56,6 +56,25 @@ four records to each other.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0014 - 2026-08-09 - Session wrap - refutation pass held, two filed counts were wrong
+
+**Evidence:**
+- python -m pytest -> 643 passed 0 failed, observed this run with __pycache__, .pytest_cache and .ruff_cache purged first
+- python -m ruff check . -> All checks passed
+- default run still includes the slow tests: 610 not-slow + 33 slow = 643, so the marker cost no coverage
+- independent refuter re-derived all ten wrap claims and CONFIRMED every substantive one
+- redactor: 1455 raw occurrences across all 9 discovered persona candidates -> 0 after redaction; idempotent; assert_clean raises on the raw log
+- raw UTF-16 LE and BE both caught by the real consumer; mutation of the wide-candidate call turned 7 tests red, restore returned byte-identical
+- pre-commit hook refused 5 hazard shapes and permitted 2 legitimate ones via REAL commits, with HEAD compared before and after every single attempt
+- dotfile ownership mutation (removeprefix -> lstrip) turned 5 tests red; 94 tracked files, zero with two owners
+- independent PII sweep over all 94 files, decoding to depth 2 with ALL_LABELS plus 442 ground-truth strings from the live log: zero operator ids, zero in filenames, positive control fires
+- anti-cheat boundary swept over the full 13,108-line session diff with a pattern proven against a positive control: zero code hits
+
+CORRECTS two counts filed earlier this session. The ledger has THIRTEEN entries, not fourteen - the fourteenth '### LL-' header is the LL-0000 template in the Format section. And there are SIX .sav files, not five: Deck.sav appeared at 14:36 local during the mail-and-equip sequence. Both were caught by the refuter, and both are exactly what this repo means by 'a filed count is a hypothesis'.
+Deck.sav parses cleanly with the existing reader - DeckDefaultOpenPage, a MapProperty<IntProperty,IntProperty>, zero undecoded - but no fixture pins it. The save set is NOT fixed; a reader must enumerate the directory.
+OPEN RISK, unresolved: three GVAS fixtures are byte-identical to the operator's live saves by sha256. Clean today, but the repo is publishing raw game-state bytes on the assumption that the shapes the scanner knows are the only shapes that matter.
+OPEN GAP: ten tracked files are neither lane-owned nor declared cross-cutting, including lanternlight/__init__.py, docs/ARCHITECTURE.md, tests/test_lane_launcher.py and tests/test_lane_contract.py. Nothing arbitrates a concurrent edit to them, and the no-two-owners test passes trivially over a file with zero owners.
+
 ### LL-0013 - 2026-08-09 - Raw UTF-16 gap closed, encoded saves blocked by path, merge_gate gained must_contain
 
 **Evidence:**

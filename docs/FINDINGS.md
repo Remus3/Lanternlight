@@ -217,7 +217,7 @@ about the game.
 |---|---|
 | Log is 567 KB | 6.1 MB and growing |
 | `AvgPrice_937566.ini` is 37 bytes and empty | 343 bytes, 30 trade prices |
-| Four `.sav` files | Five - `CampData_<userId>.sav` is new |
+| Four `.sav` files | **Six** - `CampData_<userId>.sav`, then `Deck.sav` |
 
 Log span 13:18:57Z to 17:03:01Z at the time of analysis, 142 distinct categories,
 48,032 lines of which 47,013 parse.
@@ -525,6 +525,9 @@ assumed:
 | `EnhancedInputUserSettings.sav` | `CurrentProfileIdentifierString` plus the key-profile object |
 | `CampData_<userId>.sav` | `LevelModeMap` |
 | `Notice.sav` | `readedGameBulletinId` |
+| `Deck.sav` | `DeckDefaultOpenPage`, a `MapProperty<IntProperty, IntProperty>` |
+
+`Deck.sav` did not exist before this session. It appeared at 14:36 local, during the mail-and-equip sequence, and `CampData_<userId>.sav` was rewritten at 14:41. **The set of save files is not fixed** - a reader must enumerate the directory rather than expect a known list, and a fixture set pinned to five files silently stops covering the surface.
 
 Also attested and not yet located in any surface: the operator owns the **Deluxe
 edition**, has claimed **three Twitch drops**, and has linked Discord for its
