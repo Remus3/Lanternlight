@@ -1,14 +1,22 @@
 """Read Mistfall Hunter's Unreal GVAS save files.
 
-The game writes five files into ``%LOCALAPPDATA%/MistfallHunter/Saved/
-SaveGames/``. Measured 2026-08-09, all five plain, unencrypted UE GVAS with
-magic ``47 56 41 53``::
+The game writes into ``%LOCALAPPDATA%/MistfallHunter/Saved/SaveGames/``.
+Measured 2026-08-09, six files, all plain unencrypted UE GVAS with magic
+``47 56 41 53``::
 
     CampData_<19-digit userId>.sav    1986 bytes
+    Deck.sav                          2001
     EnhancedInputUserSettings.sav     2603
     LoginOptions.sav                  2067
     Notice.sav                        1968
     UserSettings_v1.sav               2668
+
+**That list is a snapshot, not the set.** Both halves of it have already moved
+under observation: ``Deck.sav`` did not exist when this module was written and
+appeared mid-session, and ``UserSettings_v1.sav`` was 2668 bytes when it was
+captured and 2713 an hour later, because the operator was playing. A caller
+that expects a known list of filenames, or a known size, is writing down a
+guess about a live directory. Enumerate it.
 
 This module only ever reads them. The save directory is operator data, and a
 reader that writes into it is a bug with a permanent cost.
@@ -26,7 +34,7 @@ a few hundred lines of struct unpacking.
 The format, as measured off the real files
 ------------------------------------------
 
-Header, identical in all five::
+Header, identical in all six::
 
     b"GVAS"                        magic
     int32   save_game_version      3
@@ -42,7 +50,7 @@ Header, identical in all five::
 ``FString`` is a signed length that INCLUDES the NUL terminator. Positive means
 ANSI, negative means UTF-16LE with the length in characters.
 
-Then one ``uint8`` tag-extension byte - measured ``0x00`` in all five files -
+Then one ``uint8`` tag-extension byte - measured ``0x00`` in all six files -
 followed by tagged properties, each::
 
     FString name                   "None" ends the list
@@ -63,8 +71,9 @@ optional, announced by a flag, while a bool's value is carried in flag bit
 After the ``"None"`` terminator
 ------------------------------
 
-Four of the five files carry exactly four bytes there; ``EnhancedInputUserSettings.sav``
-carries 627. The whole 627 decodes, and the grammar is::
+Every file but one carries exactly four bytes there;
+``EnhancedInputUserSettings.sav`` carries 627. The whole 627 decodes, and the
+grammar is::
 
     4 bytes                        epilogue - see below
     int32                          section header, 2 here, NOT the object count
@@ -87,16 +96,19 @@ carries 627. The whole 627 decodes, and the grammar is::
 That grammar lands exactly on the end of the file, and :func:`parse` raises if
 it does not - a section it cannot consume whole is a section it has misread.
 Slot 0 of a mapping is corroborated out of band: the game log writes
-``decode key mapping KB_Blackarrow_Major_Action RightMouseButton``, naming the
-same pairs slot 0 carries.
+``decode key mapping KB_Blackarrow_Major_Action <key>``, pairing the same
+mapping names with the same slot the reader reads. The key itself is the
+operator's own configuration, so it is not written down here or carried in the
+fixture - what is measured is the pairing, not which button they chose.
 
 **The four-byte epilogue is not identified, and it is not padding.** It follows
 *every* tagged property list, not only the file's last one: the nested key
-profile carries its own, 21 bytes before EOF rather than at it. Six occurrences
-observed - one per file plus the nested object - and all six are zero. An int32
-zero fits, an empty FString fits, four zero flag bytes fit, and nothing observed
-tells those readings apart, so it is handed back as :attr:`GvasSave.epilogue`
-and left unnamed. The section header is unidentified for the same reason, with
+profile carries its own, 21 bytes before EOF rather than at it. Seven
+occurrences observed - one per file plus the nested object - and all seven are
+zero. An int32 zero fits, an empty FString fits, four zero flag bytes fit, and
+nothing observed tells those readings apart, so it is handed back as
+:attr:`GvasSave.epilogue` and left unnamed. The section header is unidentified
+for the same reason, with
 one thing ruled out: it is **not** the object count, because reading it as one
 demands a second object and the block ends on the first sentinel with nothing
 to spare.
@@ -116,7 +128,7 @@ reader that skipped what it did not understand would hand Emberforge a save
 that looks whole and is not.
 
 The types below are the complete measured set. Each is decoded because it was
-observed in one of the five files, and nothing is decoded because it looked
+observed in one of those files, and nothing is decoded because it looked
 easy:
 
 ===================================  =========================  ==============
@@ -128,10 +140,10 @@ Type                                 Python                     Seen in
 ``StrProperty``                      ``str``                    Notice
 ``TextProperty`` history ``0xff``    ``str``                    LoginOptions
 ``TextProperty`` history ``0x00``    :class:`SourceText`        EnhancedInput
-``MapProperty<IntProperty, ...>``    ``dict[int, int]``         CampData
+``MapProperty<IntProperty, ...>``    ``dict[int, int]``         CampData, Deck
 ===================================  =========================  ==============
 
-That is the complete set of type names present: grepping all five files for
+That is the complete set of type names present: grepping all six files for
 ``[A-Za-z]+Property`` yields ``Bool``, ``Double``, ``Int``, ``Map``, ``Str``
 and ``Text`` and nothing else. ``FloatProperty``, ``NameProperty``,
 ``ArrayProperty``, ``StructProperty`` and the rest are absent from the table on
@@ -395,8 +407,10 @@ class KeyMapping:
 
     Only slot 0 has ever been observed carrying a key. The game log names the
     same pairs slot 0 holds ("decode key mapping KB_Blackarrow_Major_Action
-    RightMouseButton"), which is what binds slot 0 to a real binding; slots 1
-    and 2 are named by position and have never been seen holding anything.
+    <key>"), which is what binds slot 0 to a real binding; slots 1 and 2 are
+    named by position and have never been seen holding anything. Which key the
+    operator bound is their own configuration and is not recorded here - the
+    measured fact is that the log's pairing and slot 0 agree.
 
     ``undecoded`` is the six bytes that close the row, zero in all three rows
     of the only capture. An empty FString plus two bytes fits them, an int32
@@ -458,7 +472,7 @@ class GvasSave:
     after *every* tagged property list, not only the file's last one - the key
     profile nested in ``EnhancedInputUserSettings.sav`` carries its own, 21
     bytes before EOF rather than at it - so it is an object epilogue and not
-    end-of-file padding. All six observed occurrences are zero. An int32 zero
+    end-of-file padding. All seven observed occurrences are zero. An int32 zero
     fits, an empty FString fits, four zero flag bytes fit, and nothing observed
     tells them apart, so the bytes are handed back and **not named**.
 
@@ -989,8 +1003,8 @@ def parse(data: bytes, *, strict: bool = True) -> GvasSave:
 
     trailing = reader.take(reader.remaining)
     if len(trailing) < EPILOGUE_SIZE:
-        # All six observed property lists - one per file, plus the key profile
-        # nested in EnhancedInputUserSettings - are followed by exactly four
+        # All seven observed property lists - one per file, plus the key
+        # profile nested in EnhancedInputUserSettings - are followed by four
         # bytes. Fewer means this is not the stream it appears to be, and a
         # short epilogue reported as the whole one would be a quiet lie.
         raise GvasParseError(
