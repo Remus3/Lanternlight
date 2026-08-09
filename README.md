@@ -30,7 +30,8 @@ screen:
 
 - the live-appending log at `%LOCALAPPDATA%\MistfallHunter\Saved\Logs\MistfallHunter.log`
 - a growing set of unencrypted UE GVAS `.sav` files under the same tree - four at
-  first probe, seven a day later, so a reader enumerates rather than assumes
+  first probe and **eight distinct names** within two days, one of which exists
+  only for the duration of a run, so a reader enumerates rather than assumes
 - `AvgPrice_937566.ini`, a market and trade-price cache
 - passive desktop screen capture, on the operator's own display, with no overlay
 
@@ -55,13 +56,14 @@ Honest as of 2026-08-09. This project is days old and most of it does not exist.
 | Class id table | **Done** | Ids 10-15 bound to class names by a log-to-pixel join. `docs/OBSERVED_IDS.md` |
 | Weapon config ids | **Partial** | Creation-preview ids recorded. The live id space is now **joined**: it is the same space as item cfgIds |
 | Class reference | **Done** | All six researched independently and adjudicated into `docs/CLASSES.md` |
-| Specialist lanes | **Proven** | Eight lanes, ownership enforced by tests, worktree-isolated. Two have been run end to end |
+| Specialist lanes | **Done** | Eight lanes, ownership enforced by tests, worktree-isolated, each with on-disk state and its own ledger fragment so no two lanes race |
 | Log parsing | **Early** | `lanternlight.logparse` reads the surfaces named above |
 | Redaction | **Hardened** | Sees through base64, hex and raw UTF-16, scans binaries, and refuses to certify what it cannot assess. `ROADMAP.md` item 0 |
 | Market cache | **Parser done** | `AvgPrice_937566.ini` filled. `lanternlight.avgprice` parses it; watcher not built |
+| Save watcher | **Done** | `lanternlight.savewatch` snapshots every generation of every save, refuses any destination inside a repo working directory, and never writes to the source |
 | Dungeon data | **Prologue measured** | Lifecycle, escape portals, loot, death and escape states all observed. `docs/FINDINGS.md` section 9 |
-| Raid / PvP data | **Unmeasured** | Only the Prologue has been entered (`matchId=0`, no second player). Unmeasured, not absent |
-| GVAS `.sav` reader | **Partial** | Six of seven saves parse with zero undecoded bytes. The seventh appeared mid-session and uses a `StructProperty` the reader has never measured, so it **raises** rather than guessing. Published parsers do not work on this build - UE 5.4+ changed the property tag |
+| Raid / PvP data | **Solo measured, PvP unmeasured** | Solo explores are now measured at non-zero `matchId`, which **refutes** the old assumption that a non-zero `matchId` means a matchmade run. No run with another player has been observed |
+| GVAS `.sav` reader | **Done, one gap named** | Every save parses with zero undecoded bytes, including 263 captured generations of the transient run-scoped save. Natively serialised structs (`Vector`, `Rotator`, `Quat`, `Vector2D`) are handed back verbatim and **named** undecoded rather than guessed - `Vector` and `Rotator` share a width, so only the name separates them. Published parsers do not work on this build - UE 5.4+ changed the property tag |
 | Live log tail | **Not started** | Port 8811 reserved, nothing listening |
 | **Emberforge** | **Empty** | The package exists. It **computes nothing.** No formulas are published anywhere, so there is nothing yet to encode |
 | Dashboard | **Does not exist** | Port 8810 reserved. See `BACKLOG.md` |
