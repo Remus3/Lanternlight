@@ -1,5 +1,5 @@
 {
-  "$comment": "Lanternlight Claude Code settings. Windows paths MUST use forward slashes - a single backslash makes this file invalid JSON, and an unparseable settings file registers no hooks and warns about nothing.",
+  "$comment": "Lanternlight Claude Code settings. Windows paths MUST use forward slashes - a single backslash makes this file invalid JSON, and an unparseable settings file registers no hooks and warns about nothing. The PreToolUse matcher MUST name every shell tool that can reach git: this machine is PowerShell-primary, and a matcher of 'Bash' alone let a commit issued through the PowerShell tool bypass the gate entirely. Measured 2026-08-09.",
   "permissions": {
     "allow": [
       "Bash(python -m pytest*)",
@@ -20,7 +20,7 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash",
+        "matcher": "Bash|PowerShell",
         "hooks": [
           {
             "type": "command",

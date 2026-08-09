@@ -193,6 +193,54 @@ class TestVetoAndReadOnly:
                 assert lane.owns == (), f"{lane.lane_id} is read-only but claims files"
 
 
+class TestDotfilePathsResolve:
+    """Measured 2026-08-09: the ownership map failed silently for every dotfile.
+
+    ``_normalise`` ended with ``text.lstrip("./")``. ``str.lstrip`` strips
+    CHARACTERS, not a prefix, so it ate the leading dot of every dotted path:
+    ``.gitignore`` became ``gitignore`` and ``.githooks/pre-commit`` became
+    ``githooks/pre-commit``. Neither then matched anything, so the safety lane
+    did not own the git hooks it is supposed to own, the ops lane did not own
+    its own lane contracts, and no governing dotfile was recognised as
+    cross-cutting.
+
+    Every existing ownership test passed throughout, because "zero owners"
+    trivially satisfies "not owned by more than one lane", and the only
+    cross-cutting probe used a file with no leading dot. This class exists so
+    that cluster of vacuous passes cannot recur.
+    """
+
+    def test_the_git_hooks_belong_to_the_safety_lane(self):
+        assert lanes.owner_of(".githooks/pre-commit") == "safety"
+        assert lanes.owner_of(".githooks/commit-msg") == "safety"
+
+    def test_the_generated_lane_contracts_belong_to_the_ops_lane(self):
+        assert lanes.owner_of(".claude/commands/lane-ops.md") == "ops"
+        assert lanes.owner_of(".claude/commands/lane-safety.md") == "ops"
+
+    def test_every_cross_cutting_file_is_recognised_including_dotfiles(self):
+        for name in lanes.CROSS_CUTTING:
+            assert lanes.is_cross_cutting(name), (
+                f"{name} is listed as cross-cutting but is_cross_cutting() "
+                "does not recognise it - normalisation is eating something"
+            )
+
+    def test_normalise_preserves_a_leading_dot(self):
+        assert lanes._normalise(".gitignore").as_posix() == ".gitignore"
+        assert (
+            lanes._normalise(".claude/settings.json").as_posix()
+            == ".claude/settings.json"
+        )
+
+    def test_normalise_still_strips_an_explicit_relative_prefix(self):
+        assert lanes._normalise("./ops/lanes.py").as_posix() == "ops/lanes.py"
+
+    def test_a_dotted_directory_is_not_confused_with_a_relative_prefix(self):
+        assert lanes._normalise(".githooks/pre-commit").as_posix() == (
+            ".githooks/pre-commit"
+        )
+
+
 class TestOwnsPath:
     def test_a_lane_owns_a_file_matching_its_glob(self):
         assert lanes.by_id("safety").owns_path("lanternlight/redact.py")

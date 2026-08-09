@@ -115,6 +115,11 @@ CROSS_CUTTING: frozenset[str] = frozenset(
         "ruff.toml",
         ".gitignore",
         ".gitattributes",
+        # Governs the harness for every session - which hooks fire, on which
+        # tool, with which permissions. It was unowned by OMISSION rather than
+        # by design, which is how its PreToolUse matcher sat at "Bash" alone on
+        # a PowerShell-primary machine without anyone owning the question.
+        ".claude/settings.json",
     }
 )
 
@@ -183,7 +188,13 @@ def _normalise(path: str | Path) -> PurePosixPath | None:
         except ValueError:
             return None
         text = candidate.as_posix()
-    return PurePosixPath(text.lstrip("./"))
+    # removeprefix, NOT lstrip. `str.lstrip("./")` strips CHARACTERS, so it
+    # ate the leading dot of every dotted path - `.gitignore` became
+    # `gitignore`, `.githooks/pre-commit` became `githooks/pre-commit` - and the
+    # ownership map then silently matched nothing for any dotfile. Measured
+    # 2026-08-09; the safety lane did not own the git hooks, and every existing
+    # test passed because zero owners satisfies "not more than one owner".
+    return PurePosixPath(text.removeprefix("./"))
 
 
 def is_cross_cutting(path: str | Path) -> bool:
