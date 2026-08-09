@@ -1,0 +1,124 @@
+#!/bin/sh
+#
+# Lanternlight pre-commit hook.
+#
+# Two jobs, both about what must never reach a public repo:
+#
+#   1. PII PATHS. Mistfall Hunter writes logs and saves that carry a SteamID64,
+#      a Steam persona name, GSDK openID/userId, an EOS ProductUserId and
+#      IP-resolved geolocation. Local screen captures of the game are just as
+#      identifying. .gitignore is the first fence; this is the second, because
+#      a `git add -f` or a path the ignore rules did not anticipate walks
+#      straight past the first one.
+#
+#   2. NON-ASCII BYTES in authored text. The repo is 7-bit ASCII by rule. A
+#      smuggled em-dash or smart quote breaks tooling that ANSI-decodes files
+#      and makes diffs noisy for no benefit.
+#
+# Failures are loud and the commit is refused. To inspect a real game log,
+# read it in place OUTSIDE the repo - do not copy it in and then fight the
+# hook. There is no bypass documented here on purpose.
+#
+# This hook is only active if core.hooksPath points at .githooks/, which is
+# LOCAL config and is never cloned. Run: python scripts/install_hooks.py
+
+set -u
+
+RED=''
+BOLD=''
+RESET=''
+if [ -t 2 ]; then
+    RED=$(printf '\033[31m')
+    BOLD=$(printf '\033[1m')
+    RESET=$(printf '\033[0m')
+fi
+
+fail=0
+
+# Byte-range pattern for "anything outside 7-bit ASCII", built with printf so
+# no locale-dependent escape parsing is involved.
+HIGH_BYTES=$(printf '[\200-\377]')
+
+report() {
+    # report <path> <reason>
+    fail=1
+    printf '%s%sBLOCKED%s %s\n' "$BOLD" "$RED" "$RESET" "$1" >&2
+    printf '        %s\n' "$2" >&2
+}
+
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+if [ -z "$staged" ]; then
+    exit 0
+fi
+
+# Iterate in the CURRENT shell (no pipe into while) so that `fail` survives.
+old_ifs=$IFS
+IFS='
+'
+set -f
+for path in $staged; do
+    set +f
+    IFS=$old_ifs
+
+    # ---------------------------------------------------------------
+    # 1. PII-hazard paths
+    # ---------------------------------------------------------------
+    case "$path" in
+        frames/*|*/frames/*)
+            report "$path" "sits under a frames/ directory - captured game frames are never committed"
+            ;;
+        captures/*|*/captures/*|capture/*|*/capture/*|screenshots/*|*/screenshots/*)
+            report "$path" "sits under a capture/screenshot directory - local captures are never committed"
+            ;;
+        logs/*|*/logs/*)
+            report "$path" "sits under a logs/ directory - game and tool logs carry account identifiers"
+            ;;
+        Saved/*|*/Saved/*|*MistfallHunter/*|*MistfallHunter*.log|*MistfallHunter*.sav)
+            report "$path" "comes from the game Saved tree - it carries SteamID64, persona, EOS/GSDK ids and geolocation"
+            ;;
+        *.sav|*.sav.bak|*.savegame)
+            report "$path" "is a game save file - never committed"
+            ;;
+        *.log|*.log.[0-9]|*.log.[0-9][0-9])
+            report "$path" "is a log file - never committed"
+            ;;
+    esac
+
+    # ---------------------------------------------------------------
+    # 2. Non-ASCII bytes in authored text files
+    # ---------------------------------------------------------------
+    case "$path" in
+        *.py|*.md|*.toml|*.ini|*.txt|*.sh|*.yml|*.yaml|.githooks/*)
+            # Detect with tr (byte-exact, no regex engine involved). The
+            # staged blob is checked, not the working tree copy, because those
+            # can differ.
+            offenders=$(git show ":$path" 2>/dev/null | LC_ALL=C tr -d '\000-\177')
+            if [ -n "$offenders" ]; then
+                report "$path" "contains non-ASCII bytes - this repo is 7-bit ASCII only (no em-dash, en-dash or smart quotes)"
+                # Line numbers are best effort; the tr check above is the
+                # authoritative one.
+                git show ":$path" 2>/dev/null \
+                    | LC_ALL=C grep -n "$HIGH_BYTES" 2>/dev/null \
+                    | head -n 5 \
+                    | while IFS= read -r hit; do
+                        printf '        first offending line: %s\n' "$hit" >&2
+                    done
+            fi
+            ;;
+    esac
+
+    set -f
+    IFS='
+'
+done
+set +f
+IFS=$old_ifs
+
+if [ "$fail" -ne 0 ]; then
+    printf '\n%s%spre-commit REFUSED the commit.%s\n' "$BOLD" "$RED" "$RESET" >&2
+    printf 'Unstage the offending paths (git restore --staged <path>) and fix them.\n' >&2
+    printf 'PII reminder: anything out of the game Saved tree is public forever once pushed.\n\n' >&2
+    exit 1
+fi
+
+exit 0

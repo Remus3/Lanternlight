@@ -1,0 +1,42 @@
+# Lanternlight - project metadata ONLY.
+#
+# DELIBERATE OMISSIONS, do not "helpfully" add them back:
+#
+#   * There is no [build-system] table. Lanternlight is run from a checkout,
+#     not installed as a wheel. Adding a build backend here would advertise a
+#     packaging story that does not exist and that nothing tests.
+#
+#   * There is no [tool.pytest.ini_options] and no [tool.ruff]. The real,
+#     authoritative config for those two tools lives in pytest.ini and
+#     ruff.toml at the repo root. A duplicate section in this file would not
+#     be read by either tool once its own config file exists - so the moment
+#     one side is edited, this file becomes a confident, plausible lie about
+#     how the project is actually linted and tested. One config per tool, in
+#     the file that tool actually loads.
+
+[project]
+name = "lanternlight"
+version = "0.1.0"
+description = "Companion and analysis toolkit for Mistfall Hunter, built around the Emberforge combat and build math engine."
+readme = "README.md"
+requires-python = ">=3.14"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "Moonbeam" }]
+maintainers = [{ name = "Moonbeam" }]
+keywords = ["mistfall-hunter", "emberforge", "game-companion", "build-calculator"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Games/Entertainment",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/Remus3/Lanternlight"
+Source = "https://github.com/Remus3/Lanternlight"
+Issues = "https://github.com/Remus3/Lanternlight/issues"

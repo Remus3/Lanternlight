@@ -1,0 +1,44 @@
+{
+  "$comment": "Lanternlight Claude Code settings. Windows paths MUST use forward slashes - a single backslash makes this file invalid JSON, and an unparseable settings file registers no hooks and warns about nothing.",
+  "permissions": {
+    "allow": [
+      "Bash(python -m pytest*)",
+      "Bash(python -m ruff*)",
+      "Bash(python scripts/install_hooks.py*)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git add*)",
+      "Bash(git commit*)",
+      "Bash(git push*)",
+      "Read(//C/Lanternlight/**)",
+      "Write(//C/Lanternlight/**)",
+      "Edit(//C/Lanternlight/**)"
+    ],
+    "deny": []
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:/Users/Administrator/AppData/Local/Programs/Python/Python314/python.exe C:/Lanternlight/tools/precommit_gate.py"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:/Users/Administrator/AppData/Local/Programs/Python/Python314/python.exe C:/Lanternlight/tools/ascii_check.py"
+          }
+        ]
+      }
+    ]
+  }
+}

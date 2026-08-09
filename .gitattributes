@@ -1,0 +1,66 @@
+# Lanternlight - line ending and diff policy.
+#
+# Everything textual is stored LF in the repo and checked out LF. The repo is
+# authored on Windows but is public, so a CRLF blob would show up as a
+# whole-file diff for every non-Windows contributor. The POSIX sh hooks in
+# .githooks/ additionally MUST be LF on disk - Git for Windows sh chokes on a
+# CR in the shebang line.
+
+* text=auto eol=lf
+
+# Explicit text types (belt and braces over text=auto detection)
+*.py      text eol=lf
+*.pyi     text eol=lf
+*.md      text eol=lf
+*.txt     text eol=lf
+*.toml    text eol=lf
+*.ini     text eol=lf
+*.cfg     text eol=lf
+*.json    text eol=lf
+*.yml     text eol=lf
+*.yaml    text eol=lf
+*.sh      text eol=lf
+*.csv     text eol=lf
+LICENSE   text eol=lf
+NOTICE    text eol=lf
+.gitignore     text eol=lf
+.gitattributes text eol=lf
+
+# Hook scripts are extensionless POSIX sh
+.githooks/*  text eol=lf
+
+# Windows-native scripts keep CRLF or they misbehave under cmd.exe
+*.bat     text eol=crlf
+*.cmd     text eol=crlf
+*.ps1     text eol=crlf
+
+# ---------------------------------------------------------------------------
+# Binaries - never diffed, never line-ending-converted
+# ---------------------------------------------------------------------------
+*.png     binary
+*.jpg     binary
+*.jpeg    binary
+*.gif     binary
+*.webp    binary
+*.bmp     binary
+*.ico     binary
+*.mp4     binary
+*.webm    binary
+*.wav     binary
+*.mp3     binary
+*.ogg     binary
+*.zip     binary
+*.gz      binary
+*.tar     binary
+*.7z      binary
+*.pdf     binary
+*.ttf     binary
+*.otf     binary
+*.woff    binary
+*.woff2   binary
+*.pak     binary
+*.sav     binary
+*.db      binary
+*.sqlite  binary
+*.sqlite3 binary
+*.pyc     binary

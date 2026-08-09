@@ -1,0 +1,168 @@
+# Lanternlight - ignore rules
+#
+# Two jobs: keep build/tool noise out, and keep operator PII out. The second
+# job is the one that actually matters - see the PII HAZARD block below.
+
+# ---------------------------------------------------------------------------
+# Python
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# ---------------------------------------------------------------------------
+# Scratch / working dirs - never part of the published tree
+# ---------------------------------------------------------------------------
+scratchpad/
+_scratch/
+scratch/
+tmp/
+.tmp/
+ops/runtime/
+
+# ---------------------------------------------------------------------------
+# Captures, frames and screenshots
+# ---------------------------------------------------------------------------
+frames/
+captures/
+capture/
+screenshots/
+frames/**
+captures/**
+capture/**
+screenshots/**
+frames/*.png
+captures/*.png
+capture/*.png
+screenshots/*.png
+frames/*.jpg
+captures/*.jpg
+capture/*.jpg
+screenshots/*.jpg
+frames/*.jpeg
+captures/*.jpeg
+frames/*.webp
+captures/*.webp
+frames/*.mp4
+captures/*.mp4
+
+# ---------------------------------------------------------------------------
+# Logs
+# ---------------------------------------------------------------------------
+logs/
+logs/**
+*.log
+*.log.[0-9]
+*.log.[0-9][0-9]
+*.logs
+
+# ---------------------------------------------------------------------------
+# Game saves and extracted / derived game data
+# ---------------------------------------------------------------------------
+*.sav
+*.sav.bak
+*.savegame
+data/mhdata/
+data/mhdata/**
+data/extracted/
+data/raw/
+
+# ---------------------------------------------------------------------------
+# Secrets and credentials
+# ---------------------------------------------------------------------------
+API-Key-*.txt
+*api-key*.txt
+*apikey*.txt
+*.key
+*.pem
+*.pfx
+*.p12
+.env
+.env.*
+secrets.json
+credentials.json
+
+# ---------------------------------------------------------------------------
+# Agent / editor / OS local config
+# ---------------------------------------------------------------------------
+# .claude/ is DELIBERATELY TRACKED here, unlike in the sibling projects on this
+# machine. The governance in it - the session default, the subagent definitions,
+# the ASCII and commit gates - is the point of the repo being reproducible. A
+# fresh clone that gets CLAUDE.md but not the hooks and agents gets half the
+# rules and none of the enforcement. Only genuinely machine-local files are
+# excluded below.
+.claude/settings.local.json
+.claude/**/local.*
+.claude/projects/
+.claude/todos/
+.claude/statsig/
+.claude/shell-snapshots/
+.mcp.json
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===========================================================================
+# PII HAZARD - anything copied out of the game's Saved tree
+# ===========================================================================
+#
+# Mistfall Hunter writes a log and save tree under the local application data
+# directory (on Windows: %LOCALAPPDATA%\MistfallHunter\Saved\). Those files are
+# NOT anonymous. Observed contents include, at minimum:
+#
+#   - the player's SteamID64
+#   - the player's Steam persona name
+#   - GSDK openID / userId values
+#   - an Epic Online Services ProductUserId
+#   - geolocation resolved from the player's public IP address
+#
+# Any of those, committed once, is public forever - a force-push does not
+# unpublish a value someone already cloned or that a mirror already indexed.
+#
+# RULE: never copy anything out of that tree into the repo working directory.
+# If you must inspect a real log, read it in place, outside the repo. If a
+# sample is genuinely needed for a test, hand-author a synthetic fixture with
+# obviously fake identifiers - do not redact a real one, because redaction is
+# a per-field allowlist problem and the next game patch adds a field.
+#
+# The patterns below are a backstop for when that rule is broken anyway. The
+# pre-commit hook in .githooks/ is a second backstop. Neither is the primary
+# control; the primary control is not copying the files.
+# ===========================================================================
+MistfallHunter/
+**/MistfallHunter/Saved/
+**/Saved/Logs/
+**/Saved/SaveGames/
+**/Saved/Crashes/
+Saved/
+*MistfallHunter*.log
+*MistfallHunter*.sav
+mistfall_saved/
+game_logs/
+game_saves/
+pii/
+private/
