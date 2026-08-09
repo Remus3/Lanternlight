@@ -89,25 +89,33 @@ the real tree, not compared as pattern strings), cross-cutting files such as
 worktree outside the main checkout, `safety` holds a veto, and `verify` owns
 nothing and is read-only.
 
+**Also landed:** `ops/lane_launcher.py` creates each writing lane's worktree on
+`lane/<id>` and `assert_in_lane_worktree` refuses to let a lane write in the
+primary checkout; an integration test proves a lane commit leaves the primary
+checkout with an empty `git status`. `ops/lane_contract.py` renders all eight
+contracts **from the roster**, so ownership cannot drift out of sync with the
+prose describing it, and the drift guard is proven non-vacuous. The contracts
+live in `.claude/commands/`, so each lane is also a slash command.
+
 **Not built yet, and this is the whole remaining item:**
 
-1. A launcher that creates `<worktree>/ll-lane-<id>` on `lane/<id>` and refuses
-   to run a lane anywhere else. Two writers in one working directory corrupts
-   the git index and is not recoverable by retrying.
-2. One contract file per lane under `.claude/commands/`, carrying its mandate,
-   its owned paths, its prohibitions, and the stop conditions from
-   `docs/HEADLESS.md` section 6 verbatim.
-3. Per-lane on-disk state, because agent context does not survive a session -
+1. **Per-lane on-disk state.** Agent context does not survive a session, so
    "persistent specialist" has to mean a charter plus a work log plus open items
-   on disk, or every lane silently resets.
-4. A commit-serialisation answer. Eight lanes and one ledger file will race;
-   `ops/loop/ledger.py` is atomic per write but that does not prevent two lanes
-   conflicting at merge time.
+   on disk, or every lane silently resets to zero each time it starts. This is
+   the piece that makes the lanes actually persistent rather than merely
+   well-described.
+2. **A commit-serialisation answer.** Eight lanes and one `docs/LEDGER.md` will
+   race. `ops/loop/ledger.py` is atomic per write, which prevents a torn read
+   but does nothing about two lanes appending in separate worktrees and
+   conflicting at merge. Options worth weighing: a per-lane ledger fragment
+   merged on integration, or a lock modelled on `ops/loop/guard.py`.
+3. **Nobody has actually run a lane yet.** Everything above is tested, and
+   none of it has been exercised by a real slice of work.
 
-**Acceptance:** a lane can be launched into its own worktree, do a slice of real
-work, pass its own merge gate, commit to its branch and push, with the primary
-checkout untouched throughout - demonstrated end to end for one lane, not
-described.
+**Acceptance:** a lane launched into its own worktree, doing a slice of real
+work, passing its own merge gate, committing to its branch and pushing, with the
+primary checkout untouched throughout - demonstrated end to end for one lane,
+not described.
 
 ## 2. GVAS `.sav` reader - READY
 
