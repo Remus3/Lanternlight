@@ -5,6 +5,137 @@ fidelity and archive older ones rather than deleting them.
 
 ---
 
+# Session 2026-08-09b - recon, redaction P0, and the lane architecture
+
+The second session, and much longer than the first. It ran orchestrated and
+multi-agent throughout: roughly a dozen parallel agents, two persistent lanes in
+their own git worktrees, and an adversarial verifier that returned nine defects
+in this session's own findings.
+
+Work is on branch `session/2026-08-09-recon-redaction-lanes`, pushed, **not
+merged to `main`**. Ledger entries LL-0002 through LL-0012.
+
+## The thing that mattered most
+
+**The redactor was leaking.** Running it over the live log left **684 of 686**
+occurrences of the operator's persona in place, and `assert_clean()` returned
+cleanly on a leaking line - so the guard was vacuous for that shape. Two root
+causes: keyed rules stopped their value match at whitespace, half-masking a
+two-token display name; and the persona also appears with **no key at all**, as
+a positional comma-separated field and after verbs like `PlayerOpenTreasureBox`.
+
+Then a second, subtler defect surfaced on review: persona discovery returned
+empty on an **isolated excerpt** - which is exactly what a test fixture is - so
+the keyless shapes passed through and `assert_clean` approved them. Fixed, and
+`assert_clean` gained a **cannot-certify** state so it refuses to approve text it
+has no basis to approve. That distinction - "I could not determine this is safe"
+is not "this is safe" - is the omit-rather-than-guess doctrine applied to a
+guard, and it is worth keeping.
+
+This blocked the raid-recon acceptance criterion outright, because that criterion
+requires committing a redacted log excerpt.
+
+## The recon nobody needed to capture
+
+ROADMAP item 1 was written as "do a deliberate capture session". It was not
+needed. The operator had played 3h44m and the log had grown 567 KB to 6.1 MB -
+the data was already on disk. Re-probing live state instead of trusting the
+document is the single highest-value habit this project has.
+
+Measured: the dungeon lifecycle across two runs, the escape-portal mechanic, the
+`Game.PlayState.*` namespace, six inventory opcodes, four loot contexts, 35
+item cfgIds, and the join proving **the live `holding-` id space and the item
+cfgId space are one space** (`3020401` is both the equipped weapon and a
+tradeable item priced at 31).
+
+Also: the game's nouns are **dungeon** and **escape**. `raid` and `extract`
+appear **zero** times.
+
+## Nine defects, in our own findings, from one adversarial pass
+
+An independent verifier was dispatched to REFUTE the recon and returned nine.
+The instructive ones:
+
+- A death was attributed to the operator that belonged to somebody else.
+- A scope label said "`cfgId:` anywhere in the log" and measured a pattern that
+  silently dropped an entire subsystem, because `TS.FTE` writes `cfgId: 123`
+  **with a space** and the pattern required none. 35 versus 45 ids.
+- "SEscapePortalSpawner places a portal" - it placed nothing; all six of its
+  lines are failures to find a config. A producer inferred from a name.
+
+Then the **operator's own attestation** ("I had one death, in the tutorial")
+corrected the correction. The log had been read wrong twice: `WaitSpiritual` is
+the death state and `Spiritual` the resurrection state, the operator's death is
+recorded by `OnPlayerDead` and **not** by a `Game.PlayState.Death` tag, and the
+"second player" is a **bot** the operator killed. PvP is a clean null after all.
+
+Lesson worth carrying: three passes, three different wrong answers, settled by
+one sentence from the person who was there.
+
+## The lane architecture
+
+Eight persistent specialist lanes, each owning a disjoint file set, each in its
+own git worktree on its own branch, none merging to `main`. Operator-chosen
+shape. `ops/lanes.py` declares the roster and `tests/test_lanes.py` enforces the
+invariants **mechanically** - no repo file has two owners (walked over the real
+tree, not compared as pattern strings), cross-cutting files like `CLAUDE.md` are
+owned by nobody, `safety` holds a veto, `verify` owns nothing and is read-only.
+
+Contracts in `.claude/commands/lane-*.md` are **generated** from the roster, so
+ownership and prose cannot drift; the drift guard is proven by mutation.
+
+**Running a lane end to end found two defects that reading the code never would**,
+both in the same family: a path derived from `__file__` is not a fact about the
+repository. `lanes.REPO_ROOT` resolves to the *worktree* inside a worktree, so
+every "this is not the primary checkout" assertion inverted; and
+`ensure_worktree` defaulted to it, so creating one lane's worktree from inside
+another's forked the new branch off the wrong HEAD, silently importing another
+lane's work. Both fixed via `primary_checkout()`, which asks
+`git rev-parse --git-common-dir`.
+
+## Two lanes actually ran
+
+`ingest` built the GVAS `.sav` reader (ROADMAP item 2) and then finished it -
+all 627 trailing bytes of `EnhancedInputUserSettings.sav` decode, and the result
+**cross-corroborates the log**: save and log independently agree that
+`KB_Blackarrow_Major_Action` is bound to `RightMouseButton`. Published GVAS
+parsers do not work on this build; UE 5.4+ replaced the property tag with a
+recursive type name plus a flags byte.
+
+`safety` closed a hole the ingest lane's own fixtures had exposed: base64
+defeated the PII guard completely. It also stopped the guards skipping binaries
+by suffix. Merging the two was the real test - each was green alone and only the
+merge could show whether the new scanner could see into the fixtures. It can,
+and they are clean.
+
+## Traps found the expensive way, all now written down
+
+- **The hygiene guards were blind to every uncommitted file.** They walked
+  `git ls-files`, which lists tracked paths only, so a new file was unscanned
+  until after it was committed - the exact moment the guard stops mattering. Two
+  separate agents hit this in one day.
+- **A same-length mutation inside one mtime tick leaves a stale `.pyc`.** Python
+  reuses the old bytecode, which can fake a GREEN under mutation and therefore
+  fake a non-vacuity proof outright. Clear `__pycache__` before every mutation
+  run. This one undermines the technique the whole project relies on.
+- **`pytest -q` on top of `pytest.ini`'s own `-q` becomes `-qq`**, which
+  suppresses the summary line. A wait-loop grepping for "N passed" could never
+  match and spun to its timeout.
+- **`git check-ignore -v` prints the matching pattern even for a NEGATION.**
+  Treating "any output" as "blocked" reads a carve-out as a refusal.
+- **Some settings never touch local storage.** `InvertCameraYAxis` exists in the
+  log and in no save file at all, so a settings reader built on `.sav` alone is
+  silently incomplete.
+
+## Where it stands
+
+Suite green. The primary checkout was byte-identical throughout both lane runs.
+ROADMAP item 0 (redactor P0) closed, item 2 (GVAS) closed, item 4's parser
+closed. Item 1's remainder needs a real matchmade raid, which needs the operator
+to enter one - everything measured so far is the Prologue at `matchId=0`.
+
+---
+
 # Session 2026-08-09 - project inception
 
 The first session. Lanternlight went from "does a companion tool for this game
