@@ -257,6 +257,14 @@ a running game shows the account panel.
 **12 clusters over 2 pages.** Only **Battle Hardened** is unlocked at level 2;
 every other cluster displays `Unlocks at Lv. N`.
 
+**Nodes within a cluster are linked, and the links are prerequisites.**
+Operator-attested: at level 2 only **Measured Pace** and **Battle-fed** are
+selectable, and they are **mutually exclusive** - one or the other, not both.
+The remaining four Battle Hardened nodes are visible and readable but not yet
+takeable. The connecting lines drawn between nodes are that structure; an
+earlier reading of this screen treated them as decoration and wrongly presented
+all six as available choices.
+
 | Cluster | Unlocks | Page |
 |---|---|---|
 | **Battle Hardened** | **already unlocked** | 1 |
@@ -341,10 +349,17 @@ Top-level hotkeys: `Warehouse` Tab, `Prepare` E, `Skills` K, `Talents` P, `Camp`
 U, `Task` H, `Mall` Z. `LAlt` pins a tooltip open ("Lock and view"). Page turn
 is `A` and `D`.
 
-**The account panel shows a display name that is NOT the Steam persona** - a
-separate in-game identifier. Any capture published from this screen must redact
-it, and it is a different string from the one `lanternlight/redact.py` discovers
-in the log.
+**The account panel shows a RANDOMISED display name**, not the Steam persona.
+Operator-attested: this is a **privacy setting in the game's own menu**, which
+the operator had enabled. An earlier version of this section called it "a
+separate in-game identifier" that the redactor must learn - that was wrong and
+is retracted. It is a game-supplied pseudonym, so a capture of this screen is
+safer than assumed rather than more dangerous.
+
+Worth keeping for a different reason: the setting exists, so **a capture's
+safety depends on a game option that can be toggled off**. A screenshot is only
+as redacted as the operator's current privacy setting, and nothing in this
+repository can detect which way it is set.
 
 ## Rule
 
