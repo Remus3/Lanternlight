@@ -24,10 +24,16 @@
       "item_id": "ING-4",
       "opened": "2026-08-09",
       "text": "The 4 zero bytes after every tagged property list are still unidentified - int32 zero, empty FString and four flag bytes all fit, so they stay in epilogue"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "ING-5",
+      "opened": "2026-08-09",
+      "text": "Scav.sav appeared 2026-08-09 17:51 local, 1937 bytes - an EIGHTH distinct save name. Parses with the existing reader, undecoded_trailing empty, one property bIsMaskReward. No fixture pins it"
     }
   ],
   "resume_note": "decoding StructProperty<F_PlayzoneSaveData> against the captured StandaloneSlot save",
   "schema": 1,
   "sessions": 1,
-  "updated": "2026-08-09T22:47:43+00:00"
+  "updated": "2026-08-09T22:52:56+00:00"
 }
