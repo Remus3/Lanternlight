@@ -312,6 +312,67 @@ Two things follow that are worth more than the choice itself:
 **Unmeasured:** how arrows are acquired at all - loot, craft or vendor. The
 unlock ordering is a proxy for which family arrives first, not proof of it.
 
+### Skills screen - 2026-08-09, level 2
+
+Same method: passive capture, tooltip text read off the rendered frame.
+
+**Loadout structure.** A single `Basic Skill` slot, then `Weapon Skill` split
+into two columns:
+
+| Column | Slots | Bound to |
+|---|---|---|
+| Arrow | 3 | `Z`, `X`, `C` - `C` locked until **Lv. 3** |
+| Skills | 3 | one locked until **Lv. 5**, then `Q`, `E` |
+
+**Arrow pools.** `Archer's Arrow` and `Hunter's Arrow` are shown as two separate
+five-slot rows - which is the ammo-family split made visible as UI, not
+inferred. At level 2: **2 of 5 Archer's Arrows owned, 3 locked; 0 of 5 Hunter's
+Arrows, all locked.**
+
+Owned: **Steel Arrow** and **Concussive Arrow**.
+
+**Archer's Arrows are charge-based, not consumable stock.** Operator-attested:
+they apply a special effect to the next nocked arrow, start at 3 uses, may be
+spent successively, and regenerate one at a time on a cooldown. So "carrying at
+least 2 Archer's Arrows" in the Measured Pace talent is a condition on the
+loadout, not on an inventory count that can run dry.
+
+**Open, and it matters later:** whether "at least 2 Archer's Arrows" counts
+distinct arrow TYPES equipped or available CHARGES. At level 2 the operator has
+both - 2 types, 3 charges - so this capture cannot separate the readings.
+
+### Concussive Arrow - the game states the class weakness and its counter
+
+Verbatim tooltip:
+
+> Storm-imbued rune arrowheads burst into air waves on hit, dealing Physical
+> Damage to enemies within range and inflicting stagger. If fired at full draw,
+> they will knock back enemies caught in the air waves.
+
+And the in-game hint beneath it:
+
+> Maintain one shot's distance when using a bow. The arrow loses accuracy when
+> it's too far, and drawing the bow may be difficult when too close. Use
+> Concussive Arrows to knock back fast-approaching enemies.
+
+**This is first-party corroboration of two findings that `docs/CLASSES.md` could
+previously support only from player testimony:**
+
+1. **Blackarrow is hard-countered by melee gap-closers.** The game ships a
+   dedicated counter and names the problem in its own words - "fast-approaching
+   enemies".
+2. **It is not a sniper.** An explicit optimal-band statement - inaccurate when
+   too far, hard to draw when too close - matching the reported effective heavy-
+   shot range of roughly two dodge-lengths, which was absent from every guide
+   site consulted.
+
+Note the corroboration direction: this is the developer's own UI agreeing with
+first-party player testimony, against a wiki tier that carried neither claim.
+
+**Still no numbers.** "Physical Damage", "stagger", "knock back", "within range"
+- no magnitude, no duration, no radius. Consistent with every other tooltip
+captured today.
+
 ### Node names in the remaining clusters
 
 Names and icons operator-attested per frame; tooltip text captured only where
