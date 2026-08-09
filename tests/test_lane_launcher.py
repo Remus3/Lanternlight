@@ -58,23 +58,25 @@ class TestRefusalToRunInThePrimaryCheckout:
     def test_running_from_the_primary_checkout_raises(self):
         lane = lanes.by_id("ingest")
         with pytest.raises(lane_launcher.WrongWorkingDirectory):
-            lane_launcher.assert_in_lane_worktree(lane, cwd=REPO_ROOT)
+            lane_launcher.assert_in_lane_worktree(lane, cwd=lanes.primary_checkout())
 
     def test_the_error_names_the_lane_and_both_paths(self):
         lane = lanes.by_id("ingest")
         try:
-            lane_launcher.assert_in_lane_worktree(lane, cwd=REPO_ROOT)
+            lane_launcher.assert_in_lane_worktree(lane, cwd=lanes.primary_checkout())
         except lane_launcher.WrongWorkingDirectory as exc:
             message = str(exc)
         else:
             raise AssertionError("expected a refusal")
         assert "ingest" in message
-        assert str(REPO_ROOT) in message
+        assert str(lanes.primary_checkout()) in message
 
     def test_a_subdirectory_of_the_primary_checkout_also_raises(self):
         lane = lanes.by_id("ingest")
         with pytest.raises(lane_launcher.WrongWorkingDirectory):
-            lane_launcher.assert_in_lane_worktree(lane, cwd=REPO_ROOT / "lanternlight")
+            lane_launcher.assert_in_lane_worktree(
+                lane, cwd=lanes.primary_checkout() / "lanternlight"
+            )
 
     def test_the_correct_worktree_is_accepted(self):
         lane = lanes.by_id("ingest")
@@ -134,7 +136,7 @@ class TestCommandPlanning:
                 lane_launcher.add_worktree_argv(lane),
                 lane_launcher.remove_worktree_argv(lane),
             ):
-                assert str(REPO_ROOT) not in argv
+                assert str(lanes.primary_checkout()) not in argv
 
 
 class TestAgainstARealRepo:
