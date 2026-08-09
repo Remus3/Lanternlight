@@ -291,6 +291,27 @@ all six as available choices.
 | Dodge Rapid Shot | Changes roll into dodge and unlocks Dodge Rapid Shot: shoot immediately after dodging, consuming additional Energy to quickly fire both the currently loaded arrow and a normal arrow toward enemies near the crosshairs. This skill has a cooldown. |
 | Dodge Power Shot | Changes roll into dodge and unlocks Dodge Power Shot: shoot immediately after dodging, consuming additional Energy to quickly fire the currently loaded quick-charge arrow. Quick-charge arrows can activate all special effects of fully drawn arrows but have a lower Damage Multiplier. This skill has a cooldown. |
 
+### The level-2 choice is inert, and that is the finding
+
+Operator-attested at level 2: **the character has no arrows of either family,
+only skills.** Both selectable nodes gate on *carrying* ammo - Measured Pace on
+2 Archer's Arrows, Battle-fed on 2 Hunter's Arrows - so **neither talent does
+anything at the moment it becomes available.**
+
+Two things follow that are worth more than the choice itself:
+
+- **Neither talent consumes the ammo it requires.** Measured Pace pays out on
+  firing *Normal* Arrows while merely holding 2 Archer's; Battle-fed pays out on
+  any hit while holding 2 Hunter's. The special arrows act as a key, not a cost.
+  So the entire question is which family you own, not which you spend.
+- **The tree front-loads the Archer family by three levels** - Archer's Arrow
+  Enhancement 1 at Lv. 3 against Hunter's Arrow Enhancement 1 at Lv. 6. That is
+  the game's own ordering, read off the screen, and it is the only measured
+  signal available about which ammo a player is expected to hold first.
+
+**Unmeasured:** how arrows are acquired at all - loot, craft or vendor. The
+unlock ordering is a proxy for which family arrives first, not proof of it.
+
 ### Node names in the remaining clusters
 
 Names and icons operator-attested per frame; tooltip text captured only where
