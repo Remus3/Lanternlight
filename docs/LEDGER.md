@@ -56,6 +56,20 @@ four records to each other.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0008 - 2026-08-09 - Lane launcher and generated per-lane contracts
+
+**Evidence:**
+- ops/lane_launcher.py creates a worktree per lane on lane/<id> and refuses to run in the primary checkout
+- assert_in_lane_worktree tested against the real repo root, not a mock - a path-comparison bug is what a mock would hide
+- integration test proves a lane commit leaves the primary checkout with an empty git status
+- read-only lanes are refused a worktree outright rather than trusted to remember not to use one
+- ops/lane_contract.py renders all 8 contracts FROM ops/lanes.py so the two cannot drift
+- drift guard proven non-vacuous: widening one lane's globs without regenerating turned the test red, restore returned green
+- tests/test_lane_launcher.py 16 passed, tests/test_lane_contract.py 21 passed, tests/test_lanes.py 23 passed
+- python -m pytest 433 passed 0 failed; python -m ruff check . clean; per-file regression check reports NONE
+
+First render shipped indented by 8 spaces: textwrap.dedent around an f-string does nothing once an interpolated block contributes zero-indent lines, which broke the YAML front matter. Template is now dedented before interpolation and the reason is in the module docstring.
+
 ### LL-0007 - 2026-08-09 - Hygiene guards were blind to every uncommitted file
 
 **Evidence:**

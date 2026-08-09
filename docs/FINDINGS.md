@@ -277,30 +277,63 @@ Counted over the whole log:
 | `Game.PlayState.Death` | 1 |
 | `Game.EscapeType.GroveSprite` | 1 |
 
-**Attribution matters here and the first version of this section got it wrong.**
-Comparing the `PlayerName` on each `OnRep_PlayStateTag` line against the name
-the operator actually plays under gives this split.
+### 9.3.1 The death state machine, resolved
 
-| Player | Tags |
+This section was wrong twice before it was right, and the thing that settled it
+was **the operator saying "I had one death, in the tutorial"**. That is
+first-party attestation, and it beat two rounds of log-reading that had each
+produced a confident wrong answer. The arc is recorded because the failure mode
+is instructive, not to be tidy.
+
+The operator's own `OnRep_PlayStateTag` transitions, in order:
+
+| Time (UTC) | Transition |
 |---|---|
-| the operator | `Escape` 2, `Gaming` 5, `Spiritual` 1, `WaitSpiritual` 1 |
-| a second player | `Death` 1 |
+| 14:48:24.787 | `Gaming` -> `WaitSpiritual` |
+| 14:48:31.798 | `WaitSpiritual` -> `Spiritual` |
+| 14:48:47.909 | `Spiritual` -> `Gaming` |
+| 14:53:21.443 | `Gaming` -> `Escape` |
 
-**The operator has no `Death` tag. The single death in this log is somebody
-else's.** The earlier sentence here - "both sides of the roadmap's acceptance
-criterion are present" - was false, and it would have closed half a roadmap
-item on another player's death. It is retracted.
+At 14:48:24.786, one millisecond before the first transition,
+`TS.Dungeon: OnPlayerDead` carries the operator's name. Within the same second
+the client creates the widget `WBP_GameMode_Lost` and starts
+`SpectatingCtrlComponent`; five seconds later `tryStartSpiritual` runs with
+`spiritualResurrectCfg 3` and plays `SpiritualRebornCinematicView`.
 
-Separately, `TS.Dungeon: OnPlayerDead` at 14:48:24.786 does carry the operator's
-persona, and `LogBlueprintUserMessages` at the same millisecond reads
-`CalculatePvpSkillScoreState, not pvp death`. Whether that line names the victim
-or the killer is **not** established by the line alone, so no death is claimed
-for the operator from it either.
+So, measured and no longer a question:
 
-`Spiritual` and `WaitSpiritual` remain unexplained. The operator holding exactly
-one of each, in a run that ended in `Escape`, is suggestive of a downed-then-
-recovered state - but that is inference, and it is written here as a question,
-not an answer.
+- **`WaitSpiritual` is the downed/dead state.** It is entered at the instant of
+  `OnPlayerDead` and it is what shows the loss screen.
+- **`Spiritual` is the resurrection state.** `SpiritualResurrectModel`,
+  `AdventurerSpiritualComponent` and `BP_ResurrectVolume_C_*` drive it, and the
+  component caches the nearest resurrect volume as the player moves - four such
+  cache lines appear in the minutes before the death.
+- **The operator died exactly once, and recovered.** One death, one
+  resurrection, then an escape - which matches the attestation precisely.
+
+**The critical consequence for any future death detection:** the operator's
+death is **not** recorded by a `Game.PlayState.Death` tag. It is recorded by
+`OnPlayerDead` plus the `WaitSpiritual` transition. Keying a death detector on
+`Game.PlayState.Death` would have missed this death entirely - which is exactly
+what the first two versions of this section did.
+
+### 9.3.2 The one `Game.PlayState.Death` belongs to a bot the operator killed
+
+The single `Death` tag carries a different, human-looking name. It is a bot:
+
+```
+TS.AI: generateBotPlayerStateData classId 13, Level: 1, roleId: -14801, temaId: 254, name: <name>
+[leaderRankScoreComponent]: ... "bIsPlayer":true, "bIsBot":true ...
+[DungeonLevelModel] PlayerKillPlayer <operator> -> <bot>
+[DungeonPlayerStae] OnPlayerKillPlayerMatchScoreRecord, victimPlayerState.name-<bot>, beKilldByPlayer = true
+```
+
+**Bots are indistinguishable from players by name, and `bIsPlayer` is `true`
+for them.** This one carries a plausible human display name in CJK characters,
+`classId 13` (Shadowstrix) and level 1. The only reliable discriminators
+observed are `bIsBot: true` and a **negative** `roleId`. Any future analysis
+that counts opponents, kills or deaths must use those, or it will report bot
+kills as player kills - which is precisely the error this section made.
 
 ### 9.4 The escape mechanic, named
 
@@ -452,41 +485,37 @@ Named so they are not later mistaken for absent:
 - Whether the operator has ever died. No `Game.PlayState.Death` is attributed to
   them (see 9.3).
 
-### 9.10 A second player was present, and PvP is not a clean null
+### 9.10 PvP is still a clean null, and how that was got wrong twice
 
-Retracting a claim the first version of 9.9 made. It listed "PvP of any kind" as
-unmeasured on the strength of `OnlinePlayerCount: 0`, and asserted "no second
-player was present". Both are wrong, and the second one was contradicted by
-evidence already in the file:
+This section previously claimed a second player was present and that PvP had
+moved to "contact observed". **Both are retracted.** The second `PlayerName` is
+a bot (9.3.2), `OnlinePlayerCount: 0` was correct all along, and no human
+opponent appears anywhere in this log.
 
-- **Exactly two distinct `PlayerName` values appear.** One is the operator. The
-  other is a different player whose display name carries 6 non-ASCII
-  codepoints. It is not a bot - bots are actors (`BP_Adventure_Bot_C`), not
-  `PlayerName` values.
-- That second player owns the log's only `Game.PlayState.Death`.
-- `TS.SDK: [GSDKAnalytics]` emits `client_battle_enter_pvp` twice and
-  `client_battle_leave_pvp` twice, between 14:50:24 and 14:51:15 - bracketing
-  that death at 14:51:03.
-- And `CalculatePvpSkillScoreState, not pvp death` at 14:48:24 shows the client
-  runs a PvP-vs-not classification on death events at all.
+The full arc, kept because each step failed differently:
 
-What this does **not** establish: that the operator fought anyone. The analytics
-event names may cover a mode, a zone, or a scoring pass rather than combat, and
-`OnlinePlayerCount: 0` is genuinely in the log and genuinely unexplained
-alongside a second `PlayerName`. So PvP moves from "unmeasured" to **"contact
-observed, mechanics unmeasured"**, which is a different and more useful state.
+1. The first version filed PvP as unmeasured **without ever grepping `pvp`** -
+   an unsearched word reported as an absence.
+2. An adversarial pass found 6 `pvp` hits and correctly called that out.
+3. Reacting to those hits, this section over-corrected to "a second player was
+   present" - reading a human-looking display name as a human.
+4. The operator's own attestation, plus `generateBotPlayerStateData` and
+   `bIsBot: true`, settled it: bot.
 
-The process lesson is the one this document already teaches and then broke:
-`pvp` was never grepped before being filed as absent.
+What the `pvp` hits actually are: `TS.SDK: [GSDKAnalytics]` emits
+`client_battle_enter_pvp` and `client_battle_leave_pvp` twice each between
+14:50:24 and 14:51:15, and `CalculatePvpSkillScoreState, not pvp death` runs at
+the operator's death. So the client **has** a PvP-vs-not classification and
+emits PvP-named telemetry inside a bot-only Prologue run. That means the
+telemetry name describes a mode or a scoring path, **not** the presence of a
+human opponent, and it must not be used as a PvP detector.
 
 **Also corrected:** team tags are `1-1`, `1-2` **and `1-3`**, two occurrences
 each. The first version listed only the first two.
 
-**Safety consequence, and it is new.** The log carries a **third party's**
-persona, not just the operator's, and that persona is non-ASCII. Any fixture
-drawn from a session with other players in it leaks somebody who never consented
-and is not the operator. `lanternlight/redact.py` must treat other players'
-names as in scope, and the ASCII-only rule means such a name cannot even be
-committed verbatim without also failing `tests/test_ascii_hygiene.py` - a second
-guard that happens to help here, but only by accident, and accidents are not a
-redaction strategy.
+**Redaction note, corrected.** An earlier version of this section called the
+second name "a third party's persona" and treated it as somebody's real
+identity. It is a generated bot name, so nothing here was a consent problem.
+The underlying rule still stands for a different reason: a real raid **will**
+contain real other players, so `lanternlight/redact.py` treating any
+`PlayerName` as in scope is correct - it just was not demonstrated by this log.
