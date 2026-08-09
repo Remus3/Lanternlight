@@ -1,0 +1,90 @@
+#!/bin/sh
+#
+# Lanternlight commit-msg hook.
+#
+# Rejects a commit message containing an em-dash, an en-dash, or a smart
+# quote. The repo is 7-bit ASCII by rule: use " - " (spaced hyphen) for a
+# clause break and a plain ' or " for quoting.
+#
+# Why a hook and not a style note: an em-dash pasted into a message is
+# invisible at a glance, survives review, and then shows up mangled in every
+# tool that ANSI-decodes the log.
+#
+# EXPLICITLY NOT this hook's business: a Co-Authored-By trailer. It is neither
+# stripped nor rejected here. If a message has one, it passes through
+# untouched.
+#
+# Only active if core.hooksPath points at .githooks/ - that is LOCAL config and
+# is never cloned. Run: python scripts/install_hooks.py
+
+set -u
+
+msg_file=${1:-}
+if [ -z "$msg_file" ] || [ ! -f "$msg_file" ]; then
+    printf 'commit-msg: no message file given - refusing.\n' >&2
+    exit 1
+fi
+
+RED=''
+BOLD=''
+RESET=''
+if [ -t 2 ]; then
+    RED=$(printf '\033[31m')
+    BOLD=$(printf '\033[1m')
+    RESET=$(printf '\033[0m')
+fi
+
+# Comment lines are stripped by git before the message is stored, so they must
+# not be able to fail the commit.
+body=$(LC_ALL=C grep -v '^#' "$msg_file" 2>/dev/null || true)
+
+fail=0
+
+flag() {
+    # flag <human name> <byte pattern>
+    if printf '%s' "$body" | LC_ALL=C grep -q "$2" 2>/dev/null; then
+        fail=1
+        printf '%s%sBLOCKED%s commit message contains %s\n' \
+            "$BOLD" "$RED" "$RESET" "$1" >&2
+        printf '%s' "$body" \
+            | LC_ALL=C grep -n "$2" 2>/dev/null \
+            | head -n 3 \
+            | while IFS= read -r hit; do
+                printf '        line %s\n' "$hit" >&2
+            done
+    fi
+}
+
+# UTF-8 encodings of the banned glyphs.
+EM_DASH=$(printf '\342\200\224')       # U+2014
+EN_DASH=$(printf '\342\200\223')       # U+2013
+LSQUO=$(printf '\342\200\230')         # U+2018
+RSQUO=$(printf '\342\200\231')         # U+2019
+LDQUO=$(printf '\342\200\234')         # U+201C
+RDQUO=$(printf '\342\200\235')         # U+201D
+
+flag "an em-dash (U+2014) - use ' - ' instead"  "$EM_DASH"
+flag "an en-dash (U+2013) - use '-' instead"    "$EN_DASH"
+flag "a smart quote (U+2018)"                   "$LSQUO"
+flag "a smart quote (U+2019) - use a plain '"   "$RSQUO"
+flag "a smart quote (U+201C)"                   "$LDQUO"
+flag "a smart quote (U+201D) - use a plain \""  "$RDQUO"
+
+# CP1252 single-byte forms of the same glyphs, which is what a Windows editor
+# writing an ANSI file produces. Only checked when the message contains no
+# UTF-8 E2 80 xx sequence at all, so a legitimate multi-byte character can
+# never be misread as a stray CP1252 byte.
+UTF8_PUNCT_LEAD=$(printf '\342\200')
+if ! printf '%s' "$body" | LC_ALL=C grep -q "$UTF8_PUNCT_LEAD" 2>/dev/null; then
+    CP1252=$(printf '[\221-\224\226\227]')
+    flag "a CP1252 dash or smart quote byte" "$CP1252"
+fi
+
+if [ "$fail" -ne 0 ]; then
+    printf '\n%s%scommit-msg REFUSED the commit.%s\n' "$BOLD" "$RED" "$RESET" >&2
+    printf 'Rewrite the message in 7-bit ASCII and commit again.\n' >&2
+    printf 'Tip: git commit -F <file> with an ASCII file avoids shell mangling.\n\n' >&2
+    exit 1
+fi
+
+exit 0

@@ -1,0 +1,61 @@
+# Lanternlight - ruff configuration.
+#
+# This file is the ONLY ruff config in the repo. pyproject.toml deliberately
+# carries no [tool.ruff] table; see the comment at the top of pyproject.toml.
+
+line-length = 100
+target-version = "py314"
+src = ["."]
+extend-exclude = [
+    ".venv",
+    "venv",
+    "scratchpad",
+    "_scratch",
+    "data",
+]
+
+[lint]
+# E/W  pycodestyle      - whitespace and formatting errors
+# F    pyflakes         - undefined names, unused imports, real bugs
+# I    isort            - import ordering, kept mechanical so it never diffs
+# UP   pyupgrade        - the project is 3.14-only, so legacy syntax is noise
+# B    flake8-bugbear   - the genuinely dangerous patterns (mutable defaults,
+#                         except-without-raise-from, loop-variable capture)
+# C4   comprehensions   - list(...)/dict(...) wrappers that should be literals
+# SIM  flake8-simplify  - collapsible ifs, redundant bool conversions
+# PTH  flake8-use-pathlib - os.path drift; this project is pathlib-first
+# RUF  ruff-native      - misc correctness lints
+select = ["E", "W", "F", "I", "UP", "B", "C4", "SIM", "PTH", "RUF"]
+
+ignore = [
+    # Formatter's job, and it fights black-style trailing commas.
+    "E203",
+    # Ambiguous unicode is impossible here - the repo is ASCII-only by rule and
+    # by pre-commit hook - so this rule can only ever fire as a false positive.
+    "RUF001",
+    "RUF002",
+    "RUF003",
+    # Insists on isort-style ordering inside __all__, which interleaves
+    # SCREAMING_CASE constants with lowercase callables and reads worse than a
+    # hand-grouped list. Cosmetic, opinionated, and not worth a red build.
+    "RUF022",
+]
+
+[lint.per-file-ignores]
+# Tests get to be repetitive and to shadow names in fixtures.
+"tests/**" = ["B011"]
+# Package markers are allowed to be empty or re-export.
+"**/__init__.py" = ["F401"]
+
+[lint.isort]
+known-first-party = ["lanternlight", "emberforge"]
+combine-as-imports = true
+
+[lint.pydocstyle]
+convention = "google"
+
+[format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+docstring-code-format = true

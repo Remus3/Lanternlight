@@ -1,0 +1,59 @@
+Lanternlight
+Copyright 2026 Moonbeam
+
+This product includes software developed by Moonbeam.
+Licensed under the Apache License, Version 2.0. See the LICENSE file for the
+full terms.
+
+Lanternlight is a companion and analysis project for the game Mistfall Hunter
+(Steam appid 3282300). Its combat and build math engine is named Emberforge.
+
+
+TRADEMARKS AND AFFILIATION
+--------------------------
+
+Mistfall Hunter and all related names, logos, characters, and marks are
+trademarks or registered trademarks of their respective owners.
+
+Lanternlight is an unofficial, independent, fan-made project. It is NOT
+affiliated with, associated with, authorized by, endorsed by, sponsored by, or
+in any way officially connected with Bellring Games, Skystone Games, or any of
+their subsidiaries or affiliates. Any use of a third-party name or mark in this
+project is nominative - it identifies the game the project analyzes, and nothing
+more.
+
+
+NO GAME ASSETS OR EXTRACTED GAME DATA ARE REDISTRIBUTED
+-------------------------------------------------------
+
+This repository contains and redistributes NO game assets and NO extracted game
+data of any kind. That includes, without limitation: textures, models, audio,
+animations, UI art, fonts, localization tables, datatables, blueprints, and any
+content unpacked from the game's shipped archives.
+
+This is trivially true rather than merely a policy statement: the game's Unreal
+Engine 5 .pak archives are AES-encrypted, so nothing is extractable to begin
+with. There is no asset pipeline in this project because there can be none.
+
+Any numeric values that appear in this project - stat coefficients, scaling
+curves, breakpoints, and similar - are independently derived from observed
+in-game behavior and from publicly published community documentation. Observed
+behavior and protocol facts are not themselves copyrightable; shipped content
+is, and none of it is here.
+
+
+WHAT THIS PROJECT READS
+-----------------------
+
+Lanternlight reads only files that the game itself writes into user-writable
+locations on the operator's own machine - for example the log and save tree the
+game creates under the local application data directory. It does not decrypt,
+unpack, patch, inject into, or otherwise modify the game or its installed files,
+and it does not read from the game's installation directory.
+
+Those game-written files can contain personally identifying information such as
+account identifiers, persona names, session tokens, and geolocation inferred
+from an IP address. None of that is committed to this repository, and the
+repository's ignore rules and pre-commit hook are configured to keep it out. If
+you fork or run this project, treat anything copied out of the game's save tree
+as sensitive and keep it local.
