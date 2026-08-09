@@ -1,0 +1,21 @@
+{
+  "lane_id": "capture",
+  "open_items": [
+    {
+      "blocked_on": "the client running",
+      "item_id": "CAP-1",
+      "opened": "2026-08-09",
+      "text": "ROADMAP 6 - re-run the weapon-stance toggle slowly on one class with the poller running; the first probe produced no distinguishable event, which is a failed probe and not evidence either way"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "CAP-2",
+      "opened": "2026-08-09",
+      "text": "Render lag when joining frames to the log: the ROLE panel lags the selection by about one frame while the sidebar highlight leads it"
+    }
+  ],
+  "resume_note": "no lane session yet - frame_poller captured 217 frames on 2026-08-09",
+  "schema": 1,
+  "sessions": 0,
+  "updated": "2026-08-09T22:47:43+00:00"
+}

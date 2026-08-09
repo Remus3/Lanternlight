@@ -1,0 +1,33 @@
+{
+  "lane_id": "ingest",
+  "open_items": [
+    {
+      "blocked_on": "",
+      "item_id": "ING-1",
+      "opened": "2026-08-09",
+      "text": "ROADMAP 2 - parse StandaloneSlot with undecoded_trailing == 0 and pin a fixture"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "ING-2",
+      "opened": "2026-08-09",
+      "text": "ROADMAP 3 - live log tail on port 8811, survives truncation and rotation"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "ING-3",
+      "opened": "2026-08-09",
+      "text": "ROADMAP 4 - AvgPrice watcher; the write is triggered by returning to camp, 0.975s after the camp level-switch, so poll against that not a guess"
+    },
+    {
+      "blocked_on": "an observation that separates them",
+      "item_id": "ING-4",
+      "opened": "2026-08-09",
+      "text": "The 4 zero bytes after every tagged property list are still unidentified - int32 zero, empty FString and four flag bytes all fit, so they stay in epilogue"
+    }
+  ],
+  "resume_note": "decoding StructProperty<F_PlayzoneSaveData> against the captured StandaloneSlot save",
+  "schema": 1,
+  "sessions": 1,
+  "updated": "2026-08-09T22:47:43+00:00"
+}

@@ -37,6 +37,7 @@ Touch these paths and nothing else. Every other path in the repository belongs t
 - `lanternlight/vision*.py`
 - `tests/test_vision*.py`
 - `tests/test_capture*.py`
+- `lanes/capture.*`
 
 
 ## Session shape - the default, not an escalation

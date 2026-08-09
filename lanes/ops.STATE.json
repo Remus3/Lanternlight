@@ -1,0 +1,15 @@
+{
+  "lane_id": "ops",
+  "open_items": [
+    {
+      "blocked_on": "",
+      "item_id": "OPS-1",
+      "opened": "2026-08-09",
+      "text": "ops/loop/ledger.py has no test module of its own - confirm and close the gap"
+    }
+  ],
+  "resume_note": "ROADMAP 1b - per-lane state and commit serialisation landed; integrator flow next",
+  "schema": 1,
+  "sessions": 1,
+  "updated": "2026-08-09T22:47:43+00:00"
+}

@@ -1,0 +1,21 @@
+{
+  "lane_id": "safety",
+  "open_items": [
+    {
+      "blocked_on": "a candidate fixture existing",
+      "item_id": "SAF-1",
+      "opened": "2026-08-09",
+      "text": "Review a sanitised StandaloneSlot fixture before it is committed - the filename embeds the operator roleId, so it needs a rename not just redaction"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "SAF-2",
+      "opened": "2026-08-09",
+      "text": "Capture safety depends on a privacy toggle in the game menu and nothing here can detect its state - decide whether that is documentable or guardable"
+    }
+  ],
+  "resume_note": "no lane session yet - last worked as a sub-slice of the 2026-08-09b session",
+  "schema": 1,
+  "sessions": 0,
+  "updated": "2026-08-09T22:47:43+00:00"
+}
