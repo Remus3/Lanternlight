@@ -56,6 +56,24 @@ four records to each other.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0013 - 2026-08-09 - Raw UTF-16 gap closed, encoded saves blocked by path, merge_gate gained must_contain
+
+**Evidence:**
+- merger's own probe - the one that refuted this lane's previous claim - now reports raw UTF-16 LE and BE both caught, and base64-wrapped UTF-16 still caught
+- the finding names the container ('a 25-character little-endian wide-character run') and never quotes the identifier
+- rule is a paired (character, NUL) run collapse with a 15-pair floor, both endiannesses - NOT a whole-file NUL strip
+- false-positive cost measured on a 22,110-file control corpus: the wide reading newly blocks 5 files, all compiled extension modules with uint16 tables; the rejected naive strip would have newly blocked 12 and fired on this project's own build artifacts
+- merger spot-checked the hook with REAL commits: probe.sav, .sav.b64, .log.b64, .gvas.b64 and tests/fixtures/gvas/probe.sav.b64 all refused; a reviewed-location .gvas.b64 and an ordinary .py both committed; HEAD restored byte-identical
+- lane's own commit cf3327b touched exactly 4 files and ownership resolves all 4 to safety - zero violations
+- merged suite 643 passed 0 failed with caches cleared, ruff clean
+- merge_gate.check_claimed_paths now accepts {'path':..., 'must_contain':[...]} and refutes a stub that exists but lacks the claimed content; proven additive by calling the documented string form unchanged
+
+The lane went BROADER than instructed: outside tests/fixtures it now refuses bare .b64/.base64/.hex and the whole archive family (.gz/.zip/.7z/.tar/.bz2/.xz/.zst). Nothing tracked matches today, but it will block a future archive committed outside tests/fixtures. Flagged for the operator rather than narrowed unilaterally.
+The tests/fixtures carve-out is a real widening of trust: anything there with an encoded suffix skips the path check, leaving only the content scan, which detects known shapes rather than proving cleanliness.
+The wide reading sees ASCII inside UTF-16 and nothing more. A non-ASCII digit form is not reached.
+Suite runtime 12.3s to 32.7s, almost entirely 33 hook tests spawning real git commits. A hook that merely exists is not a hook that fires, so the cost was accepted.
+Mutation testing caught TWO of the lane's own tests passing for the wrong reason - a big-endian case the little-endian pattern reached anyway, and a log-companion branch only exercised where a generic branch already caught it.
+
 ### LL-0012 - 2026-08-09 - Both lanes merged into the session branch and verified together
 
 **Evidence:**
