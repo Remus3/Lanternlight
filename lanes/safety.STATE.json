@@ -29,11 +29,17 @@
       "blocked_on": "",
       "item_id": "SAF-5",
       "opened": "2026-08-09",
-      "text": "Dungeon log lines carry PlayerName= with the operator persona AND roleid in the same line as loot values, so any dungeon excerpt is dense with PII - verify the redactor covers PlayerName= and roleid keys before item 1 commits any fixture"
+      "text": "Dungeon log lines carry the operator persona under a player-name key AND the roleid in the SAME line as loot values, so any dungeon excerpt is dense with PII. Verify the redactor covers both key shapes before item 1 commits a fixture"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "SAF-6",
+      "opened": "2026-08-09",
+      "text": "GAP MEASURED 2026-08-09: the pre-commit hook ACCEPTED a commit that tests/test_no_pii.py then rejected - the hook is less strict than the test, so a hazard can land and only fail later in the suite. Decide whether the hook should run the same detectors"
     }
   ],
   "resume_note": "no lane session yet - last worked as a sub-slice of the 2026-08-09b session",
   "schema": 1,
   "sessions": 0,
-  "updated": "2026-08-09T23:05:24+00:00"
+  "updated": "2026-08-09T23:06:54+00:00"
 }
