@@ -102,6 +102,42 @@ class TestRefusalToRunInThePrimaryCheckout:
             lane_launcher.add_worktree_argv(verify)
 
 
+class TestDefaultRepoRootIsThePrimaryCheckout:
+    """Measured accident, 2026-08-09: a lane worktree branched off the wrong thing.
+
+    ``ensure_worktree`` defaulted its ``repo_root`` to ``lanes.REPO_ROOT``,
+    which is derived from ``__file__``. Creating a second lane's worktree from
+    inside the first lane's worktree therefore ran ``git worktree add`` there,
+    and the new branch forked from **that lane's** HEAD rather than from the
+    branch the operator was on - silently importing one lane's work into
+    another's.
+
+    The default has to be a fact about the repository, not about which
+    directory the process happens to have imported from.
+    """
+
+    def test_ensure_worktree_defaults_to_the_primary_checkout(self):
+        import inspect
+
+        sig = inspect.signature(lane_launcher.ensure_worktree)
+        assert sig.parameters["repo_root"].default is None, (
+            "the default must be resolved at call time via primary_checkout(), "
+            "not bound to REPO_ROOT at import time"
+        )
+
+    def test_branch_exists_defaults_to_the_primary_checkout(self):
+        import inspect
+
+        sig = inspect.signature(lane_launcher.branch_exists)
+        assert sig.parameters["repo_root"].default is None
+
+    def test_resolver_returns_the_primary_checkout_when_given_none(self):
+        assert lane_launcher._repo_root(None) == lanes.primary_checkout()
+
+    def test_resolver_honours_an_explicit_root(self, tmp_path):
+        assert lane_launcher._repo_root(tmp_path) == tmp_path
+
+
 class TestCommandPlanning:
     """Pure argv construction - assertable without touching git."""
 

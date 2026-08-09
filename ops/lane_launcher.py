@@ -67,6 +67,24 @@ def _resolved(path: Path | str) -> Path:
     return Path(path).expanduser().resolve()
 
 
+def _repo_root(repo_root: Path | str | None) -> Path:
+    """Resolve the repository to operate on, defaulting to the MAIN checkout.
+
+    Defaulting to :data:`ops.lanes.REPO_ROOT` was a measured accident: that
+    value comes from ``__file__``, so creating one lane's worktree from inside
+    another lane's worktree ran ``git worktree add`` there, and the new branch
+    silently forked from that lane's HEAD instead of the branch the operator
+    was on. The new lane then started life carrying another lane's work.
+
+    Resolved at call time rather than bound as a default argument, because a
+    default is evaluated once at import and would freeze whichever checkout
+    happened to import the module first.
+    """
+    if repo_root is not None:
+        return Path(repo_root)
+    return lanes.primary_checkout()
+
+
 def assert_in_lane_worktree(lane: lanes.Lane, cwd: Path | str | None = None) -> None:
     """Raise unless ``cwd`` is inside ``lane``'s own worktree.
 
@@ -116,18 +134,18 @@ def remove_worktree_argv(lane: lanes.Lane) -> list[str]:
     return ["git", "worktree", "remove", str(lane.worktree_path())]
 
 
-def branch_exists(name: str, repo_root: Path = REPO_ROOT) -> bool:
+def branch_exists(name: str, repo_root: Path | None = None) -> bool:
     """True when ``name`` already resolves to a ref in ``repo_root``."""
     proc = subprocess.run(
         ["git", "rev-parse", "--verify", "--quiet", name],
-        cwd=repo_root,
+        cwd=_repo_root(repo_root),
         capture_output=True,
         check=False,
     )
     return proc.returncode == 0
 
 
-def ensure_worktree(lane: lanes.Lane, repo_root: Path = REPO_ROOT) -> Path:
+def ensure_worktree(lane: lanes.Lane, repo_root: Path | None = None) -> Path:
     """Create ``lane``'s worktree if it is missing, and return its path.
 
     Idempotent: an existing worktree is returned untouched, so a lane can call
@@ -142,10 +160,11 @@ def ensure_worktree(lane: lanes.Lane, repo_root: Path = REPO_ROOT) -> Path:
     if (target / ".git").exists():
         return target
 
+    root = _repo_root(repo_root)
     target.parent.mkdir(parents=True, exist_ok=True)
-    argv = add_worktree_argv(lane, branch_exists=branch_exists(lane.branch_name(), repo_root))
+    argv = add_worktree_argv(lane, branch_exists=branch_exists(lane.branch_name(), root))
     proc = subprocess.run(
-        argv, cwd=repo_root, capture_output=True, text=True, check=False
+        argv, cwd=root, capture_output=True, text=True, check=False
     )
     if proc.returncode != 0:
         raise WorktreeError(
