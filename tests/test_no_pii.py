@@ -39,8 +39,11 @@ other.
 """
 
 import base64
+import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -205,6 +208,44 @@ def test_the_tree_scan_pipeline_flags_a_planted_file():
         encoded_probe.unlink(missing_ok=True)
 
 
+def test_the_tree_scan_pipeline_flags_a_raw_utf16_binary():
+    """The raw wide-character case, end to end through the real walker.
+
+    Measured gap before this existed: a UTF-16 identifier inside a base64 blob
+    was caught, and the same identifier written RAW into a file was not. The
+    NUL-stripped reading only ever ran on decoded bytes, one layer down, so it
+    never saw a file's own content. That is the wrong way round for this
+    project - the game's saves are raw UTF-16 on disk, so the raw case is the
+    likely accident and the encoded one is the exotic one.
+
+    A ``.bin`` suffix on purpose: nothing in the tree recognises it, so the
+    only reason this probe is opened at all is that the PII walker refuses to
+    skip binaries.
+    """
+    fake_id = "76561190" + "000000042"
+    probe = REPO_ROOT / "_pipeline_probe_utf16.bin"
+    try:
+        # Split so this source file does not itself carry a literal key=value
+        # secret shape - the scanner cannot tell an invented id from a real one.
+        keyed = "steam" + "Id" + "=" + fake_id
+        probe.write_bytes(keyed.encode("utf-16-le"))
+
+        plain_findings, _ = _scan_tree(_scan)
+        encoded_findings, encoded_scanned = _scan_tree(_scan_encoded)
+        _assert_scanned_enough(encoded_scanned)
+
+        assert not any("_pipeline_probe_utf16.bin" in f for f in plain_findings), (
+            "the plain pass is expected to be blind to raw UTF-16 - that is why "
+            "the wide reading has to exist"
+        )
+        assert any("_pipeline_probe_utf16.bin" in f for f in encoded_findings), (
+            "a raw UTF-16 identifier in a published file must be flagged. "
+            f"findings: {encoded_findings}"
+        )
+    finally:
+        probe.unlink(missing_ok=True)
+
+
 def test_the_scanner_would_actually_catch_a_leak():
     # A guard that cannot fail is not a guard. Prove the detectors fire on a
     # synthetic leak before trusting the clean result above. Both fragments
@@ -280,3 +321,235 @@ def test_the_pii_scan_is_wider_than_the_ascii_scan():
 
 def test_ipv4_is_the_only_label_excluded_from_the_file_scan():
     assert sorted(ALL_LABELS - FILE_SCAN_LABELS) == ["IPV4"]
+
+
+# --------------------------------------------------------------------------
+# refusal by PATH - .githooks/pre-commit
+# --------------------------------------------------------------------------
+#
+# The content scan above is the net. The hook is the fence, and the two guard
+# different failures: the scan cannot tell a reviewed fixture from a raw dump,
+# and the hook cannot see inside a file at all.
+#
+# The gap these pin, found on 2026-08-09: `.gitignore` blocks `*.sav`, so the
+# standing pressure is to commit an ENCODED copy of the same bytes, and neither
+# fence had anything to say about `save.sav.b64`. Nor about `dump.gvas.b64` -
+# the same file under a name that mentions no save at all.
+#
+# Location, not extension, is what separates a reviewed fixture from a raw
+# dump, because the extension is exactly the thing an accident renames. So an
+# encoded blob is permitted under `tests/fixtures/` - where the content scan
+# above covers it and a human reviewed it - and refused everywhere else.
+#
+# Every assertion below runs a REAL `git commit` against a throwaway repository
+# wired to this repository's real hook, and checks HEAD afterwards. A hook that
+# merely exists is not a hook that fires: `core.hooksPath` is local config that
+# is never cloned, so proving the file is on disk proves nothing at all.
+
+HOOKS_DIR = REPO_ROOT / ".githooks"
+
+#: Shapes the hook must refuse ANYWHERE, including under tests/fixtures/. These
+#: name the game's own files, so there is no reviewed-fixture case for them.
+REFUSED_ANYWHERE = (
+    "probe.sav",
+    "probe.sav.b64",
+    "probe.sav.base64",
+    "probe.sav.hex",
+    "probe.sav.txt",
+    "probe.sav.gz",
+    "probe.sav.zip",
+    "probe.log",
+    "probe.log.b64",
+    "probe.log.base64",
+    "probe.log.hex",
+    "probe.log.gz",
+    # Inside the reviewed-fixture tree too. The carve-out below is for blobs
+    # under a neutral name; a path that says "save" or "log" gets no carve-out
+    # anywhere. Mutation testing is why these are here: without the
+    # tests/fixtures/ cases, deleting the log branch from the hook left every
+    # assertion green, because outside the fixture tree the generic
+    # encoded-blob branch catches the same paths anyway.
+    "tests/fixtures/probe.sav.b64",
+    "tests/fixtures/gvas/probe.sav.b64",
+    "tests/fixtures/probe.log.b64",
+    "tests/fixtures/probe.log.base64",
+    "tests/fixtures/probe.log.hex",
+    "tests/fixtures/gvas/probe.log.gz",
+)
+
+#: Encoded or derived blobs under a name that mentions no save at all. Refused
+#: outside tests/fixtures/, permitted inside it.
+REFUSED_OUTSIDE_FIXTURES = (
+    "probe.gvas",
+    "probe.gvas.b64",
+    "docs/probe.gvas.b64",
+    "probe.b64",
+    "ops/probe.base64",
+    "probe.hex",
+    "probe.gz",
+    "probe.zip",
+)
+
+#: The reviewed-fixture case. Blocking these would be a broken rule, not a
+#: strict one - they are already committed and hand-verified.
+PERMITTED_FIXTURES = (
+    "tests/fixtures/gvas/probe.gvas.b64",
+    "tests/fixtures/gvas/probe.b64",
+)
+
+
+def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["git", *args],
+        cwd=str(cwd),
+        capture_output=True,
+        text=True,
+        errors="replace",
+        timeout=60,
+        check=False,
+    )
+
+
+def _head(repo: Path) -> str:
+    return _git(repo, "rev-parse", "HEAD").stdout.strip()
+
+
+@pytest.fixture(scope="module")
+def hooked_repo(tmp_path_factory) -> Path:
+    """A throwaway repository wired to this repository's real pre-commit hook.
+
+    Throwaway rather than the real checkout on purpose: a probe commit that
+    slipped through would land in real history, which is the one accident this
+    whole module exists to prevent.
+    """
+    repo = tmp_path_factory.mktemp("hookprobe")
+    assert _git(repo, "init", "-q").returncode == 0, "git init failed"
+    for key, value in (
+        ("user.email", "probe@example.invalid"),
+        ("user.name", "hook probe"),
+        ("commit.gpgsign", "false"),
+        ("core.hooksPath", HOOKS_DIR.as_posix()),
+    ):
+        assert _git(repo, "config", key, value).returncode == 0, f"git config {key}"
+
+    (repo / "README.md").write_text("probe repository\n", encoding="ascii")
+    assert _git(repo, "add", "README.md").returncode == 0
+    first = _git(repo, "commit", "-m", "probe: initial")
+    assert first.returncode == 0, (
+        "the hook refused an innocent commit, so every refusal below would be "
+        f"meaningless.\nstdout: {first.stdout}\nstderr: {first.stderr}"
+    )
+    assert _head(repo), "no HEAD after the initial commit"
+    return repo
+
+
+def _attempt_commit(repo: Path, relpath: str, payload: bytes = b"probe\n"):
+    """Stage ``relpath`` and attempt a real commit. Returns the git result."""
+    target = repo / relpath
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(payload)
+    added = _git(repo, "add", "-f", "--", relpath)
+    assert added.returncode == 0, f"could not stage {relpath}: {added.stderr}"
+    try:
+        return _git(repo, "commit", "-m", "probe: attempt")
+    finally:
+        _git(repo, "reset", "-q", "--", relpath)
+        target.unlink(missing_ok=True)
+
+
+def test_the_hook_is_actually_wired_in_the_probe_repository(hooked_repo):
+    # Everything below is meaningless if the hook is not running. Prove it
+    # fires by tripping a rule that predates this section entirely.
+    before = _head(hooked_repo)
+    result = _attempt_commit(hooked_repo, "logs/anything.txt")
+    assert result.returncode != 0, "the hook did not fire at all"
+    assert _head(hooked_repo) == before
+
+
+@pytest.mark.parametrize("relpath", REFUSED_ANYWHERE)
+def test_the_hook_refuses_a_save_or_log_shape_anywhere(hooked_repo, relpath):
+    before = _head(hooked_repo)
+    result = _attempt_commit(hooked_repo, relpath)
+    assert result.returncode != 0, (
+        f"{relpath} was committed. stdout: {result.stdout}"
+    )
+    assert "BLOCKED" in result.stderr, result.stderr
+    assert _head(hooked_repo) == before, f"HEAD moved after staging {relpath}"
+
+
+@pytest.mark.parametrize("relpath", REFUSED_OUTSIDE_FIXTURES)
+def test_the_hook_refuses_an_encoded_blob_outside_the_fixture_tree(
+    hooked_repo, relpath
+):
+    before = _head(hooked_repo)
+    result = _attempt_commit(hooked_repo, relpath)
+    assert result.returncode != 0, (
+        f"{relpath} was committed. stdout: {result.stdout}"
+    )
+    assert "BLOCKED" in result.stderr, result.stderr
+    assert _head(hooked_repo) == before, f"HEAD moved after staging {relpath}"
+
+
+@pytest.mark.parametrize("relpath", PERMITTED_FIXTURES)
+def test_the_hook_permits_a_reviewed_fixture(hooked_repo, relpath):
+    # The specific regression to avoid. A rule that blocks the reviewed
+    # fixtures is a broken rule, not a strict one.
+    before = _head(hooked_repo)
+    result = _attempt_commit(hooked_repo, relpath, payload=b"cGFkZGluZw==\n")
+    assert result.returncode == 0, (
+        f"{relpath} was refused, which breaks the reviewed-fixture tree.\n"
+        f"stdout: {result.stdout}\nstderr: {result.stderr}"
+    )
+    assert _head(hooked_repo) != before
+    _git(hooked_repo, "rm", "-q", "-f", "--", relpath)
+    _git(hooked_repo, "commit", "-q", "-m", "probe: cleanup")
+
+
+def test_the_hook_still_permits_the_existing_gvas_fixtures(hooked_repo):
+    """The committed fixtures, byte for byte, must still be committable.
+
+    Reads the real files rather than a stand-in. A stand-in proves the pattern
+    the test author had in mind, not the paths that are actually in the tree.
+    """
+    fixtures = sorted((REPO_ROOT / "tests" / "fixtures" / "gvas").glob("*.gvas.b64"))
+    assert fixtures, "no gvas fixtures found - this test has stopped testing anything"
+    for fixture in fixtures:
+        rel = fixture.relative_to(REPO_ROOT).as_posix()
+        before = _head(hooked_repo)
+        result = _attempt_commit(hooked_repo, rel, payload=fixture.read_bytes())
+        assert result.returncode == 0, (
+            f"{rel} would now be refused by the hook.\nstderr: {result.stderr}"
+        )
+        assert _head(hooked_repo) != before
+        _git(hooked_repo, "rm", "-q", "-f", "--", rel)
+        _git(hooked_repo, "commit", "-q", "-m", "probe: cleanup")
+
+
+def test_the_hook_still_refuses_non_ascii_in_authored_text(hooked_repo):
+    # An existing rule, pinned here so a path-rule edit cannot quietly drop it.
+    before = _head(hooked_repo)
+    result = _attempt_commit(
+        hooked_repo, "docs/probe.md", payload=("dash " + chr(0x2014) + "\n").encode("utf-8")
+    )
+    assert result.returncode != 0, result.stdout
+    assert _head(hooked_repo) == before
+
+
+def test_the_hook_still_permits_an_ordinary_source_file(hooked_repo):
+    # The other half of the same claim. A guard that refuses everything is not
+    # a guard, it is an outage.
+    before = _head(hooked_repo)
+    result = _attempt_commit(hooked_repo, "ops/probe_ordinary.py", payload=b"x = 1\n")
+    assert result.returncode == 0, f"stderr: {result.stderr}"
+    assert _head(hooked_repo) != before
+    _git(hooked_repo, "rm", "-q", "-f", "--", "ops/probe_ordinary.py")
+    _git(hooked_repo, "commit", "-q", "-m", "probe: cleanup")
+
+
+def test_the_hook_scripts_carry_no_carriage_return():
+    # Git for Windows runs these through sh, which chokes on a CR in the
+    # shebang. `.gitattributes` says eol=lf; this checks the bytes on disk,
+    # because an attribute is a claim and the file is the fact.
+    for name in ("pre-commit", "commit-msg"):
+        raw = (HOOKS_DIR / name).read_bytes()
+        assert b"\r" not in raw, f".githooks/{name} contains a CR"

@@ -82,6 +82,40 @@ for path in $staged; do
         *.log|*.log.[0-9]|*.log.[0-9][0-9])
             report "$path" "is a log file - never committed"
             ;;
+        # An encoded or compressed copy of a save or a log is the same bytes
+        # under a name the ignore rules do not recognise. `.gitignore` blocks
+        # `*.sav`, so the standing pressure is to reach for exactly this, and
+        # before these two branches existed nothing stopped it. Refused
+        # everywhere, tests/fixtures/ included: these names say "game file", so
+        # there is no reviewed-fixture case for them.
+        *.sav.b64|*.sav.base64|*.sav.hex|*.sav.txt|*.sav.gz|*.sav.zip|*.sav.*)
+            report "$path" "is an encoded or derived copy of a game save - encoding is not redaction"
+            ;;
+        *.log.b64|*.log.base64|*.log.hex|*.log.gz|*.log.zip)
+            report "$path" "is an encoded or derived copy of a log - encoding is not redaction"
+            ;;
+        # The same file under a name that mentions no save at all -
+        # `dump.gvas.b64`, `blob.b64`, `stuff.gz`. The extension is the thing an
+        # accident renames, so LOCATION decides instead: a reviewed fixture
+        # lives under tests/fixtures/, where a human vetted it and
+        # tests/test_no_pii.py scans its contents on every run. Anywhere else an
+        # opaque blob is a raw dump until proven otherwise, and this hook cannot
+        # look inside one to tell the difference.
+        *.gvas|*.gvas.b64|*.gvas.base64|*.gvas.hex|*.gvas.gz \
+        |*.b64|*.base64|*.hex \
+        |*.gz|*.tgz|*.zip|*.7z|*.bz2|*.xz|*.tar|*.zst)
+            case "$path" in
+                tests/fixtures/*)
+                    # Reviewed fixture tree. Permitted on purpose - blocking it
+                    # would block the hand-verified GVAS fixtures the save
+                    # reader is tested against, and a rule that blocks the
+                    # reviewed fixtures is a broken rule, not a strict one.
+                    ;;
+                *)
+                    report "$path" "is an encoded or compressed blob outside tests/fixtures/ - if it is a reviewed fixture it belongs there, and if it is a raw dump it belongs nowhere"
+                    ;;
+            esac
+            ;;
     esac
 
     # ---------------------------------------------------------------
