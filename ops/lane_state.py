@@ -212,13 +212,34 @@ def lane_prefix(lane_id: str) -> Path:
     return lanes_dir() / lane.lane_id
 
 
-def _writable_prefix(lane_id: str) -> Path:
+def _refuse_read_only(lane_id: str) -> lanes.Lane:
+    """Raise :class:`ReadOnlyLane` unless ``lane_id`` may write.
+
+    Called by every function that reads or writes lane state, **including the
+    ones handed an explicit path**. That distinction is the whole point and it
+    was missed on the first cut: the refusal originally lived only in
+    :func:`state_path` and :func:`fragment_path`, so every default route raised
+    and every ``path=`` route walked straight past it.
+    ``save(LaneState(lane_id="verify"), somewhere)`` wrote a file.
+
+    "Eight entry points raise" is not the same property as "verify writes
+    nothing, ever", and only the second is the guarantee that lets a read-only
+    lane grade other lanes' work. Found by the refutation pass, which is
+    exactly the class of hole an author's own mutation testing misses - the
+    mutations were aimed at the code that existed, not at the route around it.
+    """
     lane = lanes.by_id(lane_id)
     if lane.read_only:
         raise ReadOnlyLane(
             f"lane {lane.lane_id!r} is read-only and is given nowhere to write - "
-            "it reports a verdict and owns no files on purpose"
+            "it reports a verdict and owns no files on purpose. Passing an "
+            "explicit path does not change that."
         )
+    return lane
+
+
+def _writable_prefix(lane_id: str) -> Path:
+    _refuse_read_only(lane_id)
     return lane_prefix(lane_id)
 
 
@@ -403,6 +424,7 @@ def load(lane_id: str, path: Path | None = None) -> LaneState:
     ``recovery_note`` set. ``recovered`` is True only when a file existed and
     could not be used, because a lane's first ever run is not a recovery.
     """
+    _refuse_read_only(lane_id)
     target = Path(path) if path is not None else state_path(lane_id)
 
     try:
@@ -451,6 +473,7 @@ def save(state: LaneState, path: Path | None = None) -> Path:
     filesystem, which is what makes it atomic - and is flushed and fsynced
     before the move. ``state.updated`` is stamped here so callers cannot forget.
     """
+    _refuse_read_only(state.lane_id)
     state.validate()
     target = Path(path) if path is not None else state_path(state.lane_id)
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -635,6 +658,7 @@ def append_fragment(
     looks like - including the rule that an entry with no acceptance evidence
     is refused, because "done" with nothing to check is a claim, not a record.
     """
+    _refuse_read_only(lane_id)
     target = Path(path) if path is not None else fragment_path(lane_id)
     block = ledger.render_entry(entry)
 
