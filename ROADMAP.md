@@ -68,7 +68,7 @@ is what distinguishes the Prologue from a real raid is itself a result worth
 recording. Blocked only on the operator entering one - nothing here needs a
 deliberate capture session any more, because the log is sufficient on its own.
 
-## 1b. Specialist lane build-out - NEXT, machinery landed and proven
+## 1b. Specialist lane build-out - CLOSED 2026-08-09
 
 Decided with the operator 2026-08-09. Eight persistent specialist lanes, each
 owning a disjoint file set, each running its own orchestrated sub-agents and
@@ -285,14 +285,23 @@ toggle may be more legible in a raid than on the creation screen.
 
 ## Ordering note
 
-Item 1b is next because it is the only item that makes every other item cheaper:
-lanes are how work gets parallelised here, and two of them have now been run end
-to end. Items 3 and 4's watcher are independent of everything and of each other.
+Item 1b is CLOSED, so **item 2 is NEXT** - the transient save is captured and
+the bytes are on disk, which is what was blocking it. Items 3 and 4's watcher
+are independent of everything and of each other.
+
+Each lane now carries its own queue in `lanes/<lane_id>.STATE.json`, so the
+right way to pick work is to read the state file of the lane that owns the
+files, not to re-read this whole document. This list stays the single place an
+item's acceptance criterion is defined; the lane files say who holds it and
+what is blocked.
 
 Item 1's remainder, and items 5 and 6, all need the client open. None of them
 needs a *deliberate* capture session any more - the 2026-08-09 pass showed the
 log alone was sufficient - so fold them into whichever session next has the game
-running rather than scheduling them.
+running rather than scheduling them. **Item 4b and items 5 and 6 are held as
+open items on the `research` and `capture` lanes**, each naming what it is
+blocked on, so they are no longer only a paragraph in a document nobody reads
+mid-session.
 
 ## Deliberately not on this list
 
