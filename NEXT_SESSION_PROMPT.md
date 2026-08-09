@@ -9,7 +9,8 @@ Steam game Mistfall Hunter. Repo root `C:\Lanternlight`, public at
 `github.com/Remus3/Lanternlight`, Apache-2.0.
 
 **Read first, in this order:** `CLAUDE.md`, `README.md`, `docs/FINDINGS.md`,
-`docs/OBSERVED_IDS.md`, `ROADMAP.md`, `docs/HEADLESS.md`, then `git log`.
+`docs/OBSERVED_IDS.md`, `ROADMAP.md`, `docs/HEADLESS.md`, `WAKEUP_NOTES.md`
+(top entry only), then `git log --oneline -15`.
 
 **Before touching anything:**
 
@@ -29,63 +30,88 @@ A fresh clone runs zero git hooks until that first command runs. The tracked
    capture and reading files the game writes are fine. See ADR-001.
 2. **7-bit ASCII everywhere**, and never add a `Co-Authored-By` trailer.
 3. **Nothing log-derived is committed without passing the redactor**, and that
-   now includes **other players' names**, not only the operator's.
+   includes other players' names, not only the operator's.
 
 ---
 
-## Where the last session left it (2026-08-09)
+## Where the last session left it
 
-Work is on branch `session/2026-08-09-recon-redaction-lanes`, pushed, **not
-merged to `main`**. Six ledger entries, `LL-0002` through `LL-0007`.
+Branch `session/2026-08-09-recon-redaction-lanes`, pushed, **not merged to
+`main`**. Ledger entries `LL-0002` through `LL-0012`. Two lane branches exist
+and are also pushed: `lane/ingest` and `lane/safety`.
 
-**Re-probe before trusting any number below.** The last session's single most
-useful move was re-probing live state and discovering three documented facts had
-gone stale inside one session - the log had grown 567 KB to 6.1 MB, the market
-cache had filled, and a fifth save file had appeared. The game may well have
-been played again since.
+**Re-probe live state before trusting any number below.** The single
+highest-value move of the last session was re-probing and finding three
+documented facts had gone stale inside one session - the log had grown 567 KB to
+6.1 MB, the market cache had filled, and a fifth save file had appeared. The
+operator plays between sessions. Assume the world moved.
 
-### Start here, in this order
+### Start here
 
-1. **ROADMAP item 0 is closed** (the redactor P0). Item **1b**, the specialist
-   lane build-out, is the biggest ready piece: the roster and its invariants
-   landed, but the launcher, the per-lane contract files, the per-lane on-disk
-   state and the commit-serialisation answer do not exist. Acceptance is one
-   lane demonstrated end to end, not described.
+1. **ROADMAP item 1b, the lane build-out**, is the biggest ready piece. The
+   roster, launcher and generated contracts all landed and a lane has been run
+   end to end. What is missing: **per-lane on-disk state** (agent context does
+   not survive a session, so "persistent specialist" is fiction without it) and
+   **commit serialisation** (eight lanes and one `docs/LEDGER.md` will race).
 2. **Item 1's remainder needs the operator to enter a real raid.** Everything
-   measured so far is the Prologue at `matchId=0`. Do not schedule a capture
-   session for it - the log alone was sufficient last time. Just check whether a
-   run with a non-zero `matchId` has appeared.
-3. **Items 2, 3 and 4's watcher** are all unblocked and independent.
+   measured is the Prologue at `matchId=0`. Do not schedule a capture session -
+   the log alone was sufficient last time. Just check for a run with a non-zero
+   `matchId`.
+3. **Items 3 (live log tail) and 4's watcher** are unblocked and independent.
 
-### Things that will bite you if you do not know them
+### How to run a lane
+
+```python
+from ops import lane_launcher, lanes
+lane = lanes.by_id("ingest")
+lane_launcher.ensure_worktree(lane)          # C:\ll-worktrees\ll-lane-<id>
+lane_launcher.assert_in_lane_worktree(lane)  # refuses outside its own worktree
+```
+Each lane's contract is `.claude/commands/lane-<id>.md`, generated from
+`ops/lanes.py`. **Edit the roster, then run `python scripts/write_lane_contracts.py`** -
+a drift test fails otherwise. Lanes commit to `lane/<id>` and never merge to
+`main`.
+
+### Traps that will bite you, all measured
 
 - **An empty grep is a claim about your pattern.** `cfgId:(\d+)` silently
-  dropped every `TS.FTE` line because that subsystem writes `cfgId: 123` with a
-  space. It cost a wrong number in a published doc.
-- **The hygiene guards now scan uncommitted files too.** They used to walk
-  `git ls-files` and were blind to exactly the new files most likely to carry a
-  pasted identifier.
-- **`ops/merge_gate.py` exists so you do not relay an agent's claim.** Measure
-  the per-file test counts BEFORE dispatching work and pass them as the
-  baseline; a global total lets one agent's new tests mask another's deletions.
-- **Agreement is not verification.** Last session an adversarial pass returned
-  **nine** defects in findings that had already been written up confidently,
-  including a death attributed to the operator that belonged to another player.
-  Dispatch the refuter every time.
-- **The redactor is scope-dependent by nature.** It discovers personas from
-  keyed shapes and then masks literals, so redact the FULL log and excerpt from
-  the redacted text - or pass `personas=` explicitly. `assert_clean` will now
-  refuse to certify rather than pass vacuously, but do not lean on that.
+  dropped an entire subsystem because `TS.FTE` writes `cfgId: 123` with a space.
+  It cost a wrong number in a published document.
+- **Clear `__pycache__` before any mutation test.** A same-length mutation inside
+  one mtime tick leaves a stale `.pyc`, which can fake a GREEN under mutation and
+  therefore fake a non-vacuity proof outright.
+- **Do not pass `-q` to pytest.** `pytest.ini` already sets it; `-qq` suppresses
+  the summary line entirely.
+- **`git check-ignore -v` prints the pattern even for a negation.** Test the exit
+  code, not whether there was output.
+- **A path from `__file__` is not a fact about the repository.** Inside a
+  worktree it is that worktree. Use `lanes.primary_checkout()`.
+- **`ops/merge_gate.py` exists so you never relay an agent's claim.** Measure
+  per-file counts BEFORE dispatching and pass them as the baseline; a global
+  total lets one agent's additions mask another's deletions.
+- **Agreement is not verification.** An adversarial pass returned **nine**
+  defects in findings that had already been written up confidently. Dispatch the
+  refuter every time.
 
 ### Open questions nobody has answered
 
 - Is `matchId` what distinguishes the Prologue from a real raid? Predicted, not
   observed.
-- What are `Game.PlayState.Spiritual` and `WaitSpiritual`? Suspected downed or
-  ghost state; unestablished.
 - Does the camp-return option byte (`GAA=` vs `GAU=`) carry the run outcome? Two
   samples cannot establish an encoding.
-- Sorcerer's single weapon config id is still unexplained. **Nothing in this
-  repo may say Blackarrow is the only single-weapon class.**
-- `OnlinePlayerCount: 0` appears alongside a second player's `PlayerName`. Those
-  cannot both mean what they appear to mean.
+- What are the 4 zero bytes after every GVAS tagged property list? An `int32`
+  zero, an empty FString and four flag bytes all fit; nothing separates them.
+- Sorcerer's single weapon config id is still unexplained. **Nothing in this repo
+  may say Blackarrow is the only single-weapon class.**
+- Where do server-side settings live? `InvertCameraYAxis` is in the log and in no
+  save file, so a settings reader built on `.sav` alone is incomplete.
+- Raw UTF-16 in a file still defeats the PII guard; UTF-16 inside base64 does not.
+
+### Operator context worth having
+
+Plays Blackarrow (classId 12), has a second character at classId 13
+(Shadowstrix). Deluxe edition, three Twitch drops claimed, Discord linked - no
+entitlement id observed anywhere yet. Has swapped primary/secondary attack binds
+(right click primary) and turned off invert-look. Died once, in the tutorial.
+Cannot read chat while playing; use text-to-speech for anything urgent, and
+never block waiting for an answer.
