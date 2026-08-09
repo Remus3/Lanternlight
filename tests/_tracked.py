@@ -129,14 +129,57 @@ def _walked(root: Path) -> list[Path]:
     return found
 
 
-def iter_authored_files(root: Path = REPO_ROOT) -> Iterator[Path]:
-    """Yield every authored text file that would be published from ``root``."""
+def _published(root: Path) -> list[Path]:
+    """Every path that would be published from ``root``, in sorted order."""
     candidates = _git_tracked(root)
     if candidates is None:
         candidates = _walked(root)
-    for path in sorted(candidates):
+    return sorted(candidates)
+
+
+def iter_authored_files(root: Path = REPO_ROOT) -> Iterator[Path]:
+    """Yield every authored TEXT file that would be published from ``root``.
+
+    Binaries are excluded because the guard this feeds - the 7-bit ASCII rule -
+    has nothing to say about them: a PNG is high bytes by definition, and
+    flagging that would be noise, not a finding.
+
+    For the PII guard, use :func:`iter_scannable_files` instead.
+    """
+    for path in _published(root):
         if path.suffix.lower() in BINARY_SUFFIXES:
             continue
+        if not path.is_file():
+            continue
+        yield path
+
+
+def iter_scannable_files(root: Path = REPO_ROOT) -> Iterator[Path]:
+    """Yield every published file, binaries included.
+
+    **Why binaries are scanned rather than skipped.** The suffix filter above
+    is right for the ASCII rule and wrong for PII: an account id inside a
+    ``.sav`` or a ``.png`` is an account id, and a file this walker refuses to
+    open is a file the guard cannot testify about. "Nothing found" and "nothing
+    looked" are different facts, and only one of them is safe to publish.
+
+    Scanning also beats the two alternatives that were considered:
+
+    - *Refusing* every committed binary needs an allowlist, and an allowlist is
+      a list of files nobody scans. It would also block a legitimate diagram
+      while doing nothing about a renamed save.
+    - *Skipping* is what produced the hole this closes. ``.gitignore`` blocks
+      ``*.sav``, so the standing pressure is to commit an encoded or renamed
+      copy of exactly the file that carries the operator's identity.
+
+    Refusal by PATH - the game's Saved tree, ``frames/``, ``*.log``, ``*.sav``
+    - is a separate mechanism and still lives in ``.githooks/pre-commit``. This
+    is the net under it, for the paths nobody anticipated.
+
+    Ignored files stay out: ``.gitignore`` remains authoritative, so
+    ``ops/runtime`` and the caches are no more scanned than before.
+    """
+    for path in _published(root):
         if not path.is_file():
             continue
         yield path

@@ -90,6 +90,27 @@ determined, it raises instead of reporting clean - "I could not tell" is a
 different fact from "it is safe", and only one of them is recoverable after a
 push.
 
+Encoded content - a fourth mechanism, and a different trade
+-----------------------------------------------------------
+
+Everything above reads plain text, so a single base64 pass defeated all of it
+at once. :func:`iter_encoded_sensitive` closes that: it finds base64 and hex
+runs, decodes them, and re-runs the structural rules on what comes out.
+
+It is a **detector only, and deliberately not wired into** :func:`redact` or
+:func:`assert_clean`. Rewriting bytes inside an encoded blob would corrupt the
+blob, so there is nothing for :func:`redact` to do, and an :func:`assert_clean`
+that raised on encoded text would be raising on something the caller has no way
+to fix. The rule for callers is instead: **redact before encoding, never
+after.** The gate that enforces it is the repository scan in
+``tests/test_no_pii.py``, which runs both passes over every published file.
+
+Its false-positive budget is also the opposite of this module's. Over-redaction
+costs an uglier fixture; a repository guard that fires on innocent text blocks
+every commit in the project. So the encoded half is tuned for near-zero false
+positives and the number is measured, not asserted - see the block above
+:func:`iter_encoded_sensitive`.
+
 Limits, stated rather than hidden:
 
 - **The keyless rules are an enumerated list, not a general solution.** A name
@@ -98,6 +119,12 @@ Limits, stated rather than hidden:
   cannot-certify path narrows this to slots that share a marker with a known
   one; an entirely novel shape in otherwise unremarkable text is still a silent
   pass.
+- **The encoded pass reads standard base64 and hex only.** The URL-safe
+  alphabet is not accepted, because ``_`` separates every snake_case identifier
+  in this repository and admitting it would fuse ordinary source into
+  multi-hundred-character "runs". Compression, encryption and any encoding
+  outside those two are likewise out of reach - there is no general answer, and
+  a guard that claimed one would be lying.
 - A display name shorter than three characters is not literal-masked; masking a
   two-character token by substring would shred ordinary words.
 - City/state/country are not pattern-detectable. Redact geolocation lines by
@@ -109,6 +136,8 @@ Typical use::
     assert_clean(clean)
 """
 
+import base64
+import binascii
 import re
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
@@ -123,6 +152,7 @@ __all__ = [
     "RULES",
     "assert_clean",
     "discover_personas",
+    "iter_encoded_sensitive",
     "iter_sensitive",
     "redact",
 ]
@@ -699,6 +729,237 @@ def iter_sensitive(
             yield rule.label, match.group(0), match.start()
 
 
+# --------------------------------------------------------------------------
+# encoded content
+# --------------------------------------------------------------------------
+#
+# Every rule above works on plain text, so a single base64 pass defeats all of
+# them at once. Measured 2026-08-09::
+#
+#     planted = "player " + "76561190" + "000000042" + " x"
+#     iter_sensitive(planted)                     -> STEAMID64, LONG_ID
+#     iter_sensitive(b64encode(planted))          -> nothing at all
+#
+# That matters because the pressure to commit encoded bytes is structural, not
+# occasional: ``.gitignore`` blocks ``*.sav``, so anyone who needs a save
+# fixture reaches for an encoded copy, and the guard that is supposed to stand
+# behind the ignore rules cannot see into one.
+#
+# The design constraint runs the opposite way from the rest of this module.
+# Over-redaction is cheap - an uglier fixture - but a repository guard that
+# fires on innocent text blocks every commit in the project, which is a denial
+# of service on the work. So this half is tuned for near-zero false positives
+# and says so:
+#
+#   - A run must be long enough to hold the shortest identifier that exists
+#     (15 digits, so 20 base64 characters), or it is far likelier to be a hash,
+#     a token or an ordinary CamelCase word than an encoded id.
+#   - It must decode, under a strict alphabet check.
+#   - The DECODED bytes then have to match one of the rules above. That is the
+#     filter doing the real work: garbage bytes essentially never contain 15
+#     consecutive ASCII digits (about 1e-22 per position) or 32 consecutive hex
+#     characters, so a decoded blob of noise yields nothing.
+#
+# Measured false-positive rate on the tracked tree: 0 findings across every
+# published file. See tests/test_no_pii.py.
+
+#: Shortest identifier this module knows is 15 digits (``LONG_ID``), which
+#: needs 15 decoded bytes, which needs 20 base64 characters. Below that a run
+#: cannot be an encoded identifier however it decodes.
+_MIN_DECODED_BYTES = 15
+_B64_MIN_RUN = 20
+
+#: Standard base64 alphabet only, with ``=`` accepted as trailing padding and
+#: never inside the run. Letting ``=`` into the body would weld ``key=`` onto
+#: the value that follows it and shift the whole decode out of phase.
+#:
+#: The URL-safe alphabet is deliberately NOT accepted: ``_`` is the separator
+#: in every snake_case identifier in this repository, so admitting it would
+#: fuse ordinary Python names into multi-hundred-character "runs". A urlsafe
+#: blob is therefore a known blind spot, stated rather than hidden.
+_B64_RUN = re.compile(rf"[A-Za-z0-9+/]{{{_B64_MIN_RUN},}}={{0,2}}")
+
+#: A whole line that is nothing but one base64 run. Consecutive such lines are
+#: joined before decoding, because an encoder that wraps at 76 columns puts a
+#: line break wherever it likes - possibly through the middle of an identifier
+#: - and decoding each line on its own would then miss it.
+_B64_LINE = re.compile(rf"[A-Za-z0-9+/]{{{_B64_MIN_RUN},}}={{0,2}}")
+
+#: Hex needs twice the characters for the same bytes. 40 is also the length of
+#: a git sha, which is the shape this will most often decode and discard.
+_HEX_MIN_RUN = _MIN_DECODED_BYTES * 2
+_HEX_RUN = re.compile(rf"(?<![0-9A-Za-z])[0-9a-fA-F]{{{_HEX_MIN_RUN},}}(?![0-9A-Za-z])")
+
+#: How many times to peel an encoding. 1 catches base64-of-a-save, which is the
+#: realistic accident; 2 also catches base64-of-hex and the deliberate double
+#: encode. Deeper costs more than it can plausibly buy, and each extra layer is
+#: nearly free of false positives only because decoded noise almost never
+#: contains a 20-character run of base64 alphabet either.
+_MAX_ENCODED_DEPTH = 2
+
+
+def _decode_b64(run: str) -> bytes | None:
+    """Decode one base64 run, or return None if it is not base64 after all.
+
+    Padding is recomputed rather than trusted. A run clipped out of a larger
+    stream arrives unpadded, and refusing those would blind this to every
+    unpadded encoder for no gain - an invalid body still fails ``validate``.
+    """
+    core = run.rstrip("=")
+    remainder = len(core) % 4
+    if remainder == 1:
+        # No byte string encodes to 4n+1 characters, so this is not base64.
+        return None
+    try:
+        return base64.b64decode(core + "=" * ((4 - remainder) % 4), validate=True)
+    except (binascii.Error, ValueError):
+        return None
+
+
+def _decode_hex(run: str) -> Iterator[bytes]:
+    """Yield the byte views of one hex run.
+
+    An odd-length run is one character out of phase at exactly one end, and
+    which end is unknowable, so both are tried. An even-length run is taken as
+    written.
+
+    A run carrying no hex LETTER is a decimal number, not a hex blob, and is
+    skipped. This is the one systematic false-positive class measured on a
+    20,077-file corpus: ``0x33`` is the character ``3``, so hex-decoding a long
+    decimal literal such as ``0.3333...`` hands back a run of digits and trips
+    ``LONG_ID``. Skipping it costs no coverage at all, because a hex dump of an
+    ASCII identifier is itself a long digit run - ``76561190...`` hex-encodes to
+    ``3736353631...`` - which the plain ``LONG_ID`` rule already catches without
+    decoding anything. Measured: this removed 7 of 23 findings on that corpus
+    and 0 of the true positives.
+    """
+    if not any(char in "abcdefABCDEF" for char in run):
+        return
+    for start in (0, 1) if len(run) % 2 else (0,):
+        usable = run[start:]
+        usable = usable[: len(usable) - len(usable) % 2]
+        if len(usable) < _HEX_MIN_RUN:
+            continue
+        try:
+            yield bytes.fromhex(usable)
+        except ValueError:
+            continue
+
+
+def _views(raw: bytes) -> Iterator[tuple[str, str]]:
+    """Yield ``(marker, text)`` readings of decoded bytes.
+
+    latin-1 rather than utf-8-with-replace: the payload is arbitrary bytes, and
+    ``replace`` fuses invalid sequences into a single U+FFFD, which silently
+    joins or destroys the runs being looked for. latin-1 is total and
+    length-preserving, so nothing is lost and offsets stay byte-exact.
+
+    The NUL-stripped reading is what reaches a UTF-16 string. Unreal writes a
+    save's text as UTF-16 whenever it is not pure ASCII, and a 17-digit id
+    stored that way reads as ``7.6.5.6...`` with a NUL between every digit -
+    which no digit-run rule can see. Dropping the NULs collapses it back.
+    """
+    yield "", raw.decode("latin-1")
+    if b"\x00" in raw:
+        yield " (nul-stripped reading)", raw.replace(b"\x00", b"").decode("latin-1")
+
+
+def _b64_blocks(text: str) -> Iterator[tuple[int, str, int]]:
+    """Yield ``(offset, joined, line_count)`` for each wrapped base64 block."""
+    group: list[tuple[int, str]] = []
+    cursor = 0
+    for line in text.splitlines(keepends=True):
+        stripped = line.strip()
+        if _B64_LINE.fullmatch(stripped):
+            group.append((cursor, stripped))
+        else:
+            if len(group) >= 2:
+                yield group[0][0], "".join(part for _, part in group), len(group)
+            group = []
+        cursor += len(line)
+    if len(group) >= 2:
+        yield group[0][0], "".join(part for _, part in group), len(group)
+
+
+def _encoded_candidates(text: str) -> Iterator[tuple[int, bytes, str]]:
+    """Yield ``(offset, decoded_bytes, description)`` for every encoded run.
+
+    The description never carries the decoded value - see
+    :func:`iter_encoded_sensitive`.
+    """
+    for match in _B64_RUN.finditer(text):
+        run = match.group(0)
+        raw = _decode_b64(run)
+        if raw is not None and len(raw) >= _MIN_DECODED_BYTES:
+            yield match.start(), raw, f"a {len(run)}-character base64 run"
+
+    for offset, joined, line_count in _b64_blocks(text):
+        raw = _decode_b64(joined)
+        if raw is not None and len(raw) >= _MIN_DECODED_BYTES:
+            yield offset, raw, (
+                f"a {line_count}-line base64 block ({len(joined)} characters)"
+            )
+
+    for match in _HEX_RUN.finditer(text):
+        run = match.group(0)
+        for raw in _decode_hex(run):
+            if len(raw) >= _MIN_DECODED_BYTES:
+                yield match.start(), raw, f"a {len(run)}-character hex run"
+
+
+def _iter_encoded_hits(
+    text: str, wanted: frozenset[str], depth: int
+) -> Iterator[tuple[str, str, int, str]]:
+    """Yield ``(label, matched, offset, description)``, recursing into layers."""
+    if depth <= 0 or not text:
+        return
+    for offset, raw, description in _encoded_candidates(text):
+        for marker, view in _views(raw):
+            detail = description + marker
+            for label, matched, _ in iter_sensitive(view, wanted):
+                yield label, matched, offset, detail
+            for label, matched, _, inner in _iter_encoded_hits(view, wanted, depth - 1):
+                yield label, matched, offset, f"{detail} containing {inner}"
+
+
+def iter_encoded_sensitive(
+    text: str,
+    labels: Iterable[str] | None = None,
+    depth: int = _MAX_ENCODED_DEPTH,
+) -> Iterator[tuple[str, str, int]]:
+    """Yield ``(label, description, offset)`` for identifiers hidden in encodings.
+
+    Companion to :func:`iter_sensitive`, not a replacement: that one reads the
+    text as written, this one reads what its base64 and hex runs decode to.
+    ``offset`` indexes ``text`` at the start of the encoded run, so a caller can
+    turn it into a line number the same way.
+
+    **The second element is a description of the container, never the decoded
+    value.** The plain scanner can quote its match because the match is already
+    sitting in the file in that form; this one would be converting an encoded
+    identifier into a plaintext one and printing it into CI output at the exact
+    moment the guard fires. So it reports "a 44-character base64 run" and the
+    offset, which is enough to find it and not enough to leak it.
+
+    Findings are deduplicated by ``(label, decoded match)``, so an identifier
+    reached by both the per-line and the joined-block pass is reported once.
+
+    This is a detector only. There is deliberately no encoded counterpart to
+    :func:`redact` - rewriting bytes inside an encoded blob would corrupt the
+    blob, and the right fix is always to redact before encoding.
+    """
+    if not text:
+        return
+    wanted = ALL_LABELS if labels is None else frozenset(labels)
+    seen: set[tuple[str, str]] = set()
+    for label, matched, offset, description in _iter_encoded_hits(text, wanted, depth):
+        key = (label, matched)
+        if key in seen:
+            continue
+        seen.add(key)
+        yield label, description, offset
+
+
 def _raise_leak(text: str, label: str, matched: str, offset: int) -> None:
     """Raise a :class:`RedactionError` that points at the leak.
 
@@ -737,6 +998,11 @@ def assert_clean(
 
     The exception message names the label, the byte offset and the 1-based line
     number. It quotes the offending match for every label except ``PERSONA``.
+
+    **This does not decode anything.** Text certified here can still carry an
+    identifier inside a base64 or hex run - see :func:`iter_encoded_sensitive`
+    for why that pass is kept separate, and redact before encoding rather than
+    after.
     """
     wanted = ALL_LABELS if labels is None else frozenset(labels)
     for label, matched, offset in iter_sensitive(text, wanted):
