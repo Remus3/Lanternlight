@@ -56,6 +56,22 @@ four records to each other.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0016 - 2026-08-09 - Blackarrow talent and skills screens measured by pixel capture; first talent point spent
+
+**Evidence:**
+- tools/frame_poller.py captured 217 frames at 2s intervals, 16:01:06 to 16:09:16 local, plus one skills-screen grab
+- 36 talent nodes across 12 clusters recorded with names, unlock levels and - for the six selectable-tier nodes - verbatim tooltip text
+- operator attested which frame showed which node, so every name is a rendered-text read joined to a human confirmation, not an icon guess
+- skills screen: loadout structure (arrow slots Z/X/C, C at Lv. 3; skill slots Q/E, third at Lv. 5) and the Archer/Hunter pools as two separate five-slot rows
+- Concussive Arrow tooltip and in-game hint captured verbatim
+- python -m pytest 685 passed 0 failed with caches purged; python -m ruff check . clean
+
+CORROBORATION worth more than the data: the in-game hint reads 'Use Concussive Arrows to knock back fast-approaching enemies', and the tooltip states an optimal band - inaccurate too far, hard to draw too close. That is the developer's own UI confirming two claims docs/CLASSES.md could previously support only from player testimony: that Blackarrow is hard-countered by gap-closers, and that it is not a sniper. Neither claim appeared in any guide site the research pass consulted.
+Second corroboration: Measured Pace gates on Archer's Arrows and Battle-fed on Hunter's, and the skills screen renders the two families as separate rows. The Archer/Hunter ammo-family finding was previously adjudicated from contested published sources; it is now visible in the game's own UI.
+NOT ONE NUMBER appears in any of the 36 talent tooltips or in the skills screen. Every effect is qualitative. The project's founding premise - that this game publishes no coefficients, so any source quoting one is fabricating - is now an observation rather than an inference.
+TWO WRONG RECOMMENDATIONS were made before the right one, both from reading structure out of an image. First: Dodge Rapid Shot, which is not selectable, because the connecting lines between nodes are prerequisites and were read as decoration. Second: an argument from unlock ordering made while assuming no arrows were held. The operator's description of their actual loadout settled it. A screenshot shows what is on screen, not what the player has.
+A safety claim was also retracted: the account panel's name is randomised by the game's own privacy setting, not a second identifier the redactor must learn. The residual point is sharper - capture safety depends on a toggle in the game menu, and nothing in this repository can detect its state.
+
 ### LL-0015 - 2026-08-09 - Fixtures made authored artifacts, orphaned files given owners, a seventh save reopened the GVAS item
 
 **Evidence:**

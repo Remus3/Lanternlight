@@ -312,6 +312,26 @@ Two things follow that are worth more than the choice itself:
 **Unmeasured:** how arrows are acquired at all - loot, craft or vendor. The
 unlock ordering is a proxy for which family arrives first, not proof of it.
 
+### Outcome - the first talent point was spent on Measured Pace
+
+Operator-attested 2026-08-09. Recorded because the character's state is now a
+fact a later session has to know, and because the reasoning shows how a decision
+was made from measured data rather than from a guide.
+
+The choice was forced by the loadout, not by a judgement about which effect is
+stronger: **Battle-fed requires carrying Hunter's Arrows and the entire
+Hunter's row is locked at level 2**, so it could not fire at all. Measured Pace's
+condition - carrying at least 2 Archer's Arrows - was met by Steel Arrow and
+Concussive Arrow.
+
+Worth keeping as a process note: the first two recommendations this project made
+on this question were both wrong, and both for the same reason. The first
+suggested Dodge Rapid Shot, which is not selectable - the connecting lines
+between nodes are prerequisites and had been read as decoration. The second
+argued from the tree's unlock ordering while assuming no arrows were held. Only
+the operator describing their actual loadout settled it. **A screenshot shows
+what is on screen; it does not show what the player has.**
+
 ### Skills screen - 2026-08-09, level 2
 
 Same method: passive capture, tooltip text read off the rendered frame.

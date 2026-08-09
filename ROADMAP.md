@@ -186,6 +186,26 @@ timestamp and never writes to it. Given the measured trigger, it should expect a
 burst at camp re-entry and silence otherwise, and a poll interval chosen against
 that rather than against a guess.
 
+## 4b. Ammo-family and talent measurement - READY, cheap, needs the client
+
+Opened 2026-08-09 after the talent and skills screens were captured. The class's
+whole kit is gated on ammo families, and the following are **unmeasured**:
+
+- Whether "carrying at least 2 Archer's Arrows" counts equipped **types** or
+  available **charges**. At level 2 the operator has both, so the capture cannot
+  separate the readings.
+- How arrows are acquired at all - loot, craft or vendor. Everything about which
+  family a player holds first currently rests on the tree's unlock ordering
+  (Archer's Lv. 3, Hunter's Lv. 6) as a proxy.
+- How `roll` differs from `dodge`. Both Dodge nodes say they convert one to the
+  other and neither says how they differ, and the class's effective range is
+  counted in dodge-lengths.
+- The three locked Archer's Arrows and all five Hunter's Arrows.
+
+**Acceptance:** each answered by observation and recorded in
+`docs/OBSERVED_IDS.md` with its method, or written up as a measured negative
+naming what was tried. A guide site does not close any of these.
+
 ## 5. Sorcerer single-weapon question - OPEN
 
 Four classes surfaced two weapon config ids in character creation, two surfaced
