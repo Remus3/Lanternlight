@@ -56,6 +56,26 @@ four records to each other.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0017 - 2026-08-09 - CORRECTS LL-0016 - the no-numbers claim was false, and three quotes were paraphrases
+
+**Evidence:**
+- LL-0016 states 'NOT ONE NUMBER appears in any of the 36 talent tooltips or in the skills screen'. That is FALSE and this entry corrects it; per the append-only rule LL-0016 is left standing and this entry names it
+- counterexample 1, independently re-read from frame f0030 by the merger: Pursuit Mark - 'Enemies hit by normal arrows have reduced Movement Speed for a period of time. This effect can stack up to 3 times.'
+- counterexample 2 and 3: Measured Pace and Battle-fed both read 'When carrying at least 2 ... Arrows', and BOTH are quoted verbatim in docs/OBSERVED_IDS.md 155 lines above the sentence denying numbers exist
+- the surviving narrower claim, now stated in the doc: no tooltip gives a MAGNITUDE of an effect - no damage figure, percentage, duration or radius. The numbers that appear are thresholds and caps, never the size of what happens
+- three quotes labelled 'verbatim from the tooltip' were paraphrases and are now restored character-exact against their frames
+- the most serious: Dodge Power Shot had the clause 'toward enemies near the crosshairs' DELETED - a targeting behaviour removed from text presented as the game's own words
+- Dodge Rapid Shot had two sentences collapsed into one; Blood Infection dropped 'the target has' and 'dealt'
+- cluster name corrected in two places: the screen reads 'Way of Gylden Hunt', the doc had invented 'Way of the Gylden Hunt'
+- 'tooltip text captured only where noted' was false - essentially all 36 were captured, and that understatement is how Pursuit Mark's stack cap went unnoticed
+- 'Steel Arrow' is operator-attested, not readable in any frame, and the name also appears in an established-outlet list in docs/CLASSES.md - now flagged rather than presented as a frame reading
+- mutual exclusivity of Measured Pace and Battle-fed is operator-attested and NOT visible in any frame; the ring shows a branch from a shared root, which is a different fact
+- python -m pytest 685 passed 0 failed with caches purged; python -m ruff check . clean
+
+Found by the wrap's refutation pass, which was told to hunt specifically for a paraphrase wearing a verbatim label. It found one that had deleted a mechanic.
+The pattern across all of it: a document whose entire value is that it does not invent things had invented a word in a name, deleted a clause from a quote, understated its own evidence, and asserted a universal negative contradicted by its own table. Screen-read documentation is a weaker evidence class than code and needs the same adversarial pass, not less.
+A universal negative is the shape most likely to have a counterexample. 'No numbers anywhere' should have been written as the narrower claim from the start, because the narrower claim is the one that was actually measured and is the one that supports the project's doctrine.
+
 ### LL-0016 - 2026-08-09 - Blackarrow talent and skills screens measured by pixel capture; first talent point spent
 
 **Evidence:**
