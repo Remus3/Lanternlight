@@ -14,6 +14,8 @@ the scanner honest instead of carving an exemption for the one file most
 likely to leak.
 """
 
+import base64
+import random
 import sys
 from pathlib import Path
 
@@ -29,6 +31,7 @@ from lanternlight.redact import (  # noqa: E402
     RedactionError,
     assert_clean,
     discover_personas,
+    iter_encoded_sensitive,
     iter_sensitive,
     redact,
 )
@@ -824,3 +827,222 @@ def test_persona_placeholder_is_stable_across_two_different_names():
     one = redact("hunter " + FAKE_NAME, personas=[FAKE_NAME])
     two = redact("hunter " + FAKE_SURNAME, personas=[FAKE_SURNAME])
     assert one == two == "hunter <PERSONA>"
+
+
+# --------------------------------------------------------------------------
+# encoded content - iter_encoded_sensitive
+# --------------------------------------------------------------------------
+#
+# The defect these pin, measured before the fix: every rule in this module
+# reads plain text, so one base64 pass blinded all of them at once and
+# tests/test_no_pii.py could not see into an encoded fixture at all. That is
+# not hypothetical - `.gitignore` blocks `*.sav`, so the pressure to commit an
+# ENCODED copy of the exact file that carries the operator's identity is
+# permanent.
+#
+# Nothing below is a literal encoded string. Every blob is encoded at runtime
+# from an invented identifier, for the same reason the plain fixtures are
+# assembled at runtime: this file is itself scanned, now including its encoded
+# runs, and a literal blob here would be a real finding.
+
+
+def _b64(text: str) -> str:
+    return base64.b64encode(text.encode("utf-8")).decode("ascii")
+
+
+def _labels(text: str, **kwargs) -> set[str]:
+    return {label for label, _, _ in iter_encoded_sensitive(text, **kwargs)}
+
+
+def test_a_base64_encoded_steamid_is_caught():
+    planted = "player " + FAKE_STEAMID64 + " connected"
+    assert "STEAMID64" in _labels(_b64(planted))
+
+
+def test_the_plain_scanner_is_still_blind_to_it():
+    # Pins WHY the encoded scanner has to exist. If this ever starts failing,
+    # the plain rules grew a decoder and this whole section needs rereading.
+    assert not list(iter_sensitive(_b64("player " + FAKE_STEAMID64 + " connected")))
+
+
+def test_a_base64_encoded_product_user_id_is_caught():
+    assert "PRODUCTUSERID" in _labels(_b64("eos " + FAKE_PRODUCT_USER_ID + " ready"))
+
+
+def test_a_base64_encoded_keyed_account_name_is_caught():
+    assert "ACCOUNT_NAME" in _labels(_b64("login " + _kv("AccountName", FAKE_ACCOUNT)))
+
+
+def test_a_base64_encoded_unkeyed_long_id_is_caught():
+    assert "LONG_ID" in _labels(_b64("trace " + FAKE_UNKEYED_ID + " end"))
+
+
+def test_an_unpadded_base64_run_is_still_decoded():
+    # A blob clipped out of a larger stream arrives with its padding gone.
+    # Refusing those would blind this to every unpadded encoder for no gain.
+    encoded = _b64("player " + FAKE_STEAMID64 + " connected").rstrip("=")
+    assert encoded.endswith("=") is False
+    assert "STEAMID64" in _labels(encoded)
+
+
+def test_a_wrapped_base64_block_is_joined_before_decoding():
+    # The one that a per-line decoder gets wrong. An encoder that wraps at a
+    # width not divisible by 4 puts the line break wherever it lands, so every
+    # individual line decodes to garbage and only the JOINED block carries the
+    # identifier.
+    encoded = _b64("padding-padding " + FAKE_STEAMID64 + " tail-tail-tail")
+    wrapped = "\n".join(encoded[i : i + 30] for i in range(0, len(encoded), 30))
+    assert len(wrapped.splitlines()) >= 3
+    per_line_blind = all(
+        not _labels(line) for line in wrapped.splitlines()
+    )
+    assert per_line_blind, "this fixture is only meaningful if line-at-a-time fails"
+    assert "STEAMID64" in _labels(wrapped)
+
+
+def test_a_standard_76_column_wrapped_blob_is_caught():
+    payload = ("filler " * 40) + FAKE_STEAMID64 + (" tail" * 40)
+    wrapped = base64.encodebytes(payload.encode("ascii")).decode("ascii")
+    assert "\n" in wrapped.strip()
+    assert "STEAMID64" in _labels(wrapped)
+
+
+def test_a_utf16_identifier_inside_a_blob_is_caught():
+    # Unreal writes a save's strings as UTF-16 whenever they are not pure
+    # ASCII, and a 17-digit id stored that way has a NUL between every digit,
+    # so no digit-run rule can see it until the NULs are dropped.
+    raw = ("id " + FAKE_STEAMID64).encode("utf-16-le")
+    assert b"\x00" in raw
+    assert not list(iter_sensitive(raw.decode("latin-1")))
+    assert "STEAMID64" in _labels(base64.b64encode(raw).decode("ascii"))
+
+
+def test_a_hex_encoded_blob_is_caught():
+    raw = ("save\xff " + FAKE_STEAMID64 + " \xfeend").encode("latin-1")
+    encoded = raw.hex()
+    assert "STEAMID64" in _labels(encoded)
+
+
+def test_a_double_encoded_identifier_is_caught():
+    assert "STEAMID64" in _labels(_b64(_b64("player " + FAKE_STEAMID64 + " ok")))
+
+
+def test_depth_one_stops_at_the_first_layer():
+    # Pins the depth contract rather than leaving it to be discovered.
+    doubled = _b64(_b64("player " + FAKE_STEAMID64 + " ok"))
+    assert "STEAMID64" in _labels(doubled, depth=2)
+    assert "STEAMID64" not in _labels(doubled, depth=1)
+
+
+def test_a_long_decimal_literal_is_not_treated_as_hex():
+    # The one systematic false-positive class measured on a 20,077-file
+    # corpus: 0x33 is the character '3', so hex-decoding "0.3333..." hands
+    # back a run of digits and trips LONG_ID. Skipping letterless runs costs
+    # nothing, because a hex dump of an ASCII id is itself a long digit run
+    # and the PLAIN rule already catches it - which the second assertion pins.
+    literal = "0." + "3" * 40
+    assert not _labels(literal)
+    assert "LONG_ID" in {label for label, _, _ in iter_sensitive(literal)}
+
+
+def test_a_short_base64_run_is_not_a_finding():
+    # Below 20 characters a run cannot hold the shortest identifier that
+    # exists, so decoding it can only manufacture noise.
+    assert not _labels(_b64("abc"))
+
+
+def test_ordinary_source_text_produces_no_findings():
+    prose = (
+        "The walker asks git what is tracked rather than guessing from "
+        "extensions, and MIN_EXPECTED_FILES is a floor not a target. "
+        "SomeVeryLongCamelCaseIdentifierName appears here on purpose."
+    )
+    assert not _labels(prose)
+
+
+def test_encoded_random_noise_produces_no_findings():
+    # The claim the whole design rests on: decoded garbage matches nothing.
+    # Seeded, so a green run today is a green run tomorrow.
+    rng = random.Random(20260809)
+    for _ in range(40):
+        blob = bytes(rng.randrange(256) for _ in range(2048))
+        assert not _labels(base64.b64encode(blob).decode("ascii"))
+
+
+def test_an_equals_sign_before_a_blob_does_not_shift_the_decode():
+    # `=` is in the base64 alphabet only as trailing padding. Letting it into
+    # the body would weld `key=` onto the value and push the whole decode out
+    # of phase, which silently loses the identifier.
+    line = _kv("payload", _b64("player " + FAKE_STEAMID64 + " connected"))
+    assert "STEAMID64" in _labels(line)
+
+
+def test_offsets_index_the_input_text():
+    encoded = _b64("player " + FAKE_STEAMID64 + " connected")
+    prefix = "log line: "
+    findings = list(iter_encoded_sensitive(prefix + encoded))
+    assert findings
+    for _label, _description, offset in findings:
+        assert (prefix + encoded)[offset:].startswith(encoded[:8])
+
+
+def test_the_description_never_carries_the_decoded_value():
+    # This message can land in CI output. Quoting the decoded match would turn
+    # an encoded identifier into a plaintext one at the exact moment the guard
+    # fires, which is the one thing this must not do.
+    encoded = _b64("player " + FAKE_STEAMID64 + " " + FAKE_PERSONA)
+    for _label, description, _offset in iter_encoded_sensitive(encoded):
+        assert FAKE_STEAMID64 not in description
+        assert FAKE_PERSONA not in description
+        assert encoded not in description
+
+
+def test_findings_are_deduplicated_across_passes():
+    # A wrapped blob is reached by BOTH the per-line pass and the joined-block
+    # pass, so the same identifier would otherwise be reported twice.
+    #
+    # The preconditions below are the point. Mutation testing caught an earlier
+    # version of this test passing while deduplication was disabled: the
+    # payload was short enough to encode onto a single line, so there was never
+    # a second pass and nothing to deduplicate. It asserted 1 and got 1 for the
+    # wrong reason.
+    payload = ("filler " * 20) + FAKE_STEAMID64 + (" tail" * 20)
+    wrapped = base64.encodebytes(payload.encode("ascii")).decode("ascii")
+
+    lines = wrapped.splitlines()
+    assert len(lines) >= 2, "fixture must wrap, or the block pass never runs"
+    assert any("STEAMID64" in _labels(line) for line in lines), (
+        "fixture is only meaningful if a single line also carries the id - "
+        "otherwise the per-line pass finds nothing and there is no duplicate"
+    )
+    assert "STEAMID64" in _labels(wrapped)
+
+    hits = [f for f in iter_encoded_sensitive(wrapped) if f[0] == "STEAMID64"]
+    assert len(hits) == 1, f"expected one deduplicated finding, got {len(hits)}"
+
+
+def test_a_label_subset_is_respected():
+    encoded = _b64("player " + FAKE_STEAMID64 + " connected")
+    assert not _labels(encoded, labels={"ACCOUNT_NAME"})
+    assert "STEAMID64" in _labels(encoded, labels={"STEAMID64"})
+
+
+def test_empty_text_yields_nothing():
+    assert not list(iter_encoded_sensitive(""))
+
+
+def test_output_is_deterministic():
+    encoded = _b64("player " + FAKE_STEAMID64 + " " + _kv("AccountName", FAKE_ACCOUNT))
+    assert list(iter_encoded_sensitive(encoded)) == list(iter_encoded_sensitive(encoded))
+
+
+def test_assert_clean_deliberately_does_not_decode():
+    # Recorded so nobody assumes coverage that is not there. redact() cannot
+    # rewrite bytes inside a blob without corrupting it, so if assert_clean
+    # decoded, it would raise on text redact() has no way to fix - a wedge with
+    # no remedy. The gate for encoded content is the repository scan in
+    # tests/test_no_pii.py, which runs over every published file. The rule for
+    # callers is simply: redact BEFORE encoding, never after.
+    encoded = _b64("player " + FAKE_STEAMID64 + " connected")
+    assert_clean(encoded)
+    assert "STEAMID64" in _labels(encoded)
