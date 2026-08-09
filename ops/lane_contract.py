@@ -87,12 +87,13 @@ def _workspace_block(lane: lanes.Lane) -> str:
     if lane.read_only:
         return (
             "You are given **no worktree**. Read the primary checkout at "
-            f"`{lanes.REPO_ROOT}` and write nothing anywhere."
+            f"`{lanes.primary_checkout()}` and write nothing anywhere."
         )
     return (
         f"Your working directory is **`{lane.worktree_path()}`** on branch\n"
         f"**`{lane.branch_name()}`**.\n\n"
-        f"You may **never** write into `{lanes.REPO_ROOT}`. A live session may\n"
+        f"You may **never** write into `{lanes.primary_checkout()}`. A live\n"
+        "session may\n"
         "own it, and two writers in one working directory corrupt the git index\n"
         "- which is not recoverable by retrying. Create your worktree and assert\n"
         "you are in it before writing anything:\n\n"
