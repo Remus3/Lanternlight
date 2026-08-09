@@ -48,6 +48,17 @@ operator plays between sessions. Assume the world moved.
 
 ### Start here
 
+**Item 2 is REOPENED and its evidence is perishable.** A seventh save,
+`StandaloneSlot_<roleId>.sav`, appeared at 15:39 - 46 KB and growing while
+written, twenty times any other save, very likely the real character and
+progression store. It uses `StructProperty<F_PlayzoneSaveData>`, which the
+reader has never measured, so it **raises** rather than guessing. **It was
+deleted 13 minutes later.** It exists only while a standalone level is active,
+so capturing it means having a watcher running before the operator enters that
+mode. There is a crude snapshotter at
+`<scratchpad>/snapshot_saves.py` from the last session; a real one belongs in
+the ingest lane.
+
 1. **ROADMAP item 1b, the lane build-out**, is the biggest ready piece. The
    roster, launcher and generated contracts all landed and a lane has been run
    end to end. What is missing: **per-lane on-disk state** (agent context does
@@ -108,6 +119,15 @@ a drift test fails otherwise. Lanes commit to `lane/<id>` and never merge to
 - Raw UTF-16 in a file still defeats the PII guard; UTF-16 inside base64 does not.
 
 ### Operator context worth having
+
+Level 2, **first talent point spent on Measured Pace** (Battle Hardened). Holds
+Steel Arrow and Concussive Arrow; the whole Hunter's Arrow row is locked. The
+talent tree, all 36 nodes, is in `docs/OBSERVED_IDS.md`.
+
+**Concussive Arrow at full draw knocks back** - the game's own hint says to use
+it against fast-approaching enemies, which is the class's measured weakness.
+
+
 
 Plays Blackarrow (classId 12), has a second character at classId 13
 (Shadowstrix). Deluxe edition, three Twitch drops claimed, Discord linked - no
