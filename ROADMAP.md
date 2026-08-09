@@ -91,25 +91,40 @@ contracts **from the roster**, so ownership cannot drift out of sync with the
 prose describing it, and the drift guard is proven non-vacuous. The contracts
 live in `.claude/commands/`, so each lane is also a slash command.
 
-**Not built yet, and this is the whole remaining item:**
+**Both remaining pieces landed 2026-08-09.** Ledger `LL-0018`.
 
-1. **Per-lane on-disk state.** Agent context does not survive a session, so
-   "persistent specialist" has to mean a charter plus a work log plus open items
-   on disk, or every lane silently resets to zero each time it starts. This is
-   the piece that makes the lanes actually persistent rather than merely
-   well-described.
-2. **A commit-serialisation answer.** Eight lanes and one `docs/LEDGER.md` will
-   race. `ops/loop/ledger.py` is atomic per write, which prevents a torn read
-   but does nothing about two lanes appending in separate worktrees and
-   conflicting at merge. Options worth weighing: a per-lane ledger fragment
-   merged on integration, or a lock modelled on `ops/loop/guard.py`.
-3. **Nobody has actually run a lane yet.** Everything above is tested, and
-   none of it has been exercised by a real slice of work.
+1. **Per-lane on-disk state - DONE.** `ops/lane_state.py` gives every writing
+   lane `lanes/<lane_id>.STATE.json`, holding a session counter, a one-line
+   resume note and its open items. Each file has exactly one owner, so it
+   cannot race. All seven writing lanes are seeded from this roadmap, so a lane
+   starting cold reads its own queue instead of the whole document. `verify` is
+   read-only and is refused a state file rather than given one it must remember
+   not to use.
+2. **Commit serialisation - DONE, and the lock option is refuted.** A lock does
+   **not** fix this, and that is worth keeping so nobody re-proposes it: a lock
+   serialises writes *in time*, but the lanes are on different branches and git
+   merges *content*. Two lanes can append perfectly serialised, an hour apart,
+   and still conflict, because both inserted text below the same anchor of the
+   same file. So the shared mutable file is removed instead - each lane appends
+   only to `lanes/<lane_id>.LEDGER.md`, and `docs/LEDGER.md` keeps exactly one
+   writer forever: the integrator on `main`, calling `lane_state.integrate`,
+   which is idempotent.
+3. **Nobody has actually run a lane yet - THIS WAS ALREADY STALE when written.**
+   Two lanes had run end to end before this line was committed: `ingest` built
+   the GVAS reader and `safety` closed the base64 hole, both in their own
+   worktrees on their own branches, both merged (`Merge branch 'lane/ingest'`,
+   `Merge branch 'lane/safety'`). Running them is what found the
+   `primary_checkout()` bug that reading the code never would.
 
-**Acceptance:** a lane launched into its own worktree, doing a slice of real
-work, passing its own merge gate, committing to its branch and pushing, with the
-primary checkout untouched throughout - demonstrated end to end for one lane,
-not described.
+**Acceptance - MET.** A lane launched into its own worktree, doing real work,
+committing to its branch, primary checkout untouched: demonstrated by the two
+lanes above, and again this session by `lane/ingest`.
+
+The differential that justifies the fragment design is measured rather than
+argued: `tests/test_lane_state.py` runs **real git merges** and asserts that two
+branches appending to one shared ledger **conflict**, and that two branches
+appending to their own fragments **do not**. Proving only the second would have
+shown the change happened without showing it mattered.
 
 ## 2. GVAS `.sav` reader - REOPENED, a new property type appeared
 
@@ -126,10 +141,27 @@ appeared at 15:39 and does not parse: it uses
 rather than guessing, which is the correct behaviour and is why this is an open
 item rather than a silent partial parse.
 
-It is 46 KB and growing while written - twenty times any other save - so it is
-very likely the real character and progression store, and therefore the most
-valuable save surface for Emberforge. Its filename also embeds the operator's
-roleId, so any fixture must be renamed, not just redacted.
+It is the real character and progression store's best candidate, and therefore
+the most valuable save surface for Emberforge. Its filename also embeds the
+operator's roleId, so any fixture must be renamed, not just redacted.
+
+**Captured 2026-08-09, and three filed claims about it are now corrected.** A
+snapshotter armed at 17:27 local took 170 generations of it. Measured:
+
+- **It is not 46 KB.** It appeared at 2,190 bytes and reached **126,078** bytes
+  in twelve minutes - about 44 times the next largest save, not twenty. The
+  earlier "46 KB" was a reading of a file mid-write, not its size.
+- **It is not append-only.** At 17:40:02 it measured 125,765 bytes, *smaller*
+  than the 126,078-byte peak twelve minutes in. It is rewritten in place with a
+  varying size, so a reader must not assume a prefix stays put between polls.
+- **The "deletes itself after about 13 minutes" timer did not fire.** It was
+  still present 13 minutes after appearing. Whatever removes it is not a simple
+  elapsed-time rule from creation; the previous session's disappearance is more
+  likely tied to leaving the mode. This is a correction to a claim carried in
+  the session hand-off, and it is why the item stayed open.
+
+None of that was reachable by re-reading a document. It came from arming a
+watcher before the file existed, which is the whole lesson of this item.
 
 **Acceptance:** `StructProperty` decoded far enough to parse this save with
 `undecoded_trailing == 0`, a sanitised fixture pinning it, and every newly

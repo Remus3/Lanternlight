@@ -37,12 +37,15 @@ Touch these paths and nothing else. Every other path in the repository belongs t
 - `lanternlight/paths.py`
 - `lanternlight/gvas.py`
 - `lanternlight/tail.py`
+- `lanternlight/savewatch.py`
 - `tests/test_logparse.py`
 - `tests/test_avgprice.py`
 - `tests/test_paths*.py`
 - `tests/test_gvas*.py`
 - `tests/test_tail*.py`
+- `tests/test_savewatch*.py`
 - `tests/fixtures/**`
+- `lanes/ingest.*`
 
 
 ## Session shape - the default, not an escalation

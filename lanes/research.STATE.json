@@ -1,0 +1,33 @@
+{
+  "lane_id": "research",
+  "open_items": [
+    {
+      "blocked_on": "the client running, operator at level 2 has both so the capture cannot separate them",
+      "item_id": "RES-1",
+      "opened": "2026-08-09",
+      "text": "ROADMAP 4b - whether 'at least 2 Archer's Arrows' counts equipped TYPES or CHARGES"
+    },
+    {
+      "blocked_on": "the client running",
+      "item_id": "RES-2",
+      "opened": "2026-08-09",
+      "text": "ROADMAP 4b - how arrows are acquired at all: loot, craft or vendor"
+    },
+    {
+      "blocked_on": "the client running",
+      "item_id": "RES-3",
+      "opened": "2026-08-09",
+      "text": "ROADMAP 4b - how roll differs from dodge; the class effective range is counted in dodge-lengths"
+    },
+    {
+      "blocked_on": "a Sorcerer creation re-walk",
+      "item_id": "RES-4",
+      "opened": "2026-08-09",
+      "text": "ROADMAP 5 - Sorcerer surfaced one weapon config id and has no published explanation, unlike Blackarrow; until settled nothing may call Blackarrow the only single-weapon class"
+    }
+  ],
+  "resume_note": "no lane session yet - docs/CLASSES.md and OBSERVED_IDS.md are current to 2026-08-09",
+  "schema": 1,
+  "sessions": 0,
+  "updated": "2026-08-09T22:47:43+00:00"
+}

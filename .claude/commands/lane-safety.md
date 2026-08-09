@@ -42,6 +42,7 @@ Touch these paths and nothing else. Every other path in the repository belongs t
 - `tools/precommit_gate.py`
 - `.githooks/**`
 - `scripts/install_hooks.py`
+- `lanes/safety.*`
 
 **This lane holds a veto.** If it reports red, no other lane may commit anything derived from a game log. That is a block, not an opinion, and no lane may talk its way past it.
 

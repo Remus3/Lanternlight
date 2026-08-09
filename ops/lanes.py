@@ -228,6 +228,7 @@ LANES: tuple[Lane, ...] = (
             "tools/precommit_gate.py",
             ".githooks/**",
             "scripts/install_hooks.py",
+            "lanes/safety.*",
         ),
         veto=True,
         forbidden_note="May not edit application logic to make a guard pass.",
@@ -259,12 +260,15 @@ LANES: tuple[Lane, ...] = (
             "lanternlight/paths.py",
             "lanternlight/gvas.py",
             "lanternlight/tail.py",
+            "lanternlight/savewatch.py",
             "tests/test_logparse.py",
             "tests/test_avgprice.py",
             "tests/test_paths*.py",
             "tests/test_gvas*.py",
             "tests/test_tail*.py",
+            "tests/test_savewatch*.py",
             "tests/fixtures/**",
+            "lanes/ingest.*",
         ),
     ),
     Lane(
@@ -291,6 +295,7 @@ LANES: tuple[Lane, ...] = (
             "docs/ARCHITECTURE.md",
             "tests/test_lane_*.py",
             "scripts/write_lane_contracts.py",
+            "lanes/ops.*",
         ),
     ),
     Lane(
@@ -308,6 +313,7 @@ LANES: tuple[Lane, ...] = (
             "docs/CLASS_RESEARCH.md",
             "docs/ECOSYSTEM.md",
             "docs/adr/**",
+            "lanes/research.*",
         ),
         forbidden_note="Writes no code. Findings only.",
     ),
@@ -319,7 +325,7 @@ LANES: tuple[Lane, ...] = (
             "measured source - omit the field instead, and keep unmeasured "
             "distinguishable from measured zero."
         ),
-        owns=("emberforge/**", "tests/test_emberforge*.py"),
+        owns=("emberforge/**", "tests/test_emberforge*.py", "lanes/emberforge.*"),
     ),
     Lane(
         lane_id="surface",
@@ -334,6 +340,7 @@ LANES: tuple[Lane, ...] = (
             "tests/test_overlay_*.py",
             "dashboard/**",
             "docs/OVERLAY.md",
+            "lanes/surface.*",
         ),
     ),
     Lane(
@@ -350,6 +357,7 @@ LANES: tuple[Lane, ...] = (
             "lanternlight/vision*.py",
             "tests/test_vision*.py",
             "tests/test_capture*.py",
+            "lanes/capture.*",
         ),
     ),
 )

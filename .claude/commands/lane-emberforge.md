@@ -34,6 +34,7 @@ Touch these paths and nothing else. Every other path in the repository belongs t
 
 - `emberforge/**`
 - `tests/test_emberforge*.py`
+- `lanes/emberforge.*`
 
 
 ## Session shape - the default, not an escalation

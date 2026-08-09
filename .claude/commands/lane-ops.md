@@ -47,6 +47,7 @@ Touch these paths and nothing else. Every other path in the repository belongs t
 - `docs/ARCHITECTURE.md`
 - `tests/test_lane_*.py`
 - `scripts/write_lane_contracts.py`
+- `lanes/ops.*`
 
 
 ## Session shape - the default, not an escalation

@@ -38,6 +38,7 @@ Touch these paths and nothing else. Every other path in the repository belongs t
 - `docs/CLASS_RESEARCH.md`
 - `docs/ECOSYSTEM.md`
 - `docs/adr/**`
+- `lanes/research.*`
 
 **Additional prohibition.** Writes no code. Findings only.
 
