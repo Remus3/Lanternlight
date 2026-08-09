@@ -5,6 +5,125 @@ fidelity and archive older ones rather than deleting them.
 
 ---
 
+# Session 2026-08-09c - the lane machinery finished, and a save caught mid-flight
+
+Orchestrated and multi-agent throughout. Branch
+`session/2026-08-09c-lane-state-and-capture`, **not merged to `main`**. Ledger
+`LL-0018` through `LL-0020`. 685 tests at the start, **801** at the end, all
+green from purged caches, ruff clean.
+
+## The thing that mattered most, and it was luck plus ten minutes
+
+The hand-off said `StandaloneSlot_<roleId>.sav` was PERISHABLE and that the
+previous session had lost it. Ten minutes into this session, before touching
+the roadmap, a crude poller was armed against the save directory. **Seventeen
+seconds later the file appeared.**
+
+It was caught whole: **263 generations, 105 distinct sizes, 2,190 bytes at
+17:27:17 to 177,878 at 17:46:54**, and then it deleted itself. Every one of
+those 263 generations now parses with zero undecoded bytes.
+
+Three filed claims about that file were wrong, and only capturing it showed
+that:
+
+- **not 46 KB** - it ends near 178 KB, about 62x the next largest save. The old
+  figure was a file read mid-write and mistaken for its size.
+- **not append-only** - it measured *smaller* fifty seconds after a peak. It is
+  rewritten in place, so one snapshot can be a torn read.
+- **not a 13-minute life** - it was still being written 19m37s in.
+
+The lesson is not about this file. It is that arming a watcher **before** the
+event costs ten minutes and re-reading a document costs the whole observation.
+
+## ROADMAP 1b is closed - and a lock was the wrong answer
+
+Per-lane state is `lanes/<lane_id>.STATE.json`; the ledger race is solved by
+`lanes/<lane_id>.LEDGER.md` fragments that only the integrator folds into
+`docs/LEDGER.md`.
+
+**The roadmap offered a lock as one of two options. A lock does not work**, and
+that is now written down so nobody re-proposes it: a lock serialises writes in
+*time*, but lanes are on different *branches*, and git merges *content*. Two
+perfectly serialised appends still conflict. `tests/test_lane_state.py` proves
+the point with real git merges - the shared-file shape is asserted to CONFLICT
+and the fragment shape to merge clean. Proving only the second would have shown
+the change happened without showing it mattered.
+
+## The layout is flat because two safety guards said so
+
+The first cut used `lanes/<id>/STATE.json`. `lanes/capture/` was then rejected
+by **two independent PII guards** - `.gitignore`'s bare `capture/` rule and the
+pre-commit hook's `*/capture/*` rule - both behaving exactly as designed. The
+lane directory was a false positive against a correct rule.
+
+Weakening a veto-holding lane's guard for a naming convenience was the wrong
+trade. Flat files (`lanes/capture.STATE.json`) remove the whole collision class
+rather than one instance: `logs`, `frames`, `private` and `tmp` are blocked the
+same way, so a future lane named after any of them would have failed
+identically and nobody would have connected symptom to cause.
+
+## Three traps, all of them this repo's own documented anti-patterns
+
+Hit anyway, which is the point of writing them down again:
+
+1. **CRLF.** The first `.gitignore` carve-out looked applied and was not - the
+   negation lines were written with CRLF while the file was LF, so each pattern
+   carried a trailing CR and matched nothing. The file read back as correct.
+   Only the byte count showed it.
+2. **`git check-ignore` is the wrong probe.** It exits 0 when *any* pattern
+   matches, **including a negation**, so a correctly re-included file reports
+   exactly like an excluded one.
+3. **The orphan guard could not have caught the hole it exists to catch.** It
+   walks `git ls-files`, so a path git is *ignoring* is invisible to it. The
+   blind spot and the bug were the same shape.
+
+## Live operator attestation, and what the log said back
+
+Mid-session the operator reported: at level 3, **Marksman** was the **only**
+talent choice at that tier, and **Lightning Arrow** went into the **C** skill
+slot. The log was checked immediately and yielded a previously unrecorded
+shape:
+
+    [SkillSlotView::OnRequestEquipAmmo]  Equip ammo: ammoId: <id>, destSlot: <n>
+
+**Exactly two equip events exist in the entire log and both target
+`destSlot: 2`, at level 3** - which independently corroborates from the log
+what `LL-0016` read off the screen: the C arrow slot unlocks at Lv. 3 and is
+the first slot a player must fill. Four ammoIds appear overall - 120501,
+120502, 120508, 120510 - a 1205xx space distinct from item cfgIds.
+
+**Which id is Lightning Arrow is deliberately NOT recorded.** Two were equipped
+to that slot five seconds apart and the log names neither. That binding needs
+the operator or a frame, and inventing it would poison exactly the file whose
+value is that it does not invent things.
+
+**Measured negative, worth as much as a positive:** the equipped loadout is in
+**no local save**. All seven saves plus the largest capture were searched for
+those ids as ASCII, int32, int64 and float64 - zero hits. The log is the only
+local surface carrying a loadout, so Emberforge cannot read one from disk.
+
+## Two safety findings, routed to the lane holding the veto
+
+- **`SAF-3`** - inventory instance ids share a **12-digit prefix** with the
+  operator's roleId. Masking the roleId alone does not mask them, and each one
+  leaks that prefix.
+- **`SAF-4`** - some `TS.UI` lines carry **CJK text**, so a raw log excerpt is
+  neither ASCII nor single-byte.
+
+## Where to start next
+
+**Item 2b** - the sanitised fixture for the transient save. It is safety-lane
+work and it is specified. Read `lanes/safety.STATE.json` first; every lane now
+carries its own queue, so read the state file of the lane that owns the files
+rather than re-reading the whole roadmap.
+
+The capture bytes are at `C:\ll-captures\saves\`, **outside the repo, not
+committed**, and the filename embeds the operator's roleId.
+
+One caveat worth keeping: a lane that adds a **new** file cannot go green
+alone, because ownership is declared in `ops/lanes.py`, which the ops lane
+owns. Measured on `lane/ingest`. Open as `OPS-2`.
+
 # Session 2026-08-09b - recon, redaction P0, and the lane architecture
 
 The second session, and much longer than the first. It ran orchestrated and
