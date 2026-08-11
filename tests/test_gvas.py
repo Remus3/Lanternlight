@@ -113,6 +113,7 @@ the reader agreed on a fiction the fixtures would fail.
 """
 
 import base64
+import dataclasses
 import struct
 import subprocess
 import sys
@@ -125,6 +126,7 @@ if str(REPO_ROOT) not in sys.path:
 
 import pytest  # noqa: E402  (path bootstrap must run first)
 
+from lanternlight import paths  # noqa: E402
 from lanternlight.gvas import (  # noqa: E402
     EPILOGUE_SIZE,
     KNOWN_PROPERTY_TYPES,
@@ -134,13 +136,23 @@ from lanternlight.gvas import (  # noqa: E402
     MEASURED_NATIVE_STRUCTS,
     MEASURED_TEXT_HISTORIES,
     MEASURED_TRAILING_OBJECT_CLASS,
+    ArrayValue,
     GvasParseError,
     GvasSave,
+    GvasSerialiseError,
+    MapValue,
+    Property,
     SourceText,
+    StructValue,
+    TextValue,
+    TypeName,
     UndecodedStruct,
     UnknownPropertyTypeError,
     load,
     parse,
+    rebuild,
+    serialise,
+    transform,
 )
 from lanternlight.redact import ALL_LABELS, iter_sensitive  # noqa: E402
 
@@ -1744,3 +1756,761 @@ def test_base64_hides_a_leak_from_the_repo_wide_guard():
     blob = _save(_prop("Leak", "StrProperty", _fstring(leak)))
     encoded = base64.b64encode(blob).decode("ascii")
     assert not list(iter_sensitive(encoded, ALL_LABELS))
+
+
+# --------------------------------------------------------------------------
+# the serialiser: byte-for-byte round-trip identity
+#
+# The oracle is identity, not plausibility. ``serialise(parse(raw)) == raw`` is
+# the only check that catches a field the reader quietly dropped, because a
+# dropped field is invisible in every assertion about the decoded values and
+# shows up immediately as a short or shifted byte string. It found the FText
+# flags word, which nothing else here was looking at.
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("name", sorted(FIXTURES), ids=lambda n: n)
+def test_every_fixture_round_trips_byte_for_byte(name: str):
+    raw = _fixture_bytes(name)
+    assert serialise(parse(raw)) == raw
+
+
+def test_every_live_save_round_trips_byte_for_byte():
+    # The fixtures are authored, so they pin only the shapes this repository
+    # chose to keep. The live directory is the engine's own output and is the
+    # one place a shape nobody anticipated can turn up - which is how Deck.sav
+    # and Scav.sav were found. Enumerated, never listed.
+    #
+    # Skips rather than passes when the game is not installed, so the suite
+    # still runs on a machine without it, and the skip is narrow enough that
+    # the machine which HAS the game cannot be quietened by it.
+    directory = paths.save_games_dir()
+    if not directory.is_dir():
+        pytest.skip(f"no save directory at {directory}; nothing to round-trip")
+    files = [p for p in sorted(directory.iterdir()) if p.is_file()]
+    if not files:
+        pytest.skip(f"{directory} holds no save files; nothing to round-trip")
+
+    # Only the file NAME is ever reported, and only for one that failed. A live
+    # save's bytes carry the operator's SteamID64 and role ids, so a pasted
+    # assertion diff would publish them.
+    mismatched = []
+    for path in files:
+        raw = path.read_bytes()
+        if serialise(parse(raw)) != raw:
+            mismatched.append(path.name)
+    assert not mismatched, (
+        "these live saves did not round-trip byte for byte: " + ", ".join(mismatched)
+    )
+
+
+def test_the_round_trip_oracle_actually_discriminates():
+    # An equality oracle is worthless if the two sides are the same object by
+    # construction. One byte changed in the source and the comparison has to
+    # fail, or every round-trip assertion above is decoration.
+    raw = _fixture_bytes("notice.gvas.b64")
+    assert serialise(parse(raw)) == raw
+    mutated = bytearray(raw)
+    mutated[-1] ^= 0xFF
+    assert serialise(parse(raw)) != bytes(mutated)
+
+
+def test_serialise_does_not_copy_the_trailing_bytes_it_was_handed():
+    # The cheap way to pass every round-trip test is to emit GvasSave.trailing
+    # verbatim, which would look perfect here and make an edited key profile
+    # silently unwritable. Corrupt that field and the output must not move: the
+    # object section is rebuilt from the decoded objects, not copied.
+    raw = _fixture_bytes("enhanced_input_user_settings.gvas.b64")
+    save = parse(raw)
+    assert len(save.trailing) == 627, "this is the fixture with an object section"
+    poisoned = dataclasses.replace(save, trailing=b"\xff" * len(save.trailing))
+    assert serialise(poisoned) == raw
+
+
+def test_an_edited_key_profile_changes_the_bytes():
+    # The other half of the same proof. If the object section were copied from
+    # trailing, editing a decoded mapping would be ignored without a word.
+    raw = _fixture_bytes("enhanced_input_user_settings.gvas.b64")
+    save = parse(raw)
+    profile = save.key_profiles[0]
+    renamed = dataclasses.replace(
+        profile,
+        mappings=(
+            dataclasses.replace(profile.mappings[0], name="KB_Renamed"),
+            *profile.mappings[1:],
+        ),
+    )
+    edited = serialise(dataclasses.replace(save, key_profiles=(renamed,)))
+    assert edited != raw
+    reparsed = parse(edited)
+    assert reparsed.key_profiles[0].mappings[0].name == "KB_Renamed"
+    assert reparsed.undecoded_trailing == b""
+
+
+# --------------------------------------------------------------------------
+# what the tag now carries, because a writer needs what a reader did not
+# --------------------------------------------------------------------------
+
+
+def test_the_property_list_and_the_plain_view_describe_the_same_properties():
+    save = _fixture("login_options.gvas.b64")
+    assert [p.name for p in save.property_list] == list(save.properties)
+    assert [p.type_name.render() for p in save.property_list] == list(
+        save.property_types.values()
+    )
+
+
+def test_a_type_name_keeps_its_structure_not_only_its_rendering():
+    # render() is one-way. A map's key and value types are separate FStrings
+    # with their own parameter counts, and nothing can split them back out of
+    # "MapProperty<IntProperty, IntProperty>" without guessing at how a name
+    # containing a comma would have been spelled.
+    save = _fixture("camp_data.gvas.b64")
+    (prop,) = save.property_list
+    assert prop.type_name.name == "MapProperty"
+    assert [p.name for p in prop.type_name.params] == ["IntProperty", "IntProperty"]
+    assert prop.type_name.render() == "MapProperty<IntProperty, IntProperty>"
+
+
+def test_a_text_property_keeps_the_ftext_flags_word_the_plain_view_drops():
+    # Measured 2 in every FText across all 276 files, and retained rather than
+    # pinned because nothing observed says it is a constant. The plain view is
+    # the string alone, so this is a field only the node can carry.
+    save = _fixture("login_options.gvas.b64")
+    (text,) = [p for p in save.property_list if p.name == "SelectedServer"]
+    assert text.type_name.name == "TextProperty"
+    assert isinstance(text.value, TextValue)
+    assert text.value.flags == 2
+    assert text.value.history == 0xFF
+    assert text.value.text == "official_NA"
+    assert save.properties["SelectedServer"] == "official_NA"
+
+
+def test_the_ftext_flags_word_is_written_back_rather_than_assumed():
+    # Non-vacuity for the field above. Change it and the bytes have to move; a
+    # writer that pinned a constant here would still equal the original.
+    raw = _fixture_bytes("login_options.gvas.b64")
+    edited = transform(
+        parse(raw),
+        lambda path, prop: (
+            dataclasses.replace(prop, value=dataclasses.replace(prop.value, flags=7))
+            if isinstance(prop.value, TextValue)
+            else prop
+        ),
+    )
+    written = serialise(edited)
+    assert written != raw
+    (text,) = [p for p in parse(written).property_list if p.name == "SelectedServer"]
+    assert text.value.flags == 7
+
+
+def test_no_committed_fixture_carries_an_array_index_or_a_property_guid():
+    # Written down as the measurement it is: no property in any fixture sets
+    # tag flag 0x01 or 0x02, and nor does any live save or any of the 263
+    # captured generations. The fields exist on Property anyway, and the two
+    # tests below are why that is not decoration.
+    for name in FIXTURES:
+        for prop in parse(_fixture_bytes(name)).property_list:
+            assert prop.array_index is None, f"{name}:{prop.name}"
+            assert prop.property_guid is None, f"{name}:{prop.name}"
+
+
+def test_an_array_index_survives_a_round_trip():
+    raw = _save(
+        _fstring("Indexed")
+        + _type("IntProperty")
+        + struct.pack("<i", 4)
+        + bytes([0x01])
+        + struct.pack("<i", 7)
+        + struct.pack("<i", 99)
+    )
+    save = parse(raw)
+    (prop,) = save.property_list
+    assert prop.array_index == 7
+    assert save.properties == {"Indexed": 99}
+    assert serialise(save) == raw
+
+
+def test_a_property_guid_survives_a_round_trip():
+    guid = bytes(range(16))
+    raw = _save(
+        _fstring("Identified")
+        + _type("IntProperty")
+        + struct.pack("<i", 4)
+        + bytes([0x02])
+        + guid
+        + struct.pack("<i", 5)
+    )
+    save = parse(raw)
+    (prop,) = save.property_list
+    assert prop.property_guid == guid
+    assert serialise(save) == raw
+
+
+def test_the_flags_byte_is_derived_from_the_value_not_stored_beside_it():
+    # A stored flags byte plus a stored bool is two copies of one fact, and an
+    # edit that changed one and not the other would write a file saying the
+    # opposite of what the object says. Property keeps no flags byte at all.
+    assert not hasattr(Property("x", TypeName("IntProperty"), 1), "flags")
+    raw = _save(_bool_prop("On", True))
+    flipped = transform(
+        parse(raw), lambda path, prop: dataclasses.replace(prop, value=False)
+    )
+    assert flipped.properties == {"On": False}
+    assert serialise(flipped) != raw
+    assert parse(serialise(flipped)).properties == {"On": False}
+
+
+# --------------------------------------------------------------------------
+# editing: the reason the writer exists
+#
+# ROADMAP 2b needs a sanitised StandaloneSlot fixture, and sanitising it means
+# SHORTENING identifier strings - a same-length substitution does not help,
+# because the LONG_ID detector fires on any run of 15 or more digits - and
+# DROPPING map entries to cut the size. Both move byte lengths, so every
+# enclosing Size and every container count has to move with them. These are
+# the proof that happens by construction rather than by hand.
+# --------------------------------------------------------------------------
+
+
+def _nested_save() -> bytes:
+    """A save shaped like the parts of StandaloneSlot that have to be edited.
+
+    A long identifier inside a struct inside a struct, so shortening it moves
+    the Size of every enclosing property; and a four-pair map of structs, so
+    dropping entries moves a count as well.
+    """
+    inner = _struct_prop(
+        "Inner",
+        _prop("ownerRoleId", "StrProperty", _fstring("3" * 19)),
+        _int_prop("Level", 4),
+    )
+    pairs = b"".join(
+        _fstring(f"slot{index}") + _struct_body(_int_prop("Count", index))
+        for index in range(4)
+    )
+    return _save(
+        _struct_prop(
+            "Outer",
+            inner,
+            _map_prop(
+                "ItemCells",
+                _type("StrProperty"),
+                _struct_type(),
+                _map_body(pairs, count=4),
+            ),
+        ),
+        _prop("BattleId", "StrProperty", _fstring("7" * 19)),
+    )
+
+
+def _shorten_ids(path, prop):
+    """Replace every all-digit StrProperty value with a shorter placeholder."""
+    if prop.type_name.name == "StrProperty" and prop.value.isdigit():
+        return dataclasses.replace(prop, value="<LONG_ID>")
+    return prop
+
+
+def _skip_type_name(blob: bytes, offset: int) -> int:
+    """Step over a serialised recursive type name and return the next offset."""
+    length = struct.unpack("<i", blob[offset : offset + 4])[0]
+    offset += 4 + length
+    count = struct.unpack("<i", blob[offset : offset + 4])[0]
+    offset += 4
+    for _ in range(count):
+        offset = _skip_type_name(blob, offset)
+    return offset
+
+
+def _tag_size(blob: bytes, name: str) -> int:
+    """Read the Size field out of the tag of the property called ``name``.
+
+    Located by walking the bytes rather than by a hard-coded offset, so it
+    cannot go stale when the blob it is pointed at changes shape.
+    """
+    marker = _fstring(name)
+    assert blob.count(marker) == 1, f"{name!r} is not a unique anchor in this blob"
+    offset = _skip_type_name(blob, blob.index(marker) + len(marker))
+    return struct.unpack("<i", blob[offset : offset + 4])[0]
+
+
+def test_the_nested_save_this_section_edits_is_what_it_claims_to_be():
+    # Everything below asserts on an edit to this blob, so if the blob were not
+    # the shape described, the whole section would be testing nothing.
+    save = parse(_nested_save())
+    assert save.properties["Outer"]["Inner"]["ownerRoleId"] == "3" * 19
+    assert save.properties["Outer"]["Inner"]["Level"] == 4
+    assert len(save.properties["Outer"]["ItemCells"]) == 4
+    assert save.properties["BattleId"] == "7" * 19
+    assert serialise(save) == _nested_save()
+
+
+def test_shortening_a_string_inside_a_nested_struct_re_parses_whole():
+    raw = _nested_save()
+    edited = serialise(transform(parse(raw), _shorten_ids))
+    assert len(edited) < len(raw), "a shorter identifier has to make a shorter file"
+
+    reparsed = parse(edited)
+    assert reparsed.undecoded_trailing == b""
+    assert reparsed.is_complete
+    assert reparsed.unknown_properties == ()
+    assert reparsed.properties["Outer"]["Inner"]["ownerRoleId"] == "<LONG_ID>"
+    assert reparsed.properties["BattleId"] == "<LONG_ID>"
+    # Untouched neighbours stay untouched. A Size patched wrong would have
+    # shifted these rather than raising, which is the failure this exists for.
+    assert reparsed.properties["Outer"]["Inner"]["Level"] == 4
+    assert len(reparsed.properties["Outer"]["ItemCells"]) == 4
+    assert reparsed.properties["Outer"]["ItemCells"]["slot3"] == {"Count": 3}
+
+
+def test_the_edited_structure_itself_round_trips():
+    # The acceptance criterion applied to the EDITED save rather than only to a
+    # captured one: whatever serialise wrote, parse reads back to bytes that
+    # serialise writes identically.
+    edited = serialise(transform(parse(_nested_save()), _shorten_ids))
+    assert serialise(parse(edited)) == edited
+
+
+def test_every_enclosing_size_moved_with_the_shortened_string():
+    # The specific failure this module exists to prevent. "Outer" is two levels
+    # above the edited string and "Inner" one, so both tags' Size fields have to
+    # shrink by exactly what the string lost, with nobody computing that by hand.
+    raw = _nested_save()
+    edited = serialise(transform(parse(raw), _shorten_ids))
+    lost = len("3" * 19) - len("<LONG_ID>")
+    assert lost == 10
+    assert _tag_size(edited, "Outer") == _tag_size(raw, "Outer") - lost
+    assert _tag_size(edited, "Inner") == _tag_size(raw, "Inner") - lost
+
+
+def test_dropping_map_entries_re_parses_whole():
+    def drop_all_but_two(path, prop):
+        if isinstance(prop.value, MapValue):
+            return dataclasses.replace(prop, value=MapValue(prop.value.pairs[:2]))
+        return prop
+
+    raw = _nested_save()
+    edited = serialise(transform(parse(raw), drop_all_but_two))
+    assert len(edited) < len(raw)
+
+    reparsed = parse(edited)
+    assert reparsed.undecoded_trailing == b""
+    assert reparsed.is_complete
+    assert reparsed.unknown_properties == ()
+    assert list(reparsed.properties["Outer"]["ItemCells"]) == ["slot0", "slot1"]
+    assert reparsed.properties["Outer"]["ItemCells"]["slot1"] == {"Count": 1}
+    assert serialise(reparsed) == edited
+
+
+def test_dropping_map_entries_from_a_real_fixture_re_parses_whole():
+    # The synthetic blob above could share a mistake with the writer. deck's
+    # DeckDefaultOpenPage is the engine's own two-pair map, so it cannot.
+    raw = _fixture_bytes("deck.gvas.b64")
+    assert parse(raw).properties["DeckDefaultOpenPage"] == {2: 3, 4: 0}
+    edited = serialise(
+        transform(
+            parse(raw),
+            lambda path, prop: dataclasses.replace(
+                prop, value=MapValue(prop.value.pairs[:1])
+            ),
+        )
+    )
+    reparsed = parse(edited)
+    assert reparsed.properties == {"DeckDefaultOpenPage": {2: 3}}
+    assert reparsed.undecoded_trailing == b""
+    assert reparsed.is_complete
+    assert len(edited) == len(raw) - 8, "one int-to-int pair is eight bytes"
+    assert serialise(reparsed) == edited
+
+
+def test_transform_can_drop_a_whole_property():
+    save = parse(_save(_int_prop("Keep", 1), _int_prop("Drop", 2)))
+    edited = transform(save, lambda path, prop: None if prop.name == "Drop" else prop)
+    assert edited.properties == {"Keep": 1}
+    assert edited.property_types == {"Keep": "IntProperty"}
+    assert parse(serialise(edited)).properties == {"Keep": 1}
+
+
+def test_transform_visits_every_depth_and_names_the_path():
+    seen = []
+
+    def record(path, prop):
+        seen.append(path)
+        return prop
+
+    transform(parse(_nested_save()), record)
+    assert ("Outer",) in seen
+    assert ("Outer", "Inner") in seen
+    assert ("Outer", "Inner", "ownerRoleId") in seen
+    assert ("Outer", "ItemCells", "[2].value", "Count") in seen
+    assert ("BattleId",) in seen
+
+
+def test_transform_recurses_into_what_it_returns_not_into_what_it_was_given():
+    # Otherwise a wholesale subtree swap would leave the new subtree unvisited,
+    # and a rule that fires on a parent and on its children would half-apply.
+    def swap_then_shorten(path, prop):
+        if prop.name == "Outer":
+            return dataclasses.replace(
+                prop,
+                value=StructValue(
+                    (Property("Injected", TypeName("StrProperty"), "9" * 19),)
+                ),
+            )
+        return _shorten_ids(path, prop)
+
+    edited = transform(parse(_nested_save()), swap_then_shorten)
+    assert edited.properties["Outer"] == {"Injected": "<LONG_ID>"}
+    assert parse(serialise(edited)).properties["Outer"] == {"Injected": "<LONG_ID>"}
+
+
+def test_rebuild_recomputes_the_plain_view_so_it_cannot_go_stale():
+    # dataclasses.replace on property_list alone would leave properties and
+    # property_types describing a save that no longer exists, and every caller
+    # in this repository reads those rather than the node tree.
+    save = parse(_save(_int_prop("Count", 1)))
+    edited = rebuild(
+        save, property_list=(Property("Count", TypeName("StrProperty"), "one"),)
+    )
+    assert edited.properties == {"Count": "one"}
+    assert edited.property_types == {"Count": "StrProperty"}
+    assert parse(serialise(edited)).properties == {"Count": "one"}
+
+
+def test_rebuild_recomputes_the_trailing_bytes_too():
+    raw = _fixture_bytes("enhanced_input_user_settings.gvas.b64")
+    save = parse(raw)
+    profile = save.key_profiles[0]
+    edited = rebuild(
+        save,
+        key_profiles=(dataclasses.replace(profile, object_name="Profile_Renamed"),),
+    )
+    assert edited.trailing != save.trailing
+    assert serialise(edited).endswith(edited.trailing)
+
+
+def test_a_transformed_key_profile_keeps_its_two_views_agreeing():
+    raw = _fixture_bytes("enhanced_input_user_settings.gvas.b64")
+    edited = transform(
+        parse(raw),
+        lambda path, prop: (
+            dataclasses.replace(prop, value="Shorter")
+            if prop.name == "ProfileIdentifierString"
+            else prop
+        ),
+    )
+    profile = edited.key_profiles[0]
+    assert profile.properties["ProfileIdentifierString"] == "Shorter"
+    assert profile.property_types["ProfileIdentifierString"] == "StrProperty"
+    written = serialise(edited)
+    assert len(written) < len(raw)
+    reparsed = parse(written)
+    assert reparsed.undecoded_trailing == b""
+    assert reparsed.key_profiles[0].properties == profile.properties
+    assert reparsed.key_profiles[0].is_complete
+
+
+# --------------------------------------------------------------------------
+# the writer raises rather than emitting a near-miss
+#
+# Every one of these is a byte the writer cannot account for. A file that
+# parses but is subtly wrong is worse than no file, because it looks like
+# evidence.
+# --------------------------------------------------------------------------
+
+
+def test_a_save_holding_a_refused_property_cannot_be_written():
+    # A non-strict parse omits the property and does NOT keep its bytes, so a
+    # file written from that object would be missing it and still look whole.
+    blob = _save(_int_prop("Before", 7), _prop("Mystery", "FloatProperty", b"\0" * 4))
+    save = parse(blob, strict=False)
+    assert save.unknown_properties
+    with pytest.raises(GvasSerialiseError, match="nothing to write back"):
+        serialise(save)
+
+
+def test_a_key_profile_holding_a_refused_property_cannot_be_written():
+    blob = _save(
+        trailing=_trailing(_profile(_prop("Mystery", "FloatProperty", b"\0" * 4)))
+    )
+    save = parse(blob, strict=False)
+    assert save.key_profiles[0].unknown_properties
+    with pytest.raises(GvasSerialiseError, match="nothing to write back"):
+        serialise(save)
+
+
+def test_a_non_ascii_string_raises_rather_than_inventing_utf16():
+    # The engine's negative-length UTF-16 branch is real and published, and not
+    # one of the 671318 non-empty FStrings measured across all 276 files takes
+    # it. Writing one would be this module inventing an encoding. The literal
+    # is escaped so this file stays 7-bit ASCII.
+    save = rebuild(
+        parse(_save(_prop("Name", "StrProperty", _fstring("plain")))),
+        property_list=(Property("Name", TypeName("StrProperty"), "caf\u00e9"),),
+    )
+    with pytest.raises(GvasSerialiseError, match="not ASCII"):
+        serialise(save)
+
+
+def test_a_property_named_none_raises():
+    # It would serialise fine and read back as the terminator, so the file
+    # would parse, be short, and say nothing about what it lost.
+    save = rebuild(
+        parse(_save(_int_prop("Count", 1))),
+        property_list=(Property("None", TypeName("IntProperty"), 1),),
+    )
+    with pytest.raises(GvasSerialiseError, match="read back as the list terminator"):
+        serialise(save)
+
+
+def test_a_repeated_property_name_raises_on_the_way_out_too():
+    save = parse(_save(_int_prop("Count", 1)))
+    doubled = dataclasses.replace(
+        save, property_list=(save.property_list[0], save.property_list[0])
+    )
+    with pytest.raises(GvasSerialiseError, match="appears twice"):
+        serialise(doubled)
+
+
+def test_a_value_that_does_not_match_its_type_name_raises():
+    save = rebuild(
+        parse(_save(_int_prop("Count", 1))),
+        property_list=(Property("Count", TypeName("IntProperty"), "not an int"),),
+    )
+    with pytest.raises(GvasSerialiseError, match="needs an int"):
+        serialise(save)
+
+
+def test_a_text_property_given_a_bare_string_raises():
+    # The plain view is the string alone and cannot say which history wrote it,
+    # so writing one would mean picking a history at random.
+    save = parse(_fixture_bytes("login_options.gvas.b64"))
+    broken = dataclasses.replace(
+        save,
+        property_list=tuple(
+            dataclasses.replace(p, value="official_NA")
+            if p.type_name.name == "TextProperty"
+            else p
+            for p in save.property_list
+        ),
+    )
+    with pytest.raises(GvasSerialiseError, match="needs a TextValue"):
+        serialise(broken)
+
+
+def test_an_unmeasured_property_type_raises_on_the_way_out():
+    save = rebuild(
+        parse(_save(_int_prop("Count", 1))),
+        property_list=(Property("Count", TypeName("FloatProperty"), 1.0),),
+    )
+    with pytest.raises(GvasSerialiseError, match="has not been measured"):
+        serialise(save)
+
+
+def test_an_element_type_never_measured_bare_raises_on_the_way_out():
+    save = rebuild(
+        parse(_save(_int_prop("Count", 1))),
+        property_list=(
+            Property(
+                "Flags",
+                TypeName("ArrayProperty", (TypeName("BoolProperty"),)),
+                ArrayValue((True,)),
+            ),
+        ),
+    )
+    with pytest.raises(GvasSerialiseError, match="outside a property tag"):
+        serialise(save)
+
+
+def test_a_mis_sized_property_guid_raises():
+    raw = _save(
+        _fstring("Identified")
+        + _type("IntProperty")
+        + struct.pack("<i", 4)
+        + bytes([0x02])
+        + bytes(16)
+        + struct.pack("<i", 5)
+    )
+    save = parse(raw)
+    broken = dataclasses.replace(
+        save,
+        property_list=(
+            dataclasses.replace(save.property_list[0], property_guid=b"\0" * 8),
+        ),
+    )
+    with pytest.raises(GvasSerialiseError, match="the tag field is 16"):
+        serialise(broken)
+
+
+def test_a_mis_sized_epilogue_raises():
+    save = parse(_save(_int_prop("Count", 1)))
+    with pytest.raises(GvasSerialiseError, match="every measured property list"):
+        serialise(dataclasses.replace(save, epilogue=b"\0\0"))
+
+
+def test_a_mis_sized_key_mapping_tail_raises():
+    save = parse(_fixture_bytes("enhanced_input_user_settings.gvas.b64"))
+    profile = save.key_profiles[0]
+    broken = dataclasses.replace(
+        profile,
+        mappings=(
+            dataclasses.replace(profile.mappings[0], undecoded=b"\0"),
+            *profile.mappings[1:],
+        ),
+    )
+    with pytest.raises(GvasSerialiseError, match="undecoded bytes"):
+        serialise(dataclasses.replace(save, key_profiles=(broken,)))
+
+
+def test_key_profiles_without_a_section_header_raise():
+    # The four bytes that open the object section are unidentified, so they
+    # cannot be reconstructed from anything else. A save carrying objects but
+    # not those bytes is unwritable, and saying so beats writing a guess.
+    save = parse(_fixture_bytes("enhanced_input_user_settings.gvas.b64"))
+    with pytest.raises(GvasSerialiseError, match="not derivable"):
+        serialise(dataclasses.replace(save, object_section_header=b""))
+
+
+def test_a_custom_version_guid_of_the_wrong_width_raises():
+    save = parse(_fixture_bytes("notice.gvas.b64"))
+    versions = save.header.custom_versions
+    assert len(versions) == 88, "this fixture carries the engine's table"
+    broken = dataclasses.replace(
+        save.header,
+        custom_versions=(
+            dataclasses.replace(versions[0], guid=b"\0" * 4),
+            *versions[1:],
+        ),
+    )
+    with pytest.raises(GvasSerialiseError, match="the field is 16"):
+        serialise(dataclasses.replace(save, header=broken))
+
+
+def test_a_bool_property_carrying_something_other_than_a_bool_raises():
+    # A tagged bool's entire value is the 0x10 flag bit, so there is no other
+    # place to put a non-bool and no honest way to coerce one.
+    save = rebuild(
+        parse(_save(_bool_prop("On", True))),
+        property_list=(Property("On", TypeName("BoolProperty"), 1),),
+    )
+    with pytest.raises(GvasSerialiseError, match="whole value is the 0x10 flag"):
+        serialise(save)
+
+
+# --------------------------------------------------------------------------
+# round-trip coverage for shapes NO committed file carries
+#
+# Measured 2026-08-10: not one fixture and not one live save holds an
+# ArrayProperty, a StructProperty, a ByteProperty or a natively serialised
+# struct. Every one of those lives only in the transient StandaloneSlot save,
+# which is machine-specific and is not committed and must not be. So the
+# committed corpus cannot cover them and these synthetic blobs do - built by
+# the same builders the reader's own tests use, which the six real fixtures
+# keep honest by refusing to parse if the builders drift into a private
+# dialect.
+# --------------------------------------------------------------------------
+
+
+def test_an_array_of_structs_round_trips():
+    raw = _save(
+        _array_prop(
+            "Currencies",
+            _struct_type(),
+            _struct_body(_int_prop("Id", 1), _int_prop("Amount", 250)),
+            _struct_body(_int_prop("Id", 2), _int_prop("Amount", 0)),
+        )
+    )
+    save = parse(raw)
+    assert save.properties["Currencies"] == (
+        {"Id": 1, "Amount": 250},
+        {"Id": 2, "Amount": 0},
+    )
+    assert serialise(save) == raw
+
+
+def test_an_empty_array_round_trips_as_empty_rather_than_absent():
+    raw = _save(_array_prop("Currencies", _struct_type()))
+    save = parse(raw)
+    assert save.properties["Currencies"] == ()
+    assert serialise(save) == raw
+
+
+def test_an_empty_map_round_trips_as_empty_rather_than_absent():
+    raw = _save(
+        _map_prop("Cells", _type("StrProperty"), _type("IntProperty"), _map_body())
+    )
+    save = parse(raw)
+    assert save.properties["Cells"] == {}
+    assert serialise(save) == raw
+
+
+def test_a_map_of_doubles_to_structs_round_trips():
+    # DropItemMap's real shape: integer item ids carried as doubles, because
+    # the save class is TypeScript and a TypeScript number is a double. It is
+    # also the parameterisation that turned up only after 200 generations.
+    pairs = b"".join(
+        struct.pack("<d", key) + _struct_body(_int_prop("Weight", index))
+        for index, key in enumerate((5.0, 30.0, 35.0))
+    )
+    raw = _save(
+        _map_prop(
+            "DropItemMap",
+            _type("DoubleProperty"),
+            _struct_type(),
+            _map_body(pairs, count=3),
+        )
+    )
+    save = parse(raw)
+    assert save.properties["DropItemMap"][35.0] == {"Weight": 2}
+    assert serialise(save) == raw
+
+
+def test_a_native_struct_round_trips_verbatim():
+    # Vector, Rotator, Quat and Vector2D carry tag flag 0x08 and are handed
+    # back as opaque bytes. The writer puts exactly those bytes back and
+    # derives the flag from the value's type, so nothing about them is guessed
+    # on the way out either.
+    payload = bytes(range(24))
+    raw = _save(
+        _struct_prop(
+            "Location",
+            struct_name="Vector",
+            path="/Script/CoreUObject",
+            guid=None,
+            body=payload,
+            flags=0x08,
+        )
+    )
+    save = parse(raw)
+    assert isinstance(save.properties["Location"], UndecodedStruct)
+    assert save.properties["Location"].data == payload
+    assert serialise(save) == raw
+
+
+def test_a_byte_property_round_trips_as_its_enumerator_name():
+    raw = _save(_byte_prop("DoorState", "E_DoorState::NewEnumerator1"))
+    save = parse(raw)
+    assert save.properties["DoorState"] == "E_DoorState::NewEnumerator1"
+    assert serialise(save) == raw
+
+
+def test_a_source_history_text_round_trips_with_its_namespace_and_key():
+    raw = _save(_text_prop("Label", "NS", "KEY_1", "Default Profile"))
+    save = parse(raw)
+    assert isinstance(save.properties["Label"], SourceText)
+    assert save.properties["Label"].namespace == "NS"
+    assert serialise(save) == raw
+
+
+def test_a_struct_five_levels_deep_round_trips():
+    # The measured maximum nesting in StandaloneSlot is 5 property-list levels.
+    body = _struct_body(_prop("Leaf", "StrProperty", _fstring("bottom")))
+    for level in range(4):
+        body = _struct_body(_prop_typed(f"Level{level}", _struct_type(), body))
+    raw = _save(_prop_typed("Root", _struct_type(), body))
+    save = parse(raw)
+    deepest = save.properties["Root"]
+    for level in reversed(range(4)):
+        deepest = deepest[f"Level{level}"]
+    assert deepest == {"Leaf": "bottom"}
+    assert serialise(save) == raw
