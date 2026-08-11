@@ -633,3 +633,472 @@ identity. It is a generated bot name, so nothing here was a consent problem.
 The underlying rule still stands for a different reason: a real raid **will**
 contain real other players, so `lanternlight/redact.py` treating any
 `PlayerName` as in scope is correct - it just was not demonstrated by this log.
+
+## 10. The transient dungeon save, decoded from its whole lifetime
+
+`StandaloneSlot_<roleId>.sav` is the file the game writes while a dungeon run is
+in progress and deletes when the run ends. Its entire 263-generation lifetime
+was captured on 2026-08-09, from first appearance at 2,190 bytes to last sight
+at 177,878 bytes. **The bytes live at `C:\ll-captures\saves\`, outside this
+repository, and are not committed** - the filename embeds the operator's roleId.
+
+Everything in this section was re-measured from those bytes by the research
+lane, against claims another agent had already filed. Two of the eight filed
+claims did not survive, which is the point of re-measuring. Where a number here
+corrects an older line in this document or in `ROADMAP.md`, the correction is
+named rather than quietly applied.
+
+Method for the whole section: `lanternlight/gvas.py` in strict mode over all 263
+generations, plus regex over the raw bytes where the question was about byte
+shapes rather than about parsed values. **All 263 parse, zero failures**, which
+supersedes section 9.9.1's "It does **not** parse" - that was true of the reader
+at 15:39 on 2026-08-09 and stopped being true the same day.
+
+### 10.1 It starts as a stub and accretes properties in a fixed order
+
+The class is `StandaloneLevelSaveData_C`, a Blueprint class under
+`/Game/Blueprints/TypeScript/module/Level/`.
+
+The **largest generation holds 17 top-level properties, not 19.** The filed
+claim said 19 and then listed 17; the list was right and the count was wrong.
+Recorded rather than silently fixed, because it is this repository's own
+anti-pattern - a count beside a list, where only the list was checked.
+
+Across all 263 generations there are exactly **six** distinct top-level key
+sets, and they form a strict growth chain - every shape is a superset of the one
+before it, and **nothing is ever removed**:
+
+| Generation index | Properties | What appeared |
+|---|---|---|
+| 0 | 4 | `MatchID`, `BattleId`, `AutoSaveTempSlot`, `AutoSaveFinalSlot` |
+| 1 | 12 | `PlayzoneData`, `PlayerData`, `DoorData`, `MonsterData`, `BotData`, `BotSpawnerData`, `IdGeneratorData`, `DamageCollectonDataSet` |
+| 13 | 14 | `LeaderRankScoreData`, `LevelDetail` |
+| 25 | 15 | `TreasureBoxMap` |
+| 127 | 16 | `DropItemMap` |
+| 259 | 17 | `EscapePortalTransforms_Full` |
+
+`DamageCollectonDataSet` is spelled that way by the game. It is not a typo in
+this document and must not be "corrected" in any reader.
+
+So **a single snapshot of this file is a snapshot of a schema, not of the
+schema.** A reader that assumes 17 properties fails on 259 of the 263
+generations, and a reader that assumes 4 fails on 262 of them. The only safe
+posture is to treat every top-level property as optional and absent-means-absent
+- which is the measurement doctrine this project already commits to, arriving
+here as a hard requirement rather than a preference.
+
+Size is **not** monotonic even though the key set is: the byte length falls at 7
+points across the 263 generations. Section 2 of `ROADMAP.md` already records
+that the file is rewritten in place. Both facts together mean a poller can read
+a shrinking file whose schema is still growing.
+
+### 10.2 A filed count that was a snapshot - `NumIdToUUID`
+
+`IdGeneratorData` holds three fields: `CurrentNum`, `NumIdToUUID` and
+`UUIDToNumId`. The two maps are exact inverses of each other in every
+generation checked.
+
+`ROADMAP.md` item 2b describes "a 23-entry `IdGeneratorData.NumIdToUUID` map".
+Measured over the whole lifetime:
+
+| Fact | Measured |
+|---|---|
+| Entries in the largest generation | **91** |
+| Entries in the first generation that has the map | 16 |
+| Distinct entry counts across the lifetime | 35 |
+| Generations where the count is exactly 23 | **5**, indices 25 to 29 |
+| Monotonically non-decreasing | yes |
+
+So the roadmap's 23 is neither wrong nor a property of the file. It is a reading
+of one of 263 moments, filed as though it described the artifact. **A filed
+count is a hypothesis**, and this is the same anti-pattern the roadmap itself
+names two sections earlier. The practical cost is real: item 2b sizes the
+sanitised fixture against a 23-entry map, and the fixture will meet a 91-entry
+one if it is cut from the last generation.
+
+**`CurrentNum` is not the map size.** In the first generation carrying the map
+it reads 24 while the map holds 16 entries, and it disagrees in 123 of the 263
+generations. It is a high-water allocation counter, not a length. Anything that
+uses it as a count will be wrong roughly half the time.
+
+The map's **values** are two different id shapes, and the split matters:
+
+| Value shape | Count in the largest generation |
+|---|---|
+| 19-digit positive, sharing the operator roleId's leading 12 digits | 16 |
+| Negative integers, 2 to 8 digits | 75 |
+
+`docs/FINDINGS.md` section 9.3.2 established from the log that **a negative
+roleId marks a bot**. The save agrees from a completely independent surface: 75
+of 91 entities in the id table carry a negative id. That is a genuine
+cross-surface corroboration rather than two readings of the same bytes.
+
+### 10.3 `PlayerData` is a struct with six fields, one of which is a JSON blob
+
+Confirmed as filed. `PlayerData` is not a map keyed by player - it is a single
+struct holding `UseTransform` (bool), `Transform`, `Hp` (int), `Inventory`
+(FString), `HealthFlaskCount` (int) and `Currencies` (array).
+
+`Inventory` is a JSON document, 6,923 characters in the largest generation, with
+seven top-level keys:
+
+| Key | Shape |
+|---|---|
+| `activatedBag` | object of bag entries, each `bagId` plus `expireAt` |
+| `consumableBagItems` | array of item cells |
+| `equipments` | array of item cells |
+| `ordinaryBagItems` | array of item cells |
+| `safeBagItems` | array of item cells |
+| `shortcutItems` | array of `cfgId` plus `slot` only |
+| `spinnerItems` | array of `cfgId` plus `slot` only |
+
+The four item-cell arrays share one element schema: `cfgId`, `count`,
+`durability`, `exEquip`, `id`, `slot`, `tradeColdAt`. `shortcutItems` and
+`spinnerItems` carry only `cfgId` and `slot`, so they are **references into**
+the bags rather than copies of them - a distinction that matters for anything
+counting inventory.
+
+`Currencies` is an array of `{CfgId, Count}`, so currency sits in the same
+id space discipline as everything else and is not a set of named fields.
+
+`PlayerData.Transform` carries **only `Rotation` and `Translation`** - no
+`Scale3D`. `EscapePortalTransforms_Full` elements carry all three. Two different
+transform shapes in one file, so a reader must not assume a fixed field list
+from the word "Transform".
+
+### 10.4 One Blueprint GUID defeats two different redaction detectors
+
+This is the section that changes what `lanternlight/redact.py` has to do, and it
+is the first Blueprint-class save this project has decoded, which is why it is
+the first to hit any of it.
+
+Blueprint property names in this file take the shape
+`Name_Index_<32 uppercase hex>`. Measured in the largest generation: **770
+property-name occurrences drawing on 65 distinct GUIDs.**
+
+**Failure one - the `PRODUCTUSERID` rule.** That rule is a bare 32-hex run. It
+fires **772 times** on this file. Every single one is a false positive:
+
+- 770 are Blueprint property-name GUIDs.
+- 2 are `monsterGuid` values inside the `DamageCollectonDataSet` JSON.
+- **Zero** equal the operator's real EOS ProductUserId, harvested for this check
+  from the live log. Not one of the 67 distinct 32-hex runs in the file appears
+  anywhere in the live log at all.
+- All 772 are **uppercase**; the real ProductUserId is **lowercase**. Case is
+  the discriminator, and it was measured rather than assumed.
+
+**Failure two - the `LONG_ID` rule, and it was found by refuting a fresh
+number.** `LONG_ID` matches any run of 15 or more digits. It fires **100 times**
+on the largest generation. Only **38** are genuine identifiers. The other **62
+sit inside a Blueprint property GUID**: two particular GUIDs happen to contain a
+17-digit and a 16-digit decimal stretch, and they recur 61 and 1 times because
+the same property names repeat in every `MonsterData` entry.
+
+The one-sentence version, which is the durable finding: **a 32-hex Blueprint
+property GUID defeats a hex-shaped detector and a length-based digit detector at
+the same time, for one cause.** Any fix aimed at only one of them leaves the
+other firing.
+
+Worth recording how the second half arrived. The 100-hit figure was filed after
+a first pass, then re-derived, and the re-derivation refuted the first reading
+of it. A twenty-minute-old number went stale in the same session that produced
+it, which is a sharper demonstration of "a filed count is a hypothesis" than any
+of the older examples in this document.
+
+**The 38 genuine long ids**, all 19 digits, all sharing the operator roleId's
+leading 12 digits, located in the parse tree:
+
+| Where | Count |
+|---|---|
+| `BattleId` | 1 |
+| `AutoSaveTempSlot` | 1 |
+| `AutoSaveFinalSlot` | 1 |
+| `IdGeneratorData.NumIdToUUID` values | 16 |
+| `IdGeneratorData.UUIDToNumId` keys | 16 |
+| `ownerRoleId` inside `ItemCell` JSON under `DropItemMap` | 3 |
+
+**`MonsterData` holds no instance ids at all.** An earlier reading that put them
+there is retracted, not softened: `MonsterData` entries carry `MonsterID`, which
+is a 4-digit config id, and nothing 15 digits long.
+
+### 10.4.1 The roleId is inside the file, not only in its name
+
+`AutoSaveFinalSlot` is exactly the string `StandaloneSlot_<roleId>` and
+`AutoSaveTempSlot` is exactly `StandaloneSlot_<roleId>_Temp`. Both were checked
+by direct string equality against the roleId taken from the filename.
+
+Section 9.9.1 and `ROADMAP.md` item 2b both warn that the **filename** embeds
+the roleId and that a fixture therefore needs renaming. That is correct and
+insufficient. The roleId is also inside the bytes, twice, welded to a
+recognisable prefix. **Renaming the file does not redact it.**
+
+`BattleId` is a sibling hazard and must be treated as exactly as sensitive as
+the roleId. It is a 19-digit value sharing the roleId's **leading 12 digits** -
+measured as the longest common prefix, not assumed. Publishing a BattleId
+publishes 12 of the 19 digits of the operator's roleId. A prior statement that
+the shared prefix is 14 digits is **refuted**; 14 is the prefix shared by 5 of
+the 16 in-file long ids, not by `BattleId`.
+
+### 10.5 Enum values are unrenamed engine defaults, and the names are unmeasured
+
+Enum-typed properties serialise as an FString of the qualified enumerator. Two
+enums appear, and the field names are misleading: the field called `Opened`
+holds an `E_DoorState` value and the field called `Locked` holds an
+`E_LockState` value. **Neither is a boolean.**
+
+Enumerators observed over all 263 generations, with occurrence counts:
+
+| Enumerator | Occurrences | Where |
+|---|---|---|
+| `E_DoorState::NewEnumerator1` | 10,104 | `DoorData.<key>.Opened` |
+| `E_DoorState::NewEnumerator2` | 699 | `DoorData.<key>.Opened` |
+| `E_DoorState::NewEnumerator3` | 33 | `DoorData.<key>.Opened` |
+| `E_LockState::NewEnumerator0` | 2,265 | `DoorData.<key>.Locked` |
+| `E_LockState::NewEnumerator2` | 9,872 | `DoorData.<key>.Locked`, `TreasureBoxMap.<key>.LockState` |
+
+**The enumerator NAMES are unknown, and this is a measured null rather than a
+gap in the write-up.** `NewEnumeratorN` is Unreal's own default label for an
+enumerator the developer never renamed, so the game itself does not carry the
+player-facing meaning in these bytes. Nothing observed binds
+`E_DoorState::NewEnumerator1` to "closed", "open" or anything else, and no
+mapping is guessed here.
+
+Two gaps are themselves observations: **`E_DoorState::NewEnumerator0` never
+appears** in 10,836 door-state values, and **`E_LockState::NewEnumerator1` never
+appears** in 12,137 lock-state values. Either they are unreachable in this
+content, or they are the default that is never written. Unmeasured, not absent.
+
+Binding these would need a capture joined on wall clock - watch one door on
+screen, poll the save, and read the enumerator that changes. That is the same
+method that bound the class ids, and it has not been done.
+
+### 10.6 The three-integer key IS positional - and here is the test that shows it
+
+`DoorData`, `MonsterData`, `BotData`, `BotSpawnerData` and `TreasureBoxMap` are
+all keyed by a string of three underscore-separated signed integers. Confirmed
+as filed, in every entry of every one of the five maps.
+
+Rather than assert that this "looks like world coordinates", the file was made
+to answer the question. `MonsterData` values carry a `Transform` with a
+`Translation` vector, so the key and a real position sit side by side in the
+same record. That is a test, and it was run.
+
+**First result, and it is a finding in its own right:** `Dead` partitions
+`Translation` perfectly. All 39 living monsters have a zero `Translation`; all
+22 dead ones have a non-zero one. **The `Transform` is written at death, not
+continuously** - so it is a death location, and comparing a key against a zero
+vector for the other 39 would have "refuted" the coordinate reading on an
+artifact of the comparison. The first pass at this did exactly that.
+
+**Second result, over the 22 records where the comparison is meaningful:**
+
+| Test | Result |
+|---|---|
+| key component vs `Translation` component, correlation | **+0.992, +0.941, +0.969** on the matching axes |
+| key equals `round(Translation)` under any axis permutation, sign flip, or scale in {0.001, 0.01, 0.1, 1, 10, 100, 1000} | 0 of 22 |
+| distance from `key / 100` to `Translation` | min 102, median 879, max 1,524 |
+
+So the key is positional beyond reasonable doubt - a near-unity correlation on
+all three axes is not something a hash produces - and it is **scaled by about
+100 relative to the `Translation` units**, with a residual of roughly 1 to 15
+metres' worth of units. The natural reading is that the key encodes the actor's
+**placement or spawn** position in hundredths of a `Translation` unit, and the
+monster died a short walk away from it. The single bot's residual is 8,865,
+about six times the worst monster - consistent with a bot roaming further than a
+monster does.
+
+Stated precisely, because the difference matters: **that the key is positional
+is measured. That it is the spawn position specifically, and what physical unit
+either quantity is in, is not.** What would settle it: `DoorData` and
+`TreasureBoxMap` carry no `Transform` at all, so the confirmation available here
+comes only from monsters and the one bot. Reading a door's world position off a
+capture, or observing the same actor across two runs to see whether its key is
+stable, would separate "spawn position" from "position at first save".
+
+One corroborating detail: across the five maps there are 136 key slots and 135
+distinct keys, and the single collision is `BotData` and `BotSpawnerData`
+sharing one key. A bot and the spawner that produced it sharing a positional
+identity is exactly what a placement-derived key predicts.
+
+### 10.7 Map key types - `DropItemMap` is float-keyed, `LevelDetail` is not
+
+Half of this claim survived and half did not.
+
+| Map | Key type | Measured over |
+|---|---|---|
+| `DropItemMap` | **float** | 1,058 key observations across all 263 generations, every one a float |
+| `LevelDetail` | **int** | 1,102 key observations across all 263 generations, every one an int |
+
+**`LevelDetail` being float-keyed is refuted.** It is `IntProperty`-keyed and
+always has been. The float keys of `DropItemMap` are all integral-valued and
+non-contiguous, so the game is using a `MapProperty<DoubleProperty, ...>` to
+hold what are plainly small integer handles - which is a format fact worth
+keeping precisely because a reader that "helpfully" coerces them will produce
+`5` where the file says `5.0` and then fail to match.
+
+`PlayzoneData`, `BotSpawnerData` and `LevelDetail` all have **float values**
+too, and `PlayzoneData` is not a map at all - it is a struct whose keys are
+Blueprint property names. A reader that groups these five together by their
+`MapProperty` tag will mis-handle `PlayzoneData`.
+
+### 10.8 Natively serialised structs, and the confirmation that they are named
+
+Confirmed as filed. In the largest generation there are **401 undecoded struct
+leaves totalling 10,600 bytes**: `Vector` 261, `Quat` 125, `Rotator` 12,
+`Vector2D` 3. These match `ROADMAP.md` item 2's figures exactly, re-derived here
+rather than relayed.
+
+`EscapePortalTransforms_Full` is an array - length 1 in the only generation that
+has it - of structs carrying `Rotation` (a `Quat`), `Translation` and `Scale3D`
+(both `Vector`).
+
+`Vector` and `Rotator` are both 24 bytes and are separable only by the name the
+tag carries. That is the concrete argument against a reader that decodes by
+width.
+
+### 10.9 `PlayzoneData` is a shrinking-circle mechanic, in the game's own fields
+
+Not in any filed claim, and the most substantive new structure in the file.
+`PlayzoneData` holds six fields:
+
+| Field | Type |
+|---|---|
+| `ElapseTime` | float |
+| `DmgCircleLocation` | `Vector2D` |
+| `DmgCircleRadius` | float |
+| `SafeCircleLocation` | `Vector2D` |
+| `SafeCircleRadius` | float |
+| `FinialSafeCircleLocation` | `Vector2D` (spelled that way by the game) |
+
+A damage circle, a safe circle, each with a centre and a radius, plus the
+**final** safe circle's centre known in advance, and a running elapsed time.
+That is a closing-zone mechanic stated in the developer's own field names.
+
+Two things follow and neither is asserted beyond the evidence. First, this is
+the first first-party evidence in this project of a zone-pressure mechanic at
+all; `docs/OBSERVED_IDS.md` records a Blackarrow talent named **Gyldenmist
+Tolerance**, and a mist that must be tolerated is a plausible player-facing name
+for this - **plausible, and unbound**. Nothing observed connects the talent to
+these fields. Second, in the sampled generation the damage circle and the safe
+circle share the same centre and the same radius to the bit, so this capture
+caught the zone before it began to move. **Whether the circles ever diverge is
+unmeasured**, and a run watched to completion is what would show it.
+
+### 10.10 The save counts a bot kill as a player kill - a second surface for 9.3.2
+
+`LeaderRankScoreData` holds ten fields:
+
+| Field | Shape |
+|---|---|
+| `KillBotCount` | int |
+| `TeamKillBotCount` | int |
+| `KillMonsterNum` | int |
+| `KillPlayerCount` | int |
+| `teamKillPlayerCount` | int (note the lowercase initial - the game's own casing) |
+| `FirstOpenContainerCount` | int |
+| `TeamKillMonsterData` | nested: category -> zone name -> `Id2cnt` map of monster id to count |
+| `TeamOpenTreasuresData` | zone name -> `Id2cnt` map of container id to count |
+| `AssistMonsterCount` | 8-digit id -> `Id2cnt` map of monster id to count |
+| `KillPlayerHistoryDatas` | array of structs |
+
+A filed claim said `KillPlayerHistoryDatas` and `KillPlayerCount` are **empty**
+in this solo capture and are therefore a measured null for solo play. **That is
+refuted.** `KillPlayerCount` is 1, `teamKillPlayerCount` is 1, and
+`KillPlayerHistoryDatas` holds one entry.
+
+The entry's fields, and what they say:
+
+| Field | Observed |
+|---|---|
+| `IsPlayer` | **true** |
+| `IsBot` | **true** |
+| `ClassId` | 15 |
+| `Level` | 2 |
+| `BotGender` | 1 |
+| `SkillNameId` | 6130017 |
+| `TimeStamp` | 544 |
+| `PlayerName` | a 17-character string, not reproduced |
+| `MsgAppearanceString` | 2 characters, not reproduced |
+| `MsgSubChannelString` | empty |
+
+So the save's own **player-kill counter counts a bot**, and the record it files
+asserts `IsPlayer` and `IsBot` simultaneously. `docs/FINDINGS.md` section 9.3.2
+established this trap from the log; it now holds on a second, independent
+surface, and the discriminator is the same one - `IsBot`, never the counter and
+never the name.
+
+The filed claim's *conclusion* survives its refuted premise, and is worth
+stating in the corrected form: **`KillPlayerHistoryDatas` is the structure that
+would carry a real other player's display name in a PvP run.** It carries a
+generated bot's name here only because this capture is a solo run. It needs a
+redaction detector before any fixture is cut from it, and `PlayerName` inside a
+struct array is not a shape any current rule reaches.
+
+`MatchID` is `11112` in all 263 generations. `docs/LEDGER.md` entry LL-0022
+already records that 11111 and 11112 both belong to **solo explores**, which is
+what independently establishes this capture as solo - it is not an inference
+from the kill counts.
+
+### 10.11 Two JSON schemas for one item, differing by case and by state
+
+Item records appear in the file under two distinct schemas, and the difference
+is not cosmetic.
+
+**lowerCamel schema** - `ItemCell`, inside `DropItemMap` values. Thirteen keys,
+present on all 12 entries: `affixes`, `cfgId`, `count`, `durability`, `gems`,
+`id`, `lock`, `ownerRoleId`, `resourceType`, `slot`, `space`, `teamIdContext`,
+`tradeCold`. `ownerRoleId` is **non-empty on 3 of 12** and empty on the other 9.
+
+**PascalCase schema** - `TreasureData` inside `TreasureBoxMap` values, and
+`TreasurableItems` inside `BotData`. Twenty keys, identical between the two:
+`AffixIdentifyNum`, `Affixes`, `BindState`, `CfgId`, `Count`, `GemIdentifyNum`,
+`Gems`, `Id`, `IdBeforePityDrop`, `IdentifyRoleId`, `IdentifyStage`,
+`IvtrContext`, `LootContext`, `OwnerRoleId`, `Slot`, `Space`, `TeamContext`,
+`bIsIdentifying`, `bNeedIdentify`, `durability`. `OwnerRoleId` is present and
+**empty in all 19** treasure-box items; it is non-empty on 8 of the bot's 22.
+
+So the same logical field exists in two casings and in two states, and a reader
+or a redactor that keys on one spelling silently misses the other. This is the
+`cfgId:` versus `cfgId: ` lesson of section 9.6 recurring in a different
+surface: **the field is the same, the pattern is not.**
+
+`IdBeforePityDrop` is first-party corroboration from the save of the loot pity
+system already noted from the log in the research lane's open items. Existence
+only - no coefficient, no threshold, and none is inferred.
+
+`PlayerData.Inventory` uses a **third**, shorter item schema again (section
+10.3), so there are three item shapes in one file.
+
+### 10.12 What this file means for the sanitised fixture, item 2b
+
+Everything below is a consequence of the measurements above, gathered here so
+the safety lane does not have to re-derive it.
+
+- The roleId is **inside** the bytes twice, not merely in the filename (10.4.1).
+  Renaming is necessary and not sufficient.
+- `BattleId` leaks 12 of the roleId's 19 digits and must be masked (10.4.1).
+- 38 genuine 19-digit ids are present, spread over six locations (10.4).
+- `PlayerName` inside the `KillPlayerHistoryDatas` struct array is a shape no
+  current detector reaches, and in a PvP run it is a third party's name (10.10).
+- `ownerRoleId` / `OwnerRoleId` exist in two casings and two states (10.11).
+- A fixture cut from the last generation meets a **91**-entry `NumIdToUUID`, not
+  the 23 the roadmap plans against (10.2).
+- Any detector added must be proven against the **772 uppercase false positives**
+  the current `PRODUCTUSERID` rule generates and the **62** the `LONG_ID` rule
+  generates, or the fixture will be unreadable rather than redacted (10.4).
+
+### 10.13 Still unmeasured after this pass
+
+Named so they are not later mistaken for absent:
+
+- The player-facing meaning of every `E_DoorState` and `E_LockState`
+  enumerator. The game ships Unreal's unrenamed defaults (10.5).
+- `E_DoorState::NewEnumerator0` and `E_LockState::NewEnumerator1` - never seen
+  in 22,973 enum values across the whole lifetime.
+- Which frame the three-integer key is expressed in, and the physical unit of
+  either it or `Translation` (10.6).
+- Whether the damage circle and the safe circle ever diverge (10.9).
+- Whether `Gyldenmist Tolerance` names the `PlayzoneData` mechanic. Suggestive,
+  unbound, and not to be written down as a binding (10.9).
+- What `MatchID 11112` selects. It is constant across the run and matches the
+  solo-explore ids in LL-0022, and nothing observed says what the number means.
