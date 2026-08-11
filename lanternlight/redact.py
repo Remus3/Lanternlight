@@ -119,6 +119,55 @@ every commit in the project. So the encoded half is tuned for near-zero false
 positives and the number is measured, not asserted - see the block above
 :func:`iter_encoded_sensitive`.
 
+Save-file identifiers, and a false-positive family worth naming
+---------------------------------------------------------------
+
+The transient ``StandaloneSlot`` save carries id shapes the length-only
+``LONG_ID`` rule already catches but cannot describe. ``BATTLEID``,
+``OWNER_ROLEID``, ``ROLEID`` and ``SAVE_SLOT`` name them. They are a RENAMING,
+not a widening and not a narrowing: each takes a digit run at ``LONG_ID``'s own
+floor, so every value they decline is one ``LONG_ID`` declines too. See
+:data:`_ID_VALUE` for why the value side is a digit run rather than anything at
+all, and :data:`_SAVE_SLOT` for why the slot name is matched by shape.
+
+Measured on the largest generation of that save, 177,878 bytes, 2026-08-11:
+
+- The operator roleId is 19 digits. 38 occurrences of a 19-digit run are
+  genuine ids - 18 distinct - and every one of them shares the roleId's first
+  12 digits. **The prefix is the smaller half of the problem.** 5 distinct ids
+  share 17 of 19 digits, and the roleId itself appears VERBATIM 5 times: twice
+  inside a slot name and three times as ``ownerRoleId`` in ``ItemCell`` JSON.
+  A fixture that masks the roleId and nothing else still ships 17 of its 19
+  digits, five times over.
+- ``BattleId`` is a ``StrProperty`` holding 19 digits and shares **12** leading
+  digits with the roleId - measured identically across all 250 captured
+  generations of the save. An earlier note recording 14 is refuted.
+
+The false positives are a single cause wearing two masks. Unreal stores a
+Blueprint property name as ``Name_Index_<32 uppercase hex GUID>`` - a variable
+called ``Hp`` becomes ``Hp_10_<GUID>`` - and that GUID trips two independent
+rules:
+
+- ``PRODUCTUSERID`` fires 772 times, 67 distinct. 770 occurrences (65 distinct)
+  are the Blueprint shape and 2 are ``monsterGuid`` values in JSON. All are
+  uppercase and NONE equals the operator's real ProductUserId.
+- ``LONG_ID`` fires 100 times, of which 62 sit INSIDE just two of those GUIDs,
+  which happen to contain a 17-digit and a 16-digit decimal stretch. The
+  17-digit one recurs 61 times because the same property name repeats per
+  ``MonsterData`` entry.
+
+**Neither rule is narrowed, and the reason is not squeamishness.** Uppercase is
+not a safe discriminator - the same 32 characters identify the same account in
+either case, and any formatter in the path can change one without changing the
+other - and position is not either, because a real ProductUserId can sit in the
+same textual slot. A narrowing on either axis buys a prettier build log and
+sells a silent false negative, which is the one failure this module cannot
+recover from. A GUID is a format fact of the shipped asset rather than a
+machine fact, so the fixture authors its own GUID suffixes and both classes
+vanish without a detector being touched. ``tests/test_redact.py`` pins all of
+this as a characterization, with a positive control proving a real-shaped
+identifier in the same position is still caught.
+
 Limits, stated rather than hidden:
 
 - **The keyless rules are an enumerated list, not a general solution.** A name
@@ -278,6 +327,49 @@ def _positional(anchors: Iterable[str], value: str) -> Rule:
     )
 
 
+#: Shortest bare digit run this module treats as an identifier. Named rather
+#: than repeated so the keyed id rules below and the generic ``LONG_ID`` rule
+#: cannot drift apart on the one number that makes them compatible.
+_LONG_ID_MIN_DIGITS = 15
+
+# The value side of an identifier rule: a bare digit run at ``LONG_ID``'s own
+# floor. Deliberately NOT :data:`_VALUE`, and the reason is measured rather
+# than aesthetic.
+#
+# These rules run over every tracked file (``tests/test_no_pii.py``), so a rule
+# generic enough to fire on prose blocks every commit in the project. Two
+# collisions in the tree today, both innocent and both already committed:
+# ``docs/FINDINGS.md`` records a generated bot's roleId - five digits, negative,
+# naming no person - and ``ROADMAP.md`` discusses ``BattleId`` in ordinary
+# English. A ``key=<anything>`` rule fires on both.
+#
+# The digit floor makes these rules a RENAMING rather than a narrowing, which
+# is the property that matters: every value they decline is a value ``LONG_ID``
+# declines too, so nothing that was caught before stops being caught. What they
+# add is the label - a reviewer of a committed fixture needs to know that the
+# long number is the operator's own roleId and not a battle serial.
+#
+# Stated rather than hidden: an identifier written under one of these keys as
+# something OTHER than a long digit run - a UUID, a hex blob - is not named by
+# these rules. It is not caught by ``LONG_ID`` either, so this is a pre-existing
+# blind spot these rules neither widen nor close.
+_ID_VALUE = rf"\d{{{_LONG_ID_MIN_DIGITS},}}(?!\d)"
+
+# ``key=``, ``key:`` and the JSON ``"key":"`` form. The trailing ``"?`` steps
+# over an opening quote so the quote survives redaction instead of being eaten
+# with the value, which keeps a redacted JSON blob parseable.
+_ID_KEY_SEP = r'"?[ \t]*[=:][ \t]*"?'
+
+
+def _keyed_id(label: str, keys: Iterable[str], placeholder: str) -> Rule:
+    """Build a ``key=<long digit run>`` rule. See :data:`_ID_VALUE`."""
+    alternation = "|".join(keys)
+    pattern = re.compile(
+        rf"(?P<key>\b(?:{alternation})\b)(?P<sep>{_ID_KEY_SEP})(?P<value>{_ID_VALUE})"
+    )
+    return Rule(label=label, pattern=pattern, replacement=rf"\g<key>\g<sep>{placeholder}")
+
+
 def _dashed(label: str, keys: Iterable[str], placeholder: str) -> Rule:
     """Build a ``key-value`` rule. The game emits this shape for names.
 
@@ -399,6 +491,22 @@ _POSSESSIVE_NAME = re.compile(
     rf"(?P<key>\bPlayer)(?P<sep>[ \t]+)(?P<value>{_POSITIONAL_VALUE})(?=')"
 )
 
+# ``StandaloneSlot_<19-digit roleId>``, the name the game gives a save slot,
+# measured under the keys ``AutoSaveTempSlot`` and ``AutoSaveFinalSlot`` (the
+# temp one carries a trailing ``_Temp``). It is masked by SHAPE rather than by
+# key, for a reason specific to this file format: a ``.sav`` is GVAS, where a
+# key and its value are two separate length-prefixed strings with no separator
+# between them at all. There is no ``key=value`` for a keyed rule to find, so a
+# keyless shape rule is the only one that reaches the value on disk.
+#
+# It must precede the ACTOR rule. ``StandaloneSlot_<19 digits>`` fits the actor
+# token exactly - an identifier welded to a 15-or-more-digit run - so without
+# this the slot name is reported as a player display name, which is a wrong
+# answer rather than a merely imprecise one.
+_SAVE_SLOT = re.compile(
+    rf"(?<![A-Za-z0-9_])StandaloneSlot_\d{{{_LONG_ID_MIN_DIGITS},}}(?!\d)"
+)
+
 # ``BP_Adventurer_C_<id>__<PERSONA>enter portal``. The game concatenates the
 # actor label, the name and sometimes the next word with no separator at all,
 # so there is no token boundary to find the end of the name by. Masking the
@@ -485,6 +593,24 @@ RULES: tuple[Rule, ...] = (
         ("steamId", "steamID", "SteamId", "steam_id", "steamid64", "SteamID64"),
         "<STEAMID64>",
     ),
+    # Save-file id shapes. Each names a long digit run the LONG_ID rule below
+    # already catches by length alone - see _ID_VALUE for why naming it matters
+    # and why the value side is a digit run rather than anything at all.
+    #
+    # OWNER_ROLEID precedes ROLEID for readability only; ``\b`` cannot match
+    # inside ``OwnerRoleId`` anyway, because the character before ``RoleId``
+    # there is a word character.
+    _keyed_id(
+        "BATTLEID",
+        ("BattleId", "battleId", "BattleID", "battle_id", "battleid"),
+        "<BATTLEID>",
+    ),
+    _keyed_id(
+        "OWNER_ROLEID",
+        ("OwnerRoleId", "ownerRoleId", "OwnerRoleID", "owner_role_id", "ownerroleid"),
+        "<OWNER_ROLEID>",
+    ),
+    _keyed_id("ROLEID", ("roleId", "RoleId", "RoleID", "role_id", "roleid"), "<ROLEID>"),
     # Bare 32-char hex: an EOS ProductUserId with no key in sight.
     Rule(
         label="PRODUCTUSERID",
@@ -498,6 +624,8 @@ RULES: tuple[Rule, ...] = (
         pattern=re.compile(r"(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?![\d.])"),
         replacement="<IPV4>",
     ),
+    # A save slot name. Must precede ACTOR - see _SAVE_SLOT.
+    Rule(label="SAVE_SLOT", pattern=_SAVE_SLOT, replacement="<SAVE_SLOT>"),
     # Name welded to a role id. Must precede LONG_ID, or LONG_ID masks the id
     # and publishes the name.
     Rule(label="ACTOR", pattern=_ACTOR_TOKEN, replacement="<ACTOR>"),
@@ -505,7 +633,7 @@ RULES: tuple[Rule, ...] = (
     # under a key this module has never seen.
     Rule(
         label="LONG_ID",
-        pattern=re.compile(r"(?<!\d)\d{15,}(?!\d)"),
+        pattern=re.compile(rf"(?<!\d)\d{{{_LONG_ID_MIN_DIGITS},}}(?!\d)"),
         replacement="<LONG_ID>",
     ),
 )

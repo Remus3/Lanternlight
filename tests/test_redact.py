@@ -1174,3 +1174,238 @@ def test_assert_clean_deliberately_does_not_decode():
     encoded = _b64("player " + FAKE_STEAMID64 + " connected")
     assert_clean(encoded)
     assert "STEAMID64" in _labels(encoded)
+
+
+# --------------------------------------------------------------------------
+# save-file identifier shapes - ROADMAP 2b
+# --------------------------------------------------------------------------
+#
+# The transient StandaloneSlot save carries four id shapes that the length-only
+# LONG_ID rule catches without naming. Naming them is the point: LONG_ID says
+# "a long number is here", and a fixture reviewer needs to know WHICH field
+# leaked, because a BattleId and the operator's own roleId are different facts
+# with different blast radii.
+#
+# Every number below is invented and assembled at runtime, exactly as the rest
+# of this file does - see the module docstring. The real capture is never
+# quoted, here or anywhere.
+
+#: A second 19-digit id sharing the invented roleId's first 12 digits, which is
+#: the relationship measured between the real BattleId and the real roleId.
+FAKE_BATTLE_ID = FAKE_ROLE_ID[:12] + "7700001"
+
+#: The save-slot name shape: ``StandaloneSlot_<19-digit roleId>``.
+FAKE_SLOT_NAME = "Standalone" + "Slot_" + FAKE_ROLE_ID
+FAKE_TEMP_SLOT_NAME = FAKE_SLOT_NAME + "_Temp"
+
+
+def _labels_of(text: str) -> set[str]:
+    """Return the labels the structural rules report for ``text``."""
+    return {label for label, _, _ in iter_sensitive(text)}
+
+
+def test_a_battle_id_is_named_rather_than_only_measured_for_length():
+    assert "BATTLEID" in _labels_of(_kv("BattleId", FAKE_BATTLE_ID))
+
+
+def test_a_battle_id_is_masked_with_its_own_placeholder():
+    assert redact(_kv("BattleId", FAKE_BATTLE_ID)) == _kv("BattleId", "<BATTLEID>")
+
+
+def test_a_battle_id_in_json_keeps_the_quotes_around_it():
+    text = _kj("BattleId", FAKE_BATTLE_ID)
+    expected = _QUOTE + "BattleId" + _QUOTE + _COLON + _QUOTE + "<BATTLEID>" + _QUOTE
+    assert redact(text) == expected
+
+
+def test_every_battle_id_spelling_is_covered():
+    for key in ("BattleId", "battleId", "BattleID", "battle_id", "battleid"):
+        assert "BATTLEID" in _labels_of(_kv(key, FAKE_BATTLE_ID)), key
+
+
+def test_an_owner_role_id_is_named():
+    assert "OWNER_ROLEID" in _labels_of(_kv("ownerRoleId", FAKE_ROLE_ID))
+    assert "OWNER_ROLEID" in _labels_of(_kv("OwnerRoleId", FAKE_ROLE_ID))
+
+
+def test_an_owner_role_id_is_masked_with_its_own_placeholder():
+    assert redact(_kv("ownerRoleId", FAKE_ROLE_ID)) == _kv("ownerRoleId", "<OWNER_ROLEID>")
+
+
+def test_a_role_id_is_named():
+    for key in ("roleId", "RoleId", "roleid", "role_id", "RoleID"):
+        assert "ROLEID" in _labels_of(_kv(key, FAKE_ROLE_ID)), key
+
+
+def test_a_role_id_is_masked_with_its_own_placeholder():
+    assert redact(_kc("RoleId", FAKE_ROLE_ID)) == _kc("RoleId", "<ROLEID>")
+
+
+def test_owner_role_id_does_not_collapse_into_the_plain_role_id_label():
+    # Two different facts. An ownerRoleId inside an ItemCell blob can name a
+    # DIFFERENT player than the operator - a traded item carries its owner -
+    # so a reviewer must be able to tell the two apart in a finding.
+    #
+    # LONG_ID is expected in both sets and is not asserted away: iter_sensitive
+    # runs every rule over the same text rather than substituting in sequence,
+    # so the length rule still reports the same digits. That overlap is the
+    # point - these rules RENAME a finding, they do not replace the backstop.
+    owner = _labels_of(_kv("OwnerRoleId", FAKE_ROLE_ID))
+    plain = _labels_of(_kv("RoleId", FAKE_ROLE_ID))
+    assert "OWNER_ROLEID" in owner and "ROLEID" not in owner
+    assert "ROLEID" in plain and "OWNER_ROLEID" not in plain
+    assert "LONG_ID" in owner and "LONG_ID" in plain
+
+
+def test_the_slot_name_shape_is_masked_whole():
+    assert redact("slot " + FAKE_SLOT_NAME) == "slot <SAVE_SLOT>"
+
+
+def test_the_temp_slot_suffix_survives_so_the_fixture_stays_readable():
+    assert redact(FAKE_TEMP_SLOT_NAME) == "<SAVE_SLOT>_Temp"
+
+
+def test_the_slot_name_is_not_swallowed_by_the_actor_rule():
+    # ``StandaloneSlot_<19 digits>`` fits the actor-token shape exactly - a
+    # leading identifier welded to a 15-or-more-digit run - so without an
+    # earlier rule it comes out as <ACTOR>, which says a player's display name
+    # was found where in fact a save slot was.
+    assert redact(FAKE_SLOT_NAME) == "<SAVE_SLOT>"
+    assert "SAVE_SLOT" in _labels_of(FAKE_SLOT_NAME)
+
+
+def test_the_slot_name_under_its_measured_keys_is_masked():
+    for key in ("AutoSaveTempSlot", "AutoSaveFinalSlot"):
+        assert redact(_kv(key, FAKE_SLOT_NAME)) == _kv(key, "<SAVE_SLOT>")
+
+
+def test_the_new_save_labels_all_reach_the_repository_scan():
+    # A label outside FILE_SCAN_LABELS is a detector the tree guard never runs,
+    # which is precisely the guard the committed fixture has to pass.
+    for label in ("BATTLEID", "OWNER_ROLEID", "ROLEID", "SAVE_SLOT"):
+        assert label in ALL_LABELS, label
+        assert label in FILE_SCAN_LABELS, label
+
+
+def test_the_save_shapes_are_still_refused_by_assert_clean():
+    for text in (
+        _kv("BattleId", FAKE_BATTLE_ID),
+        _kv("ownerRoleId", FAKE_ROLE_ID),
+        _kc("RoleId", FAKE_ROLE_ID),
+        FAKE_SLOT_NAME,
+    ):
+        with pytest.raises(RedactionError):
+            assert_clean(text, personas=[])
+
+
+def test_masking_the_save_shapes_is_idempotent():
+    document = " ".join(
+        [
+            _kv("BattleId", FAKE_BATTLE_ID),
+            _kv("ownerRoleId", FAKE_ROLE_ID),
+            _kc("RoleId", FAKE_ROLE_ID),
+            FAKE_TEMP_SLOT_NAME,
+        ]
+    )
+    once = redact(document, personas=[])
+    assert redact(once, personas=[]) == once
+    assert_clean(once, personas=[])
+
+
+def test_a_generated_bot_role_id_is_not_flagged_and_a_real_one_is():
+    # MEASURED COLLISION, recorded rather than discovered again. docs/FINDINGS.md
+    # carries a bot roleId from TS.AI generateBotPlayerStateData: five digits,
+    # negative, naming no person, and already committed. A ROLEID rule taking
+    # any value at all would fire on it and turn tests/test_no_pii.py red on an
+    # innocent published file.
+    #
+    # So the keyed id rules take a digit run at LONG_ID's own floor and nothing
+    # else. The pairing below is what makes that a scoping decision rather than
+    # a hole: the short bot id is ignored, the long real-shaped id is caught.
+    bot = "roleId" + _COLON + " " + "-14801"
+    assert "ROLEID" not in _labels_of(bot)
+    assert redact(bot) == bot
+    assert "ROLEID" in _labels_of("roleId" + _COLON + " " + FAKE_ROLE_ID)
+
+
+def test_the_keyed_id_rules_cover_exactly_what_long_id_already_covered():
+    # The claim that makes these rules a RENAMING and not a narrowing: any value
+    # the new keyed rules decline is a value LONG_ID declines too, so nothing
+    # that used to be caught stops being caught.
+    short = "roleId" + _COLON + "1234567890"
+    assert _labels_of(short) == set()
+
+
+# --------------------------------------------------------------------------
+# measured false positives - Unreal Blueprint property GUIDs
+# --------------------------------------------------------------------------
+#
+# Characterization, not a defect report. The transient save carries Unreal
+# Blueprint property names in the shape ``Name_Index_<32 uppercase hex GUID>``
+# - a variable called ``Hp`` is stored as ``Hp_10_<GUID>``. Measured on the
+# largest StandaloneSlot generation, 177,878 bytes:
+#
+#   - 772 occurrences of a bare 32-hex run, 67 distinct. 770 occurrences (65
+#     distinct) are the Blueprint property shape; the other 2 are
+#     ``monsterGuid`` values inside JSON. All 772 are uppercase, and ZERO equal
+#     the operator's real ProductUserId harvested from the live log.
+#   - 100 occurrences of a 15-or-more digit run. 62 of them sit INSIDE one of
+#     just TWO of those GUIDs, which happen to contain a 17-digit and a
+#     16-digit decimal stretch; the 17-digit one recurs 61 times because the
+#     same property name repeats per MonsterData entry. The remaining 38 are
+#     genuine ids.
+#
+# So one cause - a hex GUID baked into the shipped Blueprint asset - trips TWO
+# independent rules, PRODUCTUSERID by shape and LONG_ID by length.
+#
+# NEITHER RULE IS NARROWED. A GUID is a format fact of the shipped asset, not a
+# machine fact, so the fixture authors its own GUID suffixes and both
+# false-positive classes vanish without a detector being touched. Weakening a
+# detector to make a build pass is prohibited outright, and here the failure
+# direction is the safe one anyway: the guard refuses a commit rather than
+# publishing an identity.
+
+
+def _blueprint_property(name: str, index: str, guid: str) -> str:
+    """Build a UE Blueprint property name at runtime. Nothing here is real."""
+    return name + "_" + index + "_" + guid
+
+
+#: 32 uppercase hex, the Blueprint GUID shape. Invented, and deliberately
+#: carrying a 17-digit decimal stretch so it trips the length rule too.
+#: The digit stretch is split across two literals for the same reason every
+#: other identifier in this file is: tests/test_no_pii.py scans this source
+#: with these very detectors, and a literal 17-digit run in it is a finding.
+FAKE_BLUEPRINT_GUID = "AB" + "1234567" + "8901234567" + "CDEF" + "9876543" + "EF"
+
+
+def test_the_blueprint_guid_shape_is_reported_as_a_product_user_id():
+    assert len(FAKE_BLUEPRINT_GUID) == 32
+    text = _blueprint_property("Hp", "10", FAKE_BLUEPRINT_GUID)
+    assert "PRODUCTUSERID" in _labels_of(text)
+
+
+def test_the_blueprint_guid_shape_also_trips_the_length_rule():
+    # The second half of the same false-positive family, and the reason it is
+    # worth writing down: a reader who only knew about the hex rule would
+    # conclude that lowercasing or keying the hex rule fixes this. It does not.
+    inner = {label for label, _, _ in iter_sensitive(FAKE_BLUEPRINT_GUID)}
+    assert "LONG_ID" in inner
+
+
+def test_a_real_shaped_product_user_id_is_still_caught_in_the_same_position():
+    # The positive control that keeps the characterization above honest. If a
+    # narrowing were ever introduced, this is the assertion that has to survive
+    # it: a real-shaped puid sitting in the SAME textual position as a Blueprint
+    # property GUID must still be caught.
+    text = _blueprint_property("Hp", "10", FAKE_PRODUCT_USER_ID)
+    assert "PRODUCTUSERID" in _labels_of(text)
+    assert FAKE_PRODUCT_USER_ID not in redact(text)
+
+
+def test_the_hex_rule_is_case_blind_by_design():
+    # Why uppercase is not a safe discriminator: the same 32 hex characters are
+    # the same identifier in either case, and any tool in the path can change
+    # the case of one without changing what it identifies.
+    assert "PRODUCTUSERID" in _labels_of(FAKE_PRODUCT_USER_ID.upper())
+    assert "PRODUCTUSERID" in _labels_of(FAKE_PRODUCT_USER_ID.lower())
