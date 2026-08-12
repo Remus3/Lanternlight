@@ -337,13 +337,22 @@ starting with `#` that carries an **id-shaped token** and does not parse as a
 heading now **raises** `MalformedLedgerHeading` naming the file, the line
 number and the offending text. Scoped that way on purpose - the dangerous false
 positive is a rule that fires on ordinary prose, because a guard that cries
-wolf gets switched off and then the real collision passes too. Measured before
-choosing the scope: 46 lines start with `#` below the marker across the ledger
-and every fragment, and **all 46 parse**, so nothing legitimate is refused.
-Verified after: all three entry points now raise where all three previously
-returned empty. Three mutants, `__pycache__` purged and every anchor asserted:
-guard removed from `_blocks_below` -> 5 failed; from `fragment_entry_ids` ->
-6 failed; id-token test forced false -> 11 failed; restored -> 84 passed.
+wolf gets switched off and then the real collision passes too. Verified after:
+all three entry points now raise where all three previously returned empty.
+Three mutants, `__pycache__` purged and every anchor asserted: guard removed
+from `_blocks_below` -> 5 failed; from `fragment_entry_ids` -> 6 failed;
+id-token test forced false -> 11 failed; restored -> 84 passed.
+
+**THAT FIX WAS INCOMPLETE, AND AN ADVERSARIAL PASS FOUND A WORSE HOLE IN IT.**
+See the section below. This item's claim to have closed the silent-entry-loss
+*class* did not stand; `LL-0037` is where that is settled.
+
+Also wrong, and it is this file's own anti-pattern for the fourth time: the
+sentence above used to cite "**46** lines start with `#` below the marker, and
+all 46 parse". Re-measured, it was **47** at the commit that wrote it and **51**
+four commits later. The count grows with every entry, so filing it at all was
+the mistake - it is no longer quoted anywhere, including in the docstring that
+recited it.
 
 **Three claims above are overstated and are corrected here rather than edited
 away:**
@@ -367,6 +376,50 @@ away:**
   over-tightening hazard this item named, arriving through editing rather than
   through re-running. Not fixed here - recorded as `OPS-8`, because the right
   answer may be that an integrated entry is simply never edited.
+
+### The P0 fix was itself holed - found by refuting it, closed as `LL-0037`
+
+The wrap ran an independent pass over this session's own three done-claims. It
+confirmed 2d and item 7 and returned **`LL-0034` as PARTIAL**, with the verdict
+that it "should not be recorded as closing the silent-entry-loss class". It was
+right, and the worst finding is worse than the bug `LL-0034` fixed.
+
+**A single forgotten backtick disarmed the whole guard.** The fence state was a
+bare toggle, so an entry that opened a code fence and never closed it left every
+following line counted as code - and the guard stood down for the rest of the
+file. Reproduced by the integrator before any fix:
+
+    integrate() -> ['LL-0900']      # NON-EMPTY. It reads as SUCCESS.
+    LL-0901 landed as its own entry: False
+    LL-0901 text swallowed into LL-0900's block: True
+    exception raised: none
+
+`LL-0034`'s defect at least returned `[]`, which looks anomalous. This returns a
+success, and absorbs a whole entry into its neighbour. An unbalanced fence is
+now itself a refusal.
+
+**And the id pattern assumed today's ids.** It matched `[A-Z]{2,6}-\d{3,}`, so a
+malformed heading carrying any other shape failed the heading pattern *and* the
+id pattern and fell straight through into silence - lowercase, mixed case, a
+one- or seven-letter prefix, two digits, or no hyphen. **`OPS-7` and `SAF-0001`
+both sit outside that pattern and both exist in this repository**, so it was
+never hypothetical. The shape is now permissive about all five, while still
+firing only on a line whose FIRST token is id-shaped, so a sub-heading citing an
+id in passing is not a false positive.
+
+Both weakenings the pass proved were unpinned are now pinned, and all six
+mutants go red: id shape narrowed -> 7 failed; fence delimiters narrowed -> 2;
+unbalanced-fence refusal deleted -> 6; id matched anywhere rather than
+first-token -> 2; `Path.home()` embedded in a contract -> 2; undecodable
+property reading as absence -> 2. Restored: **1030 passed**.
+
+**A new latent trap was found while writing one of those tests and is NOT fixed
+here** - `OPS-9`. The heading **guard** respects code fences; the heading
+**parser** does not. `_HEADING_RE.finditer` runs over the whole entry region, so
+a *well-formed* heading inside a code block is parsed as a real entry while a
+malformed one beside it is ignored. The two halves disagreeing is exactly the
+shape of the bugs above, and it deserves a considered fix rather than a quiet
+one during a wrap.
 
 **Namespacing was NOT implemented, deliberately** - recorded as `OPS-6`. The
 safety lane's accidental `SAF-NNNN` is collision-free by construction and is a
@@ -438,10 +491,23 @@ where every other symptom of this item was invisible. Measured at `311cef8`:
 path-dependence on the *checkout*; it was path-dependence on **any** absolute
 path the generator happened to see.
 
-The new guards are therefore **behavioural rather than substring checks** -
-rendering must not change when the checkout moves, and must not change when the
-worktree root moves. That catches a path re-embedded later that nobody has
-thought of yet, which a grep for `C:\Lanternlight` would not.
+The new guards are **behavioural rather than substring checks** - rendering must
+not change when the checkout moves, and must not change when the worktree root
+moves.
+
+**One sentence here was an OVER-CLAIM and a refutation pass refuted it.** It
+said those guards catch "a path re-embedded later that nobody has thought of
+yet". They do not: they pin `primary_checkout()` and `WORKTREE_ROOT`
+*specifically*. The pass demonstrated it by embedding `Path.home()` and
+regenerating - **1009 passed** on this machine with `C:\Users\Administrator`
+committed into a contract, while a checkout under a different `USERPROFILE`
+measured `1 failed, 1008 passed`. The 2d symptom exactly, invisible here.
+
+Guarding two known sources is not the property "no machine-specific path is
+ever committed", and only the second makes a clone-green claim durable. Closed
+by `test_no_contract_contains_ANY_absolute_path`, which matches any drive-letter
+or `/home`-style path in a rendered contract and carries its own positive
+control so an empty finding is not mistaken for a clean one. Ledger `LL-0037`.
 
 **One existing test changed shape, stated rather than quietly edited.**
 `test_the_branch_and_worktree_are_named` asserted `str(lane.worktree_path())`

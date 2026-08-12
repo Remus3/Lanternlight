@@ -11,6 +11,7 @@ what is on disk must equal what the roster renders right now. Widen a glob in
 `ops/lanes.py` without regenerating and the build goes red.
 """
 
+import re
 import sys
 from pathlib import Path
 
@@ -140,6 +141,28 @@ class TestTheContractIsCheckoutIndependent:
         root = str(lanes.WORKTREE_ROOT)
         for lane in lanes.LANES:
             assert root not in lane_contract.render(lane), lane.lane_id
+
+    def test_no_contract_contains_ANY_absolute_path(self):
+        """Close the CLASS, not the two instances that happened to bite.
+
+        A refutation pass showed the two tests above are not enough: they pin
+        `primary_checkout()` and `WORKTREE_ROOT` specifically, so embedding some
+        OTHER machine-specific path - `Path.home()` was the demonstration - left
+        the suite green here while a checkout under a different user measured
+        the 2d symptom again. Guarding the two known sources is not the same
+        property as "no machine-specific path is ever committed", and only the
+        second is what makes a clone-green claim durable.
+        """
+        absolute = re.compile(r"[A-Za-z]:[\\/]|(?<![\w.])/(?:home|Users|root|mnt|opt)/")
+        for lane in lanes.LANES:
+            found = absolute.findall(lane_contract.render(lane))
+            assert not found, f"{lane.lane_id} embeds an absolute path: {found[:3]}"
+
+    def test_that_absolute_path_guard_actually_matches_something(self):
+        # An empty finding is a claim about the pattern, not about the file.
+        absolute = re.compile(r"[A-Za-z]:[\\/]|(?<![\w.])/(?:home|Users|root|mnt|opt)/")
+        for probe in (r"C:\Lanternlight", "C:/ll-worktrees", "/home/someone", "/Users/someone"):
+            assert absolute.search(probe), probe
 
 
 class TestAuthoringRules:

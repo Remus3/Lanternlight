@@ -84,6 +84,24 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0037 - 2026-08-12 - The wrap refutation pass holed LL-0034's own fix - a forgotten backtick disarmed the guard and returned SUCCESS while eating an entry
+
+**Evidence:**
+- THE WORST HOLE, reproduced by the integrator before any fix rather than relayed: the fence state was a bare toggle, so an entry that opened a code fence and never closed it left every following line counted as code and the guard stood down for the rest of the file. integrate() -> ['LL-0900'], NON-EMPTY, which reads as SUCCESS; LL-0901 never landed as its own entry; its text was absorbed into LL-0900's block; no exception. WORSE than the LL-0034 defect, which at least returned []
+- SECOND HOLE: the id pattern was [A-Z]{2,6}-\d{3,}, i.e. today's ids. A malformed heading with any other shape failed the heading pattern AND the id pattern and fell through into silence - lowercase, mixed case, 1-letter and 7-letter prefixes, 2 digits, and no hyphen. OPS-7 and SAF-0001 both sit outside that pattern and both exist in this repository
+- THIRD HOLE, against LL-0033: the 2d guards pin primary_checkout() and WORKTREE_ROOT specifically, not the class. The pass embedded Path.home() and regenerated - 1009 passed on this machine with C:\Users\Administrator committed into a contract, while a checkout under a different USERPROFILE measured '1 failed, 1008 passed'. The 2d symptom exactly, invisible here
+- FOURTH HOLE, against LL-0035: gvas.parse omits an undecodable property from .properties and records it in .unknown_properties, so 'never written' and 'written but our reader failed' both answered None
+- THE FAILING TESTS CAME FIRST: 12 failed before any implementation, across the unbalanced-fence class, seven id shapes, the absolute-path class guard and the unreadable-property case
+- ALL SIX MUTANTS NOW RED, __pycache__ purged and every anchor asserted unique: id shape narrowed to LL-NNNN -> 7 failed; fence delimiters narrowed -> 2 failed; unbalanced-fence refusal deleted -> 6 failed; id matched anywhere instead of first-token -> 2 failed; Path.home() embedded in a contract -> 2 failed; undecodable property reading as absence -> 2 failed
+- python -m pytest -> '1030 passed in 21.88s' observed this run; 1009 before this entry. python -m ruff check . -> All checks passed
+- duplicate_claims over the real repository -> no id is claimed by two different entries, and no malformed heading
+
+THE VERDICT IS ACCEPTED AS GIVEN. The pass returned LL-0034 as PARTIAL with 'it should not be recorded as closing the silent-entry-loss class'. That was correct and the claim is corrected in ROADMAP 2c rather than defended. Both refutation passes this session found real defects in work that had already been called done, and one of them found a defect in the FIX for the previous one.
+A FILED COUNT WAS WRONG FOR THE FOURTH TIME IN TWO SESSIONS. LL-0034 cited '46 lines start with # below the marker'; it was 47 at that commit and 51 four commits later. The count grows with every entry, so filing it was the error rather than mis-measuring it. It is no longer quoted anywhere, including the docstring that recited it.
+OPS-9 OPENED, DELIBERATELY NOT FIXED HERE. The heading GUARD respects code fences; the heading PARSER does not - _HEADING_RE.finditer runs over the whole entry region, so a WELL-FORMED heading inside a code block is parsed as a real entry while a malformed one beside it is ignored. Found while writing the tilde-fence test, when the test failed for a reason its author had not predicted. Two halves disagreeing is the shape of every bug in this entry, so it deserves a considered fix and not a quiet one during a wrap.
+PROSE CORRECTIONS in lanternlight/damage.py, all re-measured: the window holds a mean of 1.06 records and 1.62 hits per generation over the 262 generations carrying the field, ranging 0-2 and 0-8, so 'roughly two monster entries' was wrong and it is closer to one; the six-value totalDamage series is a sampled subsequence, not consecutive generations; and the claim that the clock offset belongs to 'the machine that played' is now hedged, because a fixed -05:00 applied server-side would look identical on one machine's data. Separating them needs a capture from another zone or across a DST boundary.
+A HEREDOC MANGLED BACKSLASHES A THIRD TIME this session, and a stale mutation anchor was caught a third time. Both were refused by their own assertions rather than reported as clean greens. The rule earned twice over: write the script to a file, and assert the anchor before believing any survivor.
+
 ### LL-0036 - 2026-08-12 - Session close - 2d and item 7's shipped half closed, a P0 found in the ledger machinery, and every prior test count reclassified
 
 **Evidence:**
