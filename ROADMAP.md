@@ -360,6 +360,254 @@ change joined to the toggle input, or a documented negative stating what was
 tried and over how many attempts. Note item 1 may answer this incidentally - the
 toggle may be more legible in a raid than on the creation screen.
 
+## 7. Emberforge is NOT blocked - the save records damage - READY, high value
+
+Opened 2026-08-11. This item exists because the "deliberately not on this list"
+section at the bottom of this file was **wrong**, and it was wrong in the
+direction that cost the most: it said Emberforge cannot be filled until numbers
+exist, and named item 1 as the only unblocker.
+
+**Measured this session, first-party, from bytes already on disk.** The
+transient save carries `DamageCollectonDataSet`, a JSON array of per-source
+damage records. Each entry has `sourceType`, `monsterId`, `monsterGuid`,
+`bDeathCauser`, `totalDamage`, and a `damageChildList` of individual hits. Each
+hit carries `damageValue` (a float), `timeStamp` (a Unix epoch float with
+sub-millisecond resolution), `nameId`, `Key` and `bChildDeathCauser`.
+
+Two consecutive hits on one target in the captured run measured 17.356201171875
+and 92.13079833984375, 0.256 seconds apart. Those are the first damage numbers
+this project has ever held, and nobody published them - the game wrote them.
+
+**263 generations of that file are already captured** at `C:\ll-captures\saves\`,
+so a damage timeline for a whole 20-minute run exists right now without the
+operator doing anything.
+
+Two properties of the field are measured and constrain any reader:
+
+- It is a **rolling window, not a cumulative log.** Summed `totalDamage` across
+  generations went 74.66, 251.20, 137.52, 89.09, 89.09, 227.94 - it falls as
+  well as rises, so entries age out. A reader must accumulate across
+  generations and must not treat one snapshot as a run total.
+- `nameId` was **0** on every hit observed. If `nameId` binds to the ability
+  that dealt the damage, that is damage-per-ability and it is the single most
+  valuable binding available to Emberforge. It is **unmeasured** - 0 may mean
+  basic attack, or unset. Do not assume.
+
+**EXTRACTED 2026-08-11.** All **263** generations parsed, **278** window
+readings deduplicated by `(monsterGuid, timeStamp, damageValue)` down to
+**21 distinct hits** over a **1020.3-second** span. Damage ranged 9.745483 to
+137.517426 against **8 distinct monsterIds** (1005, 1006, 1014, 1029, 2003,
+2007, 2017, 2021) across 9 monster instances.
+
+**The load-bearing result: damage is DETERMINISTIC, not rolled.** Three values
+repeat exactly, and every repeat has a distinct timestamp, so none is a
+deduplication artifact:
+
+| value | hits | detail |
+|---|---|---|
+| `9.745483398` | 5 | one monster instance, gaps 1.712, **1.501, 1.499, 1.499** |
+| `83.740417480` | 3 | monsterId 2003, across **two different instances** |
+| `30.472595215` | 2 | gap 1.709 |
+
+Two consequences worth separating. `83.740417480` landing identically on two
+**different instances of the same monster type** is the strongest single piece
+of evidence that damage is computed rather than sampled - a per-hit roll would
+not reproduce a float to nine places twice. And three consecutive gaps of
+1.501, 1.499, 1.499 seconds - a spread of 2 ms - is the **first timing constant
+this project has ever measured**.
+
+**Three negatives, each worth as much as the positives:**
+
+- `nameId` is **0 on all 424 readings** in every one of the 263 generations,
+  and `Key` is empty on all 424. So the save's window carries no attribution
+  at all, and the ~1.5 s interval cannot be attributed from the save alone.
+
+  **ANSWERED 2026-08-11 - `nameId` and `SkillNameId` ARE the same id space.**
+  Not inferred: the value `6130017` appears as `skillNameId` in the log's
+  kill-history payload and as `nameId` inside a `damageChildList` in the same
+  log, from the same component family. `nameId: 0` in the save therefore means
+  **unset**, not "no such concept". See the log section below.
+
+## 7a. The log carries what the save's window does not - MEASURED 2026-08-11
+
+The log's `[DamageCollectionComponent]: jsonString:` emits the **same structure**
+the save stores in `DamageCollectonDataSet`, but with `Key` **populated** where
+all 424 save readings had it empty. That makes the log the attribution surface
+and the save the sampling surface.
+
+**Three id-to-name bindings, first-party, read off the game's own emission:**
+
+| id | Key | range |
+|---|---|---|
+| 6130017 | `NormalArrow` | `613xxxx` - player ability |
+| 6130007 | `ExplosionArrow` | `613xxxx` - player ability |
+| 6250000 | `MonsterDamage` | `625xxxx` - monster as source |
+
+No Key maps to two ids and no id maps to two Keys across the sample. These are
+the first ability bindings the project holds, and they are **distinct from the
+`1205xx` ammoId space** already recorded, so ability and ammo are not one space.
+
+**`sourceType` is the direction flag, and it is now read rather than guessed:**
+
+- `sourceType: 0` - `monsterId` is **null** and the Key is a player ability.
+  The **player** is the source.
+- `sourceType: 1` - `monsterId` is **populated** and the Key is `MonsterDamage`.
+  The **monster** is the source.
+
+**CONSEQUENCE, and it inverts the natural reading of item 7's series.** All 21
+extracted hits carry `sourceType: 1` with a populated `monsterId`. By the log's
+own semantics that is **damage the operator TOOK, not damage they dealt.** The
+1.5 s repeating tick is therefore most likely incoming, which makes a monster
+attack cadence or a damage-over-time effect **on the player** the leading
+readings - not a bow cadence.
+
+This is stated as a **strong inference, not a measurement**: it rests on a
+single `sourceType: 1` payload in the log, and the save's records differ from
+it by having an empty `Key` where the log's had `MonsterDamage`. That
+difference is unexplained. **No damage number in item 7 may be labelled dealt
+or taken until item 7b settles it.** Recording the inference and its weakness
+is the point - the earlier draft of item 7 left direction open, and the naive
+assumption would have been exactly backwards.
+
+**Also measured here:** the log emits **one payload per death event** with
+`bDeathCauser: true`, so the log holds the killing blow that the save's rolling
+window drops. A reader that wants complete combat needs both surfaces. And a
+new monsterId, **99021**, appears only as the source that killed the operator -
+a range no other observation has touched.
+
+**SAFETY, routed to the safety lane:** the log line adjacent to these payloads
+carries the operator's persona in a bare `name:` field, and the kill-history
+line carries a third party's `playerName` **in CJK**, confirming `SAF-4` on a
+second surface. No excerpt of this region may be committed, and the
+`DamageCollectionComponent` region is now a named redaction target.
+- `bDeathCauser` and `bChildDeathCauser` are **False on all 21**, yet the run
+  recorded kills. So `DamageCollectonDataSet` is **not a complete combat log** -
+  it drops or rotates out the killing blow.
+- `sourceType` is **1** on all 21 and `Key` is empty on all 21. One source type,
+  no key. Whatever those fields discriminate was never exercised here.
+
+**THE OPEN QUESTION THAT DECIDES THE INTERPRETATION, and it is not answered:**
+whether these records are damage the player **dealt to** each monster or damage
+each monster **dealt to** the player. The set is keyed by `monsterId` and
+`monsterGuid`, which reads as "damage relating to this monster" and does not
+say which direction. Summed damage is 1284 against a player at 556 Hp with 3
+flasks, which is suggestive of neither reading strongly enough to settle it.
+**Every number above is direction-agnostic and must stay that way until this is
+measured.** Item 7b answers it cheaply: hit a known target for a known amount.
+
+**Remaining acceptance:** the extractor is currently merger analysis in a
+scratchpad, not shipped code. It needs a home in a lane, tests, and the
+timestamps joined to log wall-clock. Plus: no damage coefficient may be
+published until the same value is seen from an **independent run** - one run
+cannot separate a coefficient from a lucky repeat, however precise.
+
+**A sampling limit to design against:** 278 window readings over ~20 minutes of
+play yielded only 21 hits, because the window holds roughly two monster entries
+at a time and combat rotates them out fast. Most of the run's combat was never
+observed. Polling faster will not fix a window that small - this is a ceiling
+on what this surface can ever give, and it is an argument for the controlled
+environment in item 7b rather than for a faster poller.
+
+## 7b. Training grounds as a controlled measurement rig - READY, needs the client
+
+Opened 2026-08-11 from third-party player testimony (see item 8), and it is the
+cheapest unblocker on this list.
+
+The game ships a **training ground** where the host can spawn bots of chosen
+class, difficulty and gear quality, freeze them, and restore their own health
+and consumables. If that is accurate, it is a repeatable, zero-stake
+environment with a controlled input - which is exactly what item 7 needs to
+turn a damage number into a coefficient. Every previous plan for measuring
+combat math assumed a real run, with its gear loss, its variance and its
+single-attempt sampling.
+
+**This claim is UNVERIFIED.** It comes from one creator's video and no
+first-party observation here has seen the training ground at all.
+
+**Acceptance:** enter the training ground with the log tailing and a frame
+poller running, and record whether (a) it exists, (b) `DamageCollectonDataSet`
+is written there at all - it lives in `StandaloneSlot_<roleId>.sav`, which is
+created at match start, and a training ground may not be a "match", so this may
+be a clean negative - and (c) whether a repeated identical attack yields an
+identical `damageValue`. A written negative on any of the three is a result.
+
+## 8. Third-party data sources - reviewed 2026-08-11, tier and provenance fixed
+
+Reviewed at the operator's request. Recorded here so the assessment is not
+re-done, and so nothing absorbs these as facts by accident.
+
+**`questlog.gg` is DATAMINED, not hand-mapped.** Measured, not inferred: its
+monster database is addressed by numeric id at `/db/monster/<id>` in the same
+id space this project observed in the save's `Id2cnt` maps, and its listing
+carries developer-internal rows no player can ever see - a
+`[Debug]OrdinaryMonsterTemplate`, a `Test Dummy Monster` and a `[Discarded]`
+entry. A wiki built from play cannot contain a discarded placeholder. Its
+category slugs are internal too: the UI says "Greater Elite" while the URL says
+`BigElite`.
+
+The consequence is **not** that we use it more, and **not** that we relax
+[ADR-002](docs/adr/ADR-002-no-asset-extraction.md). Someone else decrypted the
+paks; this project still does not, and nothing about that changes. What it
+means is that the site is a **hypothesis and cross-check source**, tier 4, and
+that an id learned there is **never** written into
+[`docs/OBSERVED_IDS.md`](docs/OBSERVED_IDS.md) as an observation. A
+**contradiction** between their table and our measurement is a real result and
+is worth chasing; an agreement is not corroboration.
+
+**One cross-check already ran and held.** Their `1029` is "Hallowgrove
+Woodling". This project independently measured `1029` in the save's
+`TeamKillMonsterData` on a run the operator attested was Hallowgrove, whose
+internal map is `Whitewoods_Day` with the save's own zone key
+`WhiteWoodsOutskirts`. Their player-facing name and our internal name agree
+from opposite directions, which is worth something precisely because neither
+was derived from the other.
+
+**A second map name is now known and unmeasured here: `Brandrgarde`.** Their
+Brandrgarde (South) layer counts 316 treasure chests, 63 extraction points, 327
+enemies (2 Boss, 4 Greater Elite, 22 Elite, 68 Mini-Elite, 231 Normal), 13
+merchants and 9 quest interactables. **None of that is recorded as fact here.**
+It is a set of expectations to test the first time the operator loads that map,
+and the useful form of the test is the count, because a count that disagrees is
+immediately informative.
+
+**A live example of why the word matters.** That site says "Extraction Point".
+The game says **escape**, and `extract` appears zero times in the log - already
+recorded under item 1. Anyone grepping the log for a term learned from a map
+site gets a clean negative that means nothing.
+
+**`gamerguides.com` is HAND-MAPPED, and it is a DIFFERENT provenance from the
+site above.** Its maintainer states it plainly in the announcement thread: a
+small team "filling them out as we play", with a "Suggest Markers" function for
+readers to add their own findings. So it is **first-party player observation,
+crowd-sourced** - a higher trust tier than a datamined dump for anything about
+where a thing actually is, and a **lower** one for completeness, because
+whatever nobody has walked past yet is simply absent.
+
+Two caveats the maintainer volunteers, and both matter more than the maps:
+
+- **Its database's first iteration was built on the DEMO.** A demo-derived
+  table is stale by construction against a shipped build, and this is
+  self-declared rather than inferred. Nothing from that database may be treated
+  as current without a first-party check.
+- **They are "being mindful of randomization"**, which implies spawn or loot
+  randomization exists. That is a game-mechanic claim from a credible source
+  and it is **UNMEASURED here**. It also means a hand-placed marker for
+  randomised content is a probability, not a location - so a marker that fails
+  to match observation refutes nothing on its own.
+
+Also from that thread, unmeasured here: **Brandrgarde has North and South
+layers**, and **Chaos Mode gets its own map layers**, which implies difficulty
+changes map content rather than only scaling it. If true, `roomModeId` or
+`matchType` in the map URL is the axis that selects it - see item 1, which
+already established that four axes exist and that `matchId` is not the
+discriminator.
+
+**The general rule this item exists to fix:** "third-party site" is not a trust
+tier. Two sites for the same game, reviewed on the same day, turned out to have
+opposite provenances - one datamined from encrypted assets, one walked by hand.
+They fail in opposite directions and must be cited differently. Check how a
+source was built before quoting it, every time.
+
 ---
 
 ## Ordering note
@@ -388,7 +636,13 @@ mid-session.
   ([ADR-001](docs/adr/ADR-001-no-game-process-interaction.md)).
 - Anything requiring decrypted paks
   ([ADR-002](docs/adr/ADR-002-no-asset-extraction.md)).
-- Emberforge formula work. The engine cannot be filled before there are measured
-  numbers to fill it with, and as of 2026-08-09 **no cooldown values, damage
+- ~~Emberforge formula work.~~ **REFUTED 2026-08-11 - see item 7.** This line
+  said the engine could not be filled before measured numbers existed, and named
+  item 1 as the unblocker. It is still true that **no cooldown values, damage
   coefficients or stealth durations are published anywhere**
-  (`docs/CLASS_RESEARCH.md`). Item 1 is the unblocker.
+  (`docs/CLASS_RESEARCH.md`). It is **false** that no numbers exist: the
+  transient save writes per-hit `damageValue` with sub-millisecond timestamps,
+  and 263 generations of it were captured on 2026-08-09. The blocker was never
+  the game - it was that nobody had read the field. Left here struck through
+  rather than deleted, because "we checked and there is nothing" was wrong for
+  two days and the shape of that error is the useful part.
