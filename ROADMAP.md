@@ -317,7 +317,7 @@ entries, and every roadmap item, branch and commit citing an `LL` id, refer to.
 That is an operator decision, and detection makes it a considered one rather
 than an urgent one.
 
-## 2d. The suite is only green IN PLACE - OPEN, ops lane, confirmed twice
+## 2d. The suite is only green IN PLACE - CLOSED 2026-08-12
 
 `OPS-4` was recorded in `LL-0021` as "path-dependent" and has now been
 confirmed by an independent pass with the consequence spelled out.
@@ -335,10 +335,68 @@ clone. A fresh clone measures one failure. `README.md` tells a new contributor
 to clone and run `python -m pytest`, so the documented first-run experience is
 a red suite.
 
-**Acceptance:** the contract renders a path relative to the checkout, or the
-test compares modulo the root; a fresh `git clone` plus `python -m pytest`
-goes green, demonstrated end to end rather than argued; and the guard is shown
-to go red when the relativisation is removed.
+**Acceptance - MET 2026-08-12.** Ledger `LL-0033`. Closes `OPS-4`.
+
+Of the two options the acceptance allowed, the **first** was taken and the
+second deliberately refused. A test that compares modulo the root would have
+gone green while leaving `C:\Lanternlight` sitting inside eight generated files
+in a **public** repository, and it would have weakened the drift guard into
+"equal after an arbitrary substitution". The contract now names **no absolute
+path at all**: it gives the lane its worktree *directory* (`ll-lane-<id>`),
+says the root is `LL_WORKTREE_ROOT` or `ops.lanes.WORKTREE_ROOT`, and tells it
+to resolve the concrete path with `lane.worktree_path()` - the same function the
+launcher itself calls. A path typed into a document is a guess about the
+reader's machine.
+
+**Demonstrated end to end, not argued.** A real `git clone` into a scratch
+directory at a foreign path, both times:
+
+| ref | command | result |
+|---|---|---|
+| `311cef8` | `python -m pytest` | **1 failed, 952 passed** - all eight lanes stale |
+| `5725c03` | `python -m pytest` | **957 passed** |
+
+`grep` for `C:\`, `/Lanternlight` and `ll-worktrees` over the **cloned**
+`.claude/commands/` returns nothing.
+
+**The guard goes red when the relativisation is removed - both halves.**
+`__pycache__` purged before each run, and the anchor asserted before believing
+any survivor: re-embedding the checkout path fails 3 tests, re-embedding the
+worktree path fails 3, restored is 957.
+
+Worth keeping, because it is this file's own anti-pattern caught live: **the
+first mutation probe aborted on its own anchor assertion.** A heredoc mangled
+the backslashes so the anchor never matched. Without that assertion the probe
+would have reported a clean GREEN and been read as proof the guard was vacuous
+- the exact shape of "a mutation that fails to apply looks exactly like a
+passing test", hit while specifically watching for it.
+
+**A SECOND, INDEPENDENT TRIGGER of the same defect was found and is also
+closed**, and it was in nobody's plan. `lane.worktree_path()` was baked in too,
+and it does **not** derive from the checkout - so setting
+`LL_WORKTREE_ROOT` reddened the suite **in place**, at `C:\Lanternlight`,
+where every other symptom of this item was invisible. Measured at `311cef8`:
+`1 failed, 20 passed`. At `5725c03`: `957 passed`. The item was filed as
+path-dependence on the *checkout*; it was path-dependence on **any** absolute
+path the generator happened to see.
+
+The new guards are therefore **behavioural rather than substring checks** -
+rendering must not change when the checkout moves, and must not change when the
+worktree root moves. That catches a path re-embedded later that nobody has
+thought of yet, which a grep for `C:\Lanternlight` would not.
+
+**One existing test changed shape, stated rather than quietly edited.**
+`test_the_branch_and_worktree_are_named` asserted `str(lane.worktree_path())`
+appeared in the text, which cannot survive a relocated checkout. It was made
+**stronger** rather than relaxed: it now asserts the lane's own worktree
+directory is named **and** that no other lane's directory appears, which
+catches a lane pointed at a sibling's worktree. A test weakened to go green is
+invisible to an exit code, so this is on the record.
+
+**And the consequence for every earlier count.** `LL-0028`'s **927**, and 943,
+and 953, and every "N passed" this project has ever written down, were true
+**in place** and not in a clone. **957 is the first number in this project's
+history measured from a fresh clone at a foreign path.**
 
 ## 2b. Sanitised fixture for the transient save - CLOSED 2026-08-11
 
@@ -596,11 +654,37 @@ Two properties of the field are measured and constrain any reader:
   valuable binding available to Emberforge. It is **unmeasured** - 0 may mean
   basic attack, or unset. Do not assume.
 
-**EXTRACTED 2026-08-11.** All **263** generations parsed, **278** window
+**EXTRACTED 2026-08-11.** All **263** generations parsed, **424** window
 readings deduplicated by `(monsterGuid, timeStamp, damageValue)` down to
-**21 distinct hits** over a **1020.3-second** span. Damage ranged 9.745483 to
+**21 distinct hits** over a **1020.344-second** span. Damage ranged 9.745483 to
 137.517426 against **8 distinct monsterIds** (1005, 1006, 1014, 1029, 2003,
 2007, 2017, 2021) across 9 monster instances.
+
+**RE-DERIVED INDEPENDENTLY 2026-08-12 by the integrator, and it corrected two
+filed counts.** Every headline above held on re-measurement - 263 parsed with
+zero failures, 21 distinct hits, 1020.344 s, the same 8 monsterIds, 9
+instances, total 1284.835785, and all three repeat groups with their gaps. Two
+things did not:
+
+1. **The deduped-from count was 278 and is 424.** This document said "**278**
+   window readings deduplicated by `(monsterGuid, timeStamp, damageValue)`",
+   and then said "`nameId` is 0 on all **424** readings" a few paragraphs
+   later - two numbers for one quantity, in one item. Both are real and they
+   count **different things**: summed across generations there are **278
+   top-level entries** (one per monster instance per generation) and **424
+   child hit readings**. The dedup key is a **child-level** key, so the number
+   being deduped is 424. The sentence paired the right operation with the
+   wrong count. A filed count is a hypothesis - this file's own anti-pattern,
+   and the correction matters because an extractor test encoding "278 deduped
+   to 21" would freeze a wrong intermediate.
+2. **It is 262 generations carrying the field, not 263.** The **first**
+   generation - 2,190 bytes, the smallest, written at match start before any
+   combat - does not carry `DamageCollectonDataSet` **at all**. The property is
+   **absent**, not present-and-empty. That is a fact worth keeping rather than
+   smoothing over: the field is created when the first damage lands, so
+   "unmeasured" and "measured zero" stay distinguishable on this surface
+   exactly as the measurement doctrine requires, and a reader must treat a
+   missing property as normal rather than as a parse failure.
 
 **The load-bearing result: damage is DETERMINISTIC, not rolled.** Three values
 repeat exactly, and every repeat has a distinct timestamp, so none is a
@@ -629,8 +713,9 @@ Kept visible rather than edited away, because the overstatement is instructive:
 
 **Three negatives, each worth as much as the positives:**
 
-- `nameId` is **0 on all 424 readings** in every one of the 263 generations,
-  and `Key` is empty on all 424. So the save's window carries no attribution
+- `nameId` is **0 on all 424 readings** in every one of the **262** generations
+  that carry the field, and `Key` is empty on all 424. So the save's window
+  carries no attribution
   at all, and the ~1.5 s interval cannot be attributed from the save alone.
 
   **PROBABLY the same id space as `SkillNameId` - a strong hypothesis, NOT
@@ -750,7 +835,7 @@ timestamps joined to log wall-clock. Plus: no damage coefficient may be
 published until the same value is seen from an **independent run** - one run
 cannot separate a coefficient from a lucky repeat, however precise.
 
-**A sampling limit to design against:** 278 window readings over ~20 minutes of
+**A sampling limit to design against:** 424 window readings over ~20 minutes of
 play yielded only 21 hits, because the window holds roughly two monster entries
 at a time and combat rotates them out fast. Most of the run's combat was never
 observed. Polling faster will not fix a window that small - this is a ceiling
@@ -861,7 +946,7 @@ source was built before quoting it, every time.
 
 ## Ordering note
 
-**Item 2b is CLOSED 2026-08-11.** The next item is **7** - extract the damage
+**Items 2b, 2c and 2d are CLOSED.** The next item is **7** - extract the damage
 series into shipped code - because it is the only thing on this list that
 unblocks Emberforge, and because the numbers are already on disk. **Item 7b** is
 the cheapest thing here and answers item 7's one blocking question, so fold it
