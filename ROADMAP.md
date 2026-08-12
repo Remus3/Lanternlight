@@ -1042,13 +1042,23 @@ source was built before quoting it, every time.
 
 ## Ordering note
 
-**Items 2b, 2c and 2d are CLOSED.** The next item is **7** - extract the damage
-series into shipped code - because it is the only thing on this list that
-unblocks Emberforge, and because the numbers are already on disk. **Item 7b** is
-the cheapest thing here and answers item 7's one blocking question, so fold it
-into whichever session next has the client open. **Item 2c** is a defect in the
-continuity machinery and should be fixed before the next multi-lane session,
-not after it silently eats another entry.
+**Items 2b, 2c, 2d and item 7's shipped-code half are CLOSED as of
+2026-08-12.** `lanternlight/damage.py` reads the series, so the extractor is no
+longer scratchpad analysis.
+
+**The next item is 7b, the training ground**, and it needs the client open. It
+is the cheapest thing on this list and the **only** route to **outgoing**
+damage in quantity - which is the half Emberforge actually needs, because the
+21 hits measured so far are damage **taken**. `sourceType: 0` is what to look
+for. If the game is running, do 7b first and fold items 1, 4b, 5 and 6 into the
+same session, since all of them need the client and none deserves its own.
+
+**If the client is not open, the next item is 3, the live log tail.** It is
+fully specified, depends on nothing, and is the spine of every live feature.
+Item 4's watcher is equally independent.
+
+Item 7 itself stays **open** on one thing only: no coefficient may be published
+until the same value is seen in an **independent run**.
 
 One ownership correction, measured this session: `tests/fixtures/**` is owned by
 **ingest**, not safety. This document called 2b "safety-lane work" and the
