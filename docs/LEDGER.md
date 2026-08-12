@@ -84,6 +84,23 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0038 - 2026-08-12 - OPS-9 closed - the heading guard and the heading parser now share one fence scan, and a THIRD private reader turned up while closing it
+
+**Evidence:**
+- THE DEFECT: _assert_headings_parse skipped fenced lines while _blocks_below used _HEADING_RE.finditer over the whole entry region, which knows nothing about fences. So inside a code block a WELL-FORMED heading was parsed as a real entry while a MALFORMED one beside it was ignored - the guard protecting a region the parser read differently
+- IT IS NOT HYPOTHETICAL: docs/LEDGER.md documents its own entry format with a fenced '### LL-0000 - ...' example, safe today only because it sits ABOVE the entries marker. Quoting an example entry below the marker, or in a lane fragment, minted a phantom entry with a real id
+- THE FAILING TESTS CAME FIRST: 4 failed before implementation, including 'assert [LL-0900, LL-9999] == [LL-0900]'
+- THE FIX: one _scan_entry_region walks the region once, tracks fences, and returns heading offsets, the first malformed-heading suspect, and any unclosed fence. The guard and the splitter both consume it, so there is no second opinion left to disagree with
+- A THIRD PRIVATE READER WAS FOUND WHILE FIXING THE FIRST TWO: fragment_entry_ids had its own _HEADING_RE.finditer as well. It is now on the shared scan. Three readers meant three chances to disagree, and only two of them were in the filed defect
+- _HEADING_RE is now referenced in exactly ONE place in the module - verified by grep, which also matched three docstring mentions, so the pattern was proven to match before the count was believed
+- REAL-REPO PARITY AFTER THE CHANGE: docs/LEDGER.md still parses 37 entries LL-0037 down to LL-0001, and the fragments still parse safety 3, ingest 5, ops 6, research 1 - so the stricter parser changed no existing reading
+- NON-VACUITY, __pycache__ purged and every anchor asserted unique: splitter reverted to its own finditer -> 3 failed; fragment_entry_ids reverted -> 1 failed; the scan stops tracking fences -> 5 failed; restored -> 1035 passed
+- python -m pytest -> '1035 passed in 23.10s' observed this run; 1030 before. python -m ruff check . -> All checks passed
+
+THE PATTERN, now four for four in this module: every bug here has been TWO HALVES OF ONE PARSER DISAGREEING. The id race (fragments merged cleanly, integrate skipped silently), the malformed heading (guard knew the shape, parser did not), the unclosed fence (toggle vs reality), and now the guard-versus-parser split. The fix each time is to delete the second opinion rather than to teach it the same rules.
+A TEST FAILING FOR AN UNEXPECTED REASON IS WHAT FOUND THIS. OPS-9 was opened during the previous wrap because a tilde-fence test failed in a way its author had not predicted - the fence suppressed the guard but not the parser. Reading the failure rather than adjusting the assertion is what turned a confusing red into a filed defect.
+ONE ASSERTION IN THIS ENTRY'S OWN TESTS WAS WRONG AND IS CORRECTED RATHER THAN DROPPED: the first draft asserted the phantom heading's TEXT never reaches the ledger. It does, and it should - it is part of its author's entry body, and an append-only record must not rewrite what was written. The property that matters is that the phantom id never becomes an ENTRY, so the assertion is now about the parsed ids rather than about the bytes.
+
 ### LL-0037 - 2026-08-12 - The wrap refutation pass holed LL-0034's own fix - a forgotten backtick disarmed the guard and returned SUCCESS while eating an entry
 
 **Evidence:**
