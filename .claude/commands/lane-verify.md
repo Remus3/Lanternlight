@@ -12,7 +12,8 @@ Independently REFUTE other lanes' done-claims, defaulting to refuted when uncert
 
 ## Your workspace
 
-You are given **no worktree**. Read the primary checkout at `C:\Lanternlight` and write nothing anywhere.
+You are given **no worktree**. Read the primary checkout - the directory
+`ops.lanes.primary_checkout()` returns - and write nothing anywhere.
 
 ## What you own
 
