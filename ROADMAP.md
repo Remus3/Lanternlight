@@ -887,11 +887,49 @@ player's build does - and the save's rolling window does not carry it. So:
 Item 7b is now more important, not less: the training ground is the only route
 to outgoing damage in quantity, and `sourceType: 0` is what to look for.
 
-**Remaining acceptance:** the extractor is currently merger analysis in a
-scratchpad, not shipped code. It needs a home in a lane, tests, and the
-timestamps joined to log wall-clock. Plus: no damage coefficient may be
-published until the same value is seen from an **independent run** - one run
-cannot separate a coefficient from a lucky repeat, however precise.
+**Remaining acceptance - MET 2026-08-12 for the shipped-code half.** Ledger
+`LL-0035`. `lanternlight/damage.py`, owned by **ingest**, with 37 tests.
+
+- **A home in a lane.** Ownership declared in `ops/lanes.py` and the contracts
+  regenerated. This is `OPS-2`'s second option - the integrator declares it at
+  merge - taken deliberately, because the orphan guard goes red the moment the
+  file exists, so the file and its ownership cannot land separately.
+- **Tests.** The JSON shape is characterised against the **committed fixture**,
+  which does carry `DamageCollectonDataSet` (one record, one hit), so no
+  out-of-repo data is needed to ship or to test. Cross-generation dedup is our
+  logic rather than the game's, so it is tested on authored generations.
+- **Timestamps joined to wall-clock - and the join found a trap.** See below.
+- **Verified end to end** against all 263 captures, the shipped module
+  reproducing the scratch analysis exactly: 262 generations with payload, 424
+  readings, 21 distinct hits, 1020.344 s, total 1284.835785, the same 8 ids, 9
+  instances, direction `monster` only, `nameId` 0 only.
+
+**`timeStamp` IS NOT A UNIX EPOCH. It encodes LOCAL wall clock as though it
+were UTC.** This was in nobody's plan and it silently breaks every join between
+this surface and the log.
+
+Measured on two independent surfaces:
+
+- The capture files' own **mtimes** put the run at **22:27:00 to 22:46:54 UTC**
+  (17:27 to 17:46 local, machine at UTC-5). Reading the hit timestamps as an
+  epoch renders them **17:28:10 to 17:45:11 "UTC"** - five hours *before* the
+  run began, which is impossible, and numerically equal to the run's **local**
+  clock.
+- The **log**, which timestamps in real UTC and emits the same payload:
+  across 5 readings at **three separate times of day**, log-UTC minus
+  timestamp-read-as-epoch is **18009 to 18015 seconds**, i.e. 5.0025 to 5.0041
+  hours. Exactly the operator's offset, plus a few seconds of event-to-emission
+  lag - and the lag is positive, which is the physically correct direction.
+
+So `as_local_naive()` returns a **naive** datetime, and `to_utc()` **refuses**
+without an explicit offset rather than inventing one. The offset is a property
+of the machine that played, is absent from the save, and moves with daylight
+saving. With the offset supplied, the first and last hits land at 22:28:10 and
+22:45:11 UTC - both inside the mtime-measured window, which is the join working.
+
+**Still open on this item:** no damage coefficient may be published until the
+same value is seen from an **independent run** - one run cannot separate a
+coefficient from a lucky repeat, however precise. Nothing here computes one.
 
 **A sampling limit to design against:** 424 window readings over ~20 minutes of
 play yielded only 21 hits, because the window holds roughly two monster entries
