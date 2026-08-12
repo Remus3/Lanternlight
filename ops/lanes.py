@@ -39,7 +39,7 @@ from __future__ import annotations
 
 import os
 import subprocess
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
@@ -52,6 +52,7 @@ __all__ = [
     "by_id",
     "is_cross_cutting",
     "owner_of",
+    "path_matches",
     "primary_checkout",
     "tracked_files",
 ]
@@ -198,6 +199,22 @@ def _normalise(path: str | Path) -> PurePosixPath | None:
     # 2026-08-09; the safety lane did not own the git hooks, and every existing
     # test passed because zero owners satisfies "not more than one owner".
     return PurePosixPath(text.removeprefix("./"))
+
+
+def path_matches(path: str | Path, patterns: Iterable[str]) -> bool:
+    """True when ``path`` matches any of ``patterns``, by the roster's rules.
+
+    Exposed so a pending claim (`OPS-2`) is matched by exactly the same
+    normalisation the roster uses. Re-implementing it beside the roster is how
+    the two would drift, and this repository has already paid once for a
+    separator bug here - ``lstrip("./")`` strips CHARACTERS, so it ate the
+    leading dot of every dotfile and the ownership map silently matched nothing
+    for them.
+    """
+    rel = _normalise(path)
+    if rel is None or is_cross_cutting(rel):
+        return False
+    return any(rel.full_match(pattern) for pattern in patterns)
 
 
 def is_cross_cutting(path: str | Path) -> bool:
