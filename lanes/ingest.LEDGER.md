@@ -11,6 +11,23 @@ The integrator folds these entries into `docs/LEDGER.md` on `main`, with
 
 <!-- LANE ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0035 - 2026-08-12 - ROADMAP 7 - the damage series is shipped code, and the save's timeStamp turned out not to be a Unix epoch
+
+**Evidence:**
+- lanternlight/damage.py owned by ingest, tests/test_damage.py with 37 tests; ownership declared in ops/lanes.py and the eight lane contracts regenerated
+- THE CLOCK TRAP, measured on TWO INDEPENDENT SURFACES. Surface 1, the capture files' own mtimes: the run ran 22:27:00 to 22:46:54 UTC (17:27 to 17:46 local, machine at UTC-5). Reading the hit timestamps as a Unix epoch renders them 17:28:10 to 17:45:11 'UTC' - five hours BEFORE the run started, which is impossible, and numerically equal to the run's LOCAL wall clock
+- Surface 2, the log, which timestamps in real UTC and emits the same DamageCollectionComponent payload: across 5 readings at THREE separate times of day (14:48, 20:43, 22:36 UTC) the delta log-UTC minus timestamp-as-epoch is 18009.056 to 18014.747 seconds - 5.0025 to 5.0041 hours. Exactly the operator's UTC offset plus a few seconds of event-to-emission lag, and the lag is POSITIVE, which is the physically correct direction
+- CONSEQUENCE IN THE API: as_local_naive() returns a NAIVE datetime because the save does not know a timezone, and to_utc() raises UnknownClockOffset rather than inventing one. The offset belongs to the machine that played, is absent from the save, and moves with daylight saving. test_reading_it_as_an_epoch_falls_OUTSIDE_that_window pins the wrong reading so that the right one is not vacuous
+- END TO END over all 263 captures, the shipped module reproducing the scratchpad analysis exactly: 263 generations, 262 with a payload, 424 window readings, 21 distinct hits, span 1020.344 s, total 1284.835785, monsterIds (1005 1006 1014 1029 2003 2007 2017 2021), 9 instances, direction 'monster' only, nameId 0 only
+- THE WALL-CLOCK JOIN WORKING: with the offset supplied the first and last hits land at 22:28:10.921 and 22:45:11.265 UTC, both inside the 22:27:00 to 22:46:54 window measured independently from file mtimes
+- The COMMITTED fixture carries DamageCollectonDataSet (one record, one hit, 118.453857421875 at 1786297499.5909998, monsterId 2017), so the JSON shape is characterised against real game bytes and no out-of-repo data is needed to ship or test this
+- python -m pytest -> '1009 passed in 27.41s' this run; 972 before. python -m ruff check . -> All checks passed
+
+ABSENCE IS PRESERVED AS A FACT. damage_set_from_save returns None when the property is missing - measured on generation 1, 2,190 bytes, written at match start before combat - and () for a present-but-empty payload. Both are falsy, which is exactly the trap, so a test pins the distinction rather than trusting a caller to remember it.
+THE DEDUPLICATION KEY IS THREE FIELDS ON PURPOSE. Damage here is deterministic and three values repeat exactly across the run, so collapsing on value would erase real hits; two sources can share a millisecond, so collapsing on time would too.
+NOTHING IS LABELLED BEYOND WHAT IS PROVEN. No coefficient is computed. All 21 hits carry sourceType 1, so the module reports direction 'monster' for them and nothing else; source_of() returns None for any sourceType never observed rather than folding it into the nearer of the two. Item 7 stays open on the coefficient question, which needs an INDEPENDENT run - one run cannot separate a coefficient from a lucky repeat, however precise the float.
+OPS-2 is exercised rather than merely recorded: its second option, the integrator declaring ownership at merge, is the one that works, because the orphan guard goes red the instant an unowned file exists and so file and ownership cannot land in separate commits.
+
 ### LL-0024 - 2026-08-11 - ROADMAP 2b - the sanitised StandaloneSlot fixture, authored with transform()+serialise() and refused by its own builder until clean
 
 **Evidence:**
