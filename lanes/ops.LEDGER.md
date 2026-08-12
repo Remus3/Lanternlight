@@ -11,6 +11,24 @@ The integrator folds these entries into `docs/LEDGER.md` on `main`, with
 
 <!-- LANE ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0034 - 2026-08-12 - P0 - a malformed ledger heading was skipped in silence, which is the LL-0031 defect through a different door
+
+**Evidence:**
+- FOUND BY THE INDEPENDENT ADVERSARIAL PASS on ROADMAP 2c, which shipped without one. REPRODUCED BY THE INTEGRATOR BEFORE ANY FIX rather than relayed, on a throwaway copy of the real docs/LEDGER.md carrying a genuinely colliding LL-0018
+- THE DEFECT: with heading '###  LL-0018 - ...' (one extra space) fragment_entry_ids -> [], duplicate_claims -> [], integrate -> [], ledger unchanged, entry absent. With the well-formed heading the same three calls give ['LL-0018'], ['LL-0018'] and a raised LedgerIdCollision. One character decides whether a collision is refused or an entry silently disappears
+- WHY IT IS THE SAME BUG: integrate returning [] with no error is exactly what LL-0031 was written to end - the integrator reads [] as 'already done'. 2c closed the door and left the window open
+- THE FAILING TESTS CAME FIRST: 15 tests in TestAMalformedHeadingIsRefusedNotSkipped over five malformed shapes (two spaces, no space, one hash short, one hash too many, colon for dash) -> '11 failed, 4 passed' before the fix
+- THE FIX: _assert_headings_parse raises MalformedLedgerHeading naming file, line number and text. Scoped to NON-FENCED lines carrying an id-shaped token, because a rule that fires on ordinary prose gets switched off and then the real collision passes too
+- SCOPE MEASURED BEFORE IT WAS CHOSEN: 46 lines start with '#' below the marker across docs/LEDGER.md and every lane fragment, and all 46 parse - so the strict rule refuses nothing legitimate today
+- AFTER THE FIX all three entry points raise where all three previously returned empty, and the ledger is byte-unchanged
+- NON-VACUITY, __pycache__ purged and every anchor asserted unique before each run: guard removed from _blocks_below -> 5 failed; removed from fragment_entry_ids -> 6 failed; id-token test forced always-false -> 11 failed; restored -> 84 passed
+- python -m pytest -> '972 passed in 25.69s' this run; 957 before this change. python -m ruff check . -> All checks passed
+
+THE FIX ITSELF SHIPPED A SILENT BUG FIRST, and it is recorded because the shape is the lesson. A heredoc collapsed the backslashes in _ID_TOKEN_RE, turning '\\b' into a literal BACKSPACE byte (0x08). The regex compiled without complaint and matched nothing, so the new guard was completely dead while the module imported cleanly. Caught only because the tests still failed. 'An empty grep is a claim about your pattern' applied to a guard - and the second heredoc backslash mangling this session, the first having aborted a mutation probe.
+THREE CLAIMS IN LL-0031 ARE CORRECTED, not edited away. (1) '11 ids exist in both the ledger and a fragment' was wrong when written - re-derived as 13 today and 12 at the commit that wrote it; all still compare equal, so the conclusion survives but the number did not. (2) 'zero survivors' under mutation does not hold: flattening CRLF and stripping the final newline are both DEAD CODE, unreachable because read_text performs universal-newline translation, so only the per-line rstrip is load-bearing. That is the same vacuous-CRLF trap the item documents, hit again from the other side. (3) A real false positive exists - editing an entry already integrated into docs/LEDGER.md makes it differ from its fragment forever, so integrate raises and the live test stays red until reconciled by hand.
+OPS-8 records that false positive rather than fixing it here. The right answer may be that an integrated entry is simply never edited, which is a policy decision about an append-only record and not a code change to make quietly.
+The 2b refutation, run in parallel against the same frozen ref, CONFIRMED all eight of its claims including the 882/96/21 positive control and the LL-0029 P0 fix, and found no dead detector among 15. Two independent passes, opposite outcomes - which is the argument for running them at all rather than assuming a closed item is closed.
+
 ### LL-0033 - 2026-08-12 - ROADMAP 2d - a fresh clone now runs green, so a test count is a fact about the repo rather than about this machine
 
 **Evidence:**

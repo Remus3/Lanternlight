@@ -310,6 +310,64 @@ indentation are deliberately NOT normalised, because both carry meaning in
 Markdown. Validated against real data: 11 ids currently exist in both the
 ledger and a fragment, and all 11 compare equal.
 
+### The independent adversarial pass, run 2026-08-12 - it found a P0
+
+2c shipped with **no** independent refutation, which is a departure from this
+project's default, so one was run against a frozen `814b1ea`. The core guard
+held. Several of the claims above did not, and one of them was a P0.
+
+**P0 - the same silent data loss, through a different door. FIXED, `LL-0034`.**
+`_HEADING_RE` wants exactly `###`, one space, a non-space id, then `" - "`.
+Miss that by **one character** and the entry did not fail loudly - it became
+**invisible**. Reproduced independently by the integrator before any fix, on a
+throwaway copy of the real ledger, with a genuinely colliding `LL-0018`:
+
+| heading | `fragment_entry_ids` | `duplicate_claims` | `integrate` | entry lands |
+|---|---|---|---|---|
+| `### LL-0018 - ...` | `['LL-0018']` | `['LL-0018']` | **raises** | no, correctly refused |
+| `###  LL-0018 - ...` | `[]` | `[]` | **`[]`** | **no - silently gone** |
+
+So a lane writes an entry, `integrate` returns `[]`, the integrator reads that
+as "already done", and the entry is gone with no error - **which is the exact
+failure LL-0031 was written to end.** Detection was the whole point of 2c, and
+2c could be walked around with a space.
+
+Fixed by `_assert_headings_parse`: below the marker, a **non-fenced** line
+starting with `#` that carries an **id-shaped token** and does not parse as a
+heading now **raises** `MalformedLedgerHeading` naming the file, the line
+number and the offending text. Scoped that way on purpose - the dangerous false
+positive is a rule that fires on ordinary prose, because a guard that cries
+wolf gets switched off and then the real collision passes too. Measured before
+choosing the scope: 46 lines start with `#` below the marker across the ledger
+and every fragment, and **all 46 parse**, so nothing legitimate is refused.
+Verified after: all three entry points now raise where all three previously
+returned empty. Three mutants, `__pycache__` purged and every anchor asserted:
+guard removed from `_blocks_below` -> 5 failed; from `fragment_entry_ids` ->
+6 failed; id-token test forced false -> 11 failed; restored -> 84 passed.
+
+**Three claims above are overstated and are corrected here rather than edited
+away:**
+
+- **"11 ids currently exist in both the ledger and a fragment" was wrong when
+  written.** Re-derived by the integrator: **13** today, and the pass measured
+  **12** at the commit that wrote the sentence. A filed count is a hypothesis -
+  for the third time in two sessions. All of them do still compare equal, so
+  the conclusion drawn from the number survives; the number did not.
+- **"zero survivors" under mutation does not hold.** Two parts of the
+  normaliser are **dead code**: flattening CRLF is unreachable because
+  `read_text` performs universal-newline translation before any comparison, and
+  the final-newline strip is likewise unreachable. Only the per-line `rstrip`
+  is load-bearing. This is the same vacuous-CRLF trap the item already
+  documents, caught a second time on the other side - the fix was written
+  against a difference that cannot survive the read.
+- **A real false positive exists and is worth knowing before it bites.** Any
+  post-hoc edit to an entry already integrated into `docs/LEDGER.md` makes it
+  differ from its fragment forever, so `integrate` raises and the live
+  collision test goes red until the two are reconciled by hand. That is the
+  over-tightening hazard this item named, arriving through editing rather than
+  through re-running. Not fixed here - recorded as `OPS-8`, because the right
+  answer may be that an integrated entry is simply never edited.
+
 **Namespacing was NOT implemented, deliberately** - recorded as `OPS-6`. The
 safety lane's accidental `SAF-NNNN` is collision-free by construction and is a
 real long-term answer, but retiring the global space changes what 30 existing
