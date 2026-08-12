@@ -30,10 +30,16 @@
       "item_id": "OPS-5",
       "opened": "2026-08-09",
       "text": "The git-visibility guard skips paths that do not exist, so with fragments created lazily it currently checks exactly one real fragment. It also cannot catch an ignore rule added after a file is already tracked"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "OPS-6",
+      "opened": "2026-08-12",
+      "text": "Decide whether ledger ids become per-lane namespaced (SAF-NNNN style, collision-free by construction) and the global LL-NNNN space is retired. Detection now catches a collision, so this is no longer urgent - but retiring the global space changes what 30 existing entries, and every roadmap item and branch citing an LL id, refer to. Operator decision"
     }
   ],
-  "resume_note": "ROADMAP 2b next - safety lane owns it. main is merged and pushed at 58ff2e7",
+  "resume_note": "ROADMAP 2c closed on lane/ops - integrate() refuses an id collision and duplicate_claims() surfaces one early. OPS-6 (per-lane id namespacing) is an operator decision, recorded not taken",
   "schema": 1,
-  "sessions": 2,
-  "updated": "2026-08-09T23:24:38+00:00"
+  "sessions": 3,
+  "updated": "2026-08-12T01:33:07+00:00"
 }

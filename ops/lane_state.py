@@ -76,7 +76,7 @@ import json
 import os
 import re
 import tempfile
-from collections.abc import Iterable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -86,13 +86,17 @@ from ops.loop import ledger
 
 __all__ = [
     "FRAGMENT_MARKER",
+    "IdClaim",
     "LaneState",
+    "LedgerIdCollision",
     "OpenItem",
     "ReadOnlyLane",
     "SCHEMA",
     "add_open_item",
     "append_fragment",
     "close_open_item",
+    "duplicate_claims",
+    "format_duplicate_claims",
     "fragment_entry_ids",
     "fragment_path",
     "integrate",
@@ -162,6 +166,23 @@ class ReadOnlyLane(RuntimeError):
     Refused rather than granted-and-documented. ``verify`` writes nothing,
     ever; handing it a state file would be the first crack in that, and the
     crack would be invisible until the day it graded its own work.
+    """
+
+
+class LedgerIdCollision(RuntimeError):
+    """One item id claimed by two DIFFERENT entries.
+
+    Deliberately fatal, and deliberately not fixed automatically. The three
+    tempting alternatives are all worse:
+
+    * **Skip it** - what :func:`integrate` used to do, because a skip is
+      indistinguishable from an idempotent re-run when only the id is compared.
+      That is the defect this exception exists to end: a lane's whole session
+      record disappeared and the only symptom was an empty return value.
+    * **Overwrite it** - rewrites a record in an append-only file.
+    * **Renumber it** - quietly rewrites a record too, and the new id is
+      already cited by a roadmap item, a branch name and a commit message that
+      this function cannot see. Renumbering is a human decision.
     """
 
 
@@ -701,9 +722,14 @@ def fragment_entry_ids(path: Path) -> list[str]:
     return [m["item_id"] for m in _HEADING_RE.finditer(_entries_below(text, FRAGMENT_MARKER))]
 
 
-def _fragment_blocks(text: str) -> list[tuple[str, str]]:
-    """Split a fragment's entry region into ``(item_id, rendered_block)`` pairs."""
-    body = _entries_below(text, FRAGMENT_MARKER)
+def _blocks_below(text: str, marker: str) -> list[tuple[str, str]]:
+    """Split the entry region below ``marker`` into ``(item_id, block)`` pairs.
+
+    Used for both shapes of file - a lane fragment and the repository ledger -
+    because comparing one against the other is only meaningful if both were cut
+    up the same way.
+    """
+    body = _entries_below(text, marker)
     matches = list(_HEADING_RE.finditer(body))
     blocks: list[tuple[str, str]] = []
     for position, match in enumerate(matches):
@@ -712,16 +738,70 @@ def _fragment_blocks(text: str) -> list[tuple[str, str]]:
     return blocks
 
 
+def _fragment_blocks(text: str) -> list[tuple[str, str]]:
+    """Split a fragment's entry region into ``(item_id, rendered_block)`` pairs."""
+    return _blocks_below(text, FRAGMENT_MARKER)
+
+
+def _normalise_block(block: str) -> str:
+    """Return ``block`` in the form two copies of one entry are compared in.
+
+    The comparison this feeds decides "already integrated" from "collision",
+    and both errors it can make are expensive - but they are not symmetric.
+
+    A comparison that is too LOOSE calls two different entries the same and
+    silently drops one, which is the defect being fixed. A comparison that is
+    too STRICT calls a re-run a collision, and that is WORSE: idempotence is
+    what makes :func:`integrate` safe to re-run after a partial merge, so a
+    false collision blocks a legitimate recovery and the fix somebody reaches
+    for is a force flag - which disarms the guard permanently, for every real
+    collision as well.
+
+    So the normalisation removes exactly the differences that carry no meaning
+    and can appear without an author touching a character:
+
+    * **Line endings.** ``Path.write_text`` on Windows turns LF into CRLF and
+      ``read_text`` hides it again, a hazard this repository has already paid
+      for. ``.gitattributes``, a checkout on another platform and an editor can
+      each rewrite them too.
+    * **Trailing whitespace on a line**, which editors and hooks strip.
+    * **Leading and trailing blank lines**, which are an artefact of where the
+      block was cut, not of what it says.
+
+    Nothing else. Leading indentation is meaningful in Markdown - it makes code
+    blocks and nested list items - and interior blank lines separate paragraphs,
+    so neither is touched. Two entries that differ in any character of their
+    actual text are two entries.
+    """
+    flattened = block.replace("\r\n", "\n").replace("\r", "\n")
+    return "\n".join(line.rstrip() for line in flattened.split("\n")).strip("\n")
+
+
+def _heading_of(block: str) -> str:
+    """Return a block's first line, for an error message a human can act on."""
+    return block.replace("\r\n", "\n").split("\n", 1)[0].strip()
+
+
 def integrate(
     fragment: Path, ledger_path: Path | None = None
 ) -> list[str]:
     """Fold a lane fragment's entries into the repository ledger.
 
     Run by the integrator on ``main``, so ``docs/LEDGER.md`` keeps exactly one
-    writer and cannot race with anything. Entries already present are skipped,
-    which makes this idempotent and therefore safe to re-run after a partial
-    merge - the failure mode of a non-idempotent integrator is a duplicated
-    ledger entry, and the ledger's whole value is that it is a record.
+    writer and cannot race with anything. An entry already present **with the
+    same content** is skipped, which makes this idempotent and therefore safe
+    to re-run after a partial merge - the failure mode of a non-idempotent
+    integrator is a duplicated ledger entry, and the ledger's whole value is
+    that it is a record.
+
+    An id already present with DIFFERENT content is a collision and raises
+    :class:`LedgerIdCollision`. Those two cases used to be indistinguishable -
+    only the id was compared - and telling them apart is ROADMAP item 2c.
+    Lanes branch from a common base, so two lanes each asking "what is the next
+    free id?" get the same answer and both take it; prevention by allocation
+    cannot work, and both fragments merge cleanly because they are different
+    files. What is guaranteed instead is that the collision never passes in
+    silence. Use :func:`duplicate_claims` to see it coming.
 
     Blocks are moved verbatim rather than re-rendered from a parsed dataclass.
     Re-rendering a record risks changing bytes that were already reviewed, and
@@ -741,6 +821,9 @@ def integrate(
 
     Raises:
         MarkerMissingError: The repository ledger has no insertion marker.
+        LedgerIdCollision: An id in the fragment is already recorded with
+            different content, or the fragment claims one id twice. Nothing is
+            written - a half-applied integration is worse than a refused one.
     """
     source = Path(fragment)
     book = Path(ledger_path) if ledger_path is not None else ledger.default_ledger_path()
@@ -761,8 +844,37 @@ def integrate(
             "guess where a new entry belongs"
         )
 
-    already = set(_existing_ids(original))
-    pending = [(item_id, block) for item_id, block in blocks if item_id not in already]
+    recorded: dict[str, list[str]] = {}
+    for item_id, block in _blocks_below(original, ledger.ENTRIES_MARKER):
+        recorded.setdefault(item_id, []).append(_normalise_block(block))
+
+    pending: list[tuple[str, str]] = []
+    taken: dict[str, str] = {}
+    for item_id, block in blocks:
+        normalised = _normalise_block(block)
+        claimed = [*recorded.get(item_id, []), *([taken[item_id]] if item_id in taken else [])]
+        if normalised in claimed:
+            # Byte-for-byte the entry already in the ledger, modulo line
+            # endings: a re-run, which must stay silent.
+            continue
+        if claimed:
+            where = "this fragment already" if item_id in taken else str(book)
+            raise LedgerIdCollision(
+                f"item id {item_id!r} is claimed twice by DIFFERENT entries and "
+                "integrating would lose one of them - nothing has been written.\n"
+                f"  in {source}: {_heading_of(block)}\n"
+                f"  in {where}: {_heading_of(claimed[-1])}\n"
+                "Two lanes branching from one base can allocate the same id, and "
+                "their fragments merge cleanly because they are different files. "
+                "This is a collision, not a re-run. Renumber the fragment's entry "
+                "BY HAND to an id no other entry uses, in the fragment and in "
+                "every roadmap item, branch and commit message that cites it, then "
+                "re-run. This function will not renumber an append-only record for "
+                "you. ops.lane_state.duplicate_claims() lists every such clash."
+            )
+        taken[item_id] = normalised
+        pending.append((item_id, block))
+
     if not pending:
         return []
 
@@ -774,10 +886,100 @@ def integrate(
     return [item_id for item_id, _ in pending]
 
 
-def _existing_ids(ledger_text: str) -> Iterable[str]:
-    """Yield the item ids already recorded below the repository ledger's marker."""
-    body = _entries_below(ledger_text, ledger.ENTRIES_MARKER)
-    return (m["item_id"] for m in _HEADING_RE.finditer(body))
+@dataclass(frozen=True)
+class IdClaim:
+    """One file's claim on one item id.
+
+    Attributes:
+        item_id: The claimed id.
+        source: The file claiming it - the repository ledger, or a fragment.
+        heading: The entry's first line, which is what a human recognises it by.
+        content: The normalised block. Two claims with equal content are one
+            record seen twice, not a clash.
+    """
+
+    item_id: str
+    source: Path
+    heading: str
+    content: str
+
+
+def duplicate_claims(
+    ledger_path: Path | None = None, fragments: Sequence[Path] | None = None
+) -> dict[str, list[IdClaim]]:
+    """Report every item id claimed by two entries that are not the same entry.
+
+    :func:`integrate` catches a collision at the moment it would lose data,
+    which is late: the integrator finds out by exception, mid-merge. This
+    answers the same question cheaply and beforehand, so a wrap ritual can ask
+    it while renumbering is still easy.
+
+    **Identical claims are not reported, and that is the whole design.**
+    Fragments are not deleted after integration, so every id that has ever been
+    integrated legitimately appears in at least two files. Reporting those
+    would bury the one real collision under thirty false ones, and a report
+    nobody reads is worse than no report - it looks like coverage.
+
+    Args:
+        ledger_path: The repository ledger. Defaults to
+            :func:`ops.loop.ledger.default_ledger_path`.
+        fragments: Fragments to scan. Defaults to every writing lane's
+            fragment. Missing files are skipped: a lane that has recorded
+            nothing yet is an ordinary state, not an error.
+
+    Returns:
+        ``{item_id: [IdClaim, ...]}`` for ids with two or more distinct
+        contents, ids in sorted order, each list holding every claim on that id
+        including the identical ones - because seeing all three files is what
+        tells the integrator which two disagree. Empty means no clash.
+    """
+    book = Path(ledger_path) if ledger_path is not None else ledger.default_ledger_path()
+    sources: list[tuple[Path, str]] = [(book, ledger.ENTRIES_MARKER)]
+    if fragments is None:
+        sources += [
+            (fragment_path(lane.lane_id), FRAGMENT_MARKER)
+            for lane in lanes.LANES
+            if not lane.read_only
+        ]
+    else:
+        sources += [(Path(one), FRAGMENT_MARKER) for one in fragments]
+
+    claims: dict[str, list[IdClaim]] = {}
+    for path, marker in sources:
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (FileNotFoundError, NotADirectoryError):
+            continue
+        for item_id, block in _blocks_below(text, marker):
+            claims.setdefault(item_id, []).append(
+                IdClaim(
+                    item_id=item_id,
+                    source=path,
+                    heading=_heading_of(block),
+                    content=_normalise_block(block),
+                )
+            )
+
+    return {
+        item_id: found
+        for item_id, found in sorted(claims.items())
+        if len({claim.content for claim in found}) > 1
+    }
+
+
+def format_duplicate_claims(found: dict[str, list[IdClaim]]) -> str:
+    """Render :func:`duplicate_claims` for a human, or for a wrap ritual's log."""
+    if not found:
+        return "no id is claimed by two different entries"
+    lines = [
+        f"{len(found)} item id(s) claimed by different entries - renumber before "
+        "integrating, or one entry is lost:"
+    ]
+    for item_id, claims in found.items():
+        lines.append(f"  {item_id}")
+        for claim in claims:
+            lines.append(f"    {claim.source}: {claim.heading}")
+    return "\n".join(lines)
 
 
 def integrate_all(
