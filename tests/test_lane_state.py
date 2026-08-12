@@ -522,6 +522,99 @@ class TestTwoLanesClaimingOneId:
         assert book.read_text(encoding="utf-8").count("### LL-0023") == 1
 
 
+class TestAMalformedHeadingIsRefusedNotSkipped:
+    """The LL-0031 defect through a different door, found by a refutation pass.
+
+    `_HEADING_RE` requires exactly `### `, then a non-space id, then ` - `. An
+    entry whose heading misses that by one character does not merely fail to
+    parse - it becomes INVISIBLE. `fragment_entry_ids` omits it,
+    `duplicate_claims` cannot see the id it claims, and `integrate` returns
+    `[]` and writes nothing.
+
+    That is precisely the failure LL-0031 was written to end: an entry
+    disappears, no exception, and the only symptom is an empty list the
+    integrator reads as "already done". Detection was the whole point, so a
+    block that looks like an entry and does not parse must be refused loudly
+    rather than dropped quietly.
+
+    Measured before choosing the rule: across `docs/LEDGER.md` and all lane
+    fragments there are 46 lines starting with `#` below the marker, and all 46
+    parse. So refusing an unparseable one costs nothing today.
+    """
+
+    MALFORMED = (
+        "###  LL-0044 - 2026-08-12 - two spaces after the hashes",
+        "###LL-0044 - 2026-08-12 - no space at all",
+        "## LL-0044 - 2026-08-12 - one hash short",
+        "#### LL-0044 - 2026-08-12 - one hash too many",
+        "### LL-0044: 2026-08-12 - a colon instead of the dash",
+    )
+
+    def _fragment(self, tmp_path, heading):
+        path = tmp_path / "ops.LEDGER.md"
+        path.write_text(
+            "# Lane ledger fragment - ops\n\n"
+            f"{lane_state.FRAGMENT_MARKER}\n\n"
+            f"{heading}\n\n**Evidence:**\n- something that must not vanish\n",
+            encoding="utf-8",
+        )
+        return path
+
+    @pytest.mark.parametrize("heading", MALFORMED)
+    def test_it_raises_rather_than_returning_nothing(self, tmp_path, heading):
+        path = self._fragment(tmp_path, heading)
+        with pytest.raises(lane_state.MalformedLedgerHeading):
+            lane_state.fragment_entry_ids(path)
+
+    @pytest.mark.parametrize("heading", MALFORMED)
+    def test_integrate_refuses_instead_of_silently_dropping_it(self, tmp_path, heading):
+        book = _seed_ledger(tmp_path)
+        path = self._fragment(tmp_path, heading)
+        before = book.read_text(encoding="utf-8")
+        with pytest.raises(lane_state.MalformedLedgerHeading):
+            lane_state.integrate(path, ledger_path=book)
+        assert book.read_text(encoding="utf-8") == before
+
+    def test_the_error_names_the_file_and_the_offending_line(self, tmp_path):
+        path = self._fragment(tmp_path, self.MALFORMED[0])
+        with pytest.raises(lane_state.MalformedLedgerHeading) as caught:
+            lane_state.fragment_entry_ids(path)
+        message = str(caught.value)
+        assert "ops.LEDGER.md" in message
+        assert "LL-0044" in message
+
+    def test_a_well_formed_heading_is_still_accepted(self, tmp_path):
+        path = self._fragment(tmp_path, "### LL-0044 - 2026-08-12 - perfectly ordinary")
+        assert lane_state.fragment_entry_ids(path) == ["LL-0044"]
+
+    def test_a_hash_line_carrying_no_id_is_left_alone(self, tmp_path):
+        # Scoped to lines that look like an ENTRY. A prose sub-heading is not
+        # this rule's business, and a rule that fires on one would be a false
+        # positive that gets the whole guard disabled.
+        path = self._fragment(tmp_path, "### LL-0044 - 2026-08-12 - fine")
+        path.write_text(
+            path.read_text(encoding="utf-8") + "\n#### some prose sub-heading\n",
+            encoding="utf-8",
+        )
+        assert lane_state.fragment_entry_ids(path) == ["LL-0044"]
+
+    def test_an_id_inside_a_fenced_code_block_is_not_a_heading(self, tmp_path):
+        # An entry may quote a command or a snippet. A `#` comment naming an id
+        # inside a fence is not a malformed heading.
+        path = self._fragment(tmp_path, "### LL-0044 - 2026-08-12 - fine")
+        path.write_text(
+            path.read_text(encoding="utf-8")
+            + "\n```\n# see LL-0044 for why\n```\n",
+            encoding="utf-8",
+        )
+        assert lane_state.fragment_entry_ids(path) == ["LL-0044"]
+
+    def test_the_live_repository_has_no_malformed_heading(self):
+        # Runs over the real files on every suite run, like its collision
+        # sibling - a guard that only ever sees fixtures cannot protect a wrap.
+        lane_state.duplicate_claims()
+
+
 class TestDuplicateClaimsSurfacesTheHazardEarly:
     """See a collision BEFORE integrating, not as an exception during it."""
 
