@@ -12,11 +12,14 @@ Own redaction and every repository hygiene guard. Nothing derived from a game lo
 
 ## Your workspace
 
-Your working directory is **`C:\ll-worktrees\ll-lane-safety`** on branch
-**`lane/safety`**.
+Your working directory is your own worktree, **`ll-lane-safety`**
+under the worktree root, on branch **`lane/safety`**. The worktree
+root is `LL_WORKTREE_ROOT` when that is set and `ops.lanes.WORKTREE_ROOT`
+otherwise. Resolve it with `lane.worktree_path()` rather than typing a
+path - this contract deliberately names none, because a generated file
+that embeds one machine's paths is only correct on that machine.
 
-You may **never** write into `C:\Lanternlight`. A live
-session may
+You may **never** write into the primary checkout. A live session may
 own it, and two writers in one working directory corrupt the git index
 - which is not recoverable by retrying. Create your worktree and assert
 you are in it before writing anything:
@@ -26,6 +29,7 @@ from ops import lane_launcher, lanes
 lane = lanes.by_id("safety")
 lane_launcher.ensure_worktree(lane)
 lane_launcher.assert_in_lane_worktree(lane)
+print(lane.worktree_path())  # the concrete path, resolved here
 ```
 
 ## What you own
