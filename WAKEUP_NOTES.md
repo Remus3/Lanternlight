@@ -5,6 +5,111 @@ fidelity and archive older ones rather than deleting them.
 
 ---
 
+# Session 2026-08-11 - the fixture landed, and the roadmap was wrong about Emberforge
+
+Orchestrated and multi-agent throughout: three lanes in parallel worktrees, an
+adversarial pass, and a P0 fix. Branch `session/2026-08-11-standalone-fixture`,
+**merged to `main` at the operator's instruction** - `main` is `ea01e95`.
+Ledger `LL-0023` through `LL-0030`. 807 tests at the start, **943** at the end,
+green in place, ruff clean. Public `main` scans zero identifiers across all 113
+blobs.
+
+## The thing that mattered most was not the item being worked on
+
+ROADMAP 2b closed - the sanitised fixture exists and scans **0** findings where
+its source scans **882**. But the session's real result came from an aside: the
+operator handed over a YouTube transcript and two map sites to review, and
+chasing one claim into the save turned up `DamageCollectonDataSet`.
+
+**The game has been writing per-hit damage all along.** Float `damageValue`,
+Unix timestamps to sub-millisecond, attributed to a monster. 263 generations
+were already captured on disk from 2026-08-09. This file's own "deliberately
+not on this list" section said Emberforge could not be filled because no
+numbers existed. It was wrong for two days, and nobody had read the field.
+
+## And then the adversarial pass took half of it back
+
+Dispatched against a frozen ref, which is the lesson from last session. It
+returned five corrections to claims made **earlier the same session**:
+
+- **Direction settled, and it deflates the headline.** `PlayerData.Hp` is
+  sampled 262 times; its 13 drops total 1286 against the damage set's 1284.84,
+  pairing individually. Those 21 hits are damage **TAKEN**. So they constrain
+  survivability, **not build math** - Emberforge is unblocked by the log's four
+  `sourceType: 0` payloads, not the save's twenty-one. A quarter the size of
+  what was claimed.
+- "a float to nine places" - they are `float32`, so about **7** significant
+  digits.
+- The five repeats of `9.745483398` **are** the 1.5 s tick, so counting them as
+  independent evidence double-counts one computation.
+- "first timing constant this project has measured" - n=3 intervals, one
+  encounter, at the 1 ms quantisation floor.
+- "`nameId` and `SkillNameId` are the same id space, **proven**" - n=1 shared
+  value, and "from the same component family" was **flatly wrong**.
+
+The merger's own probe had also mis-measured a prefix, reporting matching
+positions **anywhere** as a leading prefix. Every one of these was caught by
+somebody other than the author. That is the whole argument for the shape.
+
+## A remediation opened the hole it was cleaning. Twice.
+
+Worth carrying forward as a pattern, not two anecdotes.
+
+1. The third party's display name in the save was refused **only** because a
+   Blueprint GUID beside it tripped `PRODUCTUSERID` - a **false positive** that
+   was accidentally load-bearing. Authoring those GUIDs, which item 2b
+   **required**, removes the one thing standing between a stranger's name and a
+   public repository.
+2. Then `redact()` itself - the only sanctioned redaction path - **disarmed**
+   the `NAME_FIELD` guard written to close that hazard. It rewrites the
+   decoration to `<PRODUCTUSERID>`, the anchor required `[0-9A-Za-z]`, angle
+   brackets are not alphanumeric. `assert_clean(redact(raw))` approved bytes
+   still carrying the name verbatim. **Redacting the file broke the guard.**
+
+Nothing leaked - the fixture was clean throughout and the pushed tree scans
+zero. What was broken was the protection. **Check what your fix removes, not
+only what it adds.**
+
+And the guard's own test passed for the wrong reason: it used a 32-character
+**alphanumeric** stand-in, which satisfies the anchor. The tested case was not
+the case the module's own redactor produces.
+
+## A proven defect in the continuity machinery
+
+`LL-0018` removed the shared ledger so lanes could not conflict. It solved the
+**text** race and left the **id** race untouched - and the fragment design is
+what hides it. Two lanes on separate branches both allocated `LL-0023`; git
+merged both cleanly; `integrate()` then **silently dropped one**, returning
+`[]` with no error, because it skips ids already present.
+
+Reproduced against a throwaway copy of the real ledger. Renumbered by hand and
+verified. **`ROADMAP.md` item 2c, and it should be fixed before the next
+multi-lane session** - the safety lane's accidental per-lane `SAF-NNNN`
+namespace may already be the answer.
+
+## Third-party sources, tiered so it is not re-done
+
+`questlog.gg` is **datamined** - it addresses monsters by numeric id in the
+same space the save uses, and lists `[Debug]` and `[Discarded]` developer rows
+no player can see. `gamerguides` is **hand-mapped** and says so, with a
+database whose first iteration was built on the **demo**. Opposite
+provenances, opposite failure modes, and neither may write an id into
+`docs/OBSERVED_IDS.md`. "Third-party site" is not a trust tier.
+
+## Where to start next
+
+**Item 2c** (the ledger id race) before any multi-lane work, then **item 7**
+(extract the damage series into shipped code), with **item 7b** folded into
+whichever session next has the client open - the training ground is the only
+route to **outgoing** damage in quantity, and `sourceType: 0` is what to look
+for.
+
+Do **not** label any damage number dealt or taken beyond what is already
+measured. And note **item 2d**: a fresh clone runs one failing test, so every
+count in this repository is an in-place number.
+
+---
+
 # Session 2026-08-09c - the lane machinery finished, and a save caught mid-flight
 
 Orchestrated and multi-agent throughout. Branch
