@@ -241,10 +241,42 @@ work and a different risk.
 The captured bytes are held **outside** the repository and are not committed.
 A fixture cannot be a copy: the filename embeds the operator's roleId, so it
 needs a **rename**, not merely redaction. Inside, it carries `BattleId`, the
-`AutoSaveTempSlot` / `FinalSlot` names, a 23-entry
-`IdGeneratorData.NumIdToUUID` map, and `ownerRoleId` inside the `ItemCell`
-JSON - and **several of those fire no existing `lanternlight.redact`
-detector**. It is also ~177 KB raw, so it needs size reduction as well.
+`AutoSaveTempSlot` / `FinalSlot` names, an `IdGeneratorData.NumIdToUUID` map,
+and `ownerRoleId` inside the `ItemCell` JSON - and **several of those fire no
+existing `lanternlight.redact` detector**. It is also ~177 KB raw, so it needs
+size reduction as well.
+
+**Three statements in the paragraph above were WRONG and are corrected here
+rather than quietly edited, because each one would have produced a leaking
+fixture:**
+
+1. **"The filename embeds the roleId" implies the bytes do not. They do.** The
+   roleId appears **verbatim inside the file**, twice, as `AutoSaveFinalSlot`
+   and `AutoSaveTempSlot`. A rename alone ships it. Found by the research lane.
+2. **The map has 91 entries, not 23.** 23 is true of exactly 5 of the 263
+   generations; the map grows monotonically from 16 to 91. A filed count is a
+   hypothesis - this file's own anti-pattern, hit twice more this session.
+3. **The `LONG_ID` floor makes same-length substitution useless.** The rule is
+   `\d{15,}` - length only - so an authored 19-digit id fires exactly like a
+   real one. Every identifier has to get SHORTER, which changes FString
+   lengths, which is why the serialiser in `LL-0023` had to exist first.
+
+**And a fourth hazard that was in nobody's plan.** The save carries a **third
+party's display name** in plaintext - `KillPlayerHistoryDatas.PlayerName`, plus
+`MsgSubChannelString` and `MsgAppearanceString`. Measured: **no content rule
+can reach it.** Keyed rules are structurally blind because GVAS writes the key
+and the value as separate length-prefixed strings with no separator, persona
+discovery returns zero candidates, and a display name has no shape to match. The
+safety lane's answer is a **structural** rule, `NAME_FIELD`, which recognises
+the property and demands an authored-value marker beside it.
+
+**The trap inside that hazard, and it is the sharpest thing this item found.**
+Those bytes are refused today - but **only** because a Blueprint GUID beside
+them trips `PRODUCTUSERID`, which is a **false positive**. The false positive
+was accidentally load-bearing. Authoring the GUIDs, which this item **requires**
+in order to clear that same false positive, removes the only thing standing
+between a stranger's name and a public repository. A remediation that opens a
+hole is worth more written down than any number here.
 
 Related and newly measured (`SAF-3`): inventory instance ids share a
 **12-digit prefix** with the operator's roleId, so masking the roleId alone
