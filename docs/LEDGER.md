@@ -50,9 +50,37 @@ the history.
 
 ## Item ids
 
-`LL-NNNN`, allocated in order, never reused. An id that appears in a roadmap
-item, a branch name, a commit message and a ledger entry is what ties those
-four records to each other.
+`LL-NNNN` is the convention. An id that appears in a roadmap item, a branch
+name, a commit message and a ledger entry is what ties those four records to
+each other, which is the whole reason ids exist.
+
+**Two things this section used to claim are not true, and saying them anyway
+hid a real defect.**
+
+It said ids are "allocated in order". Nothing serialises allocation. Lanes work
+on separate branches cut from a common base, so two lanes each asking "what is
+the next free id?" get the same answer and both take it - and because each lane
+appends only to its own `lanes/<lane_id>.LEDGER.md`, the two fragments merge
+cleanly with nothing anywhere complaining. That happened on 2026-08-11: `ingest`
+and `research` both took `LL-0023` for different work. Order is a convention the
+integrator maintains by hand, not a property the machinery provides.
+
+It said `LL-NNNN`, while the parser accepts any `### <id> - ` heading and the
+safety lane's fragment had already used `SAF-0001` and `SAF-0002`, which
+`integrate()` parsed without a murmur. Those two were renumbered by hand to
+`LL-0026` and `LL-0027`. The format is still `LL-NNNN` and a fragment that uses
+anything else will need renumbering before it lands here, but nothing enforces
+it, so do not read a well-formed id as evidence of a checked one.
+
+**"Never reused" is the part that is now enforced.** `ops.lane_state.integrate`
+compares content, not just the id: an entry already present with the same text
+is skipped, so the function stays idempotent and safe to re-run after a partial
+merge, while an id present with DIFFERENT text raises `LedgerIdCollision` and
+writes nothing. It will not renumber for you - the new id has to change in the
+roadmap item, the branch and the commit message too, and quietly rewriting an
+append-only record is its own defect. `ops.lane_state.duplicate_claims()` lists
+every clash across this file and every lane fragment, so the collision can be
+found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
