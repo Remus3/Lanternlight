@@ -114,6 +114,8 @@ the reader agreed on a fiction the fixtures would fail.
 
 import base64
 import dataclasses
+import json
+import re
 import struct
 import subprocess
 import sys
@@ -154,7 +156,13 @@ from lanternlight.gvas import (  # noqa: E402
     serialise,
     transform,
 )
-from lanternlight.redact import ALL_LABELS, iter_sensitive  # noqa: E402
+from lanternlight.redact import (  # noqa: E402
+    ALL_LABELS,
+    AUTHORED_NAME_MARKER,
+    NAME_BEARING_PROPERTIES,
+    iter_encoded_sensitive,
+    iter_sensitive,
+)
 
 FIXTURE_DIR = REPO_ROOT / "tests" / "fixtures" / "gvas"
 
@@ -178,6 +186,10 @@ FIXTURES: dict[str, str] = {
     ),
     "notice.gvas.b64": (
         "/Game/Blueprints/TypeScript/module/Notice/NoticeSaveData.NoticeSaveData_C"
+    ),
+    "standalone_slot.gvas.b64": (
+        "/Game/Blueprints/TypeScript/module/Level/StandaloneLevelSaveData."
+        "StandaloneLevelSaveData_C"
     ),
     "user_settings_v1.gvas.b64": (
         "/Game/Blueprints/TypeScript/module/Settings/SettingsSaveData.SettingsSaveData_C"
@@ -1756,6 +1768,322 @@ def test_base64_hides_a_leak_from_the_repo_wide_guard():
     blob = _save(_prop("Leak", "StrProperty", _fstring(leak)))
     encoded = base64.b64encode(blob).decode("ascii")
     assert not list(iter_sensitive(encoded, ALL_LABELS))
+
+
+# --------------------------------------------------------------------------
+# standalone_slot.gvas.b64 - the authored transient-save fixture
+#
+# The other six fixtures are sanitised copies of small, dull files. This one is
+# built by ``tests/fixtures/build_standalone_slot_fixture.py`` out of the
+# largest captured generation of the game's in-run level save, and it is the
+# only fixture in the repository that carries a StructProperty, an
+# ArrayProperty, a ByteProperty, a natively serialised struct, or a map keyed
+# by anything but a string. It is also the only one built from a source that
+# carried identifiers - 38 of them, 67 GUIDs, and a third party's display name.
+#
+# So the tests below are in two halves, and the second half is the one that
+# matters. Half one asserts the fixture is clean and carries the shapes it
+# exists to pin. Half two POISONS it, one sanitisation class at a time, and
+# requires the same scan to fire - because a clean result and a broken scan
+# look identical, and every "the fixture is clean" assertion above is worth
+# nothing until the scan has been watched saying otherwise.
+# --------------------------------------------------------------------------
+
+STANDALONE_SLOT = "standalone_slot.gvas.b64"
+
+#: A Blueprint property-name decoration: ``Hp_10_<opaque token>``.
+_DECORATION = re.compile(r"_\d+_[0-9A-Za-z]{1,64}$")
+
+#: Bytes one 76-column base64 line decodes to. ``lanternlight.redact``'s
+#: encoded pass decodes each base64 RUN it finds, and a wrapped fixture is a
+#: stack of separate runs, so this is the width of the window its structural
+#: rules actually see. See ``test_a_name_field_head_does_not_fit_one_base64_line``.
+_B64_LINE_BYTES = 76 // 4 * 3
+
+
+def _base(name: str) -> str:
+    """Return a property name with its Blueprint decoration stripped."""
+    return _DECORATION.sub("", name)
+
+
+def _field(struct: dict, base: str):
+    """The one value in a decoded struct dict whose undecorated name is ``base``."""
+    matches = [key for key in struct if _base(key) == base]
+    assert len(matches) == 1, f"{base!r} names {len(matches)} properties, expected 1"
+    return struct[matches[0]]
+
+
+def _poison(function):
+    """Serialise the fixture with ``function`` applied, and prove it applied.
+
+    A mutation that silently matches nothing looks exactly like a passing
+    control, which is a trap this repository has already been caught by. The
+    wrapper counts the properties the mutation actually replaced and fails if
+    that count is zero, so a rename that drifts out of date is a red test
+    rather than a quiet one.
+    """
+    touched: list[str] = []
+
+    def watched(path, prop):
+        replacement = function(path, prop)
+        if replacement is not prop:
+            touched.append(prop.name)
+        return replacement
+
+    raw = serialise(transform(_fixture(STANDALONE_SLOT), watched))
+    assert touched, "the mutation matched no property, so this control proves nothing"
+    return raw
+
+
+def _native_structs(save: GvasSave) -> dict[str, bytes]:
+    """Every natively serialised struct in a save, by struct name."""
+    found: dict[str, bytes] = {}
+
+    def walk(properties):
+        for prop in properties:
+            value = prop.value
+            if isinstance(value, UndecodedStruct):
+                found[value.struct_name] = value.data
+            elif isinstance(value, StructValue):
+                walk(value.properties)
+            elif isinstance(value, MapValue):
+                for _key, item in value.pairs:
+                    if isinstance(item, StructValue):
+                        walk(item.properties)
+            elif isinstance(value, ArrayValue):
+                for item in value.elements:
+                    if isinstance(item, StructValue):
+                        walk(item.properties)
+
+    walk(save.property_list)
+    return found
+
+
+def test_the_standalone_slot_fixture_pins_the_shapes_nothing_else_carries():
+    # The reason this fixture is worth 27 KB of base64. Every shape listed here
+    # is absent from all six of the others and from all seven live saves, so
+    # without it they are covered only by synthetic bytes this repository wrote
+    # - which prove the reader is self-consistent, not that it matches the game.
+    save = _fixture(STANDALONE_SLOT)
+    types = " ".join(save.property_types.values())
+    assert "StructProperty" in types
+    assert "ArrayProperty" in types
+    assert "MapProperty" in types
+
+    assert set(_native_structs(save)) == set(MEASURED_NATIVE_STRUCTS)
+
+    # Map keys: a string, a double and an int, all three in one file.
+    assert all(isinstance(key, str) for key in save.properties["DoorData"])
+    assert all(isinstance(key, float) for key in save.properties["DropItemMap"])
+    assert all(isinstance(key, int) for key in save.properties["LevelDetail"])
+
+    # ByteProperty is written as a qualified enumerator FString here, not as a
+    # raw byte, and the fixture keeps two DIFFERENT door states so a reader
+    # that pinned one literal cannot pass.
+    doors = list(save.properties["DoorData"].values())
+    assert len(doors) == 2
+    opened = {_field(door, "Opened") for door in doors}
+    locked = {_field(door, "Locked") for door in doors}
+    assert len(opened) == 2, "both doors share an E_DoorState enumerator"
+    assert len(locked) == 2, "both doors share an E_LockState enumerator"
+    assert all(state.startswith("E_DoorState::") for state in opened)
+    assert all(state.startswith("E_LockState::") for state in locked)
+
+
+def test_the_standalone_slot_fixture_keeps_both_drop_item_owner_spellings():
+    # ``ownerRoleId`` is the identifier inside the ItemCell JSON, and the game
+    # spells "nobody owns this" as a JSON null rather than as an empty string.
+    # A fixture carrying only one of the two would let a consumer assume the
+    # field is always a string, and would also stop pinning the authored case.
+    cells = [
+        json.loads(_field(item, "ItemCell"))
+        for item in _fixture(STANDALONE_SLOT).properties["DropItemMap"].values()
+    ]
+    owners = [cell["ownerRoleId"] for cell in cells]
+    assert len(owners) == 2
+    assert None in owners
+    authored = [owner for owner in owners if owner is not None]
+    assert len(authored) == 1
+    assert authored[0].isdigit()
+    # Shorter than LONG_ID's floor, which is the whole point - a same-length
+    # substitution would fire exactly as the real id did.
+    assert len(authored[0]) < 15
+
+
+def test_the_standalone_slot_fixture_keeps_its_two_id_maps_consistent():
+    # NumIdToUUID and UUIDToNumId are the same mapping inverted. Pruning them
+    # independently, or authoring one side's values and not the other's, would
+    # pin a shape the game never writes.
+    generator = _fixture(STANDALONE_SLOT).properties["IdGeneratorData"]
+    forward = _field(generator, "NumIdToUUID")
+    backward = _field(generator, "UUIDToNumId")
+    assert len(forward) == 3
+    assert {value: key for key, value in forward.items()} == backward
+
+
+def test_the_standalone_slot_fixture_authors_every_name_bearing_value():
+    # LeaderRankScoreData records who was killed last, and in a run with real
+    # players that is somebody else's display name. redact's structural rule
+    # goes quiet only when the authored marker sits beside the property, and
+    # test_an_unauthored_name_field_in_this_fixture_would_be_caught is what
+    # proves the rule is live rather than merely silent.
+    save = _fixture(STANDALONE_SLOT)
+    history = _field(save.properties["LeaderRankScoreData"], "KillPlayerHistoryDatas")
+    assert len(history) == 1
+    for name in NAME_BEARING_PROPERTIES:
+        assert _field(history[0], name) == AUTHORED_NAME_MARKER
+
+
+def test_the_standalone_slot_fixture_carries_no_run_of_fifteen_digits():
+    # LONG_ID is length-only, so this is the property the whole sanitisation
+    # pass exists to establish, stated directly rather than inferred from the
+    # scanner being quiet.
+    text = _fixture_bytes(STANDALONE_SLOT).decode("latin-1")
+    assert not re.search(r"(?<!\d)\d{15,}(?!\d)", text)
+
+
+def test_the_standalone_slot_fixture_carries_no_thirty_two_character_hex_run():
+    # Same statement for the other class. An authored decoration that was still
+    # 32 hex characters would have changed nothing at all, because PRODUCTUSERID
+    # keys on shape and cannot tell an authored hex run from a real one.
+    text = _fixture_bytes(STANDALONE_SLOT).decode("latin-1")
+    assert not re.search(r"(?<![0-9a-fA-F])[0-9a-fA-F]{32}(?![0-9a-fA-F])", text)
+    # The decorations are still there - the shape the engine writes is kept,
+    # only the opaque value is authored.
+    assert re.search(r"_\d+_[0-9A-Za-z]{20,}\x00", text)
+
+
+def test_the_committed_base64_of_this_fixture_hides_nothing():
+    # Acceptance in its own right, and the pass that test_no_pii.py runs over
+    # the tree. Scoped here so a failure names this fixture rather than
+    # arriving as one line in a whole-tree report.
+    encoded = (FIXTURE_DIR / STANDALONE_SLOT).read_text(encoding="ascii")
+    assert not list(iter_encoded_sensitive(encoded, labels=ALL_LABELS))
+    assert not list(iter_sensitive(encoded, labels=ALL_LABELS))
+
+
+# --------------------------------------------------------------------------
+# the controls - one per sanitisation class, each poisoning the real fixture
+# --------------------------------------------------------------------------
+
+
+def test_a_long_identifier_in_this_fixture_would_be_caught():
+    planted = "1" * 19
+
+    def poison(_path, prop):
+        if _base(prop.name) == "BattleId":
+            return dataclasses.replace(prop, value=planted)
+        return prop
+
+    raw = _poison(poison)
+    labels = {label for label, _, _ in iter_sensitive(raw.decode("latin-1"), ALL_LABELS)}
+    assert "LONG_ID" in labels, (
+        "a 19-digit id put back into the fixture was not detected, so the clean "
+        "scan of the real fixture says nothing"
+    )
+
+
+def test_a_hex_decoration_in_this_fixture_would_be_caught():
+    # Assembled in halves so this file does not itself carry a 32-hex run - the
+    # scanner cannot tell an invented ProductUserId from a real one.
+    planted = "0123456789abcdef" + "fedcba9876543210"
+
+    def poison(_path, prop):
+        if _base(prop.name) == "MonsterID":
+            return dataclasses.replace(prop, name=f"MonsterID_19_{planted}")
+        return prop
+
+    raw = _poison(poison)
+    labels = {label for label, _, _ in iter_sensitive(raw.decode("latin-1"), ALL_LABELS)}
+    assert "PRODUCTUSERID" in labels, (
+        "a 32-hex decoration put back into the fixture was not detected, so "
+        "authoring the GUIDs cannot be shown to have achieved anything"
+    )
+
+
+def test_an_unauthored_name_field_in_this_fixture_would_be_caught():
+    # The one that had to be proven rather than assumed. Until this fixture was
+    # built, that record was refused ONLY because the Blueprint GUID beside it
+    # tripped PRODUCTUSERID - a false positive that happened to be load-bearing.
+    # Authoring the GUIDs removes it, so the structural rule is now the only
+    # thing standing between a third party's display name and a public history.
+    committed = _fixture_bytes(STANDALONE_SLOT).decode("latin-1")
+    assert not [
+        label for label, _, _ in iter_sensitive(committed, ALL_LABELS)
+        if label == "NAME_FIELD"
+    ]
+
+    def poison(_path, prop):
+        if _base(prop.name) == NAME_BEARING_PROPERTIES[0]:
+            return dataclasses.replace(prop, value="a display name")
+        return prop
+
+    raw = _poison(poison)
+    labels = {label for label, _, _ in iter_sensitive(raw.decode("latin-1"), ALL_LABELS)}
+    assert "NAME_FIELD" in labels, (
+        "the structural name-field rule did not fire on an unauthored value, so "
+        "the marker in the committed fixture is not what is keeping it quiet"
+    )
+
+
+def test_a_name_field_head_does_not_fit_one_base64_line():
+    # Why the authored decorations keep the source's 32-character width.
+    #
+    # The encoded scan decodes each base64 RUN it finds, and a fixture wrapped
+    # at 76 columns is a stack of runs, each decoding to a 57-byte WINDOW. The
+    # structural rule needs the property name, its NUL and the StrProperty
+    # token - len(name) + 17 bytes - and goes quiet only if the authored marker
+    # follows within 64. No 57-byte window can hold both, so any name-bearing
+    # property whose head FITS in one window is reported, correctly by the
+    # rule's logic and uselessly for this file.
+    #
+    # An 11-character decoration was built first and did exactly that. The
+    # window is taken from the property name itself, which is the worst case.
+    text = _fixture_bytes(STANDALONE_SLOT).decode("latin-1")
+    for name in NAME_BEARING_PROPERTIES:
+        window = text[text.index(name) :][:_B64_LINE_BYTES]
+        assert not list(iter_sensitive(window, labels=["NAME_FIELD"])), (
+            f"{name} fits inside one base64 line's worth of bytes"
+        )
+
+    def shorten(_path, prop):
+        base = _base(prop.name)
+        if base in NAME_BEARING_PROPERTIES and base != prop.name:
+            return dataclasses.replace(prop, name=f"{base}_19_AUTHORED000")
+        return prop
+
+    short = _poison(shorten).decode("latin-1")
+    fired = sum(
+        len(list(iter_sensitive(short[short.index(name) :][:_B64_LINE_BYTES], ["NAME_FIELD"])))
+        for name in NAME_BEARING_PROPERTIES
+    )
+    assert fired == len(NAME_BEARING_PROPERTIES), (
+        "a short decoration was expected to bring the rule's head inside one "
+        f"base64 line for all {len(NAME_BEARING_PROPERTIES)} properties, got {fired}"
+    )
+
+
+def test_a_zeroed_native_struct_still_round_trips():
+    # The fixture authors the three native payloads that were entirely zero,
+    # because 24 zero bytes encode to 32 'A' characters and 'A' is a hex digit,
+    # so the committed base64 would trip PRODUCTUSERID as TEXT. That removes a
+    # case from the fixture, so the format claim it would have carried is
+    # pinned here instead: an all-zero payload is handed back and written back
+    # verbatim, exactly like any other.
+    payload = bytes(24)
+    raw = _save(
+        _struct_prop(
+            "Translation",
+            struct_name="Vector",
+            path="/Script/CoreUObject",
+            guid=None,
+            body=payload,
+            flags=0x08,
+        )
+    )
+    save = parse(raw)
+    assert save.properties["Translation"].data == payload
+    assert serialise(save) == raw
 
 
 # --------------------------------------------------------------------------
