@@ -233,7 +233,7 @@ misreading them - a `MapProperty` keyed by `DoubleProperty`, and `Rotator`.
 That is the raise-on-unknown guard validated in the wild for the second time,
 which is better evidence than any test.
 
-## 2c. Ledger fragments have an ID-ALLOCATION race - OPEN, ops lane, PROVEN
+## 2c. Ledger fragments have an ID-ALLOCATION race - CLOSED 2026-08-11
 
 Found by the integrator during the 2026-08-11 wrap, and proven rather than
 suspected. This is a defect in the continuity machinery itself, which is the one
@@ -272,13 +272,50 @@ that runs three lanes hits this again.
 `LL-NNNN` space is not. The lane that broke the convention may have stumbled
 onto the answer.
 
-**Acceptance:** a failing test first, proving that two fragments claiming one id
-lose an entry today. Then either (a) `integrate` REFUSES a fragment whose id is
-present with different content - distinguishing "already integrated" from
-"collision", which is the distinction it currently cannot make - or (b) ids
-become lane-namespaced and the global space is retired. Whichever is chosen,
-the guard must be shown to go red when removed, and the ledger's stated `LL-NNNN`
-convention must be updated to match reality rather than left contradicting it.
+**Acceptance - MET 2026-08-11.** Ledger `LL-0031`. Option (a), detection.
+Prevention by allocation was rejected with a reason: lanes branch from a common
+base, so two lanes each asking "what is the next free id?" get the **same**
+answer and both take it. That is exactly what happened. What can be guaranteed
+is that a collision never passes in silence.
+
+`integrate()` now compares CONTENT per id and distinguishes the two cases it
+previously could not tell apart - same id with same content is still skipped
+silently, so idempotence survives; same id with **different** content raises
+`LedgerIdCollision`, names the id and the fragment, and **writes nothing**.
+`duplicate_claims()` and `format_duplicate_claims()` report collisions across
+`docs/LEDGER.md` and every lane fragment BEFORE integration, and
+`test_the_live_repository_has_no_colliding_id` runs that over the real files on
+every suite run - so a collision cannot reach a merge even if a wrap ritual is
+skipped.
+
+**Verified independently by the integrator, before and after, on the real
+function:** the collision case went from `returned []` with the entry silently
+absent, to `RAISED LedgerIdCollision`. Idempotence held at `[]`.
+
+**The guard is two-sided, and proving that took two attempts.** The dangerous
+failure here is not the collision - it is over-tightening, because a comparison
+that is too strict turns every legitimate re-run into a false collision, blocks
+recovery after a partial merge, and gets a force flag bolted on, which disarms
+the guard for real collisions too. The integrator's first mutation probe used
+CRLF and showed no difference, which looked like a one-sided guard. **It was a
+vacuous probe:** `read_text` performs universal-newline translation, so CRLF is
+already gone before any comparison runs. Re-run with trailing whitespace - a
+difference that survives the read - the real code stays idempotent while a
+byte-exact comparison raises. The normaliser is load-bearing.
+
+"Same content" means equal after normalising line endings, per-line trailing
+whitespace, and leading and trailing blank lines - the three things that change
+without an author touching a character. Interior blank lines and leading
+indentation are deliberately NOT normalised, because both carry meaning in
+Markdown. Validated against real data: 11 ids currently exist in both the
+ledger and a fragment, and all 11 compare equal.
+
+**Namespacing was NOT implemented, deliberately** - recorded as `OPS-6`. The
+safety lane's accidental `SAF-NNNN` is collision-free by construction and is a
+real long-term answer, but retiring the global space changes what 30 existing
+entries, and every roadmap item, branch and commit citing an `LL` id, refer to.
+That is an operator decision, and detection makes it a considered one rather
+than an urgent one.
 
 ## 2d. The suite is only green IN PLACE - OPEN, ops lane, confirmed twice
 
