@@ -84,6 +84,22 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0041 - 2026-08-12 - OPS-2 closed - a lane adding a new file can go green on its own, without editing a roster it is forbidden to touch
+
+**Evidence:**
+- REPRODUCED FIRST: a fresh clone plus one new lanternlight/ module -> '1 failed, 34 passed', the orphan guard naming the file and telling the reader to declare it in ops/lanes.py, which only the OPS lane may edit. Any other lane is red for its whole session with no in-slice remedy
+- END TO END AFTER THE FIX, same procedure on a clone of the branch: lane adds a file -> '1 failed, 38 passed'; lane calls claim_path('ingest', 'lanternlight/newthing.py') -> '39 passed'
+- THE FAILING TESTS CAME FIRST: 12 failed in TestALaneCanClaimAPathItIsAdding before implementation
+- A CLAIM IS A PROMISSORY NOTE, NOT A SECOND OWNERSHIP MAP, and three guards enforce that: lanes.owner_of() is untouched so the roster remains the source of truth; two claimants on one path is still a failure with its own live test; and a claim the roster has ALREADY absorbed is STALE and fails until released, so a redeemed note cannot linger
+- lanes.path_matches() was made public so a claim is matched by exactly the roster's normalisation. Re-implementing it beside the roster is how the two would drift, and this repo has already paid for a separator bug there - lstrip('./') strips CHARACTERS and ate the leading dot of every dotfile
+- NON-VACUITY, __pycache__ purged and every anchor asserted unique: accept any number of claimants -> 1 failed; ignore claims entirely, i.e. the pre-fix guard -> 1 failed; stop reporting stale claims -> 1 failed; make a claim never match -> 5 failed; restored -> 1069 passed
+- python -m pytest -> '1069 passed in 22.14s' observed this run; 1050 before. python -m ruff check . -> All checks passed
+
+NEITHER OPTION THE ITEM OFFERED ACTUALLY REMOVED THE FRICTION, which is why a third was built. 'ops declares ownership first' needs the filename known before the work starts, which is usually false - the name is a result of the design, not an input to it. 'The integrator declares it at merge' is how lanternlight/damage.py shipped earlier this same session and it does work, but only for an integrator spanning both lanes; a lane running alone still sits red for its whole session. That matters beyond convenience: a lane stuck red cannot use the suite as a signal, its merge-gate baseline is noise, and it is under exactly the pressure CLAUDE.md names when it says never weaken a guard to make a build pass.
+THE GUARD'S INTERESTING HALF WAS UNPINNED AT FIRST, and only mutation testing would have shown it. The claim branch lived inside the test, and the real repository has no claimed path - so deleting that branch left the suite green. The predicate now lives in unowned_paths() where it can be exercised on a synthetic tree, and the mutation that ignores claims entirely goes red.
+THE ASCII GUARD CAUGHT THE AUTHOR. A non-ASCII character was typed into one of the new tests to check that claims are validated; tests/test_ascii_hygiene.py failed the whole repository for it, correctly. It is now built with chr(0xEF) instead. The guard that fired is one this project wrote for itself.
+A LANE MUST STILL RELEASE ITS CLAIM once the integrator writes the path into ops/lanes.py, and stale_claims() runs over the real state files on every suite run so a forgotten one cannot survive a merge.
+
 ### LL-0040 - 2026-08-12 - OPS-8 closed - an entry edited after integration is no longer misdiagnosed as an id collision, and the remedy was the opposite one
 
 **Evidence:**

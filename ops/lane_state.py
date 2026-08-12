@@ -102,6 +102,7 @@ __all__ = [
     "claimants_of",
     "release_path",
     "stale_claims",
+    "unowned_paths",
     "append_fragment",
     "close_open_item",
     "duplicate_claims",
@@ -671,6 +672,31 @@ def claimants_of(
         for lane_id, state in _writing_states(states).items()
         if lanes.path_matches(path, state.claimed_paths)
     )
+
+
+def unowned_paths(
+    paths: Sequence[str | Path], states: dict[str, LaneState] | None = None
+) -> list[str]:
+    """Return the paths nothing arbitrates: no roster owner, no single claimant.
+
+    The orphan guard's predicate lives here rather than inside the test so it
+    can be exercised on a synthetic tree. Left in the test it was effectively
+    unpinned: the real repository currently has no claimed path, so removing
+    the claim branch entirely would have left the suite green - a guard whose
+    interesting half is never executed.
+
+    A path with TWO claimants is unowned on purpose. Two owners for one file is
+    the invariant the lane architecture rests on, and a pending claim must not
+    become a way around it.
+    """
+    resolved = _writing_states(states)
+    return [
+        Path(path).as_posix()
+        for path in paths
+        if lanes.owner_of(path) is None
+        and not lanes.is_cross_cutting(path)
+        and len(claimants_of(path, resolved)) != 1
+    ]
 
 
 def stale_claims(

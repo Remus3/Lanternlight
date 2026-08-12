@@ -111,13 +111,7 @@ class TestNoFileIsOrphaned:
         # Without that a lane adding a file is red for its whole session and
         # cannot fix it in slice, because ownership lives in ops/lanes.py.
         # Two claimants is still a failure; see the sibling test below.
-        orphans = [
-            path.as_posix()
-            for path in lanes.tracked_files(REPO_ROOT)
-            if lanes.owner_of(path) is None
-            and not lanes.is_cross_cutting(path)
-            and len(lane_state.claimants_of(path)) != 1
-        ]
+        orphans = lane_state.unowned_paths(list(lanes.tracked_files(REPO_ROOT)))
         assert not orphans, (
             f"{len(orphans)} file(s) are neither lane-owned nor declared "
             "cross-cutting, so nothing arbitrates a concurrent edit to them. "
@@ -168,6 +162,27 @@ class TestNoFileIsOrphaned:
         assert lanes.owner_of(probe) is None
         state = lane_state.claim_path("ingest", probe, path=tmp_path / "s.json")
         assert lane_state.claimants_of(probe, states={"ingest": state}) == ["ingest"]
+
+    def test_the_orphan_predicate_honours_a_single_claim(self, tmp_path):
+        # Exercises the guard's own predicate on a SYNTHETIC tree. The real
+        # repository has no claimed path, so without this the claim branch of
+        # the guard above never executes and could be deleted unnoticed.
+        probe = "lanternlight/a_brand_new_module.py"
+        claimed = lane_state.claim_path("ingest", probe, path=tmp_path / "i.json")
+        assert lanes.owner_of(probe) is None, "the probe must be genuinely unowned"
+        # With the claim, nothing is orphaned. Without it, the same path is.
+        assert lane_state.unowned_paths([probe], states={"ingest": claimed}) == []
+        assert lane_state.unowned_paths([probe], states={}) == [probe]
+
+    def test_the_orphan_predicate_refuses_two_claimants(self, tmp_path):
+        probe = "lanternlight/contested.py"
+        ingest = lane_state.claim_path("ingest", probe, path=tmp_path / "i.json")
+        safety = lane_state.claim_path("safety", probe, path=tmp_path / "s.json")
+        both = {"ingest": ingest, "safety": safety}
+        assert lane_state.unowned_paths([probe], states=both) == [probe]
+
+    def test_the_orphan_predicate_still_passes_a_roster_owned_path(self):
+        assert lane_state.unowned_paths(["lanternlight/gvas.py"], states={}) == []
 
     def test_two_lanes_claiming_one_path_is_still_a_failure(self, tmp_path):
         """A claim relaxes WHERE ownership is written, never that it is unique.
