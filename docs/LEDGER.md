@@ -84,6 +84,24 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0032 - 2026-08-11 - Session close - 2b and 2c closed, merged to main, and 2d handed to the next session
+
+**Evidence:**
+- python -m pytest -> '953 passed in 34.94s', observed this run in the primary checkout with __pycache__, .pytest_cache and .ruff_cache purged; 807 at session start
+- python -m ruff check . -> All checks passed
+- main is 814b1ea, pushed and verified by REF COMPARISON not exit code: local and origin/main identical; working tree clean, 0 ahead 0 behind
+- public main scanned blob by blob by the integrator: 113 blobs, zero 15+ digit runs, zero 32-hex runs, zero CJK, zero detector hits
+- commit hygiene across every commit added to main this session: zero non-ASCII, zero Co-Authored-By
+- docs/LEDGER.md: 31 entries below the marker, LL-0001 to LL-0031, zero duplicates, strictly descending; lane_state.duplicate_claims() over the live repository returns NONE
+- merge gate run by the integrator against every lane before merging: safety 829, ingest 860, fixture 927, safety P0 943, ops 953 - each against a baseline measured beforehand
+
+ROADMAP 2b and 2c are CLOSED and on main. 2d is OPEN and is the next item by explicit operator direction.
+REFUTATION COVERAGE, stated plainly rather than implied. One adversarial pass ran, pinned to 060d48d, and it covered the serialiser, the detectors, the research docs and the merger's own damage claims. It found a P0 and five corrections. TWO SLICES LANDED AFTER IT AND HAVE HAD NO INDEPENDENT PASS: the sanitised fixture, and the 2c ledger fix. Both are covered by the integrator's own before-and-after re-measurement on real data plus the lanes' mutation proofs, which is weaker evidence than a separate agent and is labelled as such. Next session should refute both against the frozen main.
+THE 2c VERIFICATION IS THE LESSON, NOT THE FIX. The dangerous failure was never the collision - it was OVER-TIGHTENING, because a comparison that is too strict turns every legitimate re-run into a false collision, which gets a force flag bolted on, which disarms the guard for real collisions too. The integrator mutated the normaliser and probed it with CRLF; nothing changed, which read as proof the guard was one-sided. THE PROBE WAS VACUOUS - read_text performs universal-newline translation, so CRLF was gone before any comparison ran. Re-probed with trailing whitespace, which survives the read, the real code stays idempotent while a byte-exact comparison raises. This repository's own 'a mutation that fails to apply looks exactly like a passing test' was hit WHILE SPECIFICALLY WATCHING FOR IT, and the rule that caught it was the companion one: assert the mutation applied before believing the result.
+TWO REMEDIATIONS OPENED THE HOLE THEY WERE CLEANING, in one session. Authoring the Blueprint GUIDs - which ROADMAP 2b REQUIRED - removes the PRODUCTUSERID false positive that was accidentally the only thing refusing a third party's display name. Then redact() itself, the only sanctioned redaction path, disarmed the NAME_FIELD guard written to close that hazard, because it rewrites the decoration to a placeholder containing angle brackets and the anchor required alphanumerics. Nothing leaked either time. Two instances is a pattern: CHECK WHAT YOUR FIX REMOVES, NOT ONLY WHAT IT ADDS.
+OPEN AND NOT ANSWERED ON THE OPERATOR'S BEHALF: whether to retire the global LL-NNNN id space in favour of per-lane namespacing (OPS-6). SAF-NNNN is collision-free by construction, but retiring the global space changes what 31 existing entries and every citing roadmap item, branch and commit refer to.
+STILL UNSETTLED AND BLOCKING FOR EMBERFORGE: whether a damage number is DEALT or TAKEN beyond the 21 hits now proven to be taken. Item 7b answers it in the training ground. Until then no number may be labelled either way.
+
 ### LL-0031 - 2026-08-11 - ROADMAP 2c - integrate() now tells a re-run from an id collision, and refuses the collision
 
 **Evidence:**
