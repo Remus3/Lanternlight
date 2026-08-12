@@ -731,6 +731,112 @@ class TestAnUnclosedFenceCannotSuppressTheGuard:
             lane_state.fragment_entry_ids(path)
 
 
+class TestAnEditedEntryIsNotACollision:
+    """`OPS-8`. Two different faults gave one diagnosis, and it was the wrong one.
+
+    Edit an entry AFTER it has been integrated and it no longer matches its
+    fragment, so `integrate()` reports a `LedgerIdCollision` and the live guard
+    stays red. Reproduced before any fix: integrate, edit one number in the
+    ledger copy, re-integrate -> raised, and the message said the id was
+    "claimed twice by DIFFERENT entries" and told the reader to **renumber the
+    fragment's entry by hand**.
+
+    That remedy is actively wrong here. Renumbering would record one piece of
+    work twice under two ids - the opposite of what the reader wants, and it
+    corrupts the record while appearing to fix it.
+
+    **The decision OPS-8 asked for, taken and stated.** The item offered two
+    options: policy (an integrated entry is never edited) or code (reconcile the
+    fragment automatically). *Policy stands.* Auto-reconciliation would write to
+    a lane fragment, which this module documents as append-only and never
+    edited, so a fix for a reporting defect would have broken a core invariant.
+    What is fixed is the **diagnosis**: the two causes are now told apart where
+    that is possible, and where it is not, both are named rather than one being
+    guessed.
+    """
+
+    def _integrated(self, tmp_path):
+        book = _seed_ledger(tmp_path)
+        frag = tmp_path / "ops.LEDGER.md"
+        lane_state.append_fragment("ops", _entry("LL-0500", "the original"), path=frag)
+        assert lane_state.integrate(frag, book) == ["LL-0500"]
+        return book, frag
+
+    def _edit_the_ledger_copy(self, book):
+        text = book.read_text(encoding="utf-8")
+        edited = text.replace("the original", "the original, with a typo fixed")
+        assert edited != text, "the edit must apply or this probe is vacuous"
+        book.write_text(edited, encoding="utf-8")
+
+    def test_duplicate_claims_calls_it_an_edit_not_a_collision(self, tmp_path):
+        book, frag = self._integrated(tmp_path)
+        self._edit_the_ledger_copy(book)
+        found = lane_state.duplicate_claims(ledger_path=book, fragments=[frag])
+        assert list(found) == ["LL-0500"]
+        assert lane_state.classify_claim(found["LL-0500"]) == lane_state.EDITED_AFTER_INTEGRATION
+
+    def test_two_lanes_are_still_called_a_collision(self, tmp_path):
+        # The other half. A guard that renamed every collision an "edit" would
+        # be just as wrong in the opposite direction.
+        book = _seed_ledger(tmp_path)
+        ingest = tmp_path / "ingest.LEDGER.md"
+        research = tmp_path / "research.LEDGER.md"
+        lane_state.append_fragment("ingest", _entry("LL-0023", "serialiser"), path=ingest)
+        lane_state.append_fragment("research", _entry("LL-0023", "decode"), path=research)
+        found = lane_state.duplicate_claims(ledger_path=book, fragments=[ingest, research])
+        assert lane_state.classify_claim(found["LL-0023"]) == lane_state.TWO_LANES_COLLIDED
+
+    def test_the_rendered_report_gives_the_right_remedy_for_an_edit(self, tmp_path):
+        book, frag = self._integrated(tmp_path)
+        self._edit_the_ledger_copy(book)
+        rendered = lane_state.format_duplicate_claims(
+            lane_state.duplicate_claims(ledger_path=book, fragments=[frag])
+        )
+        assert "edited" in rendered.lower()
+        # Not "the word renumber is absent" - the message legitimately contains
+        # it while FORBIDDING it. The property is that renumbering is refused,
+        # because doing it here records one piece of work under two ids.
+        assert "do not renumber" in rendered.lower()
+        assert "append a new entry" in rendered.lower()
+
+    def test_the_rendered_report_still_says_renumber_for_a_real_collision(self, tmp_path):
+        book = _seed_ledger(tmp_path)
+        ingest = tmp_path / "ingest.LEDGER.md"
+        research = tmp_path / "research.LEDGER.md"
+        lane_state.append_fragment("ingest", _entry("LL-0023", "serialiser"), path=ingest)
+        lane_state.append_fragment("research", _entry("LL-0023", "decode"), path=research)
+        rendered = lane_state.format_duplicate_claims(
+            lane_state.duplicate_claims(ledger_path=book, fragments=[ingest, research])
+        )
+        assert "renumber" in rendered.lower()
+
+    def test_integrate_no_longer_asserts_renumbering_as_the_only_remedy(self, tmp_path):
+        # integrate() sees ONE fragment and the ledger, so it genuinely cannot
+        # tell an edit from another lane's prior claim. Omit rather than guess:
+        # it must name both causes instead of confidently giving one remedy.
+        book, frag = self._integrated(tmp_path)
+        self._edit_the_ledger_copy(book)
+        with pytest.raises(lane_state.LedgerIdCollision) as caught:
+            lane_state.integrate(frag, book)
+        message = str(caught.value).lower()
+        assert "edited" in message
+        assert "LL-0500".lower() in message
+
+    def test_integrate_still_writes_nothing_when_it_refuses(self, tmp_path):
+        book, frag = self._integrated(tmp_path)
+        self._edit_the_ledger_copy(book)
+        before = book.read_text(encoding="utf-8")
+        with pytest.raises(lane_state.LedgerIdCollision):
+            lane_state.integrate(frag, book)
+        assert book.read_text(encoding="utf-8") == before
+
+    def test_an_untouched_integration_is_still_a_silent_no_op(self, tmp_path):
+        # The behaviour none of this may disturb.
+        book, frag = self._integrated(tmp_path)
+        assert lane_state.integrate(frag, book) == []
+        assert lane_state.duplicate_claims(ledger_path=book, fragments=[frag]) == {}
+
+
 class TestAFragmentPathThatIsNotAFragment:
     """`OPS-7`. A missing fragment is ordinary; a nonsense one is not.
 

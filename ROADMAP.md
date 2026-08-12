@@ -374,8 +374,30 @@ away:**
   differ from its fragment forever, so `integrate` raises and the live
   collision test goes red until the two are reconciled by hand. That is the
   over-tightening hazard this item named, arriving through editing rather than
-  through re-running. Not fixed here - recorded as `OPS-8`, because the right
-  answer may be that an integrated entry is simply never edited.
+  through re-running. Recorded as `OPS-8`, **now CLOSED** - ledger `LL-0040`.
+
+  **The decision it asked for, taken: POLICY STANDS.** An integrated entry is
+  never edited; a correction is a **new** entry. Auto-reconciliation was
+  rejected with a reason - it would write to a lane fragment, which this
+  project documents as append-only and never edited, so fixing a *reporting*
+  defect would have broken a core invariant to do it. This session already
+  followed that policy in practice: `LL-0037` corrects `LL-0031`'s claims by
+  appending, not by editing.
+
+  **What was actually broken was the diagnosis, and it gave the opposite
+  remedy.** The message said the id was "claimed twice by DIFFERENT entries"
+  and told the reader to **renumber the fragment's entry** - which for an
+  edited entry records one piece of work under two ids, corrupting the record
+  while appearing to repair it. The two faults are now told apart: two
+  *fragments* differing means two lanes collided (renumber); one fragment
+  differing from the *ledger* means the entry was edited after integration
+  (restore it, or append a correcting entry, and do **not** renumber).
+  `integrate()` sees only one fragment so it cannot tell, and now names both
+  causes instead of guessing.
+
+  The guard still goes red on an edited entry, deliberately - a durable record
+  disagreeing with a lane's own copy is worth stopping for. The red is now
+  self-explaining.
 
 ### The P0 fix was itself holed - found by refuting it, closed as `LL-0037`
 

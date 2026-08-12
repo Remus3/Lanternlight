@@ -84,6 +84,22 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0040 - 2026-08-12 - OPS-8 closed - an entry edited after integration is no longer misdiagnosed as an id collision, and the remedy was the opposite one
+
+**Evidence:**
+- REPRODUCED BEFORE ANY FIX, on a throwaway copy of the real ledger: integrate an entry, change one number in the integrated copy, re-run. It raised LedgerIdCollision saying the id was 'claimed twice by DIFFERENT entries' and instructed the reader to RENUMBER the fragment's entry by hand
+- THAT REMEDY IS ACTIVELY WRONG FOR THIS CAUSE. Renumbering an edited entry records ONE piece of work under TWO ids - it corrupts the record while appearing to repair it. The two faults have opposite remedies and shared one message
+- THE DISCRIMINATOR, and it is exact: two FRAGMENTS holding different content under one id means two lanes allocated it independently, because they branch from a common base and both get the same answer to 'what is the next free id'. One fragment differing from the LEDGER means the entry was integrated and a copy then changed, because nothing else could have put it there
+- THE FAILING TESTS CAME FIRST: 4 failed before implementation, covering both classifications and both rendered remedies
+- classify_claim() returns EDITED_AFTER_INTEGRATION or TWO_LANES_COLLIDED; format_duplicate_claims() prints the matching remedy and labels each source as ledger or fragment. Verified on the reproduction: 'classification: edited-after-integration', and the rendered report says 'Do NOT renumber it'
+- integrate() sees ONE fragment and the ledger, so it genuinely CANNOT tell the two apart. It now NAMES BOTH CAUSES with their opposite remedies and points at duplicate_claims(), which can. Omit rather than guess, applied to a diagnosis
+- NON-VACUITY, __pycache__ purged and every anchor asserted unique: call everything a collision (the pre-fix behaviour) -> 2 failed; call everything an edit (the opposite error) -> 1 failed; stop marking which claim came from the ledger -> 2 failed; restored -> 1050 passed
+- python -m pytest -> '1050 passed in 26.58s' observed this run; 1043 before. python -m ruff check . -> All checks passed
+
+THE DECISION OPS-8 ASKED FOR, TAKEN AND STATED RATHER THAN IMPLIED. The item offered two options: policy (an integrated entry is never edited) or code (reconcile the fragment automatically). POLICY STANDS. Auto-reconciliation would write to a lane fragment, which this module documents as append-only and never edited, so fixing a REPORTING defect would have broken a core invariant to do it. The append-only contract is also what this session already followed in practice - LL-0037 corrects LL-0031's claims by appending a new entry rather than editing the old one.
+SO THE GUARD STILL GOES RED ON AN EDITED ENTRY, DELIBERATELY. That is not the defect. A durable record disagreeing with the lane's own copy is worth stopping for; what was broken was being told the wrong reason and the wrong remedy. The red is now self-explaining.
+ONE OF THIS ENTRY'S OWN TESTS ASSERTED THE WRONG THING FIRST and is corrected rather than deleted: it asserted the word 'renumber' was ABSENT from the edited-entry report. The report legitimately contains it while FORBIDDING it. Asserting the absence of a word is not the same property as asserting the absence of an instruction, and only the second is what the reader needs.
+
 ### LL-0039 - 2026-08-12 - OPS-7 closed - a fragment path that is not a fragment now says so, and an existing-but-unreadable fragment no longer reads as absent
 
 **Evidence:**

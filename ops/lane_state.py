@@ -94,7 +94,10 @@ __all__ = [
     "OpenItem",
     "ReadOnlyLane",
     "SCHEMA",
+    "EDITED_AFTER_INTEGRATION",
+    "TWO_LANES_COLLIDED",
     "add_open_item",
+    "classify_claim",
     "append_fragment",
     "close_open_item",
     "duplicate_claims",
@@ -1089,13 +1092,20 @@ def integrate(
                 "integrating would lose one of them - nothing has been written.\n"
                 f"  in {source}: {_heading_of(block)}\n"
                 f"  in {where}: {_heading_of(claimed[-1])}\n"
-                "Two lanes branching from one base can allocate the same id, and "
-                "their fragments merge cleanly because they are different files. "
-                "This is a collision, not a re-run. Renumber the fragment's entry "
-                "BY HAND to an id no other entry uses, in the fragment and in "
-                "every roadmap item, branch and commit message that cites it, then "
-                "re-run. This function will not renumber an append-only record for "
-                "you. ops.lane_state.duplicate_claims() lists every such clash."
+                "This is not a re-run. It has TWO possible causes with OPPOSITE "
+                "remedies, and this function sees only one fragment, so it will "
+                "not guess which:\n"
+                "  (1) TWO LANES COLLIDED. Lanes branch from one base, so both "
+                "got the same answer to 'what is the next free id', and their "
+                "fragments merged cleanly because they are different files. "
+                "Remedy: renumber ONE fragment's entry by hand, in the fragment "
+                "and in every roadmap item, branch and commit citing it.\n"
+                "  (2) THE ENTRY WAS EDITED AFTER IT WAS INTEGRATED, so the two "
+                "copies drifted. Remedy: restore it, or leave it and append a "
+                "NEW entry that corrects it. Do NOT renumber - that records one "
+                "piece of work under two ids.\n"
+                "ops.lane_state.duplicate_claims() sees every fragment and CAN "
+                "tell them apart; format_duplicate_claims() prints which it is."
             )
         taken[item_id] = normalised
         pending.append((item_id, block))
@@ -1127,6 +1137,10 @@ class IdClaim:
     source: Path
     heading: str
     content: str
+    #: True when this claim came from ``docs/LEDGER.md`` rather than a lane
+    #: fragment. It is what separates "two lanes took one id" from "somebody
+    #: edited an entry after it was integrated" - see :func:`classify_claim`.
+    from_ledger: bool = False
 
 
 def duplicate_claims(
@@ -1181,6 +1195,7 @@ def duplicate_claims(
                     source=path,
                     heading=_heading_of(block),
                     content=_normalise_block(block),
+                    from_ledger=marker == ledger.ENTRIES_MARKER,
                 )
             )
 
@@ -1191,18 +1206,60 @@ def duplicate_claims(
     }
 
 
+#: Two lanes independently allocated one id. Remedy: renumber, by hand.
+TWO_LANES_COLLIDED = "two-lanes-collided"
+
+#: One lane's entry was integrated and then one of the two copies was edited.
+#: Remedy: restore the entry, or append a correcting one. NEVER renumber - that
+#: records a single piece of work twice, under two ids.
+EDITED_AFTER_INTEGRATION = "edited-after-integration"
+
+
+def classify_claim(claims: Sequence[IdClaim]) -> str:
+    """Say WHICH fault a duplicated id represents. `OPS-8`.
+
+    The two have opposite remedies and used to share one message, which told
+    the reader to renumber in both cases. For an edited entry that is actively
+    wrong: renumbering records one piece of work under two ids, corrupting the
+    record while appearing to repair it.
+
+    The discriminator is where the differing claims live. Two FRAGMENTS holding
+    different content under one id means two lanes allocated it independently -
+    they branched from a common base, so both got the same answer to "what is
+    the next free id". One fragment differing from the LEDGER means the entry
+    was integrated and then a copy changed, because nothing else could have put
+    it there.
+    """
+    fragments = {claim.content for claim in claims if not claim.from_ledger}
+    if len(fragments) > 1:
+        return TWO_LANES_COLLIDED
+    return EDITED_AFTER_INTEGRATION if any(c.from_ledger for c in claims) else TWO_LANES_COLLIDED
+
+
 def format_duplicate_claims(found: dict[str, list[IdClaim]]) -> str:
     """Render :func:`duplicate_claims` for a human, or for a wrap ritual's log."""
     if not found:
         return "no id is claimed by two different entries"
-    lines = [
-        f"{len(found)} item id(s) claimed by different entries - renumber before "
-        "integrating, or one entry is lost:"
-    ]
+    lines = [f"{len(found)} item id(s) claimed by different entries:"]
     for item_id, claims in found.items():
-        lines.append(f"  {item_id}")
+        kind = classify_claim(claims)
+        if kind == TWO_LANES_COLLIDED:
+            lines.append(
+                f"  {item_id} - TWO LANES COLLIDED. Renumber one fragment's entry "
+                "by hand, in the fragment and in every roadmap item, branch and "
+                "commit citing it, then re-run."
+            )
+        else:
+            lines.append(
+                f"  {item_id} - EDITED AFTER INTEGRATION. This entry was already "
+                "integrated and one copy has since changed. Do NOT renumber it - "
+                "that records one piece of work under two ids. The ledger is "
+                "append-only: restore the entry to match, or leave it and append "
+                "a NEW entry that corrects it."
+            )
         for claim in claims:
-            lines.append(f"    {claim.source}: {claim.heading}")
+            where = "ledger" if claim.from_ledger else "fragment"
+            lines.append(f"    {claim.source} ({where}): {claim.heading}")
     return "\n".join(lines)
 
 
