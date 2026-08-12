@@ -84,6 +84,21 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0039 - 2026-08-12 - OPS-7 closed - a fragment path that is not a fragment now says so, and an existing-but-unreadable fragment no longer reads as absent
+
+**Evidence:**
+- THE FILED DEFECT: integrate('ops') - a lane ID where a fragment PATH belongs - reached a directory and surfaced a bare 'PermissionError: [Errno 13] Permission denied' on Windows. An errno is not a diagnosis
+- THE FAILING TESTS CAME FIRST: 6 failed before implementation, across a bare lane id, a directory, all three entry points, and every writing lane id rather than only 'ops'
+- THE FIX: one _fragment_text reader used by fragment_entry_ids, integrate and duplicate_claims. A bare lane id raises NotAFragment and NAMES THE PATH IT SHOULD HAVE BEEN; a directory raises naming it as one; a genuinely missing fragment still returns None so callers still read it as empty
+- THE TOLERANCE THE FIX HAD TO PRESERVE IS ITSELF PINNED: fragments are created lazily on a lane's first entry, so absence is the NORMAL state for most lanes. A mutation making a missing fragment an error -> 5 failed, so the guard cannot quietly become over-strict
+- A MUTANT SURVIVED AND FOUND ONE MORE SILENT PATH. Widening the catch back to a bare 'except OSError' left the suite at 1042 passed - nothing pinned what happens when a fragment EXISTS and cannot be read, so a lane with entries would have reported as a lane with none. That is the same silent-loss shape as every other defect in this module. Now covered: the read is monkeypatched to raise PermissionError and the call must raise rather than return []. Re-run, the same mutation -> 1 failed
+- NON-VACUITY, __pycache__ purged and every anchor asserted unique: stop refusing a bare lane id -> 2 failed; stop refusing a directory -> 4 failed; swallow everything again -> 1 failed; make a missing fragment an error -> 5 failed; restored -> 1043 passed
+- python -m pytest -> '1043 passed in 22.37s' observed this run; 1035 before. python -m ruff check . -> All checks passed
+
+THE FILED ITEM UNDERSOLD ITSELF. OPS-7 was recorded as a cosmetic error-message complaint - 'caller error, but the error should name the mistake'. Following it properly surfaced a real silent-failure path that was not in the item at all. That is the third time in two sessions that fixing a small filed item exposed a larger one beside it, and the mechanism each time was mutation testing rather than reading.
+WHY A FILENAME CONVENTION WAS NOT USED. The obvious stricter rule - demand that a fragment be named <lane_id>.LEDGER.md - was measured against the existing tests first and rejected: they legitimately pass paths like tmp_path/'LEDGER.md' and tmp_path/'nope.md'. Enforcing the convention would have failed real callers to catch a typo, which is the false-positive trade this module has already been burned by. The refusal is scoped to what cannot possibly be a fragment: a directory, or a bare lane id.
+A MISSING FRAGMENT AND A MISTYPED ONE ARE STILL INDISTINGUISHABLE, and that is stated rather than hidden. integrate('lanes/opss.LEDGER.md') still returns [] silently. Closing that needs the naming convention rejected above, or a caller-supplied lane id - neither is free, and the lazy-creation behaviour is load-bearing. Not filed as a new open item because it is a known consequence of a deliberate design, recorded here so the next reader does not rediscover it as a bug.
+
 ### LL-0038 - 2026-08-12 - OPS-9 closed - the heading guard and the heading parser now share one fence scan, and a THIRD private reader turned up while closing it
 
 **Evidence:**
