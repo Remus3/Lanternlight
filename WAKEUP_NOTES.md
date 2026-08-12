@@ -96,17 +96,53 @@ database whose first iteration was built on the **demo**. Opposite
 provenances, opposite failure modes, and neither may write an id into
 `docs/OBSERVED_IDS.md`. "Third-party site" is not a trust tier.
 
+## Item 2c was fixed in the same session - and the probe for it was vacuous
+
+`LL-0031`. `integrate()` now compares content per id: same id and same content
+is still skipped, so idempotence survives, while same id with **different**
+content raises and writes nothing. `duplicate_claims()` reports collisions
+across the ledger and every fragment, and a test runs it over the real files on
+every suite run.
+
+**The instructive part is the verification, not the fix.** The dangerous
+failure was never the collision - it was **over-tightening**, because a
+comparison that is too strict turns every legitimate re-run into a false
+collision, which gets a force flag bolted on, which disarms the guard for real
+collisions too.
+
+The integrator mutated the normaliser and tested it with **CRLF**. Nothing
+changed, which looked like proof the guard was one-sided. **The probe was
+vacuous:** `read_text` performs universal-newline translation, so CRLF is gone
+before any comparison runs. Re-run with **trailing whitespace** - a difference
+that survives the read - the real code stays idempotent while a byte-exact
+comparison raises.
+
+So this repo's own "a mutation that fails to apply looks exactly like a passing
+test" was hit **while specifically watching for it**. The rule that saved it is
+the other one: assert the mutation applied before believing the result.
+
+**Namespacing was deliberately not implemented** - `OPS-6`. `SAF-NNNN` is
+collision-free by construction and is probably the right long-term answer, but
+retiring the global space changes what 31 existing entries and every citing
+commit refer to. Operator decision.
+
 ## Where to start next
 
-**Item 2c** (the ledger id race) before any multi-lane work, then **item 7**
-(extract the damage series into shipped code), with **item 7b** folded into
-whichever session next has the client open - the training ground is the only
-route to **outgoing** damage in quantity, and `sourceType: 0` is what to look
-for.
+**Item 2d first** - it is small, and it is what a new contributor hits before
+anything else. A fresh clone runs **one failing test**:
+`tests/test_lane_contract.py` bakes the absolute `REPO_ROOT` into a rendered
+contract, so the suite is only green in place. Measured at `548e5b6` too, so it
+predates all of this. `README.md` tells people to clone and run `pytest`, so
+the documented first-run experience is currently a red suite. **Every count in
+this repository, including the 953 above, is an in-place number.**
+
+Then **item 7** - extract the damage series into shipped code - with **item 7b**
+folded into whichever session next has the client open. The training ground is
+the only route to **outgoing** damage in quantity, and `sourceType: 0` is what
+to look for.
 
 Do **not** label any damage number dealt or taken beyond what is already
-measured. And note **item 2d**: a fresh clone runs one failing test, so every
-count in this repository is an in-place number.
+measured.
 
 ---
 
