@@ -413,13 +413,29 @@ unbalanced-fence refusal deleted -> 6; id matched anywhere rather than
 first-token -> 2; `Path.home()` embedded in a contract -> 2; undecodable
 property reading as absence -> 2. Restored: **1030 passed**.
 
-**A new latent trap was found while writing one of those tests and is NOT fixed
-here** - `OPS-9`. The heading **guard** respects code fences; the heading
-**parser** does not. `_HEADING_RE.finditer` runs over the whole entry region, so
-a *well-formed* heading inside a code block is parsed as a real entry while a
-malformed one beside it is ignored. The two halves disagreeing is exactly the
-shape of the bugs above, and it deserves a considered fix rather than a quiet
-one during a wrap.
+**A new latent trap was found while writing one of those tests** - `OPS-9`,
+**now CLOSED**, ledger `LL-0038`. The heading **guard** respected code fences;
+the heading **parser** did not, so a *well-formed* heading inside a code block
+was parsed as a real entry while a malformed one beside it was ignored.
+
+Not hypothetical: `docs/LEDGER.md` documents its own entry format with a fenced
+`### LL-0000 - ...` example, safe only because it sits **above** the marker.
+Quote an example entry below the marker and it minted a phantom entry with a
+real id.
+
+Closed by giving both halves **one** `_scan_entry_region`, so there is no second
+opinion left to disagree with. **A third private reader turned up while fixing
+the first two** - `fragment_entry_ids` had its own `finditer` as well, and was
+not in the filed defect. `_HEADING_RE` is now referenced in exactly one place.
+
+Existing readings are unchanged: the real ledger still parses 37 entries and the
+fragments still parse 3, 5, 6 and 1. Three mutants -> 3, 1 and 5 failures;
+restored **1035 passed**.
+
+**The pattern is now four for four in this module.** Every defect here has been
+**two halves of one parser disagreeing** - the id race, the malformed heading,
+the unclosed fence, and the guard-versus-parser split. Each time the fix was to
+delete the second opinion, not to teach it the same rules.
 
 **Namespacing was NOT implemented, deliberately** - recorded as `OPS-6`. The
 safety lane's accidental `SAF-NNNN` is collision-free by construction and is a
