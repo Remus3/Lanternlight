@@ -84,16 +84,37 @@ def _authority_block(lane: lanes.Lane) -> str:
 
 
 def _workspace_block(lane: lanes.Lane) -> str:
+    """Describe where the lane works, naming no absolute path.
+
+    An earlier version interpolated ``lanes.primary_checkout()`` and
+    ``lane.worktree_path()`` - both absolute, both properties of the machine
+    that ran the generator rather than of the repository. Because the drift
+    guard compares the committed file against a fresh render, that made the
+    suite green only at ``C:\\Lanternlight``: a fresh clone rendered different
+    bytes and measured one failure, which is exactly what ``README.md`` tells a
+    new contributor to run.
+
+    So the concrete paths are resolved by the lane at run time, from the code
+    that owns them, instead of being frozen into text at generation time. That
+    is also the more honest instruction - a path typed into a document is a
+    guess about the reader's machine, while ``lane.worktree_path()`` is the
+    same function the launcher itself calls.
+    """
     if lane.read_only:
         return (
-            "You are given **no worktree**. Read the primary checkout at "
-            f"`{lanes.primary_checkout()}` and write nothing anywhere."
+            "You are given **no worktree**. Read the primary checkout - the "
+            "directory\n`ops.lanes.primary_checkout()` returns - and write "
+            "nothing anywhere."
         )
     return (
-        f"Your working directory is **`{lane.worktree_path()}`** on branch\n"
-        f"**`{lane.branch_name()}`**.\n\n"
-        f"You may **never** write into `{lanes.primary_checkout()}`. A live\n"
-        "session may\n"
+        f"Your working directory is your own worktree, **`ll-lane-{lane.lane_id}`**\n"
+        f"under the worktree root, on branch **`{lane.branch_name()}`**. The "
+        "worktree\n"
+        "root is `LL_WORKTREE_ROOT` when that is set and `ops.lanes.WORKTREE_ROOT`\n"
+        "otherwise. Resolve it with `lane.worktree_path()` rather than typing a\n"
+        "path - this contract deliberately names none, because a generated file\n"
+        "that embeds one machine's paths is only correct on that machine.\n\n"
+        "You may **never** write into the primary checkout. A live session may\n"
         "own it, and two writers in one working directory corrupt the git index\n"
         "- which is not recoverable by retrying. Create your worktree and assert\n"
         "you are in it before writing anything:\n\n"
@@ -102,6 +123,7 @@ def _workspace_block(lane: lanes.Lane) -> str:
         f'lane = lanes.by_id("{lane.lane_id}")\n'
         "lane_launcher.ensure_worktree(lane)\n"
         "lane_launcher.assert_in_lane_worktree(lane)\n"
+        "print(lane.worktree_path())  # the concrete path, resolved here\n"
         "```"
     )
 

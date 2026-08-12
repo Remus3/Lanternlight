@@ -38,11 +38,23 @@ class TestRenderedContent:
                 assert pattern in text, f"{lane.lane_id} omits {pattern}"
 
     def test_the_branch_and_worktree_are_named(self):
+        # The worktree is named by DIRECTORY, not by absolute path - see
+        # TestTheContractIsCheckoutIndependent for why an absolute path here
+        # made the whole suite green only in place. Asserting the directory
+        # name is the stronger check anyway: it catches a lane pointed at a
+        # sibling's worktree, which comparing a full path also did, while
+        # surviving a clone at any location.
         for lane in lanes.LANES:
             text = lane_contract.render(lane)
             assert lane.branch_name() in text
             if not lane.read_only:
-                assert str(lane.worktree_path()) in text
+                assert lane.worktree_path().name in text
+                others = [
+                    other.worktree_path().name
+                    for other in lanes.LANES
+                    if other.lane_id != lane.lane_id and not other.read_only
+                ]
+                assert not [name for name in others if name in text], lane.lane_id
 
     def test_never_merge_to_main_is_stated(self):
         for lane in lanes.LANES:
@@ -88,6 +100,46 @@ class TestRenderedContent:
         for lane in lanes.LANES:
             text = lane_contract.render(lane)
             assert "Never add a `Co-Authored-By` trailer" in text
+
+
+class TestTheContractIsCheckoutIndependent:
+    """A committed generated file must not embed the generating machine's paths.
+
+    `render()` used to interpolate `lanes.primary_checkout()`, an absolute path,
+    into text that is then committed. The drift guard below compares the file on
+    disk against a fresh render, so the two agreed only at `C:\\Lanternlight` and
+    a fresh clone measured one failure - which is what `README.md` tells a new
+    contributor to run. Every "N passed" this project has recorded was therefore
+    an in-place number.
+
+    The guard is behavioural rather than a substring check: move the checkout and
+    the bytes must not move. That goes red for any path re-embedded later,
+    including one nobody has thought of yet.
+    """
+
+    def test_rendering_does_not_change_when_the_checkout_moves(self, monkeypatch):
+        before = {lane.lane_id: lane_contract.render(lane) for lane in lanes.LANES}
+        monkeypatch.setattr(
+            lanes, "primary_checkout", lambda *a, **k: Path("/elsewhere/Lanternlight")
+        )
+        for lane in lanes.LANES:
+            assert lane_contract.render(lane) == before[lane.lane_id], lane.lane_id
+
+    def test_rendering_does_not_change_when_the_worktree_root_moves(self, monkeypatch):
+        before = {lane.lane_id: lane_contract.render(lane) for lane in lanes.LANES}
+        monkeypatch.setattr(lanes, "WORKTREE_ROOT", Path("/elsewhere/worktrees"))
+        for lane in lanes.LANES:
+            assert lane_contract.render(lane) == before[lane.lane_id], lane.lane_id
+
+    def test_no_contract_names_the_checkout_directory(self):
+        root = str(lanes.primary_checkout())
+        for lane in lanes.LANES:
+            assert root not in lane_contract.render(lane), lane.lane_id
+
+    def test_no_contract_names_the_worktree_root(self):
+        root = str(lanes.WORKTREE_ROOT)
+        for lane in lanes.LANES:
+            assert root not in lane_contract.render(lane), lane.lane_id
 
 
 class TestAuthoringRules:
