@@ -89,6 +89,7 @@ __all__ = [
     "IdClaim",
     "LaneState",
     "LedgerIdCollision",
+    "MalformedLedgerHeading",
     "OpenItem",
     "ReadOnlyLane",
     "SCHEMA",
@@ -159,6 +160,10 @@ TEMP_PREFIX = ".lane_state-"
 #: A rendered entry heading: ``### LL-0007 - 2026-08-09 - summary``.
 _HEADING_RE = re.compile(r"^### (?P<item_id>\S+) - ", re.MULTILINE)
 
+#: An id-shaped token, e.g. LL-0031 or SAF-0002. Used only to decide whether a
+#: `#` line was TRYING to be an entry heading, never to parse one.
+_ID_TOKEN_RE = re.compile(r"\b[A-Z]{2,6}-\d{3,}\b")
+
 
 class ReadOnlyLane(RuntimeError):
     """A read-only lane asked for somewhere to write.
@@ -167,6 +172,10 @@ class ReadOnlyLane(RuntimeError):
     ever; handing it a state file would be the first crack in that, and the
     crack would be invisible until the day it graded its own work.
     """
+
+
+class MalformedLedgerHeading(RuntimeError):
+    """An entry heading does not parse, so it would be skipped in silence."""
 
 
 class LedgerIdCollision(RuntimeError):
@@ -719,10 +728,53 @@ def fragment_entry_ids(path: Path) -> list[str]:
         text = target.read_text(encoding="utf-8")
     except (FileNotFoundError, NotADirectoryError):
         return []
-    return [m["item_id"] for m in _HEADING_RE.finditer(_entries_below(text, FRAGMENT_MARKER))]
+    body = _entries_below(text, FRAGMENT_MARKER)
+    _assert_headings_parse(body, target)
+    return [m["item_id"] for m in _HEADING_RE.finditer(body)]
 
 
-def _blocks_below(text: str, marker: str) -> list[tuple[str, str]]:
+def _assert_headings_parse(body: str, where: Path | str) -> None:
+    """Refuse a block that looks like an entry and does not parse as one.
+
+    **This closes LL-0031's defect through a second door.** ``_HEADING_RE``
+    wants exactly ``###``, one space, a non-space id, then ``" - "``. Miss that
+    by a single character and the entry does not fail loudly - it becomes
+    INVISIBLE. ``fragment_entry_ids`` omits it, ``duplicate_claims`` never sees
+    the id it claims, and ``integrate`` returns ``[]`` having written nothing.
+    An integrator reads that empty list as "already done" and the entry is
+    gone, which is exactly the silent data loss LL-0031 was written to end.
+
+    Scoped deliberately to lines carrying an **id-shaped token**, and skipping
+    fenced code, because the dangerous false positive here is a rule that fires
+    on ordinary prose: a guard that cries wolf gets switched off, and then the
+    real collision passes too. Measured before choosing that scope - across
+    ``docs/LEDGER.md`` and every lane fragment there are 46 lines starting with
+    ``#`` below the marker and all 46 parse, so nothing legitimate is refused
+    today.
+    """
+    in_fence = False
+    for number, line in enumerate(body.splitlines(), 1):
+        if line.lstrip().startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence or not line.lstrip().startswith("#"):
+            continue
+        if _HEADING_RE.match(line) or not _ID_TOKEN_RE.search(line):
+            continue
+        raise MalformedLedgerHeading(
+            f"{where}: line {number} looks like an entry heading and does not "
+            f"parse as one, so it would be SKIPPED IN SILENCE:\n"
+            f"  {line.strip()}\n"
+            f"An entry must read exactly '### <id> - <date> - <summary>'. A "
+            f"heading that misses that is dropped without an error - the id is "
+            f"invisible to the collision check and integrate() returns [] "
+            f"having written nothing. Fix the heading; do not widen this rule."
+        )
+
+
+def _blocks_below(
+    text: str, marker: str, where: Path | str = "<in-memory text>"
+) -> list[tuple[str, str]]:
     """Split the entry region below ``marker`` into ``(item_id, block)`` pairs.
 
     Used for both shapes of file - a lane fragment and the repository ledger -
@@ -730,6 +782,7 @@ def _blocks_below(text: str, marker: str) -> list[tuple[str, str]]:
     up the same way.
     """
     body = _entries_below(text, marker)
+    _assert_headings_parse(body, where)
     matches = list(_HEADING_RE.finditer(body))
     blocks: list[tuple[str, str]] = []
     for position, match in enumerate(matches):
@@ -738,9 +791,11 @@ def _blocks_below(text: str, marker: str) -> list[tuple[str, str]]:
     return blocks
 
 
-def _fragment_blocks(text: str) -> list[tuple[str, str]]:
+def _fragment_blocks(
+    text: str, where: Path | str = "<in-memory text>"
+) -> list[tuple[str, str]]:
     """Split a fragment's entry region into ``(item_id, rendered_block)`` pairs."""
-    return _blocks_below(text, FRAGMENT_MARKER)
+    return _blocks_below(text, FRAGMENT_MARKER, where)
 
 
 def _normalise_block(block: str) -> str:
@@ -833,7 +888,7 @@ def integrate(
     except (FileNotFoundError, NotADirectoryError):
         return []
 
-    blocks = _fragment_blocks(fragment_text)
+    blocks = _fragment_blocks(fragment_text, source)
     if not blocks:
         return []
 
@@ -845,7 +900,7 @@ def integrate(
         )
 
     recorded: dict[str, list[str]] = {}
-    for item_id, block in _blocks_below(original, ledger.ENTRIES_MARKER):
+    for item_id, block in _blocks_below(original, ledger.ENTRIES_MARKER, book):
         recorded.setdefault(item_id, []).append(_normalise_block(block))
 
     pending: list[tuple[str, str]] = []
@@ -950,7 +1005,7 @@ def duplicate_claims(
             text = path.read_text(encoding="utf-8")
         except (FileNotFoundError, NotADirectoryError):
             continue
-        for item_id, block in _blocks_below(text, marker):
+        for item_id, block in _blocks_below(text, marker, path):
             claims.setdefault(item_id, []).append(
                 IdClaim(
                     item_id=item_id,
