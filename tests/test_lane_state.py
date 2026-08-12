@@ -615,6 +615,173 @@ class TestAMalformedHeadingIsRefusedNotSkipped:
         lane_state.duplicate_claims()
 
 
+class TestAnUnclosedFenceCannotSuppressTheGuard:
+    """Found by the refutation pass on LL-0034, and WORSE than the bug it fixed.
+
+    The heading guard skips fenced code, because an entry may quote a snippet
+    that contains a `#` comment. The fence state was a bare toggle, so an entry
+    that opens a fence and forgets to close it left every following line marked
+    as code - and the guard silently stood down for the rest of the file.
+
+    Reproduced before this test existed: two entries, one forgotten backtick,
+    `integrate()` returned `['LL-0900']` - **non-empty, which reads as
+    success** - while the second entry never landed and its body was glued into
+    the first one's block. No exception anywhere.
+
+    That is worse than the defect LL-0034 closed, which at least returned an
+    empty list. A wrong answer that looks like a right answer is the failure
+    this whole module exists to prevent, so an unbalanced fence is now itself a
+    refusal.
+    """
+
+    def _fragment(self, tmp_path, body):
+        path = tmp_path / "ops.LEDGER.md"
+        path.write_text(
+            "# Lane ledger fragment - ops\n\n"
+            f"{lane_state.FRAGMENT_MARKER}\n\n{body}",
+            encoding="utf-8",
+        )
+        return path
+
+    UNCLOSED = (
+        "### LL-0900 - 2026-08-12 - forgets to close its fence\n\n"
+        "**Evidence:**\n- a command\n```\npython -m pytest\n\n"
+        "###  LL-0901 - 2026-08-12 - MALFORMED, and it must not vanish\n\n"
+        "**Evidence:**\n- an entire session record\n"
+    )
+
+    def test_an_unbalanced_fence_is_refused(self, tmp_path):
+        path = self._fragment(tmp_path, self.UNCLOSED)
+        with pytest.raises(lane_state.MalformedLedgerHeading):
+            lane_state.fragment_entry_ids(path)
+
+    def test_integrate_refuses_and_writes_nothing(self, tmp_path):
+        book = _seed_ledger(tmp_path)
+        path = self._fragment(tmp_path, self.UNCLOSED)
+        before = book.read_text(encoding="utf-8")
+        with pytest.raises(lane_state.MalformedLedgerHeading):
+            lane_state.integrate(path, ledger_path=book)
+        assert book.read_text(encoding="utf-8") == before
+
+    def test_the_hidden_entry_is_never_absorbed_into_its_neighbour(self, tmp_path):
+        # The specific harm: not merely dropped, but glued into the block above.
+        book = _seed_ledger(tmp_path)
+        path = self._fragment(tmp_path, self.UNCLOSED)
+        with pytest.raises(lane_state.MalformedLedgerHeading):
+            lane_state.integrate(path, ledger_path=book)
+        assert "must not vanish" not in book.read_text(encoding="utf-8")
+
+    def test_a_balanced_fence_is_still_fine(self, tmp_path):
+        path = self._fragment(
+            tmp_path,
+            "### LL-0900 - 2026-08-12 - closes its fence properly\n\n"
+            "**Evidence:**\n- a command\n```\n# see LL-0031 for why\n```\n",
+        )
+        assert lane_state.fragment_entry_ids(path) == ["LL-0900"]
+
+    def test_a_tilde_fence_suppresses_the_guard_exactly_like_a_backtick_one(self, tmp_path):
+        # Pinned because it was UNPINNED: the refutation pass showed that
+        # widening the delimiter set changed nothing any test observed, so the
+        # behaviour was accidental rather than chosen. `~~~` is valid Markdown,
+        # so it is supported deliberately - and now it is asserted.
+        # NOTE what a fence does and does not do, because writing this test
+        # wrongly is what revealed it: a fence suppresses the malformed-heading
+        # GUARD, not the heading PARSER. `_HEADING_RE.finditer` runs over the
+        # whole body and knows nothing about fences, so a WELL-FORMED heading
+        # inside a code block is still parsed as a real entry. Recorded as
+        # OPS-9; the two halves disagreeing is a latent trap, not a fix to make
+        # quietly during a wrap.
+        path = self._fragment(
+            tmp_path,
+            "### LL-0900 - 2026-08-12 - quotes a snippet with a tilde fence\n\n"
+            "**Evidence:**\n- a command\n~~~\n###  LL-0901 - malformed, but it is code\n~~~\n",
+        )
+        assert lane_state.fragment_entry_ids(path) == ["LL-0900"]
+
+    def test_an_unclosed_tilde_fence_is_refused_too(self, tmp_path):
+        path = self._fragment(
+            tmp_path,
+            "### LL-0900 - 2026-08-12 - forgets to close a tilde fence\n\n"
+            "**Evidence:**\n- a command\n~~~\npython -m pytest\n",
+        )
+        with pytest.raises(lane_state.MalformedLedgerHeading):
+            lane_state.fragment_entry_ids(path)
+
+    def test_a_fence_is_closed_only_by_the_delimiter_that_opened_it(self, tmp_path):
+        # Mismatched delimiters leave the fence OPEN, which is what Markdown
+        # does - and it means the unbalanced check still catches it rather than
+        # the guard quietly standing down for the rest of the file.
+        path = self._fragment(
+            tmp_path,
+            "### LL-0900 - 2026-08-12 - opens with backticks, closes with tildes\n\n"
+            "**Evidence:**\n- a command\n```\npython -m pytest\n~~~\n",
+        )
+        with pytest.raises(lane_state.MalformedLedgerHeading):
+            lane_state.fragment_entry_ids(path)
+
+    def test_an_unbalanced_fence_with_nothing_after_it_is_still_refused(self, tmp_path):
+        # It suppresses nothing today, but it is the same malformation and the
+        # next entry appended below it would be swallowed.
+        path = self._fragment(
+            tmp_path,
+            "### LL-0900 - 2026-08-12 - trailing open fence\n\n"
+            "**Evidence:**\n- a command\n```\npython -m pytest\n",
+        )
+        with pytest.raises(lane_state.MalformedLedgerHeading):
+            lane_state.fragment_entry_ids(path)
+
+
+class TestTheIdShapeIsNotAssumedToBeLLNNNN:
+    """Also from the refutation pass: six id shapes dropped silently.
+
+    The first cut of the guard recognised an entry attempt by matching
+    ``[A-Z]{2,6}-\\d{3,}``, which is what today's ids happen to look like. A
+    malformed heading carrying any other shape failed BOTH the heading pattern
+    and the id pattern, so it fell straight through into silence - the exact
+    hole the guard was written to close, reopened by assuming the id format.
+
+    `OPS-7` and `OPS-8` sit outside the original pattern, and `SAF-0001` exists
+    in this repository's own history, so this is not hypothetical.
+    """
+
+    SHAPES = (
+        "###  ll-0044 - 2026-08-12 - lowercase",
+        "###  Ll-0044 - 2026-08-12 - mixed case",
+        "###  L-0044 - 2026-08-12 - one letter",
+        "###  LEDGERX-0044 - 2026-08-12 - seven letters",
+        "###  LL-04 - 2026-08-12 - two digits",
+        "###  LL0044 - 2026-08-12 - no hyphen",
+        "###  OPS-7 - 2026-08-12 - a real id from this repo's own state files",
+    )
+
+    @pytest.mark.parametrize("heading", SHAPES)
+    def test_a_malformed_heading_of_any_id_shape_is_refused(self, tmp_path, heading):
+        path = tmp_path / "ops.LEDGER.md"
+        path.write_text(
+            "# Lane ledger fragment - ops\n\n"
+            f"{lane_state.FRAGMENT_MARKER}\n\n{heading}\n\n**Evidence:**\n- x\n",
+            encoding="utf-8",
+        )
+        with pytest.raises(lane_state.MalformedLedgerHeading):
+            lane_state.fragment_entry_ids(path)
+
+    def test_prose_mentioning_an_id_is_NOT_a_false_positive(self, tmp_path):
+        # The guard must fire on a heading that is TRYING to be an entry, not on
+        # a sub-heading that merely cites one. A rule that cries wolf gets
+        # switched off, and then the real collision passes too.
+        path = tmp_path / "ops.LEDGER.md"
+        path.write_text(
+            "# Lane ledger fragment - ops\n\n"
+            f"{lane_state.FRAGMENT_MARKER}\n\n"
+            "### LL-0044 - 2026-08-12 - ordinary\n\n"
+            "**Evidence:**\n- x\n\n"
+            "#### Why LL-0031 was not enough\n\n"
+            "#### Section 2 of the analysis\n",
+            encoding="utf-8",
+        )
+        assert lane_state.fragment_entry_ids(path) == ["LL-0044"]
+
+
 class TestDuplicateClaimsSurfacesTheHazardEarly:
     """See a collision BEFORE integrating, not as an exception during it."""
 

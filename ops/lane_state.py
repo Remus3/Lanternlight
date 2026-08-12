@@ -160,9 +160,34 @@ TEMP_PREFIX = ".lane_state-"
 #: A rendered entry heading: ``### LL-0007 - 2026-08-09 - summary``.
 _HEADING_RE = re.compile(r"^### (?P<item_id>\S+) - ", re.MULTILINE)
 
-#: An id-shaped token, e.g. LL-0031 or SAF-0002. Used only to decide whether a
-#: `#` line was TRYING to be an entry heading, never to parse one.
-_ID_TOKEN_RE = re.compile(r"\b[A-Z]{2,6}-\d{3,}\b")
+#: An id-shaped token: LL-0031, SAF-0002, OPS-7, and the shapes a typo produces.
+#: Deliberately permissive about case, prefix length, digit count and the
+#: hyphen, because this decides only whether a `#` line was TRYING to be an
+#: entry heading - never how to parse one. A narrow version of this pattern was
+#: itself a hole: an id it did not recognise fell through into silence.
+#: Either a hyphen with any digits (``OPS-7``, ``LL-0044``) or no hyphen and at
+#: least two (``LL0044``). One un-hyphenated digit is left out on purpose so an
+#: ordinary sub-heading like ``#### Section2 overview`` is not called a broken
+#: entry - the guard must fire on an entry ATTEMPT, not on prose.
+#: Both Markdown fence delimiters. A fence is closed only by the delimiter
+#: that opened it, so a mismatched one is ordinary text and leaves it open.
+_FENCE_MARKS = ("```", "~~~")
+
+_ID_TOKEN_RE = re.compile(r"[A-Za-z]{1,8}(?:-\d+|\d{2,})\Z")
+
+
+def _looks_like_an_entry_attempt(line: str) -> bool:
+    """True when ``line``'s first token after the hashes is an id.
+
+    Tested on the FIRST token rather than anywhere in the line, so a sub-heading
+    that cites an id in passing is not mistaken for a broken entry. That
+    distinction is what keeps the guard from crying wolf, and a guard that cries
+    wolf is one somebody eventually deletes.
+    """
+    text = line.lstrip().lstrip("#").strip()
+    if not text:
+        return False
+    return bool(_ID_TOKEN_RE.match(text.split()[0].strip(":.,;")))
 
 
 class ReadOnlyLane(RuntimeError):
@@ -744,22 +769,53 @@ def _assert_headings_parse(body: str, where: Path | str) -> None:
     An integrator reads that empty list as "already done" and the entry is
     gone, which is exactly the silent data loss LL-0031 was written to end.
 
-    Scoped deliberately to lines carrying an **id-shaped token**, and skipping
-    fenced code, because the dangerous false positive here is a rule that fires
-    on ordinary prose: a guard that cries wolf gets switched off, and then the
-    real collision passes too. Measured before choosing that scope - across
-    ``docs/LEDGER.md`` and every lane fragment there are 46 lines starting with
-    ``#`` below the marker and all 46 parse, so nothing legitimate is refused
-    today.
+    Scoped to lines whose FIRST token is id-shaped, and skipping fenced code,
+    because the dangerous false positive here is a rule that fires on ordinary
+    prose: a guard that cries wolf gets switched off, and then the real
+    collision passes too. A sub-heading that merely cites an id - ``#### Why
+    LL-0031 was not enough`` - is not an entry attempt and is left alone.
+
+    **Two holes were found here by a refutation pass and are closed. Both were
+    the same mistake: guarding the instance instead of the class.**
+
+    *The fence state used to be a bare toggle*, so an entry that opened a fence
+    and never closed it left every following line marked as code and the guard
+    silently stood down for the rest of the file. That was WORSE than the bug it
+    was written to fix: ``integrate()`` returned a NON-EMPTY list, which reads
+    as success, while a whole entry was absorbed into its neighbour's block. An
+    unbalanced fence is therefore now itself a refusal.
+
+    *The id pattern used to be* ``[A-Z]{2,6}-\\d{3,}`` *- today's ids*. A
+    malformed heading carrying any other shape failed the heading pattern AND
+    the id pattern and fell straight through into silence. ``OPS-7`` and
+    ``SAF-0001`` both sit outside that pattern and both exist in this
+    repository, so it was not hypothetical. The shape is now permissive about
+    case, prefix length, digit count and the hyphen.
+
+    No count of conforming lines is quoted here on purpose: it grows with every
+    entry, so a number written into this docstring is stale by the next commit.
+    Filing one was itself a defect - it was recorded as 46 and measured 51 four
+    commits later.
     """
-    in_fence = False
-    for number, line in enumerate(body.splitlines(), 1):
-        if line.lstrip().startswith("```"):
-            in_fence = not in_fence
+    lines = body.splitlines()
+    fence: str | None = None
+    fence_opened_at = 0
+    for number, line in enumerate(lines, 1):
+        stripped = line.lstrip()
+        opener = next((mark for mark in _FENCE_MARKS if stripped.startswith(mark)), None)
+        if opener is not None:
+            if fence is None:
+                fence, fence_opened_at = opener, number
+                continue
+            if opener == fence:
+                fence = None
+            # A mismatched delimiter is ordinary text inside the open fence,
+            # which is what Markdown does - and it means the fence is still
+            # open, so the unbalanced check below still catches it.
             continue
-        if in_fence or not line.lstrip().startswith("#"):
+        if fence is not None or not stripped.startswith("#"):
             continue
-        if _HEADING_RE.match(line) or not _ID_TOKEN_RE.search(line):
+        if _HEADING_RE.match(line) or not _looks_like_an_entry_attempt(line):
             continue
         raise MalformedLedgerHeading(
             f"{where}: line {number} looks like an entry heading and does not "
@@ -769,6 +825,15 @@ def _assert_headings_parse(body: str, where: Path | str) -> None:
             f"heading that misses that is dropped without an error - the id is "
             f"invisible to the collision check and integrate() returns [] "
             f"having written nothing. Fix the heading; do not widen this rule."
+        )
+    if fence is not None:
+        raise MalformedLedgerHeading(
+            f"{where}: the code fence opened at line {fence_opened_at} is never "
+            f"closed, so every line below it counts as code and the heading "
+            f"guard STANDS DOWN for the rest of the file.\n"
+            f"That is worse than a malformed heading: the next entry is absorbed "
+            f"into this one's block and integrate() returns a NON-EMPTY list, so "
+            f"it reads as success. Close the fence."
         )
 
 
