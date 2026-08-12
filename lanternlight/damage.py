@@ -8,17 +8,20 @@ while a match is running.
 Three measured properties of that field shape everything here, and each one
 breaks a reader that assumes otherwise.
 
-**It is a rolling window, not a cumulative log.** Summed `totalDamage` across
-generations falls as well as rises - 74.66, 251.20, 137.52, 89.09, 89.09,
-227.94 - so entries age out. One snapshot is never a run total, and a hit that
-has rotated out has not stopped having happened. :class:`DamageSeries`
+**It is a rolling window, not a cumulative log.** Summed `totalDamage` falls as
+well as rises across the run - 74.66, 251.20, 137.52, 89.09, 89.09, 227.94 are
+sampled generations rather than consecutive ones, but the direction reverses
+either way - so entries age out. One snapshot is never a run total, and a hit
+that has rotated out has not stopped having happened. :class:`DamageSeries`
 accumulates across generations and deduplicates on
 ``(monsterGuid, timeStamp, damageValue)``.
 
 The sampling ceiling that follows is worth designing against rather than
 fighting: 424 window readings over a 20-minute run yielded **21** distinct
-hits, because the window holds roughly two monster entries at a time. Polling
-faster does not widen a window that small.
+hits. Measured over the 262 generations that carry the field, the window holds
+a mean of **1.06 records** and **1.62 hits** per generation, ranging 0 to 2 and
+0 to 8 - so it is closer to one monster entry at a time than two. Polling
+faster does not widen a window that small; only a controlled environment does.
 
 **Absence is a fact, not a zero.** The first captured generation - 2,190 bytes,
 written at match start before any combat - does not carry the property at all.
@@ -183,9 +186,17 @@ def as_local_naive(time_stamp: float) -> dt.datetime:
     5.0041 hours, exactly the operator's offset plus a few seconds of
     event-to-emission lag.
 
-    So the game writes local wall-clock time as though it were UTC. What comes
-    back here is therefore **naive**: it carries no timezone because the save
-    does not know one. Use :func:`to_utc` when you can say what the offset was.
+    So the game writes wall-clock time as though it were UTC. What comes back
+    here is therefore **naive**: it carries no timezone because the save does
+    not know one. Use :func:`to_utc` when you can say what the offset was.
+
+    **One honest limit on the above.** All of this is one machine's data, and
+    that machine sits at -05:00. A fixed -05:00 applied server-side would look
+    identical, so "it is the LOCAL clock of the machine that played" is the
+    likeliest reading rather than a proven one. Separating them needs a capture
+    from a machine in a different zone, or one taken across a DST boundary.
+    Either way the practical instruction is unchanged, which is why this
+    function still refuses to guess: the offset must come from the caller.
     """
     return dt.datetime.fromtimestamp(time_stamp, dt.UTC).replace(tzinfo=None)
 
@@ -193,10 +204,12 @@ def as_local_naive(time_stamp: float) -> dt.datetime:
 def to_utc(time_stamp: float, utc_offset: dt.timedelta | dt.tzinfo | None) -> dt.datetime:
     """Return the true UTC instant, given the offset that was in force.
 
-    The offset is a property of the machine that played - it is not in the save,
-    and it changes with daylight saving - so it must be supplied. Guessing it
-    would silently shift every hit by hours, which is exactly the failure this
-    module exists to prevent, so a missing offset raises instead.
+    Whatever the offset belongs to - most likely the machine that played, see
+    :func:`as_local_naive` for why that is not proven - it is **not in the
+    save**, and on the local-clock reading it moves with daylight saving. So it
+    must be supplied. Guessing it would silently shift every hit by hours,
+    which is exactly the failure this module exists to prevent, so a missing
+    offset raises instead.
     """
     if utc_offset is None:
         raise UnknownClockOffset(
@@ -285,7 +298,24 @@ def damage_set_from_save(save: Any) -> tuple[DamageRecord, ...] | None:
     ``None`` means the game never wrote the field - measured on the first
     generation of a run, before any combat. ``()`` means it wrote an empty one.
     A caller that treats both as falsy has thrown away a real observation.
+
+    **A third case existed and used to collapse into the first.** ``gvas.parse``
+    omits a property it could not decode from ``properties`` and records it in
+    ``unknown_properties``, so "the game never wrote this" and "the game wrote
+    it and our reader failed" both looked like a missing key. The first is an
+    observation about the run; the second is a gap in this project's own
+    parser, and reporting it as absence points the blame in exactly the wrong
+    direction. It now raises.
     """
+    for unknown in getattr(save, "unknown_properties", ()):
+        if getattr(unknown, "name", None) == DAMAGE_PROPERTY:
+            raise MalformedDamageSet(
+                f"{DAMAGE_PROPERTY} IS present in this save but the GVAS reader "
+                f"could not decode it ({unknown.type_name}, {unknown.size} bytes "
+                f"at offset {unknown.offset}): {unknown.reason}. That is a gap in "
+                f"our parser, not an absence of combat, and the two must not "
+                f"give the same answer."
+            )
     payload = save.properties.get(DAMAGE_PROPERTY)
     if payload is None:
         return None

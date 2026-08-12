@@ -95,6 +95,64 @@ class TestAbsentIsNotEmpty:
         assert not absent and not empty  # both falsy - which is the trap
 
 
+class TestUnreadableIsNotAbsent:
+    """Found by a refutation pass: two different facts gave one answer.
+
+    `gvas.parse` omits a property it could not decode from `properties` and
+    records it in `unknown_properties`. So "the game never wrote this field" and
+    "the game wrote it and we cannot read it" both presented as a missing key,
+    and `damage_set_from_save` answered `None` to both.
+
+    The first is a real observation about the run. The second is a gap in OUR
+    reader, and reporting it as absence is the same class of error this module
+    exists to avoid - it just points the wrong way.
+    """
+
+    def _save_with_unknown(self):
+        return gvas.GvasSave(
+            properties={},
+            header=None,
+            epilogue=b"",
+            unknown_properties=(
+                gvas.UnknownProperty(
+                    name=damage.DAMAGE_PROPERTY,
+                    type_name="StrProperty",
+                    size=99,
+                    offset=1234,
+                    reason="type not measured",
+                ),
+            ),
+        )
+
+    def test_an_undecodable_property_raises_rather_than_reading_as_absent(self):
+        with pytest.raises(damage.MalformedDamageSet):
+            damage.damage_set_from_save(self._save_with_unknown())
+
+    def test_the_error_says_which_property_and_why(self):
+        with pytest.raises(damage.MalformedDamageSet) as caught:
+            damage.damage_set_from_save(self._save_with_unknown())
+        message = str(caught.value)
+        assert damage.DAMAGE_PROPERTY in message
+        assert "type not measured" in message
+
+    def test_an_unrelated_unknown_property_does_not_mask_a_genuine_absence(self):
+        save = gvas.GvasSave(
+            properties={},
+            header=None,
+            epilogue=b"",
+            unknown_properties=(
+                gvas.UnknownProperty(
+                    name="SomethingElse",
+                    type_name="StructProperty",
+                    size=8,
+                    offset=1,
+                    reason="native struct",
+                ),
+            ),
+        )
+        assert damage.damage_set_from_save(save) is None
+
+
 class TestTheCommittedFixtureParses:
     """Characterisation against real game bytes, not authored ones.
 
