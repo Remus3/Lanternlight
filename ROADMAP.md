@@ -233,7 +233,54 @@ misreading them - a `MapProperty` keyed by `DoubleProperty`, and `Rotator`.
 That is the raise-on-unknown guard validated in the wild for the second time,
 which is better evidence than any test.
 
-## 2b. Sanitised fixture for the transient save - READY, safety lane
+## 2c. Ledger fragments have an ID-ALLOCATION race - OPEN, ops lane, PROVEN
+
+Found by the integrator during the 2026-08-11 wrap, and proven rather than
+suspected. This is a defect in the continuity machinery itself, which is the one
+thing this project's whole design exists to protect.
+
+`LL-0018` removed the shared mutable ledger and gave each lane its own
+`lanes/<lane_id>.LEDGER.md` fragment, so two lanes appending could no longer
+conflict. **It solved the TEXT race and left the ID race untouched, and the
+fragment design is what hides it.** Two lanes on separate branches both
+allocated `LL-0023` - `ingest` for the GVAS serialiser, `research` for the
+transient-save decode. Because they wrote to different files, git merged both
+cleanly and nothing anywhere complained.
+
+**`integrate()` then turns the collision into SILENT DATA LOSS.** It skips ids
+already present, which is what makes it idempotent - correct behaviour for a
+re-run, catastrophic for a collision. Reproduced against a throwaway copy of the
+real ledger:
+
+    integrate(ingest)   -> ['LL-0024', 'LL-0023']
+    integrate(research) -> []          # the entire entry, gone
+    research heading present in ledger: False
+
+No exception, no warning, no diff. A lane's whole session record disappears and
+the only symptom is an empty list nobody reads.
+
+**Worked around, not fixed.** The integrator renumbered by hand before
+integrating - research to `LL-0025`, and the safety lane's two entries, which
+had been written in a **different namespace entirely** (`SAF-0001`/`SAF-0002`,
+against the `LL-NNNN` convention the ledger preamble states), to `LL-0026` and
+`LL-0027`. The result was verified: 27 entries, `LL-0001` to `LL-0027`, zero
+duplicates, strictly descending. A hand fix is not a fix, and the next session
+that runs three lanes hits this again.
+
+**Worth noticing before choosing a design:** the safety lane's accidental
+`SAF-NNNN` namespace is **collision-free by construction**, which the global
+`LL-NNNN` space is not. The lane that broke the convention may have stumbled
+onto the answer.
+
+**Acceptance:** a failing test first, proving that two fragments claiming one id
+lose an entry today. Then either (a) `integrate` REFUSES a fragment whose id is
+present with different content - distinguishing "already integrated" from
+"collision", which is the distinction it currently cannot make - or (b) ids
+become lane-namespaced and the global space is retired. Whichever is chosen,
+the guard must be shown to go red when removed, and the ledger's stated `LL-NNNN`
+convention must be updated to match reality rather than left contradicting it.
+
+## 2b. Sanitised fixture for the transient save - CLOSED 2026-08-11
 
 Split out of item 2 rather than left implied, because it is a different lane's
 work and a different risk.
@@ -282,11 +329,56 @@ Related and newly measured (`SAF-3`): inventory instance ids share a
 **12-digit prefix** with the operator's roleId, so masking the roleId alone
 does not mask them and each one leaks that prefix.
 
-**Acceptance:** a renamed, sanitised, size-reduced fixture that parses with
-`undecoded_trailing == 0`, is not byte-identical to any live save, passes
-`tests/test_no_pii.py` under `ALL_LABELS`, and carries a redact detector for
-every id shape found above - with the detectors proven non-vacuous against a
-positive control.
+**Acceptance - MET 2026-08-11.** Ledger `LL-0023` through `LL-0027`. Every
+criterion below was re-measured by the integrator rather than relayed.
+
+`tests/fixtures/gvas/standalone_slot.gvas.b64`, **19,867 raw bytes** from a
+177,878-byte source, built by the committed
+`tests/fixtures/build_standalone_slot_fixture.py` and reproducible byte for
+byte on a second run.
+
+- parses with `undecoded_trailing == b""`, `is_complete`, zero unknown
+  properties, 17 top-level properties
+- `serialise(parse(fixture)) == fixture`
+- sha256 collides with none of the 7 live saves and none of the 273 captures
+- `iter_sensitive` returns **empty** under `FILE_SCAN_LABELS` **and** under the
+  stricter `ALL_LABELS`; `iter_encoded_sensitive` over the committed base64
+  returns **empty**
+- **POSITIVE CONTROL, which is what makes those zeroes mean anything.** The
+  same scans over the pre-sanitised source: **882 plain findings**
+  (PRODUCTUSERID 772, LONG_ID 100, OWNER_ROLEID 3, NAME_FIELD 3, SAVE_SLOT 2,
+  ACTOR 2), **96 through the encoded pass**, **21 on the base64 text itself**.
+  Fixture: 0, 0, 0. A clean result and a dead scanner are otherwise identical.
+
+**Three things the build discovered that no plan anticipated:**
+
+1. **The authored decoration width is load-bearing, not cosmetic.**
+   `iter_encoded_sensitive` decodes each base64 **run** separately, so a
+   76-column fixture is scanned as 57-byte windows. `NAME_FIELD` needs
+   `len(name)+17` bytes present and goes quiet only if the marker follows
+   within 64, and no 57-byte window holds both unless the decoration is at
+   least 27 characters. An 11-character first attempt was refused by the
+   builder's own gate.
+2. **24 zero bytes encode to 32 `A` characters, and `A` is a hex digit.** So an
+   all-zero native `Vector` payload makes the committed TEXT trip
+   `PRODUCTUSERID` while the save it encodes is clean. Three payloads hit this
+   and no choice of entries avoids it. The builder authors those payloads and a
+   new test guards the whole fixture directory.
+3. **It is 19,867 bytes, not the under-10 KB the spec asked for, and the reason
+   is measured rather than conceded.** 12,972 bytes are tag overhead - 5,046
+   property names, **7,311 recursive type names**, 615 size and flag fields
+   across 123 tagged properties. Those type names are the game's own struct
+   identities and package paths; authoring them down would be lying about what
+   the game writes. The JSON the spec expected to dominate is 2,964 bytes.
+   Reaching 10 KB means dropping a container the brief required, so the brief
+   won. Recorded as `ING-12` for whoever decides otherwise.
+
+**Kept verbatim, stated rather than hidden:** game config ids and counts in the
+item JSON, the non-zero native struct payloads, the in-run damage numbers and
+timestamps, and the `LevelDetail` / `BotSpawnerData` values. None is an
+identifier under any detector.
+
+### The original acceptance, for the record
 
 **Still unidentified:** the 4 zero bytes after every tagged property list. An
 `int32` zero, an empty FString and four zero flag bytes all fit and nothing
@@ -644,9 +736,21 @@ source was built before quoting it, every time.
 
 ## Ordering note
 
-Item 1b is CLOSED and item 2's decode landed the same day, so **item 2b is
-NEXT** - the sanitised fixture, which is safety-lane work. Items 3 and 4's watcher
-are independent of everything and of each other.
+**Item 2b is CLOSED 2026-08-11.** The next item is **7** - extract the damage
+series into shipped code - because it is the only thing on this list that
+unblocks Emberforge, and because the numbers are already on disk. **Item 7b** is
+the cheapest thing here and answers item 7's one blocking question, so fold it
+into whichever session next has the client open. **Item 2c** is a defect in the
+continuity machinery and should be fixed before the next multi-lane session,
+not after it silently eats another entry.
+
+One ownership correction, measured this session: `tests/fixtures/**` is owned by
+**ingest**, not safety. This document called 2b "safety-lane work" and the
+roster in `ops/lanes.py` disagreed. What actually worked was a split - ingest
+built the artifact, safety owned the detectors and held the veto. Read the
+roster, not this file, for who owns a path.
+
+Items 3 and 4's watcher remain independent of everything and of each other.
 
 Each lane now carries its own queue in `lanes/<lane_id>.STATE.json`, so the
 right way to pick work is to read the state file of the lane that owns the

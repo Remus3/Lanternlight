@@ -11,7 +11,7 @@ The integrator folds these entries into `docs/LEDGER.md` on `main`, with
 
 <!-- LANE ENTRIES BELOW - NEWEST FIRST -->
 
-### LL-0023 - 2026-08-11 - Transient dungeon save decoded from its whole 263-generation lifetime - 8 filed claims re-measured, 2 refuted, 2 redaction false-positive classes named
+### LL-0025 - 2026-08-11 - Transient dungeon save decoded from its whole 263-generation lifetime - 8 filed claims re-measured, 2 refuted, 2 redaction false-positive classes named
 
 **Evidence:**
 - python -m pytest -> '807 passed in 26.70s', observed this run; baseline 807 collected, unchanged
