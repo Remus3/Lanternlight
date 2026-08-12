@@ -42,10 +42,22 @@
       "item_id": "ING-7",
       "opened": "2026-08-09",
       "text": "StandaloneSlot save is created at match start and destroyed at run end, producer StandaloneLevelCtrl.battleSnapUpdate. A watcher should arm on EnterBattle rather than poll blindly"
+    },
+    {
+      "blocked_on": "safety lane review of the fields no redact detector fires on",
+      "item_id": "ING-8",
+      "opened": "2026-08-11",
+      "text": "ROADMAP 2b - build the sanitised, size-reduced StandaloneSlot fixture with gvas.transform + gvas.serialise. Blocked on safety-lane sign-off for the fields lanternlight.redact has no detector for: BattleId, AutoSaveTempSlot/FinalSlot, IdGeneratorData.NumIdToUUID and ownerRoleId inside the ItemCell JSON"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "ING-9",
+      "opened": "2026-08-11",
+      "text": "MEASURED NEGATIVE to re-check when a new save shape appears: no property in any of the 276 files measured 2026-08-10 sets tag flag 0x01 (ArrayIndex) or 0x02 (property GUID), and no FString anywhere is UTF-16. gvas.serialise RAISES on a non-ASCII string rather than writing the engine's UTF-16 branch, so the first save that carries one will fail loudly rather than round-trip wrong"
     }
   ],
-  "resume_note": "decoding StructProperty<F_PlayzoneSaveData> against the captured StandaloneSlot save",
+  "resume_note": "GVAS serialiser landed and round-trips 276 files; next is ROADMAP 2b - author the sanitised StandaloneSlot fixture with transform()+serialise()",
   "schema": 1,
-  "sessions": 1,
-  "updated": "2026-08-09T23:05:24+00:00"
+  "sessions": 2,
+  "updated": "2026-08-11T23:58:54+00:00"
 }
