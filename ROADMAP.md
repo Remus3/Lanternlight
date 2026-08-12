@@ -654,11 +654,37 @@ Two properties of the field are measured and constrain any reader:
   valuable binding available to Emberforge. It is **unmeasured** - 0 may mean
   basic attack, or unset. Do not assume.
 
-**EXTRACTED 2026-08-11.** All **263** generations parsed, **278** window
+**EXTRACTED 2026-08-11.** All **263** generations parsed, **424** window
 readings deduplicated by `(monsterGuid, timeStamp, damageValue)` down to
-**21 distinct hits** over a **1020.3-second** span. Damage ranged 9.745483 to
+**21 distinct hits** over a **1020.344-second** span. Damage ranged 9.745483 to
 137.517426 against **8 distinct monsterIds** (1005, 1006, 1014, 1029, 2003,
 2007, 2017, 2021) across 9 monster instances.
+
+**RE-DERIVED INDEPENDENTLY 2026-08-12 by the integrator, and it corrected two
+filed counts.** Every headline above held on re-measurement - 263 parsed with
+zero failures, 21 distinct hits, 1020.344 s, the same 8 monsterIds, 9
+instances, total 1284.835785, and all three repeat groups with their gaps. Two
+things did not:
+
+1. **The deduped-from count was 278 and is 424.** This document said "**278**
+   window readings deduplicated by `(monsterGuid, timeStamp, damageValue)`",
+   and then said "`nameId` is 0 on all **424** readings" a few paragraphs
+   later - two numbers for one quantity, in one item. Both are real and they
+   count **different things**: summed across generations there are **278
+   top-level entries** (one per monster instance per generation) and **424
+   child hit readings**. The dedup key is a **child-level** key, so the number
+   being deduped is 424. The sentence paired the right operation with the
+   wrong count. A filed count is a hypothesis - this file's own anti-pattern,
+   and the correction matters because an extractor test encoding "278 deduped
+   to 21" would freeze a wrong intermediate.
+2. **It is 262 generations carrying the field, not 263.** The **first**
+   generation - 2,190 bytes, the smallest, written at match start before any
+   combat - does not carry `DamageCollectonDataSet` **at all**. The property is
+   **absent**, not present-and-empty. That is a fact worth keeping rather than
+   smoothing over: the field is created when the first damage lands, so
+   "unmeasured" and "measured zero" stay distinguishable on this surface
+   exactly as the measurement doctrine requires, and a reader must treat a
+   missing property as normal rather than as a parse failure.
 
 **The load-bearing result: damage is DETERMINISTIC, not rolled.** Three values
 repeat exactly, and every repeat has a distinct timestamp, so none is a
@@ -687,8 +713,9 @@ Kept visible rather than edited away, because the overstatement is instructive:
 
 **Three negatives, each worth as much as the positives:**
 
-- `nameId` is **0 on all 424 readings** in every one of the 263 generations,
-  and `Key` is empty on all 424. So the save's window carries no attribution
+- `nameId` is **0 on all 424 readings** in every one of the **262** generations
+  that carry the field, and `Key` is empty on all 424. So the save's window
+  carries no attribution
   at all, and the ~1.5 s interval cannot be attributed from the save alone.
 
   **PROBABLY the same id space as `SkillNameId` - a strong hypothesis, NOT
@@ -808,7 +835,7 @@ timestamps joined to log wall-clock. Plus: no damage coefficient may be
 published until the same value is seen from an **independent run** - one run
 cannot separate a coefficient from a lucky repeat, however precise.
 
-**A sampling limit to design against:** 278 window readings over ~20 minutes of
+**A sampling limit to design against:** 424 window readings over ~20 minutes of
 play yielded only 21 hits, because the window holds roughly two monster entries
 at a time and combat rotates them out fast. Most of the run's combat was never
 observed. Polling faster will not fix a window that small - this is a ceiling
