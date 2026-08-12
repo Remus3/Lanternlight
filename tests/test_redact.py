@@ -27,7 +27,9 @@ import pytest  # noqa: E402  (path bootstrap must run first)
 
 from lanternlight.redact import (  # noqa: E402
     ALL_LABELS,
+    AUTHORED_NAME_MARKER,
     FILE_SCAN_LABELS,
+    NAME_BEARING_PROPERTIES,
     RedactionError,
     assert_clean,
     discover_personas,
@@ -1409,3 +1411,185 @@ def test_the_hex_rule_is_case_blind_by_design():
     # the case of one without changing what it identifies.
     assert "PRODUCTUSERID" in _labels_of(FAKE_PRODUCT_USER_ID.upper())
     assert "PRODUCTUSERID" in _labels_of(FAKE_PRODUCT_USER_ID.lower())
+
+
+# --------------------------------------------------------------------------
+# a third party's display name inside a GVAS record - the structural rule
+# --------------------------------------------------------------------------
+#
+# MEASURED 2026-08-11 in the transient save. LeaderRankScoreData carries
+# KillPlayerHistoryDatas, one record of ten fields, three of which are
+# unbounded strings: PlayerName, MsgSubChannelString and MsgAppearanceString.
+# In the captured run IsBot is true and PlayerName holds a generated bot name,
+# so no real person's data is in this capture. That is luck. In a run with real
+# players that field holds SOMEBODY ELSE'S DISPLAY NAME.
+#
+# WHY NO CONTENT RULE CAN REACH IT, which is the part worth writing down:
+#
+#   - A keyed rule cannot see it. In GVAS the property name and its value are
+#     two separate length-prefixed strings; the bytes between them are the type
+#     token and a binary size, and there is no ``=`` or ``:`` anywhere. The
+#     module already has ``PlayerName`` as a persona key and it does not fire.
+#   - Persona discovery cannot see it, for the same reason - it harvests from
+#     key/value shapes, and there is no key/value shape here.
+#   - A shape rule cannot see it. SAVE_SLOT works because a slot name has a
+#     fixed shape; a display name has NO shape at all. A rule matching arbitrary
+#     strings in a save would flag the whole file and train people to ignore it.
+#
+# So the rule implemented is STRUCTURAL, not content-based: these three named
+# properties must carry an AUTHORED value in any committed artifact. It fires on
+# the property when the authored marker is absent and goes quiet when it is
+# present, which is what makes it a satisfiable condition rather than a
+# permanent red.
+
+#: A 32-character decoration that is deliberately NOT a hex run, which is what
+#: an authored Blueprint GUID has to look like - see the test below.
+NON_HEX_GUID = "SYNTHETICGUID" + "Z" * 19
+
+
+def _gvas_string_property(name: str, value: str, guid: str, index: str = "19") -> str:
+    """Assemble one GVAS StrProperty exactly as the save writes it.
+
+    Layout measured on the real capture: the decorated property name as an
+    FString, a 4-byte length and the type token ``StrProperty``, then an 8-byte
+    size, a has-guid byte, a 4-byte value length and the value. Built here from
+    parts so this file never contains the byte sequence as a literal.
+    """
+    type_token = "StrProperty"
+    return (
+        name + "_" + index + "_" + guid + "\x00"
+        + chr(len(type_token) + 1) + "\x00\x00\x00"
+        + type_token + "\x00"
+        + "\x00" * 8
+        + "\x00"
+        + chr(len(value) + 1) + "\x00\x00\x00"
+        + value + "\x00"
+    )
+
+
+#: A third party's display name. Invented, and never taken from the capture.
+FAKE_OTHER_PLAYER = "Some" + "OtherHunter"
+
+
+def test_no_key_or_persona_mechanism_reaches_a_name_inside_a_gvas_record():
+    # The refutation, pinned. Every CONTENT mechanism in this module is blind
+    # here, and each for a reason that cannot be patched by adding a key.
+    record = _gvas_string_property("PlayerName", FAKE_OTHER_PLAYER, NON_HEX_GUID)
+    assert discover_personas(record) == ()
+    assert FAKE_OTHER_PLAYER in redact(record, personas=[])
+
+
+def test_the_structural_rule_refuses_an_unauthored_name_field():
+    record = _gvas_string_property("PlayerName", FAKE_OTHER_PLAYER, NON_HEX_GUID)
+    assert "NAME_FIELD" in _labels_of(record)
+
+
+def test_authoring_the_value_satisfies_the_rule():
+    # The other half, and the one that makes this a satisfiable condition
+    # rather than a permanent red that trains people to ignore it.
+    record = _gvas_string_property("PlayerName", AUTHORED_NAME_MARKER, NON_HEX_GUID)
+    assert "NAME_FIELD" not in _labels_of(record)
+
+
+def test_all_three_measured_name_bearing_properties_are_covered():
+    for prop in ("PlayerName", "MsgSubChannelString", "MsgAppearanceString"):
+        assert prop in NAME_BEARING_PROPERTIES, prop
+        unauthored = _gvas_string_property(prop, FAKE_OTHER_PLAYER, NON_HEX_GUID)
+        authored = _gvas_string_property(prop, AUTHORED_NAME_MARKER, NON_HEX_GUID)
+        assert "NAME_FIELD" in _labels_of(unauthored), prop
+        assert "NAME_FIELD" not in _labels_of(authored), prop
+
+
+def test_the_rule_needs_the_gvas_shape_and_not_merely_the_word():
+    # Tree safety. These property names are discussed in this repository's own
+    # prose, and a rule that fired on the WORD would redden the scan on every
+    # document that mentions it. The NUL and the type token are what make this
+    # a GVAS record rather than a sentence.
+    prose = "the record carries PlayerName, MsgSubChannelString and MsgAppearanceString\n"
+    assert list(iter_sensitive(prose, labels=FILE_SCAN_LABELS)) == []
+    assert redact(prose) == prose
+
+
+def test_the_rule_needs_a_string_valued_property_not_just_a_nul():
+    # Pins the StrProperty anchor specifically. Mutation found that the prose
+    # test above passes on the NUL requirement alone, so deleting this anchor
+    # left every assertion green - the anchor was unpinned and would have been
+    # free to delete.
+    #
+    # The distinction is real rather than defensive: an integer-valued property
+    # cannot hold a display name, so firing on one would be a false positive in
+    # a rule whose entire value is that it fires rarely and means it.
+    int_valued = (
+        "PlayerName" + "_19_" + NON_HEX_GUID + "\x00"
+        + chr(len("IntProperty") + 1) + "\x00\x00\x00"
+        + "IntProperty" + "\x00" + "\x00" * 13
+    )
+    assert "NAME_FIELD" not in _labels_of(int_valued)
+
+    str_valued = _gvas_string_property("PlayerName", FAKE_OTHER_PLAYER, NON_HEX_GUID)
+    assert "NAME_FIELD" in _labels_of(str_valued)
+
+
+def test_redact_does_not_rewrite_a_gvas_name_field():
+    # Detector only, deliberately. Substituting a placeholder for the property
+    # name would change the byte length of a length-prefixed record and corrupt
+    # the blob, while leaving the value it was supposed to protect in place -
+    # strictly worse than doing nothing. The remedy is to author the value.
+    record = _gvas_string_property("PlayerName", FAKE_OTHER_PLAYER, NON_HEX_GUID)
+    assert redact(record, personas=[]) == record
+
+
+def test_assert_clean_refuses_the_field_and_says_how_to_fix_it():
+    record = _gvas_string_property("PlayerName", FAKE_OTHER_PLAYER, NON_HEX_GUID)
+    with pytest.raises(RedactionError) as excinfo:
+        assert_clean(record, personas=[])
+    message = str(excinfo.value)
+    assert "NAME_FIELD" in message
+    # Pin the REMEDY, not merely the word "author". Mutation caught this: the
+    # first version asserted 'author' in message.lower(), and passed even with
+    # the remedy branch disabled, because the fallback quotes the matched text
+    # and the test's own sentinel GUID contained that substring. An assertion
+    # satisfied by the fixture rather than by the behaviour is decoration.
+    assert "AUTHOR the value" in message
+    assert AUTHORED_NAME_MARKER in message
+    # The message travels. It must not carry the name it just caught.
+    assert FAKE_OTHER_PLAYER not in message
+
+
+def test_the_name_field_label_reaches_the_repository_scan():
+    assert "NAME_FIELD" in ALL_LABELS
+    assert "NAME_FIELD" in FILE_SCAN_LABELS
+
+
+def test_a_blueprint_hex_guid_decoration_does_not_hide_the_field():
+    # The real capture decorates all three properties with a 32-hex GUID. The
+    # rule must see through that decoration, not just the authored one.
+    record = _gvas_string_property("PlayerName", FAKE_OTHER_PLAYER, FAKE_BLUEPRINT_GUID)
+    assert "NAME_FIELD" in _labels_of(record)
+
+
+def test_the_name_field_survives_authoring_the_guid_away():
+    # THE COUPLING THAT MAKES THIS URGENT. Today the record region is refused,
+    # but only by the PRODUCTUSERID false positive firing on the Blueprint GUID
+    # beside the field. A fixture builder clearing that false positive - which
+    # is exactly what the fixture is required to do - removes the only thing
+    # currently objecting to the record, and the display name then ships in
+    # silence. So: with the GUID authored to a non-hex value, PRODUCTUSERID
+    # correctly goes quiet and NAME_FIELD must still object.
+    hexed = _gvas_string_property("PlayerName", FAKE_OTHER_PLAYER, FAKE_BLUEPRINT_GUID)
+    authored_guid = _gvas_string_property("PlayerName", FAKE_OTHER_PLAYER, NON_HEX_GUID)
+    assert "PRODUCTUSERID" in _labels_of(hexed)
+    assert "PRODUCTUSERID" not in _labels_of(authored_guid)
+    assert "NAME_FIELD" in _labels_of(authored_guid)
+
+
+def test_an_authored_guid_must_not_be_a_hex_run():
+    # Recorded because the obvious reading of "author the GUID" is wrong. The
+    # hex rule keys on SHAPE and cannot tell an authored GUID from a real
+    # ProductUserId, so authoring a GUID that is still 32 hex characters
+    # changes nothing at all. It has to stop being a hex run.
+    assert len(NON_HEX_GUID) == 32
+    assert "PRODUCTUSERID" not in _labels_of(NON_HEX_GUID)
+    still_hex = "ABCDEF0123456789" * 2
+    assert len(still_hex) == 32
+    assert "PRODUCTUSERID" in _labels_of(still_hex)

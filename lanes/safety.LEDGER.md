@@ -11,6 +11,24 @@ The integrator folds these entries into `docs/LEDGER.md` on `main`, with
 
 <!-- LANE ENTRIES BELOW - NEWEST FIRST -->
 
+### SAF-0002 - 2026-08-11 - a third party's display name in the save is not reachable by any content rule - structural NAME_FIELD guard instead
+
+**Evidence:**
+- full suite 841 passed, 841 collected from the lane worktree - baseline for this slice was 829 collected, so no drop; tests/test_no_pii.py 42 passed
+- REFUTED that any existing detector covers the field: on the real save discover_personas returns 0 candidates for the record region, redact() leaves the name byte-for-byte intact, and the keyed PlayerName persona rule cannot even match because the property is written PlayerName_19_<GUID> with no separator anywhere
+- the new rule fires 3 times on the real capture, once per name-bearing property, at the three measured offsets
+- THE COUPLING, measured: today the record is refused only because the Blueprint GUID beside it trips PRODUCTUSERID. Replacing every 32-hex run in the real save with a non-hex string - which is exactly what the fixture is required to do - takes PRODUCTUSERID to 0 and LONG_ID from 100 to 38, and NAME_FIELD still objects 3 times. Without it the remediated fixture would have had zero objections to shipping a third party's display name
+- satisfiability proven on the real bytes too: inserting the authored marker beside each property takes NAME_FIELD from 3 findings to 0
+- NON-VACUITY, 6 mutations, zero survivors after two rounds: deleting the rule, dropping the authored-marker lookahead, dropping the StrProperty anchor, letting redact() rewrite the detect-only rules, dropping DETECT_ONLY_RULES from the scanning path, and removing the remedy from the failure message all went RED
+- EXISTING TREE UNAFFECTED: NAME_FIELD run over all 110 tracked files as they exist at HEAD gave 0 plain and 0 encoded findings
+- ruff clean, both files 7-bit ASCII
+
+THE HONEST ANSWER TO 'CAN A DETECTOR SEE THIS': no, and not for want of trying. A keyed rule cannot reach it because GVAS writes the property name and its value as two separate length-prefixed strings with a binary size between them - there is no '=' or ':' in the file. Persona discovery is blind for the same reason. A shape rule cannot work either, because unlike a save slot a display name HAS no shape. A rule that matched arbitrary strings inside a save would flag the whole file, and a guard that flags everything trains people to ignore it, which costs more than it saves. So the guard is STRUCTURAL: it recognises the PROPERTY, not the value, and requires an authored marker beside it. Copy the record and it fires; author the value and it goes quiet.
+WHY IT IS DETECT-ONLY. A GVAS record is a chain of length-prefixed strings, so substituting a placeholder for the property name would change a byte count the format depends on and corrupt the blob, while leaving the value it was meant to protect exactly where it was - strictly worse than doing nothing. redact() therefore walks RULES only and the new DETECT_ONLY_RULES tuple is scanned but never substituted. The failure message carries the remedy, because the only party who can fix this is whoever builds the artifact.
+TWO MUTATION SURVIVORS ON THE FIRST ROUND, both real defects in my own tests. The prose test passed on the NUL requirement alone and never pinned the StrProperty anchor, so that anchor was free to delete - fixed with a test proving an integer-valued property does not fire while a string-valued one does. Worse, the message test asserted 'author' in message.lower() and passed with the remedy branch disabled, because the fallback quotes the matched text and my own sentinel constant was named AUTHORED_GUID. An assertion satisfied by the fixture rather than by the behaviour is decoration; the constant is renamed and the assertion now pins the remedy wording.
+CORRECTION TO SAF-9, filed last slice. 'The fixture authors its GUIDs' is not sufficient as written: the hex rule keys on shape and cannot tell an authored GUID from a real ProductUserId, so an authored GUID that is still 32 hex characters changes nothing at all. It has to stop being a hex run. Re-filed with that correction and pinned by a test.
+SCOPE LIMIT, stated rather than hidden: NAME_BEARING_PROPERTIES lists the three properties MEASURED to carry free text. A fourth that exists but was not in this capture is not covered, and no pattern could find it - the list grows by measurement. SAF-12 records that nothing yet asserts the check ran against the fixture specifically, only against whatever is committed.
+
 ### SAF-0001 - 2026-08-11 - ROADMAP 2b - name the save-file id shapes, and record the Blueprint-GUID false positive rather than silence it
 
 **Evidence:**

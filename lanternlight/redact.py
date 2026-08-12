@@ -207,8 +207,11 @@ from dataclasses import dataclass
 
 __all__ = [
     "ALL_LABELS",
+    "AUTHORED_NAME_MARKER",
+    "DETECT_ONLY_RULES",
     "FILE_SCAN_LABELS",
     "LOG_TEXT_RULES",
+    "NAME_BEARING_PROPERTIES",
     "PERSONA_PLACEHOLDER",
     "RedactionError",
     "Rule",
@@ -638,6 +641,108 @@ RULES: tuple[Rule, ...] = (
     ),
 )
 
+# --------------------------------------------------------------------------
+# a third party's display name inside a GVAS record
+# --------------------------------------------------------------------------
+#
+# Everything above is a CONTENT rule: it recognises a value by its shape or by
+# the key next to it. Measured 2026-08-11, the transient save carries a field no
+# content rule can reach.
+#
+# ``LeaderRankScoreData.KillPlayerHistoryDatas`` holds one record of ten fields,
+# three of them unbounded strings: ``PlayerName``, ``MsgSubChannelString`` and
+# ``MsgAppearanceString``. In the captured run ``IsBot`` is true and
+# ``PlayerName`` holds a generated bot name, so no real person is in that
+# capture. **That is luck, not a property of the format.** In a run with real
+# players the field holds somebody else's display name - a third party who never
+# consented to anything and cannot be asked.
+#
+# Three mechanisms, all blind, each for a reason that adding a key cannot fix:
+#
+#   - **Keyed rules.** In GVAS the property name and its value are two separate
+#     length-prefixed strings. Between them sit the type token and a binary
+#     size, and there is no ``=`` or ``:`` anywhere in the file. ``PlayerName``
+#     is ALREADY a persona key in this module and it does not fire, because
+#     ``\b`` cannot even end the token - the real property name is
+#     ``PlayerName_19_<GUID>``.
+#   - **Persona discovery.** Same reason: it harvests from key/value shapes, and
+#     there is no key/value shape here.
+#   - **Shape rules.** ``SAVE_SLOT`` works because a slot name has a fixed
+#     shape. A display name has NO shape at all. A rule matching arbitrary
+#     strings inside a save would flag the entire file, and a guard that flags
+#     everything teaches people to ignore it - which costs more than it saves.
+#
+# So the rule below is STRUCTURAL. It does not try to recognise a name; it
+# recognises the PROPERTY, and requires the value beside it to be an authored
+# marker. Copy the real record and it fires; author the value and it goes quiet.
+# That satisfiability is the whole design - a check that can never be satisfied
+# is an outage, not a guard.
+#
+# WHY THIS IS URGENT RATHER THAN THEORETICAL. Today that record region IS
+# refused - but only because the Blueprint GUID beside the field trips
+# PRODUCTUSERID, which is the false positive recorded above. Clearing that false
+# positive is exactly what a fixture builder is required to do. Doing it removes
+# the only thing currently objecting to the record, and the display name then
+# ships in silence. The accidental guard and the deliberate one have to be
+# separated before, not after.
+
+#: Properties measured to carry free text a person could be named in. Ordered
+#: as the record writes them. Extend this list when a new one is MEASURED, not
+#: when one is imagined - an unmeasured entry here costs nothing and teaches
+#: nobody, but it makes the list look authoritative when it is not.
+NAME_BEARING_PROPERTIES: tuple[str, ...] = (
+    "PlayerName",
+    "MsgSubChannelString",
+    "MsgAppearanceString",
+)
+
+#: The value a committed artifact must carry in place of a real one. A fixture
+#: sets each name-bearing property to this, and :data:`_NAME_FIELD` goes quiet.
+AUTHORED_NAME_MARKER = "<AUTHORED_NAME>"
+
+#: How far past the property name the marker may sit. Measured layout: the
+#: property-name NUL is followed by a 4-byte length, the 12-byte type token, an
+#: 8-byte size, a has-guid byte and a 4-byte value length - 29 bytes before the
+#: value begins. 64 leaves room for a variant without swallowing the next field.
+#:
+#: Stated rather than hidden: if two name-bearing properties sat within 64 bytes
+#: of each other and only one were authored, the authored one's marker could
+#: satisfy the unauthored one's check. The measured record puts them far further
+#: apart than that, and the failure needs a fixture that authored some fields
+#: and not others - which is the case the test suite pins directly.
+_AUTHORED_WINDOW = 64
+
+# The property name, its optional Blueprint decoration (``_<index>_<GUID>``),
+# and the NUL that ends the FString - then the type token close behind it, which
+# is what makes this a GVAS record rather than a sentence. The repository's own
+# prose names all three of these properties, and a rule that fired on the WORD
+# would redden the tree scan on every document that discusses them.
+#
+# The decoration is matched as an alphanumeric run rather than as hex, because
+# an AUTHORED decoration must not be a hex run - see below - and the rule has to
+# see through both.
+_NAME_FIELD = re.compile(
+    rf"(?<![A-Za-z0-9_])(?:{'|'.join(NAME_BEARING_PROPERTIES)})"
+    rf"(?:_\d+_[0-9A-Za-z]{{1,64}})?\x00"
+    rf"(?=[\s\S]{{0,24}}?StrProperty\x00)"
+    rf"(?![\s\S]{{0,{_AUTHORED_WINDOW}}}?{re.escape(AUTHORED_NAME_MARKER)})"
+)
+
+#: Rules that DETECT but never rewrite. :func:`iter_sensitive` and therefore
+#: :func:`assert_clean` and the repository scan all see these; :func:`redact`
+#: deliberately does not.
+#:
+#: The reason is specific rather than stylistic. A GVAS record is a chain of
+#: length-prefixed strings, so substituting a placeholder for the property name
+#: would change a byte count the format depends on and corrupt the blob - while
+#: leaving the value it was supposed to protect exactly where it was. That is
+#: strictly worse than doing nothing. The remedy for this class is to author the
+#: value at the point the fixture is built, which is a thing only the builder
+#: can do, so the guard's job is to refuse and say so.
+DETECT_ONLY_RULES: tuple[Rule, ...] = (
+    Rule(label="NAME_FIELD", pattern=_NAME_FIELD, replacement=""),
+)
+
 #: Rules for log text only. These keys are too generic to point at a source
 #: tree, so they are kept out of :data:`RULES` and therefore out of the
 #: repository scan in ``tests/test_no_pii.py``. :func:`redact` and
@@ -654,8 +759,10 @@ LOG_TEXT_RULES: tuple[Rule, ...] = (
     ),
 )
 
-#: Every label this module can emit.
-ALL_LABELS: frozenset[str] = frozenset(rule.label for rule in RULES)
+#: Every label this module can emit, rewriting and detect-only alike.
+ALL_LABELS: frozenset[str] = frozenset(
+    rule.label for rule in RULES + DETECT_ONLY_RULES
+)
 
 #: Labels appropriate for scanning repository source files. ``IPV4`` is
 #: excluded because a four-part version string is indistinguishable from an
@@ -857,14 +964,19 @@ def iter_sensitive(
     every rule. Matches are yielded in rule order, then in text order within a
     rule, so output is deterministic.
 
-    This walks :data:`RULES` only. :data:`LOG_TEXT_RULES` and persona discovery
-    are log-text mechanisms and are deliberately absent, because this function
-    is also what scans the repository tree - see the module docstring.
+    This walks :data:`RULES` and :data:`DETECT_ONLY_RULES`.
+    :data:`LOG_TEXT_RULES` and persona discovery are log-text mechanisms and are
+    deliberately absent, because this function is also what scans the repository
+    tree - see the module docstring.
+
+    The detect-only rules are included here rather than in :func:`redact`
+    precisely because this is the scanning path: they describe a hazard a caller
+    has to fix at the source, not one a substitution can paper over.
     """
     if not text:
         return
     wanted = ALL_LABELS if labels is None else frozenset(labels)
-    for rule in RULES:
+    for rule in RULES + DETECT_ONLY_RULES:
         if rule.label not in wanted:
             continue
         for match in rule.pattern.finditer(text):
@@ -1190,6 +1302,18 @@ def _raise_leak(text: str, label: str, matched: str, offset: int) -> None:
         detail = (
             f"a {len(matched)}-character display name, not quoted here because "
             "this message travels"
+        )
+    elif label == "NAME_FIELD":
+        # Neither the property name nor anything near it is quoted. The value
+        # beside it is the thing this rule exists to protect, and a message
+        # that travels must not carry it even by accident.
+        detail = (
+            "a GVAS property measured to carry free text a person can be named "
+            f"in ({', '.join(NAME_BEARING_PROPERTIES)}), whose value is not the "
+            f"authored marker {AUTHORED_NAME_MARKER!r}. redact() cannot fix this "
+            "and deliberately does not try - rewriting a length-prefixed record "
+            "corrupts it and leaves the value in place. AUTHOR the value where "
+            "the artifact is built, rather than copying the captured one"
         )
     else:
         detail = repr(matched)
