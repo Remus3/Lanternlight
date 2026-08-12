@@ -318,18 +318,23 @@ class TestLedgerFragment:
         assert lane_state.fragment_entry_ids(tmp_path / "nope.md") == []
 
 
+def _seed_ledger(tmp_path: Path) -> Path:
+    """Write a miniature repository ledger, template trap and all."""
+    target = tmp_path / "LEDGER.md"
+    target.write_text(
+        "# Ledger\n\nPreamble with a template:\n\n"
+        "```\n### LL-0000 - YYYY-MM-DD - one-line summary\n```\n\n"
+        f"{ledger.ENTRIES_MARKER}\n\n"
+        "### LL-0099 - 2026-08-08 - something older\n\n"
+        "**Evidence:**\n- it happened\n",
+        encoding="utf-8",
+    )
+    return target
+
+
 class TestIntegrateIntoTheRepositoryLedger:
     def _seeded_ledger(self, tmp_path: Path) -> Path:
-        target = tmp_path / "LEDGER.md"
-        target.write_text(
-            "# Ledger\n\nPreamble with a template:\n\n"
-            "```\n### LL-0000 - YYYY-MM-DD - one-line summary\n```\n\n"
-            f"{ledger.ENTRIES_MARKER}\n\n"
-            "### LL-0099 - 2026-08-08 - something older\n\n"
-            "**Evidence:**\n- it happened\n",
-            encoding="utf-8",
-        )
-        return target
+        return _seed_ledger(tmp_path)
 
     def test_a_fragment_entry_lands_in_the_repository_ledger(self, tmp_path):
         book = self._seeded_ledger(tmp_path)
@@ -386,6 +391,178 @@ class TestIntegrateIntoTheRepositoryLedger:
         assert "### LL-0100" in text
         assert "### LL-0101" in text
         assert "### LL-0099" in text
+
+
+class TestTwoLanesClaimingOneId:
+    """The id-allocation race, ROADMAP item 2c.
+
+    ``LL-0018`` gave every lane its own fragment, which removed the TEXT race:
+    two lanes appending can no longer conflict, because they write to different
+    files. **The ID race survived, and the fragment design is what hides it.**
+    Two lanes branching from a common base both ask "what is the next free id?",
+    both get the same answer, and git merges both fragments cleanly because
+    nothing textually conflicts.
+
+    ``integrate`` then turned that into silent data loss. Skipping ids already
+    present is what makes it idempotent - right for a re-run, catastrophic for a
+    collision - and the two cases were indistinguishable, so the second lane's
+    entry vanished with no exception, no warning and no diff.
+
+    Reproduced by the integrator on 2026-08-11 against a throwaway copy of the
+    real ledger::
+
+        integrate(ingest)   -> ['LL-0024', 'LL-0023']
+        integrate(research) -> []          # the entire entry, gone
+        research heading present in ledger: False
+    """
+
+    def _collision(self, tmp_path: Path) -> tuple[Path, Path, Path]:
+        """Seed a ledger and two fragments that both claim ``LL-0023``."""
+        book = _seed_ledger(tmp_path)
+        ingest = tmp_path / "ingest.LEDGER.md"
+        research = tmp_path / "research.LEDGER.md"
+        lane_state.append_fragment(
+            "ingest", _entry("LL-0023", "a GVAS serialiser"), path=ingest
+        )
+        lane_state.append_fragment(
+            "research", _entry("LL-0023", "the transient-save decode"), path=research
+        )
+        return book, ingest, research
+
+    def test_the_second_lanes_entry_is_never_lost_without_a_word(self, tmp_path):
+        # The defect itself, asserted in the only form that survives the fix:
+        # integrating a colliding fragment must either RAISE or record the
+        # entry. What it must never do is return quietly having dropped it.
+        book, ingest, research = self._collision(tmp_path)
+        assert lane_state.integrate(ingest, book) == ["LL-0023"]
+
+        raised: BaseException | None = None
+        moved: list[str] | None = None
+        try:
+            moved = lane_state.integrate(research, book)
+        except Exception as exc:  # broad on purpose - "did it say ANYTHING?"
+            raised = exc
+
+        after = book.read_text(encoding="utf-8")
+        assert raised is not None or "the transient-save decode" in after, (
+            "SILENT DATA LOSS: the research lane's LL-0023 entry is gone. "
+            f"integrate returned {moved!r}, raised nothing, and the heading "
+            "'the transient-save decode' is absent from the ledger. A whole "
+            "session record disappeared and the only symptom was an empty list."
+        )
+
+    def test_a_collision_raises_and_says_what_to_do_about_it(self, tmp_path):
+        book, ingest, research = self._collision(tmp_path)
+        lane_state.integrate(ingest, book)
+
+        with pytest.raises(lane_state.LedgerIdCollision) as caught:
+            lane_state.integrate(research, book)
+
+        message = str(caught.value)
+        assert "LL-0023" in message, "the message must name the colliding id"
+        assert "research.LEDGER.md" in message, "the message must name the fragment"
+        assert "renumber" in message.lower(), (
+            "the message must say what to do - the integrator is a human "
+            "decision here, and an error with no remedy gets a force flag "
+            "bolted onto it instead"
+        )
+
+    def test_a_refused_collision_writes_nothing(self, tmp_path):
+        # A half-applied integration is worse than a refused one: the next
+        # re-run would see some ids present and some absent.
+        book, ingest, research = self._collision(tmp_path)
+        lane_state.integrate(ingest, book)
+        before = book.read_text(encoding="utf-8")
+        lane_state.append_fragment(
+            "research", _entry("LL-0024", "an innocent bystander"), path=research
+        )
+
+        with pytest.raises(lane_state.LedgerIdCollision):
+            lane_state.integrate(research, book)
+
+        assert book.read_text(encoding="utf-8") == before
+        assert "LL-0024" not in book.read_text(encoding="utf-8")
+
+    def test_one_fragment_claiming_one_id_twice_is_a_collision_too(self, tmp_path):
+        # Same defect, one file. Both blocks are absent from the ledger, so
+        # both would be inserted and the ledger would hold a duplicate id.
+        book = _seed_ledger(tmp_path)
+        frag = tmp_path / "frag.md"
+        lane_state.append_fragment("ingest", _entry("LL-0023", "first work"), path=frag)
+        lane_state.append_fragment("ingest", _entry("LL-0023", "other work"), path=frag)
+        with pytest.raises(lane_state.LedgerIdCollision):
+            lane_state.integrate(frag, book)
+
+    def test_the_same_entry_twice_is_still_a_skip_not_a_collision(self, tmp_path):
+        # Idempotence is load-bearing: integrate must stay safe to re-run after
+        # a partial merge. Byte-identical content is a re-run, never a clash.
+        book = _seed_ledger(tmp_path)
+        frag = tmp_path / "frag.md"
+        lane_state.append_fragment("ingest", _entry("LL-0023", "one thing"), path=frag)
+        assert lane_state.integrate(frag, book) == ["LL-0023"]
+        assert lane_state.integrate(frag, book) == []
+        assert book.read_text(encoding="utf-8").count("### LL-0023") == 1
+
+    def test_line_endings_and_trailing_blanks_do_not_fake_a_collision(self, tmp_path):
+        # The hazard this repository has already paid for: Windows write_text
+        # turns LF into CRLF and read_text hides it. A byte-exact comparison
+        # would call a re-run a collision, and a false collision is WORSE than
+        # the bug - it is what makes someone add a force flag.
+        book = _seed_ledger(tmp_path)
+        frag = tmp_path / "frag.md"
+        lane_state.append_fragment("ingest", _entry("LL-0023", "one thing"), path=frag)
+        assert lane_state.integrate(frag, book) == ["LL-0023"]
+
+        roughed = frag.read_text(encoding="utf-8").replace("\n", "\r\n")
+        roughed = roughed.replace("**Evidence:**", "**Evidence:**   ") + "\r\n\r\n"
+        assert "\r\n" in roughed, "the CRLF mutation must have applied"
+        frag.write_bytes(roughed.encode("utf-8"))
+
+        assert lane_state.integrate(frag, book) == []
+        assert book.read_text(encoding="utf-8").count("### LL-0023") == 1
+
+
+class TestDuplicateClaimsSurfacesTheHazardEarly:
+    """See a collision BEFORE integrating, not as an exception during it."""
+
+    def test_two_fragments_claiming_one_id_are_reported(self, tmp_path):
+        book = _seed_ledger(tmp_path)
+        ingest = tmp_path / "ingest.LEDGER.md"
+        research = tmp_path / "research.LEDGER.md"
+        lane_state.append_fragment("ingest", _entry("LL-0023", "serialiser"), path=ingest)
+        lane_state.append_fragment("research", _entry("LL-0023", "decode"), path=research)
+
+        found = lane_state.duplicate_claims(ledger_path=book, fragments=[ingest, research])
+
+        assert list(found) == ["LL-0023"]
+        assert {claim.source for claim in found["LL-0023"]} == {ingest, research}
+        rendered = lane_state.format_duplicate_claims(found)
+        assert "LL-0023" in rendered
+        assert "ingest.LEDGER.md" in rendered and "research.LEDGER.md" in rendered
+
+    def test_an_already_integrated_entry_is_not_reported(self, tmp_path):
+        # Fragments are not deleted after integration, so every integrated id
+        # legitimately appears in two files. Reporting those would bury the one
+        # real collision in noise, and a noisy report is one nobody reads.
+        book = _seed_ledger(tmp_path)
+        frag = tmp_path / "ingest.LEDGER.md"
+        lane_state.append_fragment("ingest", _entry("LL-0023", "serialiser"), path=frag)
+        lane_state.integrate(frag, book)
+
+        assert lane_state.duplicate_claims(ledger_path=book, fragments=[frag]) == {}
+        assert "no id" in lane_state.format_duplicate_claims({}).lower()
+
+    def test_a_missing_fragment_is_not_an_error(self, tmp_path):
+        book = _seed_ledger(tmp_path)
+        assert lane_state.duplicate_claims(
+            ledger_path=book, fragments=[tmp_path / "nope.md"]
+        ) == {}
+
+    def test_the_live_repository_has_no_colliding_id(self):
+        # The wrap ritual's check, run as a test so a collision cannot reach a
+        # merge unnoticed even if the ritual is skipped.
+        found = lane_state.duplicate_claims()
+        assert found == {}, lane_state.format_duplicate_claims(found)
 
 
 class TestOwnershipMatchesTheRoster:
