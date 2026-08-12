@@ -499,6 +499,240 @@ safety depends on a game option that can be toggled off**. A screenshot is only
 as redacted as the operator's current privacy setting, and nothing in this
 repository can detect which way it is set.
 
+## Ids from the transient dungeon save - 2026-08-09 capture, read 2026-08-11
+
+**Method for every row below: direct decode of `StandaloneSlot_<roleId>.sav`
+with `lanternlight/gvas.py` in strict mode.** The bytes are the 263-generation
+capture at `C:\ll-captures\saves\`, held outside this repository and not
+committed. Unless a row says otherwise the value is from the largest
+generation. No wiki was consulted for any of it, and no name below was imported
+from one.
+
+This is the first id set this project has taken from a **save** rather than
+from the log or the screen, so the surface itself is worth naming: these ids
+were watched being **written to disk by the game**, which is a different and
+slightly stronger observation than reading them out of a log line.
+
+The full structural analysis is `docs/FINDINGS.md` section 10.
+
+### Monster config ids - `MonsterData.<key>.MonsterID`
+
+19 distinct ids over 61 monster records. The number after each id is how many
+records carried it in that single generation, so it is a population count for
+one dungeon run and not a property of the id.
+
+| MonsterID | Records | MonsterID | Records |
+|---|---|---|---|
+| 1003 | 1 | 1400 | 6 |
+| 1004 | 7 | 1410 | 4 |
+| 1005 | 13 | 2001 | 1 |
+| 1006 | 2 | 2002 | 1 |
+| 1007 | 6 | 2003 | 4 |
+| 1010 | 2 | 2007 | 1 |
+| 1013 | 1 | 2012 | 1 |
+| 1014 | 5 | 2017 | 3 |
+| 1029 | 1 | 2021 | 1 |
+| | | 3003 | 1 |
+
+**No monster id is bound to a name.** Nothing in the save carries a monster
+name string, and none was observed on screen at a time that could be joined to
+these bytes. Binding them needs the same wall-clock pixel join that bound the
+class ids. Recorded now, unbound, because the ids exist and that is a fact worth
+keeping.
+
+The same id space is used by the kill-count maps below, which is a
+within-file cross-check rather than a separate observation.
+
+### Zone names - `LeaderRankScoreData`
+
+Three zone-name strings appear as map keys, emitted by the game into its own
+save:
+
+| Zone key | Appears under |
+|---|---|
+| `WhiteWoodsOutskirts` | `TeamKillMonsterData`, `TeamOpenTreasuresData` |
+| `GiantHighland` | `TeamKillMonsterData`, `TeamOpenTreasuresData` |
+| `Default` | `TeamKillMonsterData` only |
+
+`WhiteWoodsOutskirts` is consistent with the log's `WhiteWoods_Level_Easy2`
+sublevel and with the operator's player-facing name **Hallowgrove**, already
+recorded as an open item in `lanes/research.STATE.json`. **Consistent is not
+bound** - nothing observed here proves these name the same place, and no
+binding is claimed. `GiantHighland` and `Default` have no player-facing name
+attached to them by anything measured.
+
+`TeamKillMonsterData` nests one level deeper than the zone: the outer key is a
+**category**, and the only value seen is `Normal`. Whether that is a difficulty,
+a monster class or something else is unmeasured.
+
+### Monster kill counts by zone - `TeamKillMonsterData.Normal.<zone>.Id2cnt`
+
+Monster id to kill count, one solo run:
+
+| Zone | Id2cnt |
+|---|---|
+| `WhiteWoodsOutskirts` | 1004:3, 1005:6, 1006:1, 1007:2, 1014:2, 1400:2, 2003:2, 2007:1, 2021:1 |
+| `GiantHighland` | 2017:1 |
+| `Default` | 1029:1 |
+
+Total 22, which equals the file's own `KillMonsterNum` of 22 and the 22
+`MonsterData` records flagged `Dead`. Three independent counts in one file
+agreeing is a consistency check, not three observations.
+
+### Container config ids - `TeamOpenTreasuresData.<zone>.Id2cnt`
+
+Container id to open count. **A different id space from the monster ids** -
+`1204` and `1211` appear in both zones here, and neither is a `MonsterID`:
+
+| Zone | Id2cnt |
+|---|---|
+| `WhiteWoodsOutskirts` | 1002:1, 1203:1, 1204:1, 1205:1, 1206:2, 1211:2 |
+| `GiantHighland` | 1204:1, 1211:1, 1219:1 |
+
+Note these keys arrive as JSON **strings** while the monster `Id2cnt` keys
+arrive as ints. Same shape, two encodings, in one file.
+
+**No container id is bound to a name.**
+
+### Assist source ids - `AssistMonsterCount`
+
+Five 8-digit ids, each mapping to an `Id2cnt` of monster id to count:
+
+| Id | Monsters assisted |
+|---|---|
+| 30101001 | 1004:1, 1005:2, 1400:2, 2007:1 |
+| 30101003 | 1004:2, 1005:2, 1014:1, 2003:1, 2021:1 |
+| 30101004 | 1005:2, 1006:1, 1007:2, 1014:1, 2003:1 |
+| 30108004 | 2017:1 |
+| 30298031 | 1029:1 |
+
+**These are unbound.** An 8-digit id in a field called `AssistMonsterCount`
+could be a skill, an ability, a damage source or an equipment slot. The field
+name is not evidence of what the id names - this document's own standing rule -
+and nothing observed distinguishes the readings.
+
+Related and also unbound: `SkillNameId 6130017` on the kill-history record
+(below) is a **7**-digit id in a differently named field, so it is a different
+id space from the 8-digit ones here unless something later joins them.
+
+### Bot attribute id - `BotData.<key>.AttributeId`
+
+One value observed: **`11120007`**. Unbound. It is 8 digits like the assist ids
+and shares no observed value with them.
+
+### Class id 15 confirmed live, from a save
+
+`LeaderRankScoreData.KillPlayerHistoryDatas[0].ClassId` reads **15**, with
+`Level` 2 and `BotGender` 1. That is the **Withered Knight** row of the class
+table above - the one row established "by elimination plus sidebar order",
+because its ROLE panel was never captured.
+
+This does **not** promote that binding. It confirms the id **exists in live
+play** and is emitted by a second surface, which is what was previously thin
+about it; it says nothing about the name. The name still rests on elimination.
+
+Recorded also because the record carries `IsPlayer: true` **and** `IsBot: true`
+at once, and `KillPlayerCount` counts it - see `docs/FINDINGS.md` section 10.10.
+Any id read out of this structure is a **bot's** id unless `IsBot` says
+otherwise.
+
+### Loot context is numeric in the save and a string in the log
+
+The log emits `context:` as a word - `Bot`, `EnemyCorpse`, `TreasureBox`,
+`Pickup`, recorded earlier in this document. The save emits `LootContext` as an
+**integer** on the same kind of item record:
+
+| `LootContext` | Observed on | Occurrences |
+|---|---|---|
+| 2 | items inside `TreasureBoxMap` entries | 19 |
+| 5 | items inside `BotData.TreasurableItems` | 22 |
+
+**The mapping to the log's words is a hypothesis, not a binding.** The
+containers make `2 -> TreasureBox` and `5 -> Bot` the obvious readings, but no
+observation puts a number and a word together, and this document does not
+record obvious readings as bindings. Two values out of at least four is also not
+a decoding.
+
+`IvtrContext` is a separate numeric field on the same records: `0` on all 19
+treasure-box items, and `0`:13, `1`:1, `2`:7, `5`:1 across the bot's 22. Values
+observed, meanings unmeasured.
+
+### `LevelDetail` keys
+
+Five integer keys, each with a float value, in every generation that has the
+map: **1, 2, 3, 100, 101**. Unbound - nothing observed says what a level-detail
+key selects or what its float means.
+
+### `MatchID`
+
+**`11112`**, constant across all 263 generations. `docs/LEDGER.md` LL-0022
+already records 11111 and 11112 as ids belonging to **solo explores**, observed
+from the log. The save agreeing is a second surface for the same id, not a new
+binding: what the number selects is still unmeasured.
+
+### Item config ids seen in this save
+
+All in the 7-digit live-item space already established above, which is itself
+the finding - **the save and the log share one item id space**, checked by
+value.
+
+Dropped on the ground, `DropItemMap.<key>.ItemCell.cfgId`, 12 entries:
+
+```
+901210   903202   903205   904203 (x2)   905201
+1110301  1210301  1320301  1510301  1620201  1720101
+```
+
+In treasure boxes, `TreasureBoxMap.<key>.TreasureData[].CfgId`, 19 items across
+11 boxes:
+
+```
+901201   903201   903202   903205   903208   903301 (x2)  903306
+903308   903411   904203 (x4)  904207 (x2)  904304
+1310301  1620201
+```
+
+Carried by the single bot, `BotData.<key>.TreasurableItems[].CfgId`, 22 items:
+
+```
+101      901101 (x2)  901202  901210  903206  903302  903304  903306  903310
+904205   1120101  1120301  1220101  1320101  1420101  1520101  1520301
+1630102  1720101   3020401  3020901
+```
+
+Equipped by that bot, `BotData.<key>.Inventory.equipments[].cfgId`, 8 items:
+
+```
+1120101  1220101  1320101  1420101  1520101  1630102  1720101  3020901
+```
+
+**39 distinct ids** appear in this save. **16** were already recorded in this
+document from the log; **23 are new to this project**:
+
+```
+901202   901210   903206   903208   903301   903304   903310   903411
+904207   904304   905201   1120101  1120301  1220101  1320101  1320301
+1420101  1520101  1520301  1620201  1630102  1720101  3020901
+```
+
+That list was derived twice. The first version wrongly included `903201`, which
+was already recorded, and wrongly omitted `903301`, which was not - two errors
+in opposite directions from reading a 35-id block by eye. The version above was
+computed by set difference against the recorded block. **A hand-checked id list
+is a hypothesis for the same reason a hand-checked count is.**
+
+**None of the 39 is bound to a name.** No item name appears anywhere in this save,
+exactly as none appears anywhere in the log.
+
+One structural note worth more than the list: the bot's 8 equipped ids follow
+the `1120101 / 1220101 / 1320101 / 1420101 / 1520101` pattern, which mirrors the
+operator's own equipped `1110301 / 1210301 / 1310301 / 1410301 / 1510301` from
+section 9.9.2 of `docs/FINDINGS.md` - same slot positions in the second digit
+pair, different trailing group. That is **suggestive of an armour-set encoding
+where the middle digits select the slot**, and it is written down as suggestive.
+Two sets is not an encoding, and the last time this document inferred a scheme
+from an id range it had to be retracted.
+
 ## Rule
 
 Every future id binding gets recorded here at the moment it is observed, with

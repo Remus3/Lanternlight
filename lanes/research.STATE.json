@@ -72,10 +72,52 @@
       "item_id": "RES-12",
       "opened": "2026-08-09",
       "text": "Second escape type FixEscapeBell / WindChime seen alongside GroveSprite - the one-escape-type claim is refuted and FINDINGS.md section 9 needs correcting"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "RES-13",
+      "opened": "2026-08-11",
+      "text": "ROADMAP item 2b carries two lines this lane measured as wrong: it plans the fixture against a 23-entry IdGeneratorData.NumIdToUUID (23 holds in 5 of 263 generations; the largest has 91), and it says the FILENAME embeds the roleId when the roleId is also inside the bytes twice, in AutoSaveTempSlot and AutoSaveFinalSlot. ROADMAP.md is not this lane's file - ops or safety must apply it. FINDINGS 10.2 and 10.4.1 carry the evidence"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "RES-14",
+      "opened": "2026-08-11",
+      "text": "SAFETY: lanternlight/redact.py has two false-positive classes on any Blueprint-class save. PRODUCTUSERID (bare 32-hex) fires 772 times on the largest generation with zero true positives, all uppercase against a lowercase real ProductUserId. LONG_ID (15+ digits) fires 100 times of which 62 sit inside two Blueprint property GUIDs. One cause, two detectors. Safety lane owns the fix; FINDINGS 10.4 carries the counts"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "RES-15",
+      "opened": "2026-08-11",
+      "text": "SAFETY: LeaderRankScoreData.KillPlayerHistoryDatas is an array of structs carrying PlayerName, MsgAppearanceString and MsgSubChannelString. No current redact rule reaches a name inside a struct array. It holds a generated bot name in this solo capture and would hold a real third party's display name in a PvP run"
+    },
+    {
+      "blocked_on": "the client running, in a dungeon, with a door in view",
+      "item_id": "RES-16",
+      "opened": "2026-08-11",
+      "text": "Bind the E_DoorState and E_LockState enumerators. The game ships Unreal's unrenamed NewEnumeratorN defaults, so the meaning is not in the bytes. Method: watch one door on screen while polling the save, and read which enumerator changes - the same wall-clock join that bound the class ids. Observed so far: DoorState 1/2/3, LockState 0/2, with DoorState 0 and LockState 1 never seen in 22,973 values"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "RES-17",
+      "opened": "2026-08-11",
+      "text": "The three-integer map key is measured positional (per-axis correlation +0.992/+0.941/+0.969 against Translation on the 22 dead monsters, key/100 within 102 to 1,524 units). WHICH frame it encodes - placement, spawn, or position at first save - and the physical unit of either quantity are unmeasured. DoorData and TreasureBoxMap carry no Transform, so the confirmation available is monsters-only. Watching one actor across two runs to see whether its key is stable would separate the readings"
+    },
+    {
+      "blocked_on": "a run watched to completion",
+      "item_id": "RES-18",
+      "opened": "2026-08-11",
+      "text": "PlayzoneData is a shrinking-circle mechanic (DmgCircle and SafeCircle, each a Vector2D centre plus a radius, plus FinialSafeCircleLocation and ElapseTime). In this capture the damage and safe circles are identical to the bit, so the zone had not started moving. Whether they ever diverge, and whether the talent Gyldenmist Tolerance names this mechanic, are both UNMEASURED - do not write the talent binding down until something observed connects them"
+    },
+    {
+      "blocked_on": "the client running",
+      "item_id": "RES-19",
+      "opened": "2026-08-11",
+      "text": "No id taken from the transient save is bound to a name: 19 monster config ids, 3 zone-name strings (WhiteWoodsOutskirts, GiantHighland, Default), container ids, 5 eight-digit assist-source ids, one bot AttributeId, 5 LevelDetail keys, and 23 item cfgIds new to this project. Nothing in the save carries a name string, so every one needs the wall-clock pixel join. Recorded unbound in docs/OBSERVED_IDS.md rather than guessed"
     }
   ],
-  "resume_note": "no lane session yet - docs/CLASSES.md and OBSERVED_IDS.md are current to 2026-08-09",
+  "resume_note": "docs/FINDINGS.md section 10 and the save-derived id section of docs/OBSERVED_IDS.md are current to the 2026-08-09 transient-save capture, re-measured 2026-08-11. Two filed claims and two prior statements were refuted - see lanes/research.LEDGER.md LL-0023. The next research question that does not need the client running is binding the E_DoorState and E_LockState enumerators, which needs a capture joined on wall clock.",
   "schema": 1,
-  "sessions": 0,
-  "updated": "2026-08-09T23:05:24+00:00"
+  "sessions": 1,
+  "updated": "2026-08-11T23:53:40+00:00"
 }
