@@ -11,6 +11,24 @@ The integrator folds these entries into `docs/LEDGER.md` on `main`, with
 
 <!-- LANE ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0031 - 2026-08-11 - ROADMAP 2c - integrate() now tells a re-run from an id collision, and refuses the collision
+
+**Evidence:**
+- python -m pytest -> '953 passed in 30.59s', observed this run in the lane/ops worktree with __pycache__ purged; baseline 943 collected, measured before the change and re-measured as the sum of the --collect-only per-file counts
+- python -m ruff check . -> All checks passed
+- THE FAILING TEST CAME FIRST and reproduced the filed defect verbatim: tests/test_lane_state.py::TestTwoLanesClaimingOneId::test_the_second_lanes_entry_is_never_lost_without_a_word failed with 'SILENT DATA LOSS: the research lane's LL-0023 entry is gone. integrate returned [], raised nothing, and the heading is absent from the ledger'
+- ops/lane_state.py: LedgerIdCollision, _normalise_block, _blocks_below, IdClaim, duplicate_claims, format_duplicate_claims; integrate() compares CONTENT per id instead of the id alone and writes nothing when it refuses
+- SAME id SAME content is still a silent skip - idempotence is load-bearing and the pre-existing test_integration_is_idempotent still passes untouched
+- six mutations, zero survivors, each anchor asserted to match exactly once, __pycache__ purged between every run, source restored and sha256-verified: M1 drop the raise -> 3 red; M2 never skip identical content -> test_integration_is_idempotent red; M3 byte-exact compare -> the CRLF test red; M4 make everything compare equal (the original bug) -> the loss test red; M5 duplicate_claims stops filtering identical claims -> 4 red; M6 duplicate_claims finds nothing -> 1 red
+- the guard is proven to fire BOTH ways, which is the point: M1 and M4 prove a collision cannot pass, M2 and M3 prove a re-run is not mistaken for one
+- docs/LEDGER.md preamble prose corrected, and the 83,718 bytes below the entries marker are byte-identical to HEAD - proven by comparison, not by intent
+- duplicate_claims() over the real repository: 30 ledger entries, 11 fragment ids already integrated, zero clashes reported - so the same-content path is exercised against real data and the live-repository test is not vacuous
+
+WHAT 'SAME CONTENT' MEANS, and why the choice matters more than it looks: line endings, per-line trailing whitespace, and leading/trailing blank lines are normalised away; nothing else is. Those three can change without an author touching a character - Windows write_text turns LF into CRLF, read_text hides it, and .gitattributes, a checkout on another platform and an editor each rewrite them. Interior blank lines and leading indentation are NOT normalised, because they carry meaning in Markdown. The two possible errors are not symmetric: too loose drops an entry, too STRICT calls a legitimate re-run a collision, blocks recovery after a partial merge, and gets a force flag bolted on - which disarms the guard for every real collision as well. Strictness was chosen with that asymmetry in mind.
+PREVENTION BY ALLOCATION IS REFUTED and this is why it was not attempted: lanes branch from a common base, so two lanes asking 'what is the next free id?' get the same answer and both take it. That is exactly what happened with LL-0023. Detection is what can actually be guaranteed.
+RECORDED, NOT DECIDED - open item OPS-6. The safety lane's accidental SAF-NNNN namespace is collision-free BY CONSTRUCTION, which the global LL-NNNN space is not, so per-lane namespacing is a real long-term answer. It is NOT implemented, deliberately: retiring the global space changes what 30 existing entries mean and what every roadmap item, branch name and commit message citing an LL id refers to. That is an operator decision, and the detection guard makes it a considered choice rather than an urgent one.
+NOT DONE, and named rather than left implied: ROADMAP.md item 2c is not marked closed here, because ROADMAP.md is outside this lane's file set. The integrator closes it. Nor is duplicate_claims() wired into any wrap ritual or the merge gate - it is called by TestDuplicateClaimsSurfacesTheHazardEarly::test_the_live_repository_has_no_colliding_id, so a collision cannot reach a merge unnoticed even with the ritual skipped, but ops/loop/ and ops/merge_gate.py were not in this lane's file set this session.
+
 ### LL-0022 - 2026-08-09 - Session wrap - 1b closed, item 2 decoded, the transient save captured whole and pushed
 
 **Evidence:**
