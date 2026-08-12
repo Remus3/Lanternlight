@@ -170,6 +170,19 @@ identifier in the same position is still caught.
 
 Limits, stated rather than hidden:
 
+- **The GVAS name-field rule covers three property names and three type
+  tokens, and that list is extended by measurement only.**
+  :data:`NAME_BEARING_PROPERTIES` holds the properties measured to carry free
+  text in the transient save; :data:`NAME_BEARING_TYPES` holds the string-valued
+  type tokens. A property this capture does not contain is not checked, so the
+  rule going quiet says the three MEASURED fields are authored - it does not
+  say the record carries nobody's name. Guessing entries would make the list
+  look authoritative when it is not, which is why it grows only when a field is
+  watched carrying text.
+- **The authored marker must be the whole value.** It is matched as a complete
+  length-prefixed ASCII FString, so a value that merely contains the marker does
+  not authorise itself. A value written as UTF-16 is not reached, for the same
+  reason the rest of this module reads narrow text.
 - **The keyless rules are an enumerated list, not a general solution.** A name
   slot this capture does not contain will not be masked, and if the surrounding
   text carries no other signal it will not be discovered either. The
@@ -212,6 +225,7 @@ __all__ = [
     "FILE_SCAN_LABELS",
     "LOG_TEXT_RULES",
     "NAME_BEARING_PROPERTIES",
+    "NAME_BEARING_TYPES",
     "PERSONA_PLACEHOLDER",
     "RedactionError",
     "Rule",
@@ -696,21 +710,90 @@ NAME_BEARING_PROPERTIES: tuple[str, ...] = (
     "MsgAppearanceString",
 )
 
+#: GVAS type tokens whose value is a string a person can be named in.
+#: ``StrProperty`` is the one the measured record uses; ``NameProperty`` and
+#: ``TextProperty`` hold text the same way and are the same hazard under a
+#: different token, so anchoring on ``StrProperty`` alone was a rule a shipped
+#: build could walk past by changing a field's declared type. Non-string tokens
+#: stay out: an ``IntProperty`` cannot hold a display name, and a rule whose
+#: only value is that it fires rarely must not fire on one.
+NAME_BEARING_TYPES: tuple[str, ...] = (
+    "StrProperty",
+    "NameProperty",
+    "TextProperty",
+)
+
 #: The value a committed artifact must carry in place of a real one. A fixture
 #: sets each name-bearing property to this, and :data:`_NAME_FIELD` goes quiet.
 AUTHORED_NAME_MARKER = "<AUTHORED_NAME>"
 
-#: How far past the property name the marker may sit. Measured layout: the
-#: property-name NUL is followed by a 4-byte length, the 12-byte type token, an
-#: 8-byte size, a has-guid byte and a 4-byte value length - 29 bytes before the
-#: value begins. 64 leaves room for a variant without swallowing the next field.
+
+def _fstring(value: str) -> str:
+    """Return ``value`` as GVAS writes an ASCII FString.
+
+    A 4-byte little-endian length that counts the terminating NUL, then the
+    characters, then that NUL. Computed rather than written as a literal so the
+    marker can change length without a hand-maintained byte creeping out of
+    step with it.
+    """
+    length = len(value) + 1
+    prefix = "".join(chr((length >> shift) & 0xFF) for shift in (0, 8, 16, 24))
+    return prefix + value + "\x00"
+
+
+#: The authored value as it must appear on disk: a COMPLETE FString whose whole
+#: content is the marker. Requiring the length prefix and the terminating NUL is
+#: what stops a file authorising itself - see :data:`_AUTHORED_WINDOW`.
+_AUTHORED_FSTRING = _fstring(AUTHORED_NAME_MARKER)
+
+#: How far past the property-name NUL the type token may sit. Measured layout: a
+#: 4-byte length then the 12-or-13-byte token.
+_TYPE_TOKEN_WINDOW = 24
+
+#: How far past the TYPE TOKEN the authored FString may sit, and the anchor is
+#: the point. Measured layout: an 8-byte size and a has-guid byte, so the value
+#: FString begins exactly 9 bytes after the token - confirmed against the
+#: committed fixture. 48 leaves room for the optional 16-byte property GUID and
+#: for an ``FText`` header, without reaching the next field.
 #:
-#: Stated rather than hidden: if two name-bearing properties sat within 64 bytes
-#: of each other and only one were authored, the authored one's marker could
-#: satisfy the unauthored one's check. The measured record puts them far further
-#: apart than that, and the failure needs a fixture that authored some fields
-#: and not others - which is the case the test suite pins directly.
-_AUTHORED_WINDOW = 64
+#: The first version of this check asked only whether the marker appeared within
+#: 64 bytes of the PROPERTY NAME, which had two consequences, both measured:
+#:
+#: - A file could authorise itself. A value of ``<AUTHORED_NAME><real name>``,
+#:   or a marker anywhere else in that window, silenced the rule regardless of
+#:   what the value actually was. Anchoring after the type token and demanding a
+#:   complete FString means the marker has to BE the value, not merely be near
+#:   one.
+#: - It looked past the type token by accident rather than by design, so the
+#:   window's meaning depended on how long the token happened to be.
+#:
+#: Stated rather than hidden, because it is narrowed and not closed: if two
+#: name-bearing properties sat within 48 bytes of each other and only one were
+#: authored, the authored one's FString could still satisfy the unauthored one's
+#: check. The measured record puts them roughly a hundred bytes apart, and
+#: ``tests/test_redact.py`` pins the authored-neighbour case directly.
+_AUTHORED_WINDOW = 48
+
+# One unit of a Blueprint decoration: a single alphanumeric character, OR a
+# whole placeholder this module emits.
+#
+# THE PLACEHOLDER BRANCH IS THE WHOLE POINT, and it is not decoration. The first
+# version spelled the decoration ``_\d+_[0-9A-Za-z]{1,64}``, and :func:`redact`
+# rewrites a Blueprint GUID to ``<PRODUCTUSERID>`` - angle brackets are not
+# alphanumeric, so the anchor stopped matching and the rule went quiet on
+# redacted text. Running this module's own sanctioned path over a file DISARMED
+# its guard, and ``assert_clean`` then certified a record with a third party's
+# display name still verbatim in it.
+#
+# The tolerated shape is derived from :data:`_PLACEHOLDER`, which is the shape
+# every rule in this module replaces with, rather than from a literal character
+# class somebody has to remember to widen. A placeholder added tomorrow is
+# covered on the day it is added; ``tests/test_redact.py`` derives its cases
+# from :data:`RULES` for the same reason.
+_DECORATION_UNIT = rf"(?:{_PLACEHOLDER}|[0-9A-Za-z])"
+_DECORATION = rf"(?:_(?:{_PLACEHOLDER}|\d+)_{_DECORATION_UNIT}{{1,64}})?"
+
+_TYPE_TOKEN = rf"(?:{'|'.join(NAME_BEARING_TYPES)})\x00"
 
 # The property name, its optional Blueprint decoration (``_<index>_<GUID>``),
 # and the NUL that ends the FString - then the type token close behind it, which
@@ -718,14 +801,15 @@ _AUTHORED_WINDOW = 64
 # prose names all three of these properties, and a rule that fired on the WORD
 # would redden the tree scan on every document that discusses them.
 #
-# The decoration is matched as an alphanumeric run rather than as hex, because
-# an AUTHORED decoration must not be a hex run - see below - and the rule has to
-# see through both.
+# The decoration is matched as an alphanumeric-or-placeholder run rather than as
+# hex, because an AUTHORED decoration must not be a hex run - see the tests - and
+# the rule has to see through both, plus whatever redact() leaves behind.
 _NAME_FIELD = re.compile(
     rf"(?<![A-Za-z0-9_])(?:{'|'.join(NAME_BEARING_PROPERTIES)})"
-    rf"(?:_\d+_[0-9A-Za-z]{{1,64}})?\x00"
-    rf"(?=[\s\S]{{0,24}}?StrProperty\x00)"
-    rf"(?![\s\S]{{0,{_AUTHORED_WINDOW}}}?{re.escape(AUTHORED_NAME_MARKER)})"
+    rf"{_DECORATION}\x00"
+    rf"(?=[\s\S]{{0,{_TYPE_TOKEN_WINDOW}}}?{_TYPE_TOKEN})"
+    rf"(?![\s\S]{{0,{_TYPE_TOKEN_WINDOW}}}?{_TYPE_TOKEN}"
+    rf"[\s\S]{{0,{_AUTHORED_WINDOW}}}?{re.escape(_AUTHORED_FSTRING)})"
 )
 
 #: Rules that DETECT but never rewrite. :func:`iter_sensitive` and therefore
@@ -1313,7 +1397,11 @@ def _raise_leak(text: str, label: str, matched: str, offset: int) -> None:
             f"authored marker {AUTHORED_NAME_MARKER!r}. redact() cannot fix this "
             "and deliberately does not try - rewriting a length-prefixed record "
             "corrupts it and leaves the value in place. AUTHOR the value where "
-            "the artifact is built, rather than copying the captured one"
+            "the artifact is built, rather than copying the captured one. The "
+            "value must be the marker and nothing else, and that property list "
+            "is extended by measurement only - a name-bearing property nobody "
+            "has measured yet is not checked, so this passing is not a "
+            "certificate that the record carries no other person's name"
         )
     else:
         detail = repr(matched)
