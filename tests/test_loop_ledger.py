@@ -197,6 +197,49 @@ class TestTheWriteIsAtomicAndClean:
         book = _book(tmp_path)
         assert ledger.append_entry(_entry(), book) == book
 
+    def test_the_commit_step_really_is_a_replace(self, monkeypatch, tmp_path):
+        """Atomicity itself, not just its side effects.
+
+        Added because a mutation survived: deleting `tmp_path.replace(target)`
+        from the only sanctioned writer of `docs/LEDGER.md` left the whole
+        suite green. The debris and LF tests happen to pass either way, so
+        nothing pinned the one property that makes a polled file safe to read.
+
+        Breaking the replace must leave the ledger UNTOUCHED. A writer that
+        wrote in place would have already modified it by this point.
+        """
+        book = _book(tmp_path)
+        ledger.append_entry(_entry("LL-0001"), book)
+        before = book.read_bytes()
+
+        real_replace = Path.replace
+
+        def refuse(self, target):
+            raise OSError("replace refused")
+
+        monkeypatch.setattr(Path, "replace", refuse)
+        with pytest.raises(OSError):
+            ledger.append_entry(_entry("LL-0002"), book)
+        monkeypatch.setattr(Path, "replace", real_replace)
+
+        assert book.read_bytes() == before, (
+            "the ledger changed even though the commit step failed, so the "
+            "write is not atomic - a reader could see a half-written entry"
+        )
+        assert "LL-0002" not in book.read_text(encoding="utf-8")
+
+    def test_a_failed_commit_leaves_no_debris(self, monkeypatch, tmp_path):
+        book = _book(tmp_path)
+
+        def refuse(self, target):
+            raise OSError("replace refused")
+
+        monkeypatch.setattr(Path, "replace", refuse)
+        with pytest.raises(OSError):
+            ledger.append_entry(_entry(), book)
+        leftovers = [p.name for p in tmp_path.iterdir() if p.name != book.name]
+        assert not leftovers, leftovers
+
 
 class TestTheDefaultTargetIsTheRealLedger:
     def test_it_points_at_docs_ledger_md(self):

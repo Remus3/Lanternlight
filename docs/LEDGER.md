@@ -84,6 +84,22 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0044 - 2026-08-12 - The ops sweep was refuted - a catch-all claim made the orphan guard vacuous, and two of the pass's own findings did not reproduce
+
+**Evidence:**
+- SEVERE, AND SELF-INFLICTED THE SAME DAY: claim_path(lane, '**') matched every unowned path in the repository, so the orphan guard reported green with a genuinely orphaned file on disk. Reproduced by the integrator - unowned_paths(['some/random/unowned.txt']) returned [] under a catch-all claim. The sanctioned pressure valve opened all the way
+- THE QUIETER HALF, also reproduced: capture claiming 'lanternlight/*.py' reaches lanternlight/redact.py, which safety owns and holds a veto over, and stale_claims() did not flag it because it compared the PATTERN as a path rather than what the pattern REACHES
+- FIXED by overreach(), which walks the REAL TREE - two patterns can differ textually and still match one file, the same reason tests/test_lanes.py walks the tree instead of comparing globs. A claim is refused at write time AND reported stale if one is already on disk, so a claim smuggled in by hand is still caught
+- A lane may still claim within its OWN slice; refusing that would make the mechanism useless to the lane most likely to need it
+- ATOMICITY WAS UNTESTED IN THE FILE THAT CLAIMED TO TEST THE WRITER. Deleting tmp_path.replace(target) from the only sanctioned writer of docs/LEDGER.md left the suite at 1101 passed. Now covered by refusing the replace and asserting the ledger is BYTE-UNCHANGED: the same mutation gives 10 failed
+- TWO VISIBILITY ASSERTIONS WERE 'is False' ONLY, so they would pass vacuously the moment the probe returned None - the same skip-vacuity this class was already caught by once. They now assert the probe answered at all
+- python -m pytest -> '1108 passed in 25.35s' observed this run; 1101 before. python -m ruff check . -> All checks passed
+
+TWO OF THE PASS'S FINDINGS DID NOT REPRODUCE, and this is recorded because a refutation pass is evidence, not authority. It reported that a four-backtick fence and an info string on a closing fence each MINT A PHANTOM ENTRY with no error. Probed directly, both returned the correct id list and neither produced a phantom. What IS real is smaller and points the other way: fence delimiter LENGTH was not tracked, so a longer or shorter inner run confused the scanner into a FALSE REFUSAL on legal Markdown - loud, not silent. Fixed properly by tracking (character, width) and requiring a closer to be the same character, at least as long, and free of an info string, per CommonMark. 'open4 inner3' now parses as ['LL-0001'] where it previously raised.
+THE DIRECTION OF THAT ERROR MATTERS. A false refusal is the failure mode that gets a guard switched off, so it is worth fixing - but it is not the silent-loss class the pass claimed, and recording it as one would have overstated the danger in exactly the way this session has been correcting all day.
+FOUR LESSER FINDINGS ARE ACCEPTED AND RECORDED RATHER THAN FIXED. OPS-10: the ledger writer's byte-preservation self-check is still deletable in silence, and LL-0042 over-claimed that it was covered - the behavioural tests cover the OUTCOME, and nothing forces the assertion path. OPS-11: a 4-space indented code block whose first token is id-shaped is falsely refused. The mistyped-fragment limit is now stated in the docstring in the PRESENT tense rather than only in the ledger, and classify_claim documents its precedence when a collision and an edit are both present.
+THE PASS'S MERGE JUDGEMENT WAS 'safe to merge, but LL-0038 and LL-0042 both overstate scope'. The overstatements are corrected here rather than defended: each claimed to close a CLASS while a reachable instance of that class survived.
+
 ### LL-0043 - 2026-08-12 - Session close - the ops queue swept from seven open items to one, and every fix found a larger hole beside the one that was filed
 
 **Evidence:**

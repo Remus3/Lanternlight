@@ -7,10 +7,22 @@
       "item_id": "OPS-6",
       "opened": "2026-08-12",
       "text": "Decide whether ledger ids become per-lane namespaced (SAF-NNNN style, collision-free by construction) and the global LL-NNNN space is retired. Detection now catches a collision, so this is no longer urgent - but retiring the global space changes what 30 existing entries, and every roadmap item and branch citing an LL id, refer to. Operator decision"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "OPS-10",
+      "opened": "2026-08-12",
+      "text": "ops/loop/ledger.py self-checks that every byte below the marker survives an append, and that CHECK is still deletable in silence - removing the raise leaves the suite green, because the behavioural tests cover the outcome and nothing forces the assertion path. LL-0042 over-claimed that it was covered. Decide whether a defensive assert with no reachable trigger is worth a test or should simply not claim coverage"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "OPS-11",
+      "opened": "2026-08-12",
+      "text": "A 4-space indented code block whose first token is id-shaped is falsely refused by _assert_headings_parse - indented code is not fenced, so the guard treats it as a broken heading. Loud, not silent, but it is a false positive and a guard that cries wolf gets switched off. Found by the refutation pass on LL-0038"
     }
   ],
   "resume_note": "ROADMAP 2d closed on lane/ops - the contract names no absolute path, so a fresh clone runs 957 green. OPS-4 closed. OPS-6 (per-lane id namespacing) is still an operator decision, recorded not taken",
   "schema": 1,
   "sessions": 4,
-  "updated": "2026-08-12T04:13:28+00:00"
+  "updated": "2026-08-12T04:43:03+00:00"
 }
