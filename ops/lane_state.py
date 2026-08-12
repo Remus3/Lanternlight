@@ -90,6 +90,7 @@ __all__ = [
     "LaneState",
     "LedgerIdCollision",
     "MalformedLedgerHeading",
+    "NotAFragment",
     "OpenItem",
     "ReadOnlyLane",
     "SCHEMA",
@@ -174,6 +175,53 @@ _HEADING_RE = re.compile(r"^### (?P<item_id>\S+) - ", re.MULTILINE)
 _FENCE_MARKS = ("```", "~~~")
 
 _ID_TOKEN_RE = re.compile(r"[A-Za-z]{1,8}(?:-\d+|\d{2,})\Z")
+
+
+def _fragment_text(path: Path | str) -> str | None:
+    """Read a lane fragment, or None when it legitimately does not exist yet.
+
+    `OPS-7`. Absence and nonsense used to be one answer. Fragments are created
+    lazily on a lane's first entry, so a missing one is the NORMAL state for
+    most lanes and must stay silent - but the same tolerance swallowed a real
+    caller mistake: ``integrate("ops")``, passing a lane ID where a fragment
+    PATH belongs, landed on a directory and surfaced a bare
+    ``PermissionError: [Errno 13] Permission denied: 'ops'`` on Windows.
+
+    An errno is not a diagnosis, and the two cases sit a hair apart - get the
+    name slightly wrong and you got a silent ``[]``, get it wrong another way
+    and you got an unrelated OS error. Neither said "that is not a fragment".
+
+    So: missing is None, and anything that cannot be a fragment raises with the
+    path it should probably have been.
+    """
+    target = Path(path)
+
+    known = {lane.lane_id for lane in lanes.LANES if not lane.read_only}
+    if str(path) in known:
+        raise NotAFragment(
+            f"{path!r} is a LANE ID, not a fragment path. This function takes a "
+            f"path to a lane's ledger fragment.\n"
+            f"  did you mean: {fragment_path(str(path))}\n"
+            f"Passing the id reached a directory of the same name and used to "
+            f"surface a bare OS error instead of saying this."
+        )
+    if target.is_dir():
+        raise NotAFragment(
+            f"{target} is a directory, not a lane ledger fragment. A fragment is "
+            f"a Markdown file, normally lanes/<lane_id>{FRAGMENT_SUFFIX}."
+        )
+
+    try:
+        return target.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        # The ordinary case: this lane has recorded nothing yet.
+        return None
+    except NotADirectoryError:
+        # A parent component is a file, so the path cannot ever exist. Still
+        # absence rather than corruption.
+        return None
+    except IsADirectoryError as exc:  # pragma: no cover - POSIX twin of is_dir
+        raise NotAFragment(f"{target} is a directory, not a lane fragment") from exc
 
 
 @dataclass(frozen=True)
@@ -265,6 +313,10 @@ class ReadOnlyLane(RuntimeError):
 
 class MalformedLedgerHeading(RuntimeError):
     """An entry heading does not parse, so it would be skipped in silence."""
+
+
+class NotAFragment(RuntimeError):
+    """A fragment path is not a fragment, and not merely a missing one."""
 
 
 class LedgerIdCollision(RuntimeError):
@@ -813,9 +865,8 @@ def fragment_entry_ids(path: Path) -> list[str]:
     recorded nothing yet is an ordinary state, not an error.
     """
     target = Path(path)
-    try:
-        text = target.read_text(encoding="utf-8")
-    except (FileNotFoundError, NotADirectoryError):
+    text = _fragment_text(path)
+    if text is None:
         return []
     # Via the shared scan, not a private `finditer` - this function was a THIRD
     # independent reading of the same region, found while closing OPS-9 on the
@@ -1003,9 +1054,8 @@ def integrate(
     source = Path(fragment)
     book = Path(ledger_path) if ledger_path is not None else ledger.default_ledger_path()
 
-    try:
-        fragment_text = source.read_text(encoding="utf-8")
-    except (FileNotFoundError, NotADirectoryError):
+    fragment_text = _fragment_text(fragment)
+    if fragment_text is None:
         return []
 
     blocks = _fragment_blocks(fragment_text, source)
@@ -1121,9 +1171,8 @@ def duplicate_claims(
 
     claims: dict[str, list[IdClaim]] = {}
     for path, marker in sources:
-        try:
-            text = path.read_text(encoding="utf-8")
-        except (FileNotFoundError, NotADirectoryError):
+        text = _fragment_text(path)
+        if text is None:
             continue
         for item_id, block in _blocks_below(text, marker, path):
             claims.setdefault(item_id, []).append(

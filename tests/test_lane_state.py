@@ -731,6 +731,107 @@ class TestAnUnclosedFenceCannotSuppressTheGuard:
             lane_state.fragment_entry_ids(path)
 
 
+class TestAFragmentPathThatIsNotAFragment:
+    """`OPS-7`. A missing fragment is ordinary; a nonsense one is not.
+
+    `integrate()` and friends treat a fragment that does not exist as empty,
+    which is correct - fragments are created lazily on a lane's first entry, so
+    six of seven lanes have none. But that tolerance used to swallow a genuine
+    caller mistake too: `integrate("ops")`, passing a LANE ID where a fragment
+    PATH belongs, hit a directory and surfaced a bare
+    ``PermissionError: [Errno 13] Permission denied: 'ops'`` on Windows.
+
+    An errno is not a diagnosis. Worse, the two cases are a hair apart: get the
+    name slightly wrong and you get a silent `[]`, get it wrong in a different
+    way and you get an unrelated OS error. Neither says "that is not a
+    fragment", which is the one thing the caller needs to hear.
+    """
+
+    def test_a_bare_lane_id_is_refused_with_the_path_it_should_have_been(self, tmp_path):
+        book = _seed_ledger(tmp_path)
+        with pytest.raises(lane_state.NotAFragment) as caught:
+            lane_state.integrate("ops", ledger_path=book)
+        message = str(caught.value)
+        assert "ops" in message
+        assert "ops.LEDGER.md" in message, "the error must name the path meant"
+
+    def test_a_directory_is_refused_rather_than_raising_an_errno(self, tmp_path):
+        book = _seed_ledger(tmp_path)
+        somewhere = tmp_path / "a_directory"
+        somewhere.mkdir()
+        with pytest.raises(lane_state.NotAFragment) as caught:
+            lane_state.integrate(somewhere, ledger_path=book)
+        assert "directory" in str(caught.value).lower()
+
+    def test_refusing_writes_nothing(self, tmp_path):
+        book = _seed_ledger(tmp_path)
+        before = book.read_text(encoding="utf-8")
+        somewhere = tmp_path / "a_directory"
+        somewhere.mkdir()
+        with pytest.raises(lane_state.NotAFragment):
+            lane_state.integrate(somewhere, ledger_path=book)
+        assert book.read_text(encoding="utf-8") == before
+
+    def test_fragment_entry_ids_refuses_a_directory_too(self, tmp_path):
+        somewhere = tmp_path / "a_directory"
+        somewhere.mkdir()
+        with pytest.raises(lane_state.NotAFragment):
+            lane_state.fragment_entry_ids(somewhere)
+
+    def test_duplicate_claims_refuses_a_directory_too(self, tmp_path):
+        book = _seed_ledger(tmp_path)
+        somewhere = tmp_path / "a_directory"
+        somewhere.mkdir()
+        with pytest.raises(lane_state.NotAFragment):
+            lane_state.duplicate_claims(ledger_path=book, fragments=[somewhere])
+
+    def test_a_MISSING_fragment_is_still_ordinary_and_still_reads_as_empty(self, tmp_path):
+        # The behaviour this fix must not break. Fragments are created lazily,
+        # so absence is the normal state for most lanes and must stay silent.
+        book = _seed_ledger(tmp_path)
+        assert lane_state.fragment_entry_ids(tmp_path / "nope.LEDGER.md") == []
+        assert lane_state.integrate(tmp_path / "nope.LEDGER.md", ledger_path=book) == []
+        assert lane_state.duplicate_claims(
+            ledger_path=book, fragments=[tmp_path / "nope.LEDGER.md"]
+        ) == {}
+
+    def test_an_unreadable_but_EXISTING_fragment_is_not_reported_as_absent(
+        self, tmp_path, monkeypatch
+    ):
+        """A file that is there and cannot be read is not an empty lane.
+
+        Added because a mutation survived: widening the catch back to a bare
+        `except OSError` left the whole suite green, which means nothing pinned
+        what happens when a fragment exists but the read fails. Swallowing that
+        into `None` reports a lane with entries as a lane with none - the same
+        silent-loss shape as every other bug in this module.
+        """
+        path = tmp_path / "ops.LEDGER.md"
+        path.write_text(
+            "# Lane ledger fragment - ops\n\n"
+            f"{lane_state.FRAGMENT_MARKER}\n\n"
+            "### LL-0500 - 2026-08-12 - a real entry that must not vanish\n\n"
+            "**Evidence:**\n- x\n",
+            encoding="utf-8",
+        )
+        assert lane_state.fragment_entry_ids(path) == ["LL-0500"]
+
+        def refuse(*args, **kwargs):
+            raise PermissionError(13, "Permission denied")
+
+        monkeypatch.setattr(Path, "read_text", refuse)
+        with pytest.raises(OSError):
+            lane_state.fragment_entry_ids(path)
+
+    def test_every_real_lane_id_is_refused_not_just_ops(self, tmp_path):
+        book = _seed_ledger(tmp_path)
+        for lane in lanes.LANES:
+            if lane.read_only:
+                continue
+            with pytest.raises(lane_state.NotAFragment):
+                lane_state.integrate(lane.lane_id, ledger_path=book)
+
+
 class TestTheGuardAndTheParserAgreeAboutFences:
     """`OPS-9`. The two halves used to disagree, which is this module's bug shape.
 
