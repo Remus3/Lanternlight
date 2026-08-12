@@ -98,6 +98,10 @@ __all__ = [
     "TWO_LANES_COLLIDED",
     "add_open_item",
     "classify_claim",
+    "claim_path",
+    "claimants_of",
+    "release_path",
+    "stale_claims",
     "append_fragment",
     "close_open_item",
     "duplicate_claims",
@@ -513,12 +517,19 @@ class LaneState:
     resume_note: str = ""
     updated: str = ""
     open_items: list[OpenItem] = field(default_factory=list)
+    #: Paths this lane is ADDING and has claimed, pending the integrator
+    #: writing them into ``ops/lanes.py``. See :func:`claim_path` - `OPS-2`.
+    #: A promissory note, never a second ownership map: a claim the roster has
+    #: since absorbed is STALE and fails :func:`stale_claims`.
+    claimed_paths: tuple[str, ...] = ()
     recovered: bool = False
     recovery_note: str = ""
 
     def validate(self) -> None:
         """Raise unless every authored field is writable ASCII."""
         _require_ascii("lane_id", self.lane_id)
+        for claimed in self.claimed_paths:
+            _require_ascii("claimed_paths", claimed)
         _require_ascii("resume_note", self.resume_note)
         if "\n" in self.resume_note:
             raise ValueError("resume_note must be a single line")
@@ -539,6 +550,7 @@ class LaneState:
             "resume_note": self.resume_note,
             "updated": self.updated,
             "open_items": [item.to_dict() for item in self.open_items],
+            "claimed_paths": list(self.claimed_paths),
         }
 
     @classmethod
@@ -581,13 +593,101 @@ class LaneState:
         if not isinstance(raw_items, list):
             raise ValueError("open_items must be a list")
 
+        raw_claims = payload.get("claimed_paths", [])
+        if not isinstance(raw_claims, list):
+            raise ValueError("claimed_paths must be a list")
+        for one in raw_claims:
+            if not isinstance(one, str):
+                raise ValueError(f"claimed path must be a string, got {one!r}")
+
         return cls(
             lane_id=lane_id,
             sessions=sessions,
             resume_note=resume_note,
             updated=updated,
             open_items=[OpenItem.from_dict(item) for item in raw_items],
+            claimed_paths=tuple(raw_claims),
         )
+
+
+def claim_path(lane_id: str, pattern: str, path: Path | None = None) -> LaneState:
+    """Claim ``pattern`` for ``lane_id``, pending the roster absorbing it.
+
+    `OPS-2`. The orphan guard fails any file no lane owns, and ownership lives
+    in ``ops/lanes.py``, which only the **ops** lane may edit. So a lane adding
+    a file was red for its whole session with no in-slice remedy - and a lane
+    stuck red is exactly the pressure that gets a guard weakened to go green,
+    which ``CLAUDE.md`` forbids outright.
+
+    Neither option the item offered removes that. "ops declares it first" needs
+    the filename known before the work starts, which is usually false. "The
+    integrator declares it at merge" works for an integrator spanning both
+    lanes - it is how ``lanternlight/damage.py`` shipped - but a lane running
+    alone still sits red.
+
+    A claim is a **promissory note**, not a second ownership map. The roster
+    stays the only source of truth: :func:`ops.lanes.owner_of` is untouched,
+    and once the integrator writes the path into ``ops/lanes.py`` the claim is
+    STALE and :func:`stale_claims` fails until it is released.
+    """
+    state = load(lane_id, path)
+    _refuse_read_only(lane_id)
+    if pattern not in state.claimed_paths:
+        state.claimed_paths = (*state.claimed_paths, pattern)
+    save(state, path)
+    return state
+
+
+def release_path(lane_id: str, pattern: str, path: Path | None = None) -> LaneState:
+    """Drop a claim, normally because the roster now carries it."""
+    state = load(lane_id, path)
+    _refuse_read_only(lane_id)
+    state.claimed_paths = tuple(one for one in state.claimed_paths if one != pattern)
+    save(state, path)
+    return state
+
+
+def _writing_states(states: dict[str, LaneState] | None) -> dict[str, LaneState]:
+    if states is not None:
+        return states
+    return {
+        lane.lane_id: load(lane.lane_id)
+        for lane in lanes.LANES
+        if not lane.read_only
+    }
+
+
+def claimants_of(
+    path: str | Path, states: dict[str, LaneState] | None = None
+) -> list[str]:
+    """Return the lane ids claiming ``path``, sorted. Normally zero or one.
+
+    More than one is a real fault and is returned rather than resolved: two
+    owners for one file is the invariant the whole lane architecture rests on,
+    and a pending claim must not become a way around it.
+    """
+    return sorted(
+        lane_id
+        for lane_id, state in _writing_states(states).items()
+        if lanes.path_matches(path, state.claimed_paths)
+    )
+
+
+def stale_claims(
+    states: dict[str, LaneState] | None = None,
+) -> list[tuple[str, str]]:
+    """Return ``(lane_id, pattern)`` for claims the roster has already absorbed.
+
+    This is what stops a claim becoming permanent. Once ``ops/lanes.py`` owns
+    the path, the note has been redeemed and leaving it behind would build the
+    shadow ownership map the roster exists to prevent.
+    """
+    stale = []
+    for lane_id, state in sorted(_writing_states(states).items()):
+        for pattern in state.claimed_paths:
+            if any(lane.owns_path(pattern) for lane in lanes.LANES):
+                stale.append((lane_id, pattern))
+    return stale
 
 
 def load(lane_id: str, path: Path | None = None) -> LaneState:
