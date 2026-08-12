@@ -84,6 +84,26 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0033 - 2026-08-12 - ROADMAP 2d - a fresh clone now runs green, so a test count is a fact about the repo rather than about this machine
+
+**Evidence:**
+- THE DEFECT, MEASURED END TO END BEFORE ANY EDIT: git clone of 311cef8 into a scratch directory, then python -m pytest -> '1 failed, 952 passed in 29.55s', the failure being tests/test_lane_contract.py::TestOnDiskMatchesTheRoster::test_the_files_on_disk_equal_what_the_roster_renders with all eight lanes listed stale
+- ROOT CAUSE: ops/lane_contract.py:_workspace_block interpolated lanes.primary_checkout() and lane.worktree_path() - both absolute - into text that is then COMMITTED, while the drift guard compares the committed file against a fresh render. The two agreed only at C:\Lanternlight
+- THE FAILING TESTS CAME FIRST: four new guards in TestTheContractIsCheckoutIndependent, run before the fix -> '4 failed, 21 deselected in 0.47s'
+- THE FIX AFTER: same clone procedure at 5725c03, cloned to a different path, python -m pytest -> '957 passed in 24.95s'
+- grep for 'C:\', '/Lanternlight' and 'll-worktrees' over the CLONED .claude/commands/ -> NONE. The generated artifacts now name no absolute path at all
+- NON-VACUITY, both halves, __pycache__ purged before each run and the anchor asserted before believing any survivor: re-embed the checkout path -> 3 failed (test_rendering_does_not_change_when_the_checkout_moves, test_no_contract_names_the_checkout_directory, and the drift guard); re-embed the worktree path -> 3 failed (the matching worktree pair, and the drift guard); restored -> 957 passed
+- THE FIRST MUTATION PROBE ABORTED ON ITS OWN ANCHOR ASSERTION - a heredoc mangled the backslashes so the anchor did not match. Without that assertion it would have reported a clean GREEN and been read as proof the guard was vacuous. The mutation script was moved to a file
+- A SECOND, INDEPENDENT TRIGGER OF THE SAME DEFECT was found and is also closed: LL_WORKTREE_ROOT=/some/other/place at 311cef8 fails IN PLACE -> '1 failed, 20 passed', so the suite was not merely path-dependent on the checkout. At 5725c03 the same command -> '957 passed'
+- python -m pytest in the lane/ops worktree -> '957 passed in 24.79s'; baseline 953 measured with --collect-only before dispatching
+- python -m ruff check . -> All checks passed
+- ops.merge_gate.verify(claimed_paths=[ops/lane_contract.py, tests/test_lane_contract.py, .claude/commands/lane-ops.md], baseline=953) -> 'merge gate: OK (957 tests collected)'
+
+ONE EXISTING TEST CHANGED SHAPE, stated rather than hidden: test_the_branch_and_worktree_are_named asserted str(lane.worktree_path()) in text, which cannot survive a relocated checkout. It was made STRONGER rather than relaxed - it now asserts the lane's own worktree DIRECTORY is named AND that no other lane's directory appears, which catches a lane pointed at a sibling's worktree. A test that is weakened to go green is invisible to an exit code, so the change is recorded here.
+The new guards are BEHAVIOURAL, not substring checks: rendering must not change when the checkout moves, and must not change when the worktree root moves. That goes red for a path re-embedded later, including one nobody has thought of yet - which a grep for 'C:\Lanternlight' would not.
+CONSEQUENCE FOR EVERY EARLIER COUNT: 927 in LL-0028, 943, 953 and every 'N passed' before this entry were true IN PLACE and not in a clone. 957 is the first number in this project's history measured from a fresh clone at a foreign path.
+OPS-4 is closed by this entry. It was recorded in LL-0021 as 'path-dependent' and sat open through three sessions because the symptom looked cosmetic; what made it worth doing is that README.md tells a new contributor to clone and run pytest, so the documented first-run experience was a red suite.
+
 ### LL-0032 - 2026-08-11 - Session close - 2b and 2c closed, merged to main, and 2d handed to the next session
 
 **Evidence:**

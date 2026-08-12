@@ -30,10 +30,16 @@
       "item_id": "OPS-6",
       "opened": "2026-08-12",
       "text": "Decide whether ledger ids become per-lane namespaced (SAF-NNNN style, collision-free by construction) and the global LL-NNNN space is retired. Detection now catches a collision, so this is no longer urgent - but retiring the global space changes what 30 existing entries, and every roadmap item and branch citing an LL id, refer to. Operator decision"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "OPS-7",
+      "opened": "2026-08-12",
+      "text": "lane_state.integrate() catches FileNotFoundError and NotADirectoryError to return [] for a missing fragment, but a path that IS a directory raises a bare PermissionError on Windows (errno 13) instead of a clear message. Hit by calling integrate('ops') with a lane id instead of a fragment path. Caller error, but the error should name the mistake"
     }
   ],
   "resume_note": "ROADMAP 2d closed on lane/ops - the contract names no absolute path, so a fresh clone runs 957 green. OPS-4 closed. OPS-6 (per-lane id namespacing) is still an operator decision, recorded not taken",
   "schema": 1,
   "sessions": 4,
-  "updated": "2026-08-12T01:55:58+00:00"
+  "updated": "2026-08-12T02:01:14+00:00"
 }
