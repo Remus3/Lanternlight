@@ -66,10 +66,16 @@
       "item_id": "SAF-12",
       "opened": "2026-08-12",
       "text": "WIRING GAP, stated rather than assumed: NAME_FIELD reaches the tree scan only because tests/test_no_pii.py calls iter_sensitive, which now walks DETECT_ONLY_RULES. Nothing asserts that a FIXTURE specifically was checked - the scan covers whatever is committed. When the 2b fixture lands, add a test that names the fixture file and asserts NAME_FIELD is silent on it, so the check cannot be lost by moving or renaming the file"
+    },
+    {
+      "blocked_on": "a capture containing a NameProperty or TextProperty",
+      "item_id": "SAF-13",
+      "opened": "2026-08-12",
+      "text": "UNMEASURED BY CONSTRUCTION: NAME_BEARING_TYPES now covers NameProperty and TextProperty as well as StrProperty, added by reasoning about the GVAS format rather than by measurement - neither token appears in any captured save. Two things need re-measuring if one is ever observed. (1) A TextProperty's value sits behind an FText header (flags, history type, namespace and key FStrings) rather than directly after the 8-byte size and the has-guid byte, so the authored marker may fall outside the 48-byte window and the rule would then be unsatisfiable for that token. (2) The same window is what stops an authored neighbour authorising an unauthored field, so it cannot simply be widened without re-checking field spacing."
     }
   ],
-  "resume_note": "NAME_FIELD structural guard landed for third-party names; next is the 2b fixture itself against SAF-8, SAF-9, SAF-11 and SAF-12",
+  "resume_note": "NAME_FIELD re-armed after a P0 self-inflicted defect - redact() had disarmed it. Next is still the 2b fixture against SAF-8, SAF-9, SAF-11 and SAF-12, plus SAF-13 on the unmeasured type tokens",
   "schema": 1,
-  "sessions": 1,
-  "updated": "2026-08-12T00:08:30+00:00"
+  "sessions": 2,
+  "updated": "2026-08-12T01:12:46+00:00"
 }

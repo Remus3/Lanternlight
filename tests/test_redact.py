@@ -16,6 +16,7 @@ likely to leak.
 
 import base64
 import random
+import re
 import sys
 from pathlib import Path
 
@@ -25,11 +26,13 @@ if str(REPO_ROOT) not in sys.path:
 
 import pytest  # noqa: E402  (path bootstrap must run first)
 
+from lanternlight import redact as redact_module  # noqa: E402
 from lanternlight.redact import (  # noqa: E402
     ALL_LABELS,
     AUTHORED_NAME_MARKER,
     FILE_SCAN_LABELS,
     NAME_BEARING_PROPERTIES,
+    PERSONA_PLACEHOLDER,
     RedactionError,
     assert_clean,
     discover_personas,
@@ -1447,15 +1450,24 @@ def test_the_hex_rule_is_case_blind_by_design():
 NON_HEX_GUID = "SYNTHETICGUID" + "Z" * 19
 
 
-def _gvas_string_property(name: str, value: str, guid: str, index: str = "19") -> str:
+def _gvas_string_property(
+    name: str,
+    value: str,
+    guid: str,
+    index: str = "19",
+    type_token: str = "StrProperty",
+) -> str:
     """Assemble one GVAS StrProperty exactly as the save writes it.
 
     Layout measured on the real capture: the decorated property name as an
     FString, a 4-byte length and the type token ``StrProperty``, then an 8-byte
     size, a has-guid byte, a 4-byte value length and the value. Built here from
     parts so this file never contains the byte sequence as a literal.
+
+    ``type_token`` is a parameter because the same three property names can be
+    written as ``NameProperty`` or ``TextProperty``, which carry strings the
+    same way - see the hole-(b) tests at the end of this section.
     """
-    type_token = "StrProperty"
     return (
         name + "_" + index + "_" + guid + "\x00"
         + chr(len(type_token) + 1) + "\x00\x00\x00"
@@ -1593,3 +1605,231 @@ def test_an_authored_guid_must_not_be_a_hex_run():
     still_hex = "ABCDEF0123456789" * 2
     assert len(still_hex) == 32
     assert "PRODUCTUSERID" in _labels_of(still_hex)
+
+
+# --------------------------------------------------------------------------
+# the guard against the guard - redacting the file must not disarm the rule
+# --------------------------------------------------------------------------
+#
+# REPRODUCED 2026-08-11 against the real capture, and the reason this section
+# exists. redact() rewrites the Blueprint decoration beside a name-bearing
+# property to a placeholder, and a placeholder is not alphanumeric. The first
+# version of the anchor spelled the decoration as ``_\d+_[0-9A-Za-z]{1,64}``,
+# so once redact() had run the anchor no longer matched, NAME_FIELD went quiet,
+# and assert_clean() certified a record with a third party's display name still
+# verbatim in it. Redacting the file is what broke the guard.
+#
+# It was invisible because the test above uses NON_HEX_GUID, a 32-character
+# ALPHANUMERIC decoration that satisfies the old anchor. The tested case was not
+# the case redact() actually produces - a test passing for the wrong reason,
+# which is this repository's most expensive recurring failure.
+#
+# The fix does not widen a character class by hand. The decoration tolerates
+# whatever the module's OWN placeholder shape is, and the test below derives the
+# placeholder set from RULES rather than listing it, so a placeholder added
+# tomorrow is covered without anyone remembering to come back here.
+
+
+def _placeholders_the_module_emits() -> set[str]:
+    """Every ``<LABEL>`` literal that appears in a rule's replacement.
+
+    Derived from the module rather than listed, on purpose: a hand-maintained
+    list is exactly the thing that fell out of sync and disarmed the rule.
+    """
+    found: set[str] = set()
+    for rule in redact_module.RULES + redact_module.DETECT_ONLY_RULES:
+        found.update(re.findall(r"<[A-Z0-9_]+>", rule.replacement))
+    found.add(PERSONA_PLACEHOLDER)
+    return found
+
+
+def test_the_module_emits_more_than_a_handful_of_placeholders():
+    # Guards the derivation above. If the replacements ever stop carrying their
+    # placeholders literally, every test built on this set silently tests
+    # nothing, and an empty loop body is the classic vacuous pass.
+    emitted = _placeholders_the_module_emits()
+    assert len(emitted) >= 10, sorted(emitted)
+    assert "<PRODUCTUSERID>" in emitted
+    assert PERSONA_PLACEHOLDER in emitted
+
+
+def test_every_placeholder_the_module_emits_has_the_shape_the_anchor_tolerates():
+    # The coupling, pinned. The decoration anchor is built from
+    # redact._PLACEHOLDER; if a rule ever emitted a placeholder outside that
+    # shape, the anchor would go blind on it and this fails instead.
+    shape = re.compile(redact_module._PLACEHOLDER)
+    for placeholder in sorted(_placeholders_the_module_emits()):
+        assert shape.fullmatch(placeholder), placeholder
+    assert shape.fullmatch(AUTHORED_NAME_MARKER)
+
+
+def test_the_name_field_survives_the_module_redacting_the_decoration_away():
+    # THE DEFECT, reproduced. The capture decorates the property with a 32-hex
+    # Blueprint GUID; redact() rewrites that GUID to <PRODUCTUSERID>, and the
+    # anchor used to stop matching at that point.
+    record = _gvas_string_property("PlayerName", FAKE_OTHER_PLAYER, FAKE_BLUEPRINT_GUID)
+    redacted = redact(record, personas=[])
+
+    # Assert the rewrite actually happened before believing anything about the
+    # survivor - a mutation that fails to apply looks exactly like a pass.
+    assert FAKE_BLUEPRINT_GUID not in redacted
+    assert "<PRODUCTUSERID>" in redacted
+    # And assert the hazard is still there. This is why the guard matters: the
+    # display name is untouched by redact(), because no content rule reaches it.
+    assert FAKE_OTHER_PLAYER in redacted
+
+    assert "NAME_FIELD" in _labels_of(redacted)
+
+
+def test_assert_clean_refuses_redacted_output_that_still_carries_the_name():
+    # The other half of the same defect. iter_sensitive going quiet is only a
+    # missing label; assert_clean going quiet is a published identity.
+    record = _gvas_string_property("PlayerName", FAKE_OTHER_PLAYER, FAKE_BLUEPRINT_GUID)
+    redacted = redact(record, personas=[])
+    assert FAKE_OTHER_PLAYER in redacted
+    with pytest.raises(RedactionError) as excinfo:
+        assert_clean(redacted, personas=[])
+    assert "NAME_FIELD" in str(excinfo.value)
+
+
+def test_the_anchor_sees_through_every_placeholder_the_module_can_emit():
+    # Not just <PRODUCTUSERID>. LONG_ID can eat an all-digit decoration and
+    # SAVE_SLOT, ACTOR and the rest are all reachable in principle, so the
+    # anchor is tested against the whole emitted set rather than the one
+    # placeholder that happened to be reproduced.
+    for placeholder in sorted(_placeholders_the_module_emits()):
+        decoration = "AUTH" + placeholder + "ZZ"
+        record = _gvas_string_property("PlayerName", FAKE_OTHER_PLAYER, decoration)
+        assert "NAME_FIELD" in _labels_of(record), placeholder
+
+
+def test_the_anchor_sees_through_a_placeholder_in_the_decoration_index():
+    # The index is a digit run, and this module masks digit runs. An index long
+    # enough for LONG_ID to eat is implausible rather than impossible, and the
+    # branch that tolerates it is free - but an untested branch is decoration,
+    # so it is pinned here rather than left to be believed.
+    record = _gvas_string_property(
+        "PlayerName", FAKE_OTHER_PLAYER, NON_HEX_GUID, index="<LONG_ID>"
+    )
+    assert "NAME_FIELD" in _labels_of(record)
+
+
+def test_the_anchor_sees_through_a_wholly_replaced_decoration():
+    # The degenerate case: redact() replaced the entire decoration, leaving a
+    # placeholder and nothing else beside the property name.
+    record = _gvas_string_property("PlayerName", FAKE_OTHER_PLAYER, "<LONG_ID>")
+    assert "NAME_FIELD" in _labels_of(record)
+
+
+# --------------------------------------------------------------------------
+# hole (a) - the marker must authorise a value, not merely be near one
+# --------------------------------------------------------------------------
+
+
+def test_a_marker_glued_to_a_real_value_does_not_authorise_it():
+    # The self-authorising file. The first version of the check asked only
+    # whether the marker appeared within 64 bytes of the property name, so a
+    # value that merely BEGINS with the marker silenced the rule and shipped
+    # whatever followed it. The marker now has to be the whole value, spelled as
+    # a complete FString with its own length prefix.
+    record = _gvas_string_property(
+        "PlayerName", AUTHORED_NAME_MARKER + FAKE_OTHER_PLAYER, NON_HEX_GUID
+    )
+    assert FAKE_OTHER_PLAYER in record
+    assert "NAME_FIELD" in _labels_of(record)
+
+
+def test_a_marker_trailing_a_real_value_does_not_authorise_it():
+    record = _gvas_string_property(
+        "PlayerName", FAKE_OTHER_PLAYER + AUTHORED_NAME_MARKER, NON_HEX_GUID
+    )
+    assert "NAME_FIELD" in _labels_of(record)
+
+
+def test_a_marker_in_the_decoration_does_not_authorise_the_value():
+    # Reachable only because the anchor now tolerates placeholders in the
+    # decoration, which is the fix above. The two changes have to be made
+    # together or this one opens a hole the other closes.
+    record = _gvas_string_property(
+        "PlayerName", FAKE_OTHER_PLAYER, "AUTH" + AUTHORED_NAME_MARKER + "ZZ"
+    )
+    assert "NAME_FIELD" in _labels_of(record)
+
+
+def test_an_authored_neighbour_does_not_authorise_an_unauthored_field():
+    # Two fields, the first unauthored and the second authored. The authored
+    # one's marker must not satisfy the unauthored one's check.
+    unauthored = _gvas_string_property("PlayerName", FAKE_OTHER_PLAYER, NON_HEX_GUID)
+    authored = _gvas_string_property(
+        "MsgSubChannelString", AUTHORED_NAME_MARKER, NON_HEX_GUID
+    )
+    hits = [
+        offset for label, _, offset in iter_sensitive(unauthored + authored)
+        if label == "NAME_FIELD"
+    ]
+    assert len(hits) == 1, hits
+    assert hits[0] == 0
+
+
+def test_authoring_every_field_still_satisfies_the_rule_after_the_tightening():
+    # Satisfiability, re-pinned against the tightened check. A guard that can
+    # never be satisfied is an outage, not a guard - and the committed fixture
+    # has to keep passing.
+    record = "".join(
+        _gvas_string_property(prop, AUTHORED_NAME_MARKER, NON_HEX_GUID)
+        for prop in NAME_BEARING_PROPERTIES
+    )
+    assert "NAME_FIELD" not in _labels_of(record)
+
+
+# --------------------------------------------------------------------------
+# hole (b) - NameProperty and TextProperty carry strings too
+# --------------------------------------------------------------------------
+
+
+def test_the_same_property_written_as_a_name_or_text_property_is_covered():
+    # The first version anchored on the literal token StrProperty, so the same
+    # field written under either of the other two string-valued type tokens
+    # walked straight past the guard.
+    for type_token in ("NameProperty", "TextProperty"):
+        unauthored = _gvas_string_property(
+            "PlayerName", FAKE_OTHER_PLAYER, NON_HEX_GUID, type_token=type_token
+        )
+        assert "NAME_FIELD" in _labels_of(unauthored), type_token
+        authored = _gvas_string_property(
+            "PlayerName", AUTHORED_NAME_MARKER, NON_HEX_GUID, type_token=type_token
+        )
+        assert "NAME_FIELD" not in _labels_of(authored), type_token
+
+
+def test_a_non_string_type_token_is_still_not_covered():
+    # The complement, and the reason the type token is an enumerated list rather
+    # than "any word ending in Property": an integer-valued property cannot hold
+    # a display name, and a rule whose value is that it fires rarely must not
+    # fire on one.
+    int_valued = _gvas_string_property(
+        "PlayerName", FAKE_OTHER_PLAYER, NON_HEX_GUID, type_token="IntProperty"
+    )
+    assert "NAME_FIELD" not in _labels_of(int_valued)
+
+
+# --------------------------------------------------------------------------
+# hole (c) - the property list grows by measurement only, said out loud
+# --------------------------------------------------------------------------
+
+
+def test_the_refusal_states_that_the_property_list_is_measured_only():
+    # Hole (c) is not a defect to fix, it is a limit to publish. The list cannot
+    # be widened by imagination without making it look authoritative when it is
+    # not, so the honest move is to say so where a reader meets it: in the
+    # refusal message and in the module's own stated limits.
+    record = _gvas_string_property("PlayerName", FAKE_OTHER_PLAYER, NON_HEX_GUID)
+    with pytest.raises(RedactionError) as excinfo:
+        assert_clean(record, personas=[])
+    assert "measurement only" in str(excinfo.value)
+
+
+def test_the_module_docstring_states_the_property_list_limit():
+    doc = redact_module.__doc__ or ""
+    assert "measurement only" in doc
+    assert "NAME_BEARING_PROPERTIES" in doc
