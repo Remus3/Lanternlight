@@ -280,6 +280,29 @@ become lane-namespaced and the global space is retired. Whichever is chosen,
 the guard must be shown to go red when removed, and the ledger's stated `LL-NNNN`
 convention must be updated to match reality rather than left contradicting it.
 
+## 2d. The suite is only green IN PLACE - OPEN, ops lane, confirmed twice
+
+`OPS-4` was recorded in `LL-0021` as "path-dependent" and has now been
+confirmed by an independent pass with the consequence spelled out.
+
+`ops/lane_contract.py:render()` bakes the **absolute** `REPO_ROOT` into the
+contract text, so
+`tests/test_lane_contract.py::TestOnDiskMatchesTheRoster::test_the_files_on_disk_equal_what_the_roster_renders`
+can only pass at `C:\Lanternlight`. In a fresh clone it FAILS - measured at
+`060d48d` **and** at `548e5b6`, so it predates this session and is not a
+regression. Substituting the root makes all eight lane contracts byte-equal.
+
+**Why it matters more than it looks:** every "N passed" this project has ever
+recorded, including `LL-0028`'s **927**, is true **in place** and not in a
+clone. A fresh clone measures one failure. `README.md` tells a new contributor
+to clone and run `python -m pytest`, so the documented first-run experience is
+a red suite.
+
+**Acceptance:** the contract renders a path relative to the checkout, or the
+test compares modulo the root; a fresh `git clone` plus `python -m pytest`
+goes green, demonstrated end to end rather than argued; and the guard is shown
+to go red when the relativisation is removed.
+
 ## 2b. Sanitised fixture for the transient save - CLOSED 2026-08-11
 
 Split out of item 2 rather than left implied, because it is a different lane's
@@ -377,6 +400,25 @@ byte on a second run.
 item JSON, the non-zero native struct payloads, the in-run damage numbers and
 timestamps, and the `LevelDetail` / `BotSpawnerData` values. None is an
 identifier under any detector.
+
+**A P0 WAS FOUND IN THE GUARD AFTER THIS ITEM WAS CLOSED.** Ledger `LL-0029`
+and `LL-0030`. The fixture was, and remains, clean - verified by direct scan
+and by an independent scan of all 113 blobs on the pushed remote. **Nothing
+leaked.** What was broken was the protection: `redact()` rewrites the Blueprint
+decoration to `<PRODUCTUSERID>`, `NAME_FIELD`'s anchor required
+`[0-9A-Za-z]`, and angle brackets are not alphanumeric - so **redacting a file
+disarmed the rule**, and `assert_clean(redact(raw))` approved bytes still
+carrying a third party's display name verbatim.
+
+That is the second time in one session that a **remediation opened the hole it
+was cleaning** - the first being that authoring the GUIDs removes the false
+positive which was accidentally the only thing refusing the same record. Two
+instances is a pattern, not a coincidence, and the pattern is: **check what
+your fix removes, not only what it adds.**
+
+Fixed by matching the decoration as a run of units where a unit is either one
+alphanumeric character or a whole placeholder taken from the module's own
+constants, so a placeholder added later cannot silently disarm it again.
 
 ### The original acceptance, for the record
 
@@ -533,12 +575,20 @@ deduplication artifact:
 | `83.740417480` | 3 | monsterId 2003, across **two different instances** |
 | `30.472595215` | 2 | gap 1.709 |
 
-Two consequences worth separating. `83.740417480` landing identically on two
-**different instances of the same monster type** is the strongest single piece
-of evidence that damage is computed rather than sampled - a per-hit roll would
-not reproduce a float to nine places twice. And three consecutive gaps of
-1.501, 1.499, 1.499 seconds - a spread of 2 ms - is the **first timing constant
-this project has ever measured**.
+**Both halves of that were overstated, and an adversarial pass corrected them.**
+Kept visible rather than edited away, because the overstatement is instructive:
+
+- **"a float to nine places" is wrong.** Every value is exactly `float32`; the
+  ULP at 83.74 is 7.6e-6, so a repeat pins about **7 significant digits**, not
+  9. Still far too tight for a per-hit roll, but say the true number.
+- **The five repeats of `9.745483398` are ONE computation, not five.** They are
+  the 1.5-second tick itself, so counting them as independent evidence
+  double-counts. The genuinely independent evidence is a single fact:
+  `83.740417480` landing identically on **two different instances of the same
+  monster type**.
+- **"the first timing constant this project has measured" is too strong.** It
+  is n=3 intervals, from one monster instance in one encounter, at a 1 ms
+  quantisation floor. It is a strong lead, not a constant.
 
 **Three negatives, each worth as much as the positives:**
 
@@ -546,11 +596,25 @@ this project has ever measured**.
   and `Key` is empty on all 424. So the save's window carries no attribution
   at all, and the ~1.5 s interval cannot be attributed from the save alone.
 
-  **ANSWERED 2026-08-11 - `nameId` and `SkillNameId` ARE the same id space.**
-  Not inferred: the value `6130017` appears as `skillNameId` in the log's
+  **PROBABLY the same id space as `SkillNameId` - a strong hypothesis, NOT
+  proven.** The value `6130017` appears as `skillNameId` in the log's
   kill-history payload and as `nameId` inside a `damageChildList` in the same
-  log, from the same component family. `nameId: 0` in the save therefore means
-  **unset**, not "no such concept". See the log section below.
+  log. An earlier draft of this item called that "proven" and "not inferred".
+  **Both were over-claims and an adversarial pass refuted them:**
+
+  - **n = 1.** `skillNameId` has exactly **one** distinct value in the entire
+    12.7 MB log. One shared value between two fields is a strong lead, not a
+    demonstration that the spaces coincide.
+  - **`6130007` never appears as a `skillNameId` at all**, so the overlap is
+    not reciprocal on the sample available.
+  - **"from the same component family" was simply WRONG.** `skillNameId` is
+    emitted by `leaderRankScoreComponent`, `battleSnapUpdate` and
+    `battleSettlement` - **not** by `DamageCollectionComponent`. That sentence
+    asserted a shared provenance that does not exist, which is exactly the kind
+    of detail that makes a weak claim read as a strong one.
+
+  `nameId: 0` still most likely means **unset**. Closing this needs a second
+  distinct `skillNameId` seen also as a `nameId`.
 
 ## 7a. The log carries what the save's window does not - MEASURED 2026-08-11
 
@@ -579,19 +643,18 @@ the first ability bindings the project holds, and they are **distinct from the
   The **monster** is the source.
 
 **CONSEQUENCE, and it inverts the natural reading of item 7's series.** All 21
-extracted hits carry `sourceType: 1` with a populated `monsterId`. By the log's
-own semantics that is **damage the operator TOOK, not damage they dealt.** The
-1.5 s repeating tick is therefore most likely incoming, which makes a monster
-attack cadence or a damage-over-time effect **on the player** the leading
-readings - not a bow cadence.
+extracted hits carry `sourceType: 1` with a populated `monsterId`, so they are
+**damage the operator TOOK**. This was written as a strong inference from a
+single log payload; it has since been **CONFIRMED independently** by the
+`PlayerData.Hp` join in item 7 above, which is first-party and does not depend
+on the log at all.
 
-This is stated as a **strong inference, not a measurement**: it rests on a
-single `sourceType: 1` payload in the log, and the save's records differ from
-it by having an empty `Key` where the log's had `MonsterDamage`. That
-difference is unexplained. **No damage number in item 7 may be labelled dealt
-or taken until item 7b settles it.** Recording the inference and its weakness
-is the point - the earlier draft of item 7 left direction open, and the naive
-assumption would have been exactly backwards.
+**One caveat on generalising the log half.** The only `sourceType: 1` payload
+in the log carries `monsterId` **99021**, which appears **once** in the whole
+log against 105 mentions of the `1xxx`/`2xxx` space. It looks like a synthetic
+death-source bucket rather than a real monster, so its semantics should not be
+stretched. The direction conclusion does not rest on it any more - the Hp join
+carries it.
 
 **Also measured here:** the log emits **one payload per death event** with
 `bDeathCauser: true`, so the log holds the killing blow that the save's rolling
@@ -610,14 +673,39 @@ second surface. No excerpt of this region may be committed, and the
 - `sourceType` is **1** on all 21 and `Key` is empty on all 21. One source type,
   no key. Whatever those fields discriminate was never exercised here.
 
-**THE OPEN QUESTION THAT DECIDES THE INTERPRETATION, and it is not answered:**
-whether these records are damage the player **dealt to** each monster or damage
-each monster **dealt to** the player. The set is keyed by `monsterId` and
-`monsterGuid`, which reads as "damage relating to this monster" and does not
-say which direction. Summed damage is 1284 against a player at 556 Hp with 3
-flasks, which is suggestive of neither reading strongly enough to settle it.
-**Every number above is direction-agnostic and must stay that way until this is
-measured.** Item 7b answers it cheaply: hit a known target for a known amount.
+**DIRECTION - SETTLED 2026-08-11. These are damage the operator TOOK.**
+
+Not an inference and not from the log. The answer was in the captured bytes the
+whole time, in a **second field of the same file**: `PlayerData.Hp`, sampled
+262 times across the run.
+
+- **13 HP drops, totalling 1286.**
+- **21 damage hits, totalling 1284.84.**
+- The 1.16 gap is integer rounding across 13 drops, and the drops pair to hits
+  **individually**: 108.53 + 83.74 = 192.27 against a 192 drop, 17.36 + 92.13 =
+  109.49 against a 110 drop, 137.52 against 138, 89.09 against 89.
+- **No HP drop is unaccounted for.**
+
+Found by the adversarial pass and re-measured independently by the integrator.
+An earlier draft of this item left direction open and called it the blocking
+question; it was answerable from data already on disk, and the reason it stayed
+open is that nobody joined the two fields.
+
+**AND THIS IS THE DEFLATING PART, which matters more than the result.** The 21
+hits are **incoming** damage. Emberforge needs **outgoing** damage - what the
+player's build does - and the save's rolling window does not carry it. So:
+
+- Everything above describes what monsters do to the player. It constrains
+  survivability, not build math.
+- **Outgoing damage exists, but only in the log**, in the four
+  `DamageCollectionComponent` payloads at `sourceType: 0` - `NormalArrow` at
+  409.03, 278.26 and 378.79, `ExplosionArrow` at 273.22. Four samples, emitted
+  at kill events, WITH ability attribution.
+- So item 7's headline holds but shrinks: Emberforge is unblocked by the
+  **log**, at four samples, not by the save at twenty-one.
+
+Item 7b is now more important, not less: the training ground is the only route
+to outgoing damage in quantity, and `sourceType: 0` is what to look for.
 
 **Remaining acceptance:** the extractor is currently merger analysis in a
 scratchpad, not shipped code. It needs a home in a lane, tests, and the
