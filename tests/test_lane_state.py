@@ -731,6 +731,88 @@ class TestAnUnclosedFenceCannotSuppressTheGuard:
             lane_state.fragment_entry_ids(path)
 
 
+class TestTheGuardAndTheParserAgreeAboutFences:
+    """`OPS-9`. The two halves used to disagree, which is this module's bug shape.
+
+    `_assert_headings_parse` skipped fenced lines. `_HEADING_RE.finditer` ran
+    over the whole entry region and knew nothing about fences. So inside a code
+    block a **well-formed** heading was parsed as a real entry while a
+    **malformed** one was ignored - the guard protecting a region the parser was
+    not reading the same way.
+
+    That is not hypothetical: `docs/LEDGER.md` documents its own entry format
+    with a fenced `### LL-0000 - ...` example, and it is safe today only because
+    it sits ABOVE the entries marker. Quote an example entry below the marker,
+    or in a lane fragment, and it became a phantom entry with a real id.
+
+    Both halves now share one fence scanner, so there is no second opinion to
+    disagree with.
+    """
+
+    def _fragment(self, tmp_path, body):
+        path = tmp_path / "ops.LEDGER.md"
+        path.write_text(
+            "# Lane ledger fragment - ops\n\n"
+            f"{lane_state.FRAGMENT_MARKER}\n\n{body}",
+            encoding="utf-8",
+        )
+        return path
+
+    QUOTES_AN_EXAMPLE = (
+        "### LL-0900 - 2026-08-12 - documents the entry format\n\n"
+        "**Evidence:**\n- an entry looks like this:\n"
+        "```\n"
+        "### LL-9999 - 2026-01-01 - EXAMPLE, not a real entry\n"
+        "```\n"
+    )
+
+    def test_a_well_formed_heading_inside_a_fence_is_not_an_entry(self, tmp_path):
+        path = self._fragment(tmp_path, self.QUOTES_AN_EXAMPLE)
+        assert lane_state.fragment_entry_ids(path) == ["LL-0900"]
+
+    def test_the_phantom_id_never_becomes_an_entry_in_the_ledger(self, tmp_path):
+        book = _seed_ledger(tmp_path)
+        path = self._fragment(tmp_path, self.QUOTES_AN_EXAMPLE)
+        assert lane_state.integrate(path, ledger_path=book) == ["LL-0900"]
+
+        text = book.read_text(encoding="utf-8")
+        # The example TEXT is carried, because it is part of LL-0900's body and
+        # an append-only record must not rewrite what its author wrote. What
+        # must not happen is LL-9999 becoming an ENTRY - so the assertion is
+        # about the parsed ids, not about the bytes.
+        assert "EXAMPLE, not a real entry" in text
+        blocks = lane_state._blocks_below(text, ledger.ENTRIES_MARKER, book)
+        ids = [item_id for item_id, _ in blocks]
+        assert "LL-9999" not in ids
+        assert "LL-0900" in ids
+
+    def test_the_phantom_id_is_invisible_to_the_collision_check(self, tmp_path):
+        book = _seed_ledger(tmp_path)
+        path = self._fragment(tmp_path, self.QUOTES_AN_EXAMPLE)
+        found = lane_state.duplicate_claims(ledger_path=book, fragments=[path])
+        assert "LL-9999" not in found
+
+    def test_a_fenced_example_cannot_collide_with_a_real_entry(self, tmp_path):
+        # The sharp end: a quoted example carrying an id that IS already in the
+        # ledger must not be reported as a collision, because it is not an
+        # entry at all. A false collision blocks a legitimate integration.
+        book = _seed_ledger(tmp_path)
+        path = self._fragment(
+            tmp_path,
+            "### LL-0900 - 2026-08-12 - quotes a REAL id as an example\n\n"
+            "**Evidence:**\n- like this:\n```\n"
+            "### LL-0018 - 2026-08-09 - totally different text\n```\n",
+        )
+        assert lane_state.duplicate_claims(ledger_path=book, fragments=[path]) == {}
+        assert lane_state.integrate(path, ledger_path=book) == ["LL-0900"]
+
+    def test_the_body_of_a_fenced_example_stays_with_its_real_entry(self, tmp_path):
+        path = self._fragment(tmp_path, self.QUOTES_AN_EXAMPLE)
+        blocks = lane_state._fragment_blocks(path.read_text(encoding="utf-8"), path)
+        assert [item_id for item_id, _ in blocks] == ["LL-0900"]
+        assert "LL-9999" in blocks[0][1]
+
+
 class TestTheIdShapeIsNotAssumedToBeLLNNNN:
     """Also from the refutation pass: six id shapes dropped silently.
 

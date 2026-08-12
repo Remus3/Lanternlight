@@ -176,6 +176,70 @@ _FENCE_MARKS = ("```", "~~~")
 _ID_TOKEN_RE = re.compile(r"[A-Za-z]{1,8}(?:-\d+|\d{2,})\Z")
 
 
+@dataclass(frozen=True)
+class _RegionScan:
+    """One reading of an entry region, shared by the guard and the splitter.
+
+    `OPS-9` existed because those two had **separate** readings: the guard
+    skipped fenced lines and the splitter used ``_HEADING_RE.finditer`` over the
+    whole region, which knows nothing about fences. So a well-formed heading
+    inside a code block became a real entry while a malformed one beside it was
+    ignored. Two halves of one parser disagreeing is the shape of every bug this
+    module has had, so there is now exactly one scan and both callers use it.
+
+    Attributes:
+        headings: ``(char_offset, item_id)`` for each heading OUTSIDE a fence,
+            in document order. The offset indexes into the region body.
+        suspect: The first ``(line_number, line)`` that looks like an entry
+            heading and does not parse, or None.
+        open_fence_at: Line number of a fence that is never closed, or 0.
+    """
+
+    headings: tuple[tuple[int, str], ...]
+    suspect: tuple[int, str] | None
+    open_fence_at: int
+
+
+def _scan_entry_region(body: str) -> _RegionScan:
+    """Walk ``body`` once, tracking fences, and report what is in it.
+
+    A fence is closed only by the delimiter that opened it, which is what
+    Markdown does and which means a mismatched delimiter leaves the fence open
+    - caught by :attr:`_RegionScan.open_fence_at` rather than silently ending
+    the fenced span early.
+    """
+    fence: str | None = None
+    fence_opened_at = 0
+    offset = 0
+    headings: list[tuple[int, str]] = []
+    suspect: tuple[int, str] | None = None
+
+    for number, raw in enumerate(body.splitlines(keepends=True), 1):
+        line = raw.rstrip("\n").rstrip("\r")
+        stripped = line.lstrip()
+        opener = next((mark for mark in _FENCE_MARKS if stripped.startswith(mark)), None)
+        if opener is not None:
+            if fence is None:
+                fence, fence_opened_at = opener, number
+            elif opener == fence:
+                fence = None
+            offset += len(raw)
+            continue
+        if fence is None and stripped.startswith("#"):
+            match = _HEADING_RE.match(line)
+            if match:
+                headings.append((offset, match["item_id"]))
+            elif suspect is None and _looks_like_an_entry_attempt(line):
+                suspect = (number, line)
+        offset += len(raw)
+
+    return _RegionScan(
+        headings=tuple(headings),
+        suspect=suspect,
+        open_fence_at=fence_opened_at if fence is not None else 0,
+    )
+
+
 def _looks_like_an_entry_attempt(line: str) -> bool:
     """True when ``line``'s first token after the hashes is an id.
 
@@ -753,9 +817,12 @@ def fragment_entry_ids(path: Path) -> list[str]:
         text = target.read_text(encoding="utf-8")
     except (FileNotFoundError, NotADirectoryError):
         return []
+    # Via the shared scan, not a private `finditer` - this function was a THIRD
+    # independent reading of the same region, found while closing OPS-9 on the
+    # first two. Three readers, three chances to disagree.
     body = _entries_below(text, FRAGMENT_MARKER)
     _assert_headings_parse(body, target)
-    return [m["item_id"] for m in _HEADING_RE.finditer(body)]
+    return [item_id for _, item_id in _scan_entry_region(body).headings]
 
 
 def _assert_headings_parse(body: str, where: Path | str) -> None:
@@ -797,26 +864,9 @@ def _assert_headings_parse(body: str, where: Path | str) -> None:
     Filing one was itself a defect - it was recorded as 46 and measured 51 four
     commits later.
     """
-    lines = body.splitlines()
-    fence: str | None = None
-    fence_opened_at = 0
-    for number, line in enumerate(lines, 1):
-        stripped = line.lstrip()
-        opener = next((mark for mark in _FENCE_MARKS if stripped.startswith(mark)), None)
-        if opener is not None:
-            if fence is None:
-                fence, fence_opened_at = opener, number
-                continue
-            if opener == fence:
-                fence = None
-            # A mismatched delimiter is ordinary text inside the open fence,
-            # which is what Markdown does - and it means the fence is still
-            # open, so the unbalanced check below still catches it.
-            continue
-        if fence is not None or not stripped.startswith("#"):
-            continue
-        if _HEADING_RE.match(line) or not _looks_like_an_entry_attempt(line):
-            continue
+    scan = _scan_entry_region(body)
+    if scan.suspect is not None:
+        number, line = scan.suspect
         raise MalformedLedgerHeading(
             f"{where}: line {number} looks like an entry heading and does not "
             f"parse as one, so it would be SKIPPED IN SILENCE:\n"
@@ -826,11 +876,11 @@ def _assert_headings_parse(body: str, where: Path | str) -> None:
             f"invisible to the collision check and integrate() returns [] "
             f"having written nothing. Fix the heading; do not widen this rule."
         )
-    if fence is not None:
+    if scan.open_fence_at:
         raise MalformedLedgerHeading(
-            f"{where}: the code fence opened at line {fence_opened_at} is never "
-            f"closed, so every line below it counts as code and the heading "
-            f"guard STANDS DOWN for the rest of the file.\n"
+            f"{where}: the code fence opened at line {scan.open_fence_at} is "
+            f"never closed, so every line below it counts as code and the "
+            f"heading guard STANDS DOWN for the rest of the file.\n"
             f"That is worse than a malformed heading: the next entry is absorbed "
             f"into this one's block and integrate() returns a NON-EMPTY list, so "
             f"it reads as success. Close the fence."
@@ -845,14 +895,19 @@ def _blocks_below(
     Used for both shapes of file - a lane fragment and the repository ledger -
     because comparing one against the other is only meaningful if both were cut
     up the same way.
+
+    The heading positions come from :func:`_scan_entry_region`, the SAME scan
+    the guard uses, so a heading inside a code fence is not an entry here either
+    - it stays part of the surrounding entry's body, where its author put it.
+    Using ``_HEADING_RE.finditer`` here instead was `OPS-9`.
     """
     body = _entries_below(text, marker)
     _assert_headings_parse(body, where)
-    matches = list(_HEADING_RE.finditer(body))
+    headings = _scan_entry_region(body).headings
     blocks: list[tuple[str, str]] = []
-    for position, match in enumerate(matches):
-        end = matches[position + 1].start() if position + 1 < len(matches) else len(body)
-        blocks.append((match["item_id"], body[match.start() : end].strip("\n")))
+    for position, (start, item_id) in enumerate(headings):
+        end = headings[position + 1][0] if position + 1 < len(headings) else len(body)
+        blocks.append((item_id, body[start:end].strip("\n")))
     return blocks
 
 
