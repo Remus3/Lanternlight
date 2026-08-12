@@ -816,6 +816,51 @@ class TestALaneCanClaimAPathItIsAdding:
         with pytest.raises(ValueError):
             lane_state.claim_path("ingest", non_ascii, path=tmp_path / "s.json")
 
+    def test_a_catch_all_claim_is_refused(self, tmp_path):
+        """The severe hole, found by refuting this mechanism the day it landed.
+
+        `claim_path(lane, "**")` matched every unowned path in the repository,
+        so the orphan guard reported green with a genuinely orphaned file on
+        disk. The sanctioned pressure valve opened all the way.
+        """
+        for greedy in ("**", "**/*", "**/*.py"):
+            with pytest.raises(ValueError, match="may not claim"):
+                lane_state.claim_path("ops", greedy, path=tmp_path / "s.json")
+
+    def test_a_claim_may_not_reach_another_lanes_files(self, tmp_path):
+        # The quieter shape: capture claiming lanternlight/*.py reaches
+        # lanternlight/redact.py, which safety owns and holds a veto over.
+        # The message truncates its list, so the FULL reach is asserted on
+        # overreach() and the message only has to name the fault.
+        with pytest.raises(ValueError, match="already owns"):
+            lane_state.claim_path("capture", "lanternlight/*.py", path=tmp_path / "s.json")
+        reached = lane_state.overreach("lanternlight/*.py", "capture")
+        assert any("redact.py" in one and "safety" in one for one in reached), reached
+
+    def test_a_lane_may_still_claim_over_its_OWN_owned_files(self, tmp_path):
+        # Not overreach - a lane widening within its own slice is its business,
+        # and refusing it would make the mechanism useless for the lane most
+        # likely to need it.
+        state = lane_state.claim_path(
+            "ingest", "lanternlight/gvas.py", path=tmp_path / "s.json"
+        )
+        assert "lanternlight/gvas.py" in state.claimed_paths
+
+    def test_the_overreach_check_is_not_vacuous(self):
+        # It must actually find something, or every refusal above is theatre.
+        assert lane_state.overreach("**", "ops"), "the probe found nothing to protect"
+        assert lane_state.overreach("lanternlight/*.py", "capture")
+        assert lane_state.overreach("lanternlight/brand_new_unowned.py", "ingest") == []
+
+    def test_an_overreaching_claim_already_on_disk_is_reported_stale(self, tmp_path):
+        # A claim written before this rule existed, or smuggled in by hand,
+        # must still be caught by the live guard rather than only at write time.
+        state = lane_state.load("capture", tmp_path / "s.json")
+        state.claimed_paths = ("lanternlight/*.py",)
+        assert lane_state.stale_claims(states={"capture": state}) == [
+            ("capture", "lanternlight/*.py")
+        ]
+
     def test_a_stale_claim_is_reported(self, tmp_path):
         # The whole point. Once the integrator folds a claim into ops/lanes.py,
         # the claim MUST be removed - otherwise it becomes a permanent second
@@ -1429,7 +1474,13 @@ class TestLaneStateIsVisibleToGit:
                 .relative_to(lane_state.REPO_ROOT)
                 .as_posix()
             )
-            if lanes.git_would_take(rel) is False:
+            verdict = lanes.git_would_take(rel)
+            # `is False` ALONE would pass vacuously the moment the probe starts
+            # returning None - which is the exact skip-vacuity this class was
+            # already caught by once. An unanswerable path is a failure here,
+            # because git is installed: we checked.
+            assert verdict is not None, f"the probe could not answer for {rel}"
+            if verdict is False:
                 missing.append(rel)
         assert not missing, (
             "git will not take these files, so the lanes owning them silently "
@@ -1504,7 +1555,9 @@ class TestVisibilityIsCheckedForPathsThatDoNotExistYET:
         for lane in writing:
             for chooser in (lane_state.state_path, lane_state.fragment_path):
                 rel = chooser(lane.lane_id).relative_to(lane_state.REPO_ROOT).as_posix()
-                if lanes.git_would_take(rel) is False:
+                verdict = lanes.git_would_take(rel)
+                assert verdict is not None, f"the probe could not answer for {rel}"
+                if verdict is False:
                     refused.append(rel)
         assert not refused, (
             "git would REFUSE these lane files, so the lane silently resets to "

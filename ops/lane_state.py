@@ -178,9 +178,12 @@ _HEADING_RE = re.compile(r"^### (?P<item_id>\S+) - ", re.MULTILINE)
 #: least two (``LL0044``). One un-hyphenated digit is left out on purpose so an
 #: ordinary sub-heading like ``#### Section2 overview`` is not called a broken
 #: entry - the guard must fire on an entry ATTEMPT, not on prose.
-#: Both Markdown fence delimiters. A fence is closed only by the delimiter
-#: that opened it, so a mismatched one is ordinary text and leaves it open.
-_FENCE_MARKS = ("```", "~~~")
+#: The two Markdown fence characters. A fence is a run of at least three, and
+#: it closes only on the SAME character, at a run at least as long, with no
+#: info string - see :func:`_fence_marker`. Tracking the character alone was
+#: not enough: a longer or shorter inner run then looked like a close, and the
+#: mess surfaced as a false refusal on perfectly legal Markdown.
+_FENCE_MARKS = ("`", "~")
 
 _ID_TOKEN_RE = re.compile(r"[A-Za-z]{1,8}(?:-\d+|\d{2,})\Z")
 
@@ -201,6 +204,13 @@ def _fragment_text(path: Path | str) -> str | None:
 
     So: missing is None, and anything that cannot be a fragment raises with the
     path it should probably have been.
+
+    **A limit that is still live, in the present tense.** A MISTYPED fragment
+    name is indistinguishable from a missing one and still returns None
+    silently - ``integrate("lanes/opss.LEDGER.md")`` gives ``[]``. Closing it
+    needs a filename convention, which was measured against the existing tests
+    and rejected because they legitimately pass names like ``LEDGER.md``, or a
+    caller-supplied lane id. Neither is free, and lazy creation is load-bearing.
     """
     target = Path(path)
 
@@ -264,7 +274,7 @@ def _scan_entry_region(body: str) -> _RegionScan:
     - caught by :attr:`_RegionScan.open_fence_at` rather than silently ending
     the fenced span early.
     """
-    fence: str | None = None
+    fence: tuple[str, int] | None = None
     fence_opened_at = 0
     offset = 0
     headings: list[tuple[int, str]] = []
@@ -273,11 +283,21 @@ def _scan_entry_region(body: str) -> _RegionScan:
     for number, raw in enumerate(body.splitlines(keepends=True), 1):
         line = raw.rstrip("\n").rstrip("\r")
         stripped = line.lstrip()
-        opener = next((mark for mark in _FENCE_MARKS if stripped.startswith(mark)), None)
-        if opener is not None:
+        marker = _fence_marker(stripped)
+        if marker is not None:
+            char, width, info = marker
             if fence is None:
-                fence, fence_opened_at = opener, number
-            elif opener == fence:
+                # An opening fence may carry an info string (```python).
+                fence, fence_opened_at = (char, width), number
+            elif char == fence[0] and width >= fence[1] and not info:
+                # CommonMark: a fence closes only on the SAME character, at
+                # least as long, and with no info string. Tracking only the
+                # character - which this did at first - makes a longer inner
+                # run look like a close, and a shorter one look like a close
+                # too. Neither minted a phantom entry, because the unbalanced
+                # check caught the mess; both produced a FALSE REFUSAL on legal
+                # Markdown, which is the failure mode that gets a guard
+                # switched off.
                 fence = None
             offset += len(raw)
             continue
@@ -294,6 +314,21 @@ def _scan_entry_region(body: str) -> _RegionScan:
         suspect=suspect,
         open_fence_at=fence_opened_at if fence is not None else 0,
     )
+
+
+def _fence_marker(stripped: str) -> tuple[str, int, str] | None:
+    """Return ``(char, width, info)`` when ``stripped`` is a fence line.
+
+    ``width`` is the run length, which decides what can close it, and ``info``
+    is whatever follows - an opening fence may carry ``python``; a closing one
+    may not.
+    """
+    for char in _FENCE_MARKS:
+        if not stripped.startswith(char * 3):
+            continue
+        width = len(stripped) - len(stripped.lstrip(char))
+        return char, width, stripped[width:].strip()
+    return None
 
 
 def _looks_like_an_entry_attempt(line: str) -> bool:
@@ -633,10 +668,53 @@ def claim_path(lane_id: str, pattern: str, path: Path | None = None) -> LaneStat
     """
     state = load(lane_id, path)
     _refuse_read_only(lane_id)
+    _refuse_overreaching_claim(lane_id, pattern)
     if pattern not in state.claimed_paths:
         state.claimed_paths = (*state.claimed_paths, pattern)
     save(state, path)
     return state
+
+
+def overreach(pattern: str, lane_id: str = "") -> list[str]:
+    """Return roster-owned files ``pattern`` would swallow. Empty is good.
+
+    **A claim is for files nobody owns yet.** Without this, a catch-all made the
+    orphan guard vacuous: ``claim_path(lane, "**")`` matched every unowned path
+    in the repository, so the guard reported green with a genuinely orphaned
+    file on disk. The sanctioned pressure valve opened all the way.
+
+    It also catches the quieter shape - ``lanternlight/*.py`` claimed by
+    ``capture`` reaches ``lanternlight/redact.py``, which ``safety`` owns and
+    holds a veto over. Neither breaks :func:`ops.lanes.owner_of`, which still
+    answers ``safety``, but a lane should not be able to file a note over
+    another lane's files at all.
+
+    Checked against the REAL TREE rather than against pattern strings, because
+    two patterns can differ textually and still both match one file - the same
+    reason ``tests/test_lanes.py`` walks the tree instead of comparing globs.
+    """
+    reached = []
+    for path in lanes.tracked_files():
+        if not lanes.path_matches(path, [pattern]):
+            continue
+        owner = lanes.owner_of(path)
+        if owner is not None and owner != lane_id:
+            reached.append(f"{path.as_posix()} (owned by {owner})")
+    return sorted(reached)
+
+
+def _refuse_overreaching_claim(lane_id: str, pattern: str) -> None:
+    reached = overreach(pattern, lane_id)
+    if not reached:
+        return
+    raise ValueError(
+        f"lane {lane_id!r} may not claim {pattern!r}: it reaches "
+        f"{len(reached)} file(s) another lane already owns.\n  "
+        + "\n  ".join(reached[:5])
+        + "\nA claim is a promissory note for a file NOBODY owns yet. A "
+        "catch-all would make the orphan guard vacuous, which is the one thing "
+        "the claim mechanism must not buy."
+    )
 
 
 def release_path(lane_id: str, pattern: str, path: Path | None = None) -> LaneState:
@@ -711,7 +789,13 @@ def stale_claims(
     stale = []
     for lane_id, state in sorted(_writing_states(states).items()):
         for pattern in state.claimed_paths:
-            if any(lane.owns_path(pattern) for lane in lanes.LANES):
+            # Two conditions, because the pattern-as-a-path check alone missed
+            # the case that matters most: `lanternlight/*.py` is not itself an
+            # owned path, yet it reaches `lanternlight/redact.py`, which safety
+            # owns. Redeemed notes and overreaching notes are both stale.
+            if any(lane.owns_path(pattern) for lane in lanes.LANES) or overreach(
+                pattern, lane_id
+            ):
                 stale.append((lane_id, pattern))
     return stale
 
@@ -1355,6 +1439,12 @@ def classify_claim(claims: Sequence[IdClaim]) -> str:
     the next free id". One fragment differing from the LEDGER means the entry
     was integrated and then a copy changed, because nothing else could have put
     it there.
+
+    **Precedence when BOTH are true**, stated because it is otherwise a guess:
+    two fragments disagreeing wins, even if the ledger copy was also edited.
+    The collision must be renumbered before anything else can be reconciled, so
+    reporting it first is the actionable order. The rendered report names every
+    source, so the edit is still visible.
     """
     fragments = {claim.content for claim in claims if not claim.from_ledger}
     if len(fragments) > 1:
