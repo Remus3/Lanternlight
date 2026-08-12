@@ -4,24 +4,6 @@
   "open_items": [
     {
       "blocked_on": "",
-      "item_id": "OPS-1",
-      "opened": "2026-08-09",
-      "text": "ops/loop/ledger.py has no test module of its own - confirm and close the gap"
-    },
-    {
-      "blocked_on": "",
-      "item_id": "OPS-3",
-      "opened": "2026-08-09",
-      "text": "lanes/<id>.LEDGER.md fragments are created lazily on first entry, so six of seven lanes have no fragment yet and the git-visibility guard skips a file that does not exist"
-    },
-    {
-      "blocked_on": "",
-      "item_id": "OPS-5",
-      "opened": "2026-08-09",
-      "text": "The git-visibility guard skips paths that do not exist, so with fragments created lazily it currently checks exactly one real fragment. It also cannot catch an ignore rule added after a file is already tracked"
-    },
-    {
-      "blocked_on": "",
       "item_id": "OPS-6",
       "opened": "2026-08-12",
       "text": "Decide whether ledger ids become per-lane namespaced (SAF-NNNN style, collision-free by construction) and the global LL-NNNN space is retired. Detection now catches a collision, so this is no longer urgent - but retiring the global space changes what 30 existing entries, and every roadmap item and branch citing an LL id, refer to. Operator decision"
@@ -30,5 +12,5 @@
   "resume_note": "ROADMAP 2d closed on lane/ops - the contract names no absolute path, so a fresh clone runs 957 green. OPS-4 closed. OPS-6 (per-lane id namespacing) is still an operator decision, recorded not taken",
   "schema": 1,
   "sessions": 4,
-  "updated": "2026-08-12T04:01:15+00:00"
+  "updated": "2026-08-12T04:13:28+00:00"
 }
