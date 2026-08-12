@@ -113,6 +113,52 @@ would have frozen a wrong intermediate. Also: **262** generations carry the
 field, not 263 - the first, 2,190 bytes and pre-combat, does not carry it at
 all, so absence stays distinguishable from zero on this surface.
 
+## The wrap's own refutation pass holed the P0 fix, and that is the best result of the day
+
+A third pass ran at wrap time over this session's own three done-claims. It
+**confirmed 2d and item 7** - re-deriving the damage figures with its own reader
+and proving the log prefix is really UTC non-circularly, by comparing the last
+log stamp against its own file mtime. It returned **`LL-0034` as PARTIAL**:
+"it should not be recorded as closing the silent-entry-loss class."
+
+It was right, and the hole it found is **worse than the bug `LL-0034` fixed**.
+
+**One forgotten backtick disarmed the entire guard.** The fence state was a bare
+toggle, so an entry that opened a code fence and never closed it left every line
+below it counted as code, and the guard stood down for the rest of the file:
+
+    integrate() -> ['LL-0900']   NON-EMPTY, so it reads as SUCCESS
+    LL-0901 landed as its own entry: False
+    LL-0901 text swallowed into LL-0900's block: True
+    exception: none
+
+The original defect at least returned `[]`, which looks anomalous. This returns
+**success** while absorbing a whole entry into its neighbour.
+
+Three more, all the same mistake - **guarding the instance instead of the
+class**:
+
+- the id pattern was `[A-Z]{2,6}-\d{3,}`, i.e. *today's* ids, so a malformed
+  heading in any other shape fell through into silence. **`OPS-7` and
+  `SAF-0001` both sit outside it and both exist here.**
+- 2d's guards pinned `primary_checkout()` and `WORKTREE_ROOT` specifically, so
+  embedding `Path.home()` gave **1009 passed** on this machine with
+  `C:\Users\Administrator` committed into a contract - and `1 failed` under a
+  different `USERPROFILE`. The 2d symptom, invisible here.
+- an undecodable property read as **absence**, because `gvas.parse` omits it
+  from `.properties` and records it in `.unknown_properties`.
+
+All four closed, 12 failing tests first, six mutants all red, **1030 passed**.
+
+**A filed count was wrong for the fourth time in two sessions** - "46 lines
+below the marker" was 47 then 51. It grows with every entry, so *filing it* was
+the error. It is now quoted nowhere.
+
+**`OPS-9` is open and deliberately unfixed:** the heading **guard** respects
+code fences, the heading **parser** does not. A well-formed heading inside a
+code block is parsed as a real entry while a malformed one beside it is
+ignored. Found because a test failed for a reason its author had not predicted.
+
 ## Where to start next
 
 **Item 7b, the training ground** - the cheapest unblocker on the list and the
