@@ -5,6 +5,134 @@ fidelity and archive older ones rather than deleting them.
 
 ---
 
+# Session 2026-08-12 - a clone finally runs green, and a P0 in the machinery that guards the record
+
+Branch work on `lane/ops` and `session/2026-08-12-damage-extractor`, both
+merged to `main` and **pushed** - `main` is `0d919c0`, and all nine branches are
+on the remote. Ledger `LL-0033` through `LL-0035`. **953 tests at the start,
+1009 at the end**, ruff clean. The outgoing diff scanned **0** identifiers
+through `lanternlight.redact` with a positive control firing 5 on the same text.
+
+## The headline is not a feature, it is that every count before today was a lie
+
+**ROADMAP 2d is closed.** `ops/lane_contract.py` interpolated
+`primary_checkout()` and `worktree_path()` - both absolute - into text that is
+then **committed**, and the drift guard compares the committed file against a
+fresh render. So the two agreed only at `C:\Lanternlight`. A real clone at
+`311cef8` measured **1 failed, 952 passed**; at the fix, **957 passed**.
+
+`README.md` told contributors to clone and run pytest, so the documented
+first-run experience was a red suite. **1009 is the first number in this
+project's history measured from a fresh clone at a foreign path.**
+
+Of the two options the acceptance allowed, the second - "the test compares
+modulo the root" - was **refused** with a reason: it goes green while leaving
+`C:\Lanternlight` inside eight generated files in a public repo, and weakens
+the drift guard into "equal after an arbitrary substitution".
+
+**A second, independent trigger was found and closed too**, and it was in
+nobody's plan: `worktree_path()` does not derive from the checkout, so setting
+`LL_WORKTREE_ROOT` reddened the suite **in place**, where every other symptom
+of this item was invisible. The item was filed as path-dependence on the
+checkout; it was path-dependence on **any** absolute path the generator saw.
+The new guards are therefore behavioural - render must not change when the
+checkout moves, or when the worktree root moves - which catches a path
+re-embedded later that nobody has thought of yet.
+
+## The two refutation passes disagreed with each other, which is the point
+
+Both were run against a frozen `814b1ea`, on slices that had shipped with none.
+
+**2b came back CONFIRMED on all eight claims** - the 882/96/21 positive
+control reproduced exactly, all 15 detectors fire when injected, no dead
+detector, and the LL-0029 P0 fix verified across all 263 generations. Safe as
+shipped. Its four new defects are non-blocking; the sharpest is that the
+fixture builder's documented provenance is **ambiguous** - four captures are
+177,878 bytes and three of them rebuild differently.
+
+**2c came back with a P0.** `_HEADING_RE` wants exactly `###`, one space, a
+non-space id, then `" - "`. Miss it by **one character** and the entry does not
+fail loudly, it becomes **invisible**: `fragment_entry_ids` `[]`,
+`duplicate_claims` `[]`, `integrate` `[]`, ledger unchanged, entry gone.
+
+**That is the LL-0031 silent-data-loss defect verbatim, through a different
+door, in the machinery closed to prevent exactly it.** 2c shut the door and
+left the window open. Reproduced by the integrator before any fix, on a
+throwaway copy of the real ledger with a genuinely colliding `LL-0018`. Fixed
+as `LL-0034`.
+
+Three of `LL-0031`'s own claims are corrected rather than edited away: the "11
+ids" count was **wrong when written** (13 today), two normaliser branches are
+**dead code** because `read_text` translates newlines before any comparison,
+and a real false positive exists - editing an entry **after** it is integrated
+makes it differ from its fragment forever, so `integrate` raises and the live
+test stays red. That last is `OPS-8`, deliberately unfixed: the right answer
+may be a policy that an integrated entry is never edited.
+
+## The fix shipped a silent bug first, and the shape is the lesson
+
+A heredoc collapsed the backslashes in the new `_ID_TOKEN_RE`, turning `\b`
+into a literal **backspace byte**. The regex compiled without complaint and
+matched **nothing**, so the brand-new guard was entirely dead while the module
+imported cleanly. Only the still-failing tests caught it.
+
+That is the second heredoc backslash mangling in one session - the first
+aborted a mutation probe on its anchor assertion, which is the only reason it
+did not read as "the guard is vacuous". **Do not use a heredoc for anything
+containing a backslash.** Write the script to a file.
+
+## Item 7 shipped, and the wall-clock join found the real result
+
+`lanternlight/damage.py`, owned by ingest, 37 tests, `LL-0035`.
+
+**The save's `timeStamp` is NOT a Unix epoch. It encodes LOCAL wall clock as
+though it were UTC.** Confirmed on two independent surfaces:
+
+- capture file **mtimes** put the run at 22:27:00-22:46:54 UTC, while the hits
+  read as an epoch render 17:28:10-17:45:11 "UTC" - five hours *before* the run
+  began, and numerically equal to its **local** clock
+- the **log**, which timestamps in real UTC and emits the same payload: across
+  5 readings at **three separate times of day**, the delta is 18009-18015 s =
+  5.0025-5.0041 h, the operator's offset plus event-to-emission lag
+
+So `as_local_naive()` returns a **naive** datetime and `to_utc()` **raises**
+without an explicit offset. The offset belongs to the machine that played, is
+absent from the save, and moves with DST - guessing it shifts every hit by
+hours. A test pins the *wrong* reading too, so "it lands in the window" is not
+vacuous.
+
+Verified end to end: the shipped module over all 263 captures reproduces the
+scratch analysis exactly, and the joined first and last hits land inside the
+mtime-measured window.
+
+**Two filed counts in ROADMAP 7 were wrong and are corrected.** It carried
+*both* "278 window readings" and "0 on all 424 readings" for one quantity -
+278 is top-level entries, 424 is child hits, and the dedup key is child-level,
+so the deduped-from number is **424**. A test encoding "278 deduped to 21"
+would have frozen a wrong intermediate. Also: **262** generations carry the
+field, not 263 - the first, 2,190 bytes and pre-combat, does not carry it at
+all, so absence stays distinguishable from zero on this surface.
+
+## Where to start next
+
+**Item 7b, the training ground** - the cheapest unblocker on the list and the
+only route to **outgoing** damage in quantity. `sourceType: 0` is what to look
+for. Needs the client open, so fold it into whichever session has it running,
+along with items 1, 4b, 5 and 6.
+
+Otherwise **item 3, the live log tail** - fully specified, needs nothing but
+work, and it is the spine of every live feature.
+
+Do **not** label any damage number dealt or taken beyond the 21 already proven
+TAKEN, and publish **no** coefficient until the same value appears in an
+independent run.
+
+Two operator decisions are recorded and deliberately unanswered: **OPS-6**
+(retire the global `LL-NNNN` id space for per-lane namespacing) and **OPS-8**
+(may an integrated ledger entry ever be edited).
+
+---
+
 # Session 2026-08-11 - the fixture landed, and the roadmap was wrong about Emberforge
 
 Orchestrated and multi-agent throughout: three lanes in parallel worktrees, an

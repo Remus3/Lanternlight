@@ -47,13 +47,18 @@ from "measured zero". See [ADR-005](docs/adr/ADR-005-omit-rather-than-guess.md).
 
 ## Status
 
-Honest as of 2026-08-11. This project is days old and most of it does not exist.
+Honest as of 2026-08-12. This project is days old and most of it does not exist.
 
-One caveat before the table, because a new contributor hits it first: **a fresh
-clone runs one failing test.** `tests/test_lane_contract.py` bakes the absolute
-checkout path into a rendered contract, so the suite is only green *in place*.
-It is a known defect, filed as `ROADMAP.md` item 2d, and it predates the work
-below. Every test count in this repository is an in-place number.
+**A fresh clone now runs green.** It did not until 2026-08-12: the generated
+lane contracts embedded the absolute checkout path, so the suite passed only at
+`C:\Lanternlight` and a clone measured one failure - which was the documented
+first-run experience for anyone following the instructions below. Fixed and
+closed as `ROADMAP.md` item 2d, ledger `LL-0033`, demonstrated with a real
+clone rather than argued.
+
+The consequence is worth stating once: every test count recorded in this
+repository **before** that date was an in-place number. Counts from 2026-08-12
+onward are measured from a fresh clone at a foreign path.
 
 | Area | State | Notes |
 |---|---|---|
@@ -73,7 +78,8 @@ below. Every test count in this repository is an in-place number.
 | GVAS `.sav` **writer** | **Done** | `serialise(parse(raw)) == raw`, byte-identical on **276** files - 6 fixtures, 7 live saves, all 263 captures. Byte identity is a far harsher oracle than value equality: it immediately caught a `TextProperty` flags word the reader had been silently discarding since it was written. `transform()` and `rebuild()` recompute every enclosing `Size`, so nothing is hand-patched |
 | Transient-save fixture | **Committed** | `tests/fixtures/gvas/standalone_slot.gvas.b64`, 19,867 bytes, built by a committed and reproducible builder. It scans **zero** identifiers where its 177,878-byte source scans **882** - the positive control is what makes the zero mean anything |
 | Live log tail | **Not started** | Port 8811 reserved, nothing listening |
-| **Emberforge** | **Empty, but no longer blocked** | It still **computes nothing**. What changed on 2026-08-11 is that the input exists: the game writes **per-hit damage** with sub-millisecond timestamps, and the log binds damage to ability names. No formula is published anywhere; the numbers are now measurable anyway. `ROADMAP.md` item 7 |
+| Damage series reader | **Done** | `lanternlight.damage` accumulates the game's rolling damage window across generations and deduplicates it - 424 readings to 21 distinct hits over one run. It found that the save's `timeStamp` is **not a Unix epoch**: it encodes local wall clock as though it were UTC, confirmed against both capture mtimes and the log's real-UTC clock, so `to_utc()` refuses without an explicit offset rather than shifting every hit by hours. `ROADMAP.md` item 7 |
+| **Emberforge** | **Empty, but no longer blocked** | It still **computes nothing**, and it will not until a number is seen twice. What changed on 2026-08-11 is that the input exists: the game writes **per-hit damage** with sub-millisecond timestamps, and the log binds damage to ability names. The 21 hits measured so far are damage **taken**, which constrains survivability rather than build math; outgoing damage lives in the log at four samples. No coefficient may be published until the same value appears in an **independent run**. `ROADMAP.md` items 7 and 7b |
 | Dashboard | **Does not exist** | Port 8810 reserved. See `BACKLOG.md` |
 | Packaged release | **None** | No wheel, no installer, no tagged version |
 

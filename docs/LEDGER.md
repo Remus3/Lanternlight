@@ -84,6 +84,23 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0036 - 2026-08-12 - Session close - 2d and item 7's shipped half closed, a P0 found in the ledger machinery, and every prior test count reclassified
+
+**Evidence:**
+- python -m pytest -> '1009 passed in 27.02s', observed this run on main with __pycache__ purged; 1009 collected. 953 at session start
+- python -m ruff check . -> All checks passed
+- FRESH CLONE OF MAIN, the acceptance that matters: git clone of C:\Lanternlight into a scratch directory at a foreign path, then python -m pytest -> '1009 passed'. At 311cef8 the same procedure gave '1 failed, 952 passed'
+- main 311cef8 -> 0d919c0, pushed. All NINE branches now on the remote; every one is fully merged into main (0 commits not reachable from it), so pushing them uploaded no new objects
+- PRE-PUSH SAFETY, on the outgoing DIFF rather than the tree: 103,524 characters scanned through lanternlight.redact -> 0 plain findings and 0 encoded findings, with a POSITIVE CONTROL of 5 findings on the same text plus a planted id, so the zero is a real zero and not a dead scanner. No capture-derived filename reached a commit. 282 redaction/PII/ascii/walker tests green
+- LL-0033 ROADMAP 2d, LL-0034 the heading P0, LL-0035 ROADMAP 7's shipped-code half - each with its own evidence and each integrated into docs/LEDGER.md through lane_state.integrate
+
+THE RECLASSIFICATION IS THE DURABLE RESULT. Every 'N passed' recorded in this repository before 2026-08-12 - 927, 943, 953 and all their predecessors - was true IN PLACE and not in a clone, because the generated lane contracts embedded the generating machine's absolute paths and the drift guard compared them against a fresh render. 1009 is the first count measured from a fresh clone at a foreign path. README.md is corrected; it had told contributors the opposite.
+TWO REFUTATION PASSES, OPPOSITE OUTCOMES, WHICH IS THE ARGUMENT FOR RUNNING THEM. 2b confirmed all eight of its claims including the 882/96/21 positive control and found no dead detector among 15. 2c returned a P0 - a heading one character off is not merely unparsed, it is INVISIBLE, so integrate() returns [] and the entry is gone. That is LL-0031's own defect through a different door, in the machinery closed to prevent it. Agreement between slices would have proved nothing; disagreement is what found this.
+A SECOND TRIGGER OF 2d WAS IN NOBODY'S PLAN. worktree_path() does not derive from the checkout, so LL_WORKTREE_ROOT reddened the suite IN PLACE - where every other symptom of the item was invisible. The item was filed as path-dependence on the checkout; it was path-dependence on ANY absolute path the generator saw. The new guards are behavioural rather than substring checks for exactly that reason.
+THE P0 FIX SHIPPED A SILENT BUG FIRST. A heredoc collapsed the backslashes in _ID_TOKEN_RE, turning \\b into a literal BACKSPACE byte; the regex compiled cleanly and matched nothing, so the new guard was entirely dead. Second heredoc mangling of the session - the first aborted a mutation probe on its anchor assertion, which is the only reason it did not read as 'the guard is vacuous'. Do not use a heredoc for anything containing a backslash.
+ITEM 7's WALL-CLOCK JOIN FOUND MORE THAN IT WAS ASKED FOR: the save's timeStamp is not a Unix epoch, it encodes LOCAL wall clock as though it were UTC, confirmed on two independent surfaces. to_utc() now refuses without an explicit offset rather than shifting every hit by five hours.
+OPEN AND DELIBERATELY UNANSWERED, both operator decisions: OPS-6 (retire the global LL-NNNN id space for per-lane namespacing) and OPS-8 (whether a ledger entry may be edited after integration). Item 7 also stays open on its coefficient question, which needs an INDEPENDENT run - one run cannot separate a coefficient from a lucky repeat.
+
 ### LL-0035 - 2026-08-12 - ROADMAP 7 - the damage series is shipped code, and the save's timeStamp turned out not to be a Unix epoch
 
 **Evidence:**
