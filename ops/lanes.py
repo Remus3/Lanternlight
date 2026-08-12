@@ -50,6 +50,7 @@ __all__ = [
     "MAY_BE_EMPTY",
     "WORKTREE_ROOT",
     "by_id",
+    "git_would_take",
     "is_cross_cutting",
     "owner_of",
     "path_matches",
@@ -401,6 +402,56 @@ def owner_of(path: str | Path) -> str | None:
         if lane.owns_path(path):
             return lane.lane_id
     return None
+
+
+def git_would_take(path: str | Path, root: Path = REPO_ROOT) -> bool | None:
+    """True when git would accept ``path``, EVEN IF IT DOES NOT EXIST YET.
+
+    `OPS-3` and `OPS-5`. The visibility guard used to answer this by listing
+    what git already sees, which silently skipped every path not yet on disk -
+    lane fragments are created lazily, so it was checking four of seven and
+    reporting green. It also could not notice an ignore rule added AFTER a file
+    was tracked, because a tracked file keeps being listed.
+
+    Asking about the RULE rather than the listing fixes both, but the obvious
+    probe is a trap this repository has already documented and which was
+    re-measured before writing this: ``git check-ignore`` exits **0** when any
+    pattern matches **including a negation**, so a correctly re-included file
+    reports exactly like an excluded one. Measured here:
+    ``tests/fixtures/gvas/standalone_slot.gvas.b64`` is re-included by
+    ``!tests/fixtures/**/*.gvas.b64`` and still exits 0.
+
+    So the exit code is not the answer - the matched PATTERN is. With ``-v``
+    git prints ``<file>:<line>:<pattern>\\t<path>``, and a pattern starting with
+    ``!`` is a carve-out, meaning git would take the file after all.
+
+    Returns None when git cannot answer, so a caller can skip rather than
+    passing vacuously.
+    """
+    rel = _normalise(path)
+    if rel is None:
+        return None
+    try:
+        proc = subprocess.run(
+            ["git", "check-ignore", "-v", "--no-index", "--", rel.as_posix()],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if proc.returncode == 1:
+        return True  # nothing matched, so nothing excludes it
+    if proc.returncode != 0:
+        return None  # git declined to answer at all
+    first = proc.stdout.splitlines()[0] if proc.stdout.splitlines() else ""
+    source = first.split("\t")[0]
+    parts = source.split(":", 2)
+    if len(parts) != 3:
+        return None
+    return parts[2].startswith("!")
 
 
 def tracked_files(root: Path = REPO_ROOT) -> Iterator[Path]:

@@ -84,6 +84,21 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0042 - 2026-08-12 - OPS-1, OPS-3 and OPS-5 closed - the ledger writer gets its own tests and the git-visibility guard stops skipping what is not on disk
+
+**Evidence:**
+- OPS-3/OPS-5 MEASURED FIRST: the visibility guard read 'rel not in acceptable AND Path(rel).exists()', so every path not yet on disk was SKIPPED. Fragments are created lazily, so it was checking 4 of 7 writing lanes and reporting green
+- THE PROBE IS NOW ABOUT THE RULE, NOT THE LISTING: lanes.git_would_take asks git check-ignore, which answers for a path that does not exist, and also catches OPS-5's second half - an ignore rule added AFTER a file is tracked, which a listing-based probe cannot see
+- THE DOCUMENTED TRAP WAS RE-MEASURED RATHER THAN TRUSTED: check-ignore exits 0 when any pattern matches INCLUDING A NEGATION. Confirmed live on tests/fixtures/gvas/standalone_slot.gvas.b64, which is re-included by '!tests/fixtures/**/*.gvas.b64' and still exits 0. So the exit code is not the answer - the matched PATTERN is, and a leading '!' means git would take the file
+- OPS-1 CONFIRMED AS A REAL GAP: ops/loop/ledger.py, the only sanctioned writer of docs/LEDGER.md, had no test module. It was exercised incidentally by three other test files, which tests the CALLER's path rather than the module's promises
+- tests/test_loop_ledger.py: 27 tests over validation, ASCII refusal at the field, rendering, newest-on-top, byte-for-byte preservation of everything below the marker, refusal without a marker, no write on a refusal, no temp file left behind, and LF endings asserted on BYTES
+- NON-VACUITY, __pycache__ purged and every anchor asserted unique: ignore negations in check-ignore -> 1 failed; stop answering for an unmatched path -> 3 failed; drop the ASCII enforcement -> 4 failed; stop refusing a markerless ledger -> 2 failed; put the newest entry at the bottom -> 3 failed; restored -> 1101 passed
+- python -m pytest -> '1101 passed in 22.23s' observed this run; 1069 before. python -m ruff check . -> All checks passed
+
+A MUTANT EXPOSED VACUITY IN THE NEW TESTS THEMSELVES, and this is the most useful thing in the entry. The first version skipped whenever git_would_take returned None, so breaking the probe turned every test in the class from a FAILURE into a SKIP: the mutation run read '1094 passed, 7 skipped', which looks green. A guard that stands down when the thing it guards breaks is not a guard. Availability is now measured independently with 'git --version', so a None from the probe on a machine that has git is a real failure. Re-run, the same mutation gives '3 failed'.
+THE OLD GUARD WAS POINTED AT THE NEW PROBE rather than left beside it. It kept its own notion of visibility - a set of listed paths - and two readers of one fact is the shape of OPS-9 and of every other defect in this module. There is now one answer to 'would git take this'.
+OPS-1 WAS NOT MERELY A MISSING FILE. The module's one real promise - that every byte already below the marker survives an append - is self-checked in code and had NO test, so the check could have been deleted silently. That is exactly how integrate()'s reversed() was found to be decoration in an earlier session.
+
 ### LL-0041 - 2026-08-12 - OPS-2 closed - a lane adding a new file can go green on its own, without editing a roster it is forbidden to touch
 
 **Evidence:**

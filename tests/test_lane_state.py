@@ -1340,6 +1340,23 @@ class TestIntegrationOrderIsActuallyChecked:
         )
 
 
+def _skip_unless_git_is_installed() -> None:
+    """Skip only when git is genuinely absent from the machine.
+
+    Deliberately NOT "skip when the probe returns None". Those are different
+    facts, and conflating them turns a broken probe into a green run - measured,
+    by mutation, on the first version of this file.
+    """
+    try:
+        proc = subprocess.run(
+            ["git", "--version"], capture_output=True, text=True, check=False
+        )
+    except OSError:  # pragma: no cover - git is present on this machine
+        pytest.skip("git is not installed")
+    if proc.returncode != 0:  # pragma: no cover - same
+        pytest.skip("git is not installed")
+
+
 class TestLaneStateIsVisibleToGit:
     """A state file git cannot see is a lane that silently resets to zero.
 
@@ -1398,9 +1415,11 @@ class TestLaneStateIsVisibleToGit:
         )
 
     def _assert_git_would_take(self, chooser) -> None:
-        acceptable = self._acceptable()
-        if acceptable is None:
-            pytest.skip("git unavailable")
+        # Asks lanes.git_would_take rather than keeping a second notion of
+        # visibility. The `and Path(...).exists()` this replaced is `OPS-3` and
+        # `OPS-5`: it skipped every lane whose file was not yet on disk, so the
+        # fragment half was checking four of seven and reporting green.
+        _skip_unless_git_is_installed()
         missing = []
         for lane in lanes.LANES:
             if lane.read_only:
@@ -1410,7 +1429,7 @@ class TestLaneStateIsVisibleToGit:
                 .relative_to(lane_state.REPO_ROOT)
                 .as_posix()
             )
-            if rel not in acceptable and Path(REPO_ROOT / rel).exists():
+            if lanes.git_would_take(rel) is False:
                 missing.append(rel)
         assert not missing, (
             "git will not take these files, so the lanes owning them silently "
@@ -1423,6 +1442,92 @@ class TestLaneStateIsVisibleToGit:
 
     def test_git_would_take_every_writing_lanes_ledger_fragment(self):
         self._assert_git_would_take(lane_state.fragment_path)
+
+
+class TestVisibilityIsCheckedForPathsThatDoNotExistYET:
+    """`OPS-3` and `OPS-5`. The guard above skips what is not on disk.
+
+    Fragments are created lazily on a lane's first entry, so most lanes have
+    none - measured at the time of this fix, **four of seven** existed. The
+    guard's `and Path(...).exists()` therefore skipped three lanes entirely and
+    still reported green. A guard that silently checks half its subjects is the
+    shape this repository keeps paying for.
+
+    The same blindness covers `OPS-5`'s second half: a rule added to
+    `.gitignore` AFTER a file is tracked leaves the file listed, so a
+    listing-based probe cannot see it either.
+
+    Both are answered by asking git about the RULE rather than about the
+    listing - see `ops.lanes.git_would_take`, and note that its exit code is
+    deliberately not the answer, because `check-ignore` exits 0 on a negation
+    too.
+    """
+
+    def _skip_without_git(self):
+        """Skip ONLY when git itself is missing - never when the probe breaks.
+
+        Caught by mutation: the first version skipped whenever
+        `git_would_take` returned None, so breaking the probe turned every test
+        in this class from a failure into a SKIP. `1094 passed, 7 skipped` reads
+        green. A guard that stands down when the thing it guards breaks is not
+        a guard, and this repository has been bitten by that shape before.
+
+        So availability is measured independently, and a None from the probe on
+        a machine that HAS git is a real failure below.
+        """
+        _skip_unless_git_is_installed()
+
+    def test_the_probe_tells_a_kept_path_from_an_excluded_one(self):
+        # Non-vacuity first: a probe that answered True to everything, or None
+        # to everything, would make every assertion below meaningless.
+        self._skip_without_git()
+        assert lanes.git_would_take("ops/lanes.py") is True
+        assert lanes.git_would_take("ops/never_written.pyc") is False
+
+    def test_the_probe_reads_a_NEGATION_as_kept(self):
+        # The documented trap, pinned. This path is re-included by an explicit
+        # `!` rule and `check-ignore` still exits 0 for it.
+        self._skip_without_git()
+        assert lanes.git_would_take("tests/fixtures/gvas/standalone_slot.gvas.b64") is True
+
+    def test_the_probe_answers_for_a_path_that_does_not_exist(self):
+        self._skip_without_git()
+        absent = Path(lane_state.REPO_ROOT) / "lanes" / "nosuchlane.LEDGER.md"
+        assert not absent.exists(), "this probe needs a path that is really absent"
+        assert lanes.git_would_take("lanes/nosuchlane.LEDGER.md") is True
+
+    def test_every_writing_lane_is_checked_not_only_the_ones_with_files(self):
+        """The fix, stated as a count rather than as a hope."""
+        self._skip_without_git()
+        writing = [lane for lane in lanes.LANES if not lane.read_only]
+        refused = []
+        for lane in writing:
+            for chooser in (lane_state.state_path, lane_state.fragment_path):
+                rel = chooser(lane.lane_id).relative_to(lane_state.REPO_ROOT).as_posix()
+                if lanes.git_would_take(rel) is False:
+                    refused.append(rel)
+        assert not refused, (
+            "git would REFUSE these lane files, so the lane silently resets to "
+            "zero every session and nothing warns:\n  " + "\n  ".join(refused)
+        )
+        assert len(writing) == 7, "roster changed - re-read this test's premise"
+
+    def test_a_lane_fragment_that_does_not_exist_is_still_checked(self):
+        # The specific regression. Pick a writing lane with no fragment on disk
+        # and assert the probe still has an opinion about it.
+        self._skip_without_git()
+        absent = [
+            lane
+            for lane in lanes.LANES
+            if not lane.read_only and not lane_state.fragment_path(lane.lane_id).exists()
+        ]
+        if not absent:
+            pytest.skip("every lane has a fragment now - the gap closed itself")
+        for lane in absent:
+            rel = lane_state.fragment_path(lane.lane_id).relative_to(
+                lane_state.REPO_ROOT
+            ).as_posix()
+            assert lanes.git_would_take(rel) is True, rel
 
 
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
