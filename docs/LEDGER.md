@@ -84,6 +84,54 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0044 - 2026-08-12 - The ops sweep was refuted - a catch-all claim made the orphan guard vacuous, and two of the pass's own findings did not reproduce
+
+**Evidence:**
+- SEVERE, AND SELF-INFLICTED THE SAME DAY: claim_path(lane, '**') matched every unowned path in the repository, so the orphan guard reported green with a genuinely orphaned file on disk. Reproduced by the integrator - unowned_paths(['some/random/unowned.txt']) returned [] under a catch-all claim. The sanctioned pressure valve opened all the way
+- THE QUIETER HALF, also reproduced: capture claiming 'lanternlight/*.py' reaches lanternlight/redact.py, which safety owns and holds a veto over, and stale_claims() did not flag it because it compared the PATTERN as a path rather than what the pattern REACHES
+- FIXED by overreach(), which walks the REAL TREE - two patterns can differ textually and still match one file, the same reason tests/test_lanes.py walks the tree instead of comparing globs. A claim is refused at write time AND reported stale if one is already on disk, so a claim smuggled in by hand is still caught
+- A lane may still claim within its OWN slice; refusing that would make the mechanism useless to the lane most likely to need it
+- ATOMICITY WAS UNTESTED IN THE FILE THAT CLAIMED TO TEST THE WRITER. Deleting tmp_path.replace(target) from the only sanctioned writer of docs/LEDGER.md left the suite at 1101 passed. Now covered by refusing the replace and asserting the ledger is BYTE-UNCHANGED: the same mutation gives 10 failed
+- TWO VISIBILITY ASSERTIONS WERE 'is False' ONLY, so they would pass vacuously the moment the probe returned None - the same skip-vacuity this class was already caught by once. They now assert the probe answered at all
+- python -m pytest -> '1108 passed in 25.35s' observed this run; 1101 before. python -m ruff check . -> All checks passed
+
+TWO OF THE PASS'S FINDINGS DID NOT REPRODUCE, and this is recorded because a refutation pass is evidence, not authority. It reported that a four-backtick fence and an info string on a closing fence each MINT A PHANTOM ENTRY with no error. Probed directly, both returned the correct id list and neither produced a phantom. What IS real is smaller and points the other way: fence delimiter LENGTH was not tracked, so a longer or shorter inner run confused the scanner into a FALSE REFUSAL on legal Markdown - loud, not silent. Fixed properly by tracking (character, width) and requiring a closer to be the same character, at least as long, and free of an info string, per CommonMark. 'open4 inner3' now parses as ['LL-0001'] where it previously raised.
+THE DIRECTION OF THAT ERROR MATTERS. A false refusal is the failure mode that gets a guard switched off, so it is worth fixing - but it is not the silent-loss class the pass claimed, and recording it as one would have overstated the danger in exactly the way this session has been correcting all day.
+FOUR LESSER FINDINGS ARE ACCEPTED AND RECORDED RATHER THAN FIXED. OPS-10: the ledger writer's byte-preservation self-check is still deletable in silence, and LL-0042 over-claimed that it was covered - the behavioural tests cover the OUTCOME, and nothing forces the assertion path. OPS-11: a 4-space indented code block whose first token is id-shaped is falsely refused. The mistyped-fragment limit is now stated in the docstring in the PRESENT tense rather than only in the ledger, and classify_claim documents its precedence when a collision and an edit are both present.
+THE PASS'S MERGE JUDGEMENT WAS 'safe to merge, but LL-0038 and LL-0042 both overstate scope'. The overstatements are corrected here rather than defended: each claimed to close a CLASS while a reachable instance of that class survived.
+
+### LL-0043 - 2026-08-12 - Session close - the ops queue swept from seven open items to one, and every fix found a larger hole beside the one that was filed
+
+**Evidence:**
+- python -m pytest -> observed this run on the wrap branch with __pycache__ purged: 1101 passed. 953 at session start
+- python -m ruff check . -> All checks passed
+- A FRESH CLONE IS STILL GREEN, which is the property ROADMAP 2d bought earlier in this same session and the reason any of these counts mean anything outside this machine
+- LL-0033 ROADMAP 2d, LL-0034 the heading P0, LL-0035 ROADMAP 7's shipped code, LL-0036 the first wrap, LL-0037 the wrap refutation's four holes, LL-0038 OPS-9, LL-0039 OPS-7, LL-0040 OPS-8, LL-0041 OPS-2, LL-0042 OPS-1/3/5
+- ops lane open items went from OPS-1,2,3,5,6,7,8 plus OPS-9 opened mid-session, down to OPS-6 alone
+- Pre-push redaction scan over the outgoing DIFF, not the tree, at every push this session: 0 plain findings and 0 encoded, each time with a positive control of 5 on the same text plus a planted id
+
+THE PATTERN OF THE WHOLE SESSION, stated once so it is not rediscovered: EVERY defect closed today was TWO HALVES OF ONE THING DISAGREEING, or a guard that covered the instance rather than the class. The id race, the malformed heading, the unclosed fence, the guard-versus-parser split, absent-versus-unreadable, edited-versus-collided, and a path guard that pinned two known sources instead of the property. The fix each time was to delete the second opinion, never to teach it the same rules.
+MUTATION TESTING FOUND WHAT READING DID NOT, four separate times. A surviving mutant exposed the unreadable-fragment path (OPS-7), the unpinned claim branch (OPS-2), the unpinned fence delimiter (LL-0037) and - the sharpest - a whole test class that SKIPPED instead of failing when its probe broke (OPS-3/5). That run read '1094 passed, 7 skipped', which looks green. A guard that stands down when the thing it guards breaks is not a guard.
+THREE FILED COUNTS WERE WRONG THIS SESSION - '278 window readings', '11 shared ids', '46 hash lines'. The last is the instructive one: it grows with every entry, so FILING it was the error rather than mis-measuring it. It is now quoted nowhere.
+HEREDOC BACKSLASH MANGLING BIT THREE TIMES and stale mutation anchors three times. Every one was refused by its own assertion rather than reported as a clean green - which is the entire argument for asserting the anchor before believing a survivor.
+OPS-6 IS THE ONLY OPEN OPS ITEM AND IS NOT MINE TO TAKE: retiring the global LL-NNNN id space for per-lane namespacing changes what 43 entries and every citing roadmap item, branch and commit refer to. Detection makes it a considered decision rather than an urgent one.
+NOTHING IN EMBERFORGE CHANGED and no damage coefficient was published. The 21 measured hits remain damage TAKEN; outgoing damage is four log samples. Item 7b, the training ground, is still the cheapest unblocker and still needs the client open.
+
+### LL-0042 - 2026-08-12 - OPS-1, OPS-3 and OPS-5 closed - the ledger writer gets its own tests and the git-visibility guard stops skipping what is not on disk
+
+**Evidence:**
+- OPS-3/OPS-5 MEASURED FIRST: the visibility guard read 'rel not in acceptable AND Path(rel).exists()', so every path not yet on disk was SKIPPED. Fragments are created lazily, so it was checking 4 of 7 writing lanes and reporting green
+- THE PROBE IS NOW ABOUT THE RULE, NOT THE LISTING: lanes.git_would_take asks git check-ignore, which answers for a path that does not exist, and also catches OPS-5's second half - an ignore rule added AFTER a file is tracked, which a listing-based probe cannot see
+- THE DOCUMENTED TRAP WAS RE-MEASURED RATHER THAN TRUSTED: check-ignore exits 0 when any pattern matches INCLUDING A NEGATION. Confirmed live on tests/fixtures/gvas/standalone_slot.gvas.b64, which is re-included by '!tests/fixtures/**/*.gvas.b64' and still exits 0. So the exit code is not the answer - the matched PATTERN is, and a leading '!' means git would take the file
+- OPS-1 CONFIRMED AS A REAL GAP: ops/loop/ledger.py, the only sanctioned writer of docs/LEDGER.md, had no test module. It was exercised incidentally by three other test files, which tests the CALLER's path rather than the module's promises
+- tests/test_loop_ledger.py: 27 tests over validation, ASCII refusal at the field, rendering, newest-on-top, byte-for-byte preservation of everything below the marker, refusal without a marker, no write on a refusal, no temp file left behind, and LF endings asserted on BYTES
+- NON-VACUITY, __pycache__ purged and every anchor asserted unique: ignore negations in check-ignore -> 1 failed; stop answering for an unmatched path -> 3 failed; drop the ASCII enforcement -> 4 failed; stop refusing a markerless ledger -> 2 failed; put the newest entry at the bottom -> 3 failed; restored -> 1101 passed
+- python -m pytest -> '1101 passed in 22.23s' observed this run; 1069 before. python -m ruff check . -> All checks passed
+
+A MUTANT EXPOSED VACUITY IN THE NEW TESTS THEMSELVES, and this is the most useful thing in the entry. The first version skipped whenever git_would_take returned None, so breaking the probe turned every test in the class from a FAILURE into a SKIP: the mutation run read '1094 passed, 7 skipped', which looks green. A guard that stands down when the thing it guards breaks is not a guard. Availability is now measured independently with 'git --version', so a None from the probe on a machine that has git is a real failure. Re-run, the same mutation gives '3 failed'.
+THE OLD GUARD WAS POINTED AT THE NEW PROBE rather than left beside it. It kept its own notion of visibility - a set of listed paths - and two readers of one fact is the shape of OPS-9 and of every other defect in this module. There is now one answer to 'would git take this'.
+OPS-1 WAS NOT MERELY A MISSING FILE. The module's one real promise - that every byte already below the marker survives an append - is self-checked in code and had NO test, so the check could have been deleted silently. That is exactly how integrate()'s reversed() was found to be decoration in an earlier session.
+
 ### LL-0041 - 2026-08-12 - OPS-2 closed - a lane adding a new file can go green on its own, without editing a roster it is forbidden to touch
 
 **Evidence:**
