@@ -3,12 +3,6 @@
   "open_items": [
     {
       "blocked_on": "",
-      "item_id": "ING-1",
-      "opened": "2026-08-09",
-      "text": "ROADMAP 2 - parse StandaloneSlot with undecoded_trailing == 0 and pin a fixture"
-    },
-    {
-      "blocked_on": "",
       "item_id": "ING-2",
       "opened": "2026-08-09",
       "text": "ROADMAP 3 - live log tail on port 8811, survives truncation and rotation"
@@ -44,20 +38,32 @@
       "text": "StandaloneSlot save is created at match start and destroyed at run end, producer StandaloneLevelCtrl.battleSnapUpdate. A watcher should arm on EnterBattle rather than poll blindly"
     },
     {
-      "blocked_on": "safety lane review of the fields no redact detector fires on",
-      "item_id": "ING-8",
-      "opened": "2026-08-11",
-      "text": "ROADMAP 2b - build the sanitised, size-reduced StandaloneSlot fixture with gvas.transform + gvas.serialise. Blocked on safety-lane sign-off for the fields lanternlight.redact has no detector for: BattleId, AutoSaveTempSlot/FinalSlot, IdGeneratorData.NumIdToUUID and ownerRoleId inside the ItemCell JSON"
-    },
-    {
       "blocked_on": "",
       "item_id": "ING-9",
       "opened": "2026-08-11",
       "text": "MEASURED NEGATIVE to re-check when a new save shape appears: no property in any of the 276 files measured 2026-08-10 sets tag flag 0x01 (ArrayIndex) or 0x02 (property GUID), and no FString anywhere is UTF-16. gvas.serialise RAISES on a non-ASCII string rather than writing the engine's UTF-16 branch, so the first save that carries one will fail loudly rather than round-trip wrong"
+    },
+    {
+      "blocked_on": "safety lane - the rule and the encoded pass are theirs",
+      "item_id": "ING-10",
+      "opened": "2026-08-12",
+      "text": "SAFETY LANE QUESTION, not actionable here: iter_encoded_sensitive scans each base64 RUN separately, so a 76-column fixture is read as 57-byte windows and a structural rule whose quieting marker sits outside the window fires on a clean file. Measured on NAME_FIELD. The standalone_slot fixture sidesteps it by keeping 32-character decorations; nothing fixes it for a shorter one"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "ING-11",
+      "opened": "2026-08-12",
+      "text": "MEASURED: a committed base64 blob encoding 24 consecutive zero bytes contains a 32-character run of 'A', which is a hex run and a PRODUCTUSERID finding on the file TEXT. Guarded by test_no_fixture_encodes_a_long_run_of_zero_bytes; the builder authors the payload. Any future save fixture with a zeroed native struct meets this"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "ING-12",
+      "opened": "2026-08-12",
+      "text": "standalone_slot.gvas.b64 is 19867 raw bytes rather than the under-10-KB target. 12972 of them are tag overhead (5046 names, 7311 recursive type names, 615 size and flag fields over 123 properties) and the type names are the game's own struct identities. Reaching 10 KB means dropping a container the brief asked to keep - reopen only with a decision about which shape to lose"
     }
   ],
-  "resume_note": "GVAS serialiser landed and round-trips 276 files; next is ROADMAP 2b - author the sanitised StandaloneSlot fixture with transform()+serialise()",
+  "resume_note": "ROADMAP 2b done - standalone_slot.gvas.b64 is committed, clean under ALL_LABELS both plain and encoded, and its builder refuses to write a leaking fixture. Next is ROADMAP 3, the live log tail on port 8811",
   "schema": 1,
-  "sessions": 2,
-  "updated": "2026-08-11T23:58:54+00:00"
+  "sessions": 3,
+  "updated": "2026-08-12T00:45:45+00:00"
 }
