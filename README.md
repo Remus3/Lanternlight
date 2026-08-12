@@ -47,7 +47,13 @@ from "measured zero". See [ADR-005](docs/adr/ADR-005-omit-rather-than-guess.md).
 
 ## Status
 
-Honest as of 2026-08-09. This project is days old and most of it does not exist.
+Honest as of 2026-08-11. This project is days old and most of it does not exist.
+
+One caveat before the table, because a new contributor hits it first: **a fresh
+clone runs one failing test.** `tests/test_lane_contract.py` bakes the absolute
+checkout path into a rendered contract, so the suite is only green *in place*.
+It is a known defect, filed as `ROADMAP.md` item 2d, and it predates the work
+below. Every test count in this repository is an in-place number.
 
 | Area | State | Notes |
 |---|---|---|
@@ -64,8 +70,10 @@ Honest as of 2026-08-09. This project is days old and most of it does not exist.
 | Dungeon data | **Prologue measured** | Lifecycle, escape portals, loot, death and escape states all observed. `docs/FINDINGS.md` section 9 |
 | Raid / PvP data | **Solo measured, PvP unmeasured** | Solo explores are now measured at non-zero `matchId`, which **refutes** the old assumption that a non-zero `matchId` means a matchmade run. No run with another player has been observed |
 | GVAS `.sav` reader | **Done, one gap named** | Every save parses with zero undecoded bytes, including 263 captured generations of the transient run-scoped save. Natively serialised structs (`Vector`, `Rotator`, `Quat`, `Vector2D`) are handed back verbatim and **named** undecoded rather than guessed - `Vector` and `Rotator` share a width, so only the name separates them. Published parsers do not work on this build - UE 5.4+ changed the property tag |
+| GVAS `.sav` **writer** | **Done** | `serialise(parse(raw)) == raw`, byte-identical on **276** files - 6 fixtures, 7 live saves, all 263 captures. Byte identity is a far harsher oracle than value equality: it immediately caught a `TextProperty` flags word the reader had been silently discarding since it was written. `transform()` and `rebuild()` recompute every enclosing `Size`, so nothing is hand-patched |
+| Transient-save fixture | **Committed** | `tests/fixtures/gvas/standalone_slot.gvas.b64`, 19,867 bytes, built by a committed and reproducible builder. It scans **zero** identifiers where its 177,878-byte source scans **882** - the positive control is what makes the zero mean anything |
 | Live log tail | **Not started** | Port 8811 reserved, nothing listening |
-| **Emberforge** | **Empty** | The package exists. It **computes nothing.** No formulas are published anywhere, so there is nothing yet to encode |
+| **Emberforge** | **Empty, but no longer blocked** | It still **computes nothing**. What changed on 2026-08-11 is that the input exists: the game writes **per-hit damage** with sub-millisecond timestamps, and the log binds damage to ability names. No formula is published anywhere; the numbers are now measurable anyway. `ROADMAP.md` item 7 |
 | Dashboard | **Does not exist** | Port 8810 reserved. See `BACKLOG.md` |
 | Packaged release | **None** | No wheel, no installer, no tagged version |
 
