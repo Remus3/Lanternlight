@@ -66,8 +66,10 @@ ids" count was **wrong when written** (13 today), two normaliser branches are
 **dead code** because `read_text` translates newlines before any comparison,
 and a real false positive exists - editing an entry **after** it is integrated
 makes it differ from its fragment forever, so `integrate` raises and the live
-test stays red. That last is `OPS-8`, deliberately unfixed: the right answer
-may be a policy that an integrated entry is never edited.
+test stays red. That last was recorded as `OPS-8`, with the open question being
+whether the right answer is a policy that an integrated entry is simply never
+edited. It was **closed later the same session** - and the answer was yes; see
+the ops-queue sweep below.
 
 ## The fix shipped a silent bug first, and the shape is the lesson
 
@@ -154,10 +156,54 @@ All four closed, 12 failing tests first, six mutants all red, **1030 passed**.
 below the marker" was 47 then 51. It grows with every entry, so *filing it* was
 the error. It is now quoted nowhere.
 
-**`OPS-9` is open and deliberately unfixed:** the heading **guard** respects
-code fences, the heading **parser** does not. A well-formed heading inside a
-code block is parsed as a real entry while a malformed one beside it is
-ignored. Found because a test failed for a reason its author had not predicted.
+**`OPS-9`** - the heading **guard** respected code fences, the heading **parser**
+did not, so a well-formed heading inside a code block was parsed as a real entry
+while a malformed one beside it was ignored. Found because a test failed for a
+reason its author had not predicted. **Closed later the same session** - see the
+ops-queue sweep below.
+
+## The ops queue was swept to empty, and every fix found a bigger hole beside it
+
+Seven open `OPS-*` items went to **one**. Ledger `LL-0038` through `LL-0042`.
+The pattern held in every single one: **the filed item undersold the defect,
+and mutation testing - not reading - found the rest.**
+
+- **`OPS-9`** - guard and parser disagreed about fences. Fixing the two readers
+  in the item exposed a **third** (`fragment_entry_ids` had its own
+  `finditer`). `_HEADING_RE` is now referenced in exactly one place.
+- **`OPS-7`** - filed as "the error message should name the mistake". A
+  surviving mutant showed an **existing but unreadable** fragment read as
+  *absent*, which was not in the item at all.
+- **`OPS-8`** - the decision it asked for is **taken: policy stands.** An
+  integrated entry is never edited; a correction is a NEW entry.
+  Auto-reconciliation was refused because it would write to an append-only
+  fragment. What was actually broken was the **diagnosis** - it told the reader
+  to *renumber*, which for an edited entry records one piece of work under two
+  ids.
+- **`OPS-2`** - neither option the item offered removed the friction, so a
+  third was built: a lane **claims** a path in its own `STATE.json`, the orphan
+  guard honours exactly one claimant, and the claim goes **stale** once the
+  roster absorbs it. The guard's claim branch was itself unpinned at first -
+  the real repo has no claimed path, so deleting the branch left the suite
+  green.
+- **`OPS-1`, `OPS-3`, `OPS-5`** - the visibility guard was checking **4 of 7**
+  writing lanes and reporting green, because it skipped any path not yet on
+  disk. Now it asks git about the **rule** (`lanes.git_would_take`). The
+  documented `check-ignore` trap was re-measured rather than trusted: it exits
+  **0 on a negation**, so the exit code is not the answer - the pattern's
+  leading `!` is. And `ops/loop/ledger.py`, the only sanctioned writer of the
+  ledger, finally has its own 27 tests.
+
+**The sharpest single lesson of the sweep, and it was in my own tests.** The
+first version of the visibility tests **skipped** whenever the probe returned
+None - so breaking the probe turned every test in the class from a failure into
+a SKIP. The mutation run read `1094 passed, 7 skipped`, which looks green. A
+guard that stands down when the thing it guards breaks is not a guard.
+Availability is now measured independently with `git --version`.
+
+**Only `OPS-6` is left, and it is yours:** retire the global `LL-NNNN` id space
+for per-lane namespacing. It changes what 42 entries and every citing commit
+refer to, so it is not a call to make unattended.
 
 ## Where to start next
 
@@ -173,9 +219,9 @@ Do **not** label any damage number dealt or taken beyond the 21 already proven
 TAKEN, and publish **no** coefficient until the same value appears in an
 independent run.
 
-Two operator decisions are recorded and deliberately unanswered: **OPS-6**
-(retire the global `LL-NNNN` id space for per-lane namespacing) and **OPS-8**
-(may an integrated ledger entry ever be edited).
+One operator decision remains, deliberately unanswered: **OPS-6** - retire
+the global `LL-NNNN` id space for per-lane namespacing. **OPS-8 was closed**
+later in the same session; see the ops-queue sweep above.
 
 ---
 

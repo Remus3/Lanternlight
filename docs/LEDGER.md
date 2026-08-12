@@ -84,6 +84,23 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0043 - 2026-08-12 - Session close - the ops queue swept from seven open items to one, and every fix found a larger hole beside the one that was filed
+
+**Evidence:**
+- python -m pytest -> observed this run on the wrap branch with __pycache__ purged: 1101 passed. 953 at session start
+- python -m ruff check . -> All checks passed
+- A FRESH CLONE IS STILL GREEN, which is the property ROADMAP 2d bought earlier in this same session and the reason any of these counts mean anything outside this machine
+- LL-0033 ROADMAP 2d, LL-0034 the heading P0, LL-0035 ROADMAP 7's shipped code, LL-0036 the first wrap, LL-0037 the wrap refutation's four holes, LL-0038 OPS-9, LL-0039 OPS-7, LL-0040 OPS-8, LL-0041 OPS-2, LL-0042 OPS-1/3/5
+- ops lane open items went from OPS-1,2,3,5,6,7,8 plus OPS-9 opened mid-session, down to OPS-6 alone
+- Pre-push redaction scan over the outgoing DIFF, not the tree, at every push this session: 0 plain findings and 0 encoded, each time with a positive control of 5 on the same text plus a planted id
+
+THE PATTERN OF THE WHOLE SESSION, stated once so it is not rediscovered: EVERY defect closed today was TWO HALVES OF ONE THING DISAGREEING, or a guard that covered the instance rather than the class. The id race, the malformed heading, the unclosed fence, the guard-versus-parser split, absent-versus-unreadable, edited-versus-collided, and a path guard that pinned two known sources instead of the property. The fix each time was to delete the second opinion, never to teach it the same rules.
+MUTATION TESTING FOUND WHAT READING DID NOT, four separate times. A surviving mutant exposed the unreadable-fragment path (OPS-7), the unpinned claim branch (OPS-2), the unpinned fence delimiter (LL-0037) and - the sharpest - a whole test class that SKIPPED instead of failing when its probe broke (OPS-3/5). That run read '1094 passed, 7 skipped', which looks green. A guard that stands down when the thing it guards breaks is not a guard.
+THREE FILED COUNTS WERE WRONG THIS SESSION - '278 window readings', '11 shared ids', '46 hash lines'. The last is the instructive one: it grows with every entry, so FILING it was the error rather than mis-measuring it. It is now quoted nowhere.
+HEREDOC BACKSLASH MANGLING BIT THREE TIMES and stale mutation anchors three times. Every one was refused by its own assertion rather than reported as a clean green - which is the entire argument for asserting the anchor before believing a survivor.
+OPS-6 IS THE ONLY OPEN OPS ITEM AND IS NOT MINE TO TAKE: retiring the global LL-NNNN id space for per-lane namespacing changes what 43 entries and every citing roadmap item, branch and commit refer to. Detection makes it a considered decision rather than an urgent one.
+NOTHING IN EMBERFORGE CHANGED and no damage coefficient was published. The 21 measured hits remain damage TAKEN; outgoing damage is four log samples. Item 7b, the training ground, is still the cheapest unblocker and still needs the client open.
+
 ### LL-0042 - 2026-08-12 - OPS-1, OPS-3 and OPS-5 closed - the ledger writer gets its own tests and the git-visibility guard stops skipping what is not on disk
 
 **Evidence:**
