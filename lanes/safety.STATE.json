@@ -15,12 +15,6 @@
     },
     {
       "blocked_on": "",
-      "item_id": "SAF-3",
-      "opened": "2026-08-09",
-      "text": "PII-ADJACENT: inventory instance ids share a 12-digit prefix with the operator roleId (an id seen in onEquipPackUpdate vs the roleId in the save filename). Redacting the roleId alone does NOT mask instance ids, and each instance id leaks that prefix. Check whether lanternlight.redact covers this shape"
-    },
-    {
-      "blocked_on": "",
       "item_id": "SAF-4",
       "opened": "2026-08-09",
       "text": "ENCODING: some TS.UI log lines carry CJK text, so a log excerpt is not ASCII and not single-byte. Confirm the redactor and every excerpt path handle it, and that the ASCII hygiene guard can never be fed raw log text"
@@ -42,10 +36,40 @@
       "item_id": "SAF-7",
       "opened": "2026-08-09",
       "text": "MEASURED: .githooks/pre-commit ASCII arm does not cover *.json - a json em-dash gives HOOK EXIT 0 while the same bytes in a .md are BLOCKED. lanes/*.STATE.json are the repo first tracked agent-written json, so this gap is now load-bearing"
+    },
+    {
+      "blocked_on": "a candidate fixture existing",
+      "item_id": "SAF-8",
+      "opened": "2026-08-11",
+      "text": "RE-SCOPED FROM SAF-3 and remeasured 2026-08-11: prefix sharing is NOT the worst of it. The operator roleId (19 digits) appears VERBATIM 5 times in the StandaloneSlot save (2 slot names, 3 ownerRoleId in ItemCell JSON), 5 further distinct ids share 17 of its 19 digits, and BattleId shares 12 - not the 14 recorded earlier, which is refuted across all 250 captured generations. A 2b fixture must renumber EVERY 19-digit id, not just mask the roleId"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "SAF-10",
+      "opened": "2026-08-11",
+      "text": "PvP BLIND SPOT: LeaderRankScoreData carries KillPlayerHistoryDatas plus KillPlayerCount and teamKillPlayerCount. It holds no player identifier in the captured run because that run was solo, so a clean scan of it is evidence about solo play only. A fixture taken from a run with real players must be rescanned for third-party names and ids, never assumed clean on this precedent"
+    },
+    {
+      "blocked_on": "a candidate fixture existing",
+      "item_id": "SAF-9",
+      "opened": "2026-08-12",
+      "text": "CORRECTED 2026-08-11: Unreal Blueprint property names Name_Index_<32 hex GUID> trip PRODUCTUSERID 772 times and LONG_ID 62 of 100 times. Last slice said the fixture should AUTHOR its GUIDs - that is not sufficient as written. The hex rule keys on SHAPE and cannot tell an authored GUID from a real puid, so an authored GUID that is still 32 hex characters changes nothing. It must stop being a hex run. Verified on the real save: replacing every 32-hex run with a non-hex string takes PRODUCTUSERID to 0 and LONG_ID from 100 to 38. Neither rule is narrowed"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "SAF-11",
+      "opened": "2026-08-12",
+      "text": "MEASURED THIRD-PARTY PII, promoted from the SAF-10 risk: LeaderRankScoreData.KillPlayerHistoryDatas holds one record of ten fields, three of them unbounded strings - PlayerName, MsgSubChannelString, MsgAppearanceString. In this capture IsBot is true so the name is a generated bot, which is luck not a guarantee; in a run with real players PlayerName holds a third party's display name. NO CONTENT RULE CAN REACH IT - GVAS has no key/value separator, so keyed rules and persona discovery are structurally blind, and a display name has no shape for a shape rule to match. Covered instead by the structural NAME_FIELD rule: these three properties must carry AUTHORED_NAME_MARKER in any committed artifact. Fires 3 times on the real save; goes quiet when the values are authored"
+    },
+    {
+      "blocked_on": "a candidate fixture existing",
+      "item_id": "SAF-12",
+      "opened": "2026-08-12",
+      "text": "WIRING GAP, stated rather than assumed: NAME_FIELD reaches the tree scan only because tests/test_no_pii.py calls iter_sensitive, which now walks DETECT_ONLY_RULES. Nothing asserts that a FIXTURE specifically was checked - the scan covers whatever is committed. When the 2b fixture lands, add a test that names the fixture file and asserts NAME_FIELD is silent on it, so the check cannot be lost by moving or renaming the file"
     }
   ],
-  "resume_note": "no lane session yet - last worked as a sub-slice of the 2026-08-09b session",
+  "resume_note": "NAME_FIELD structural guard landed for third-party names; next is the 2b fixture itself against SAF-8, SAF-9, SAF-11 and SAF-12",
   "schema": 1,
-  "sessions": 0,
-  "updated": "2026-08-09T23:16:04+00:00"
+  "sessions": 1,
+  "updated": "2026-08-12T00:08:30+00:00"
 }
