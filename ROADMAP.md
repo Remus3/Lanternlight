@@ -233,7 +233,77 @@ misreading them - a `MapProperty` keyed by `DoubleProperty`, and `Rotator`.
 That is the raise-on-unknown guard validated in the wild for the second time,
 which is better evidence than any test.
 
-## 2b. Sanitised fixture for the transient save - READY, safety lane
+## 2c. Ledger fragments have an ID-ALLOCATION race - OPEN, ops lane, PROVEN
+
+Found by the integrator during the 2026-08-11 wrap, and proven rather than
+suspected. This is a defect in the continuity machinery itself, which is the one
+thing this project's whole design exists to protect.
+
+`LL-0018` removed the shared mutable ledger and gave each lane its own
+`lanes/<lane_id>.LEDGER.md` fragment, so two lanes appending could no longer
+conflict. **It solved the TEXT race and left the ID race untouched, and the
+fragment design is what hides it.** Two lanes on separate branches both
+allocated `LL-0023` - `ingest` for the GVAS serialiser, `research` for the
+transient-save decode. Because they wrote to different files, git merged both
+cleanly and nothing anywhere complained.
+
+**`integrate()` then turns the collision into SILENT DATA LOSS.** It skips ids
+already present, which is what makes it idempotent - correct behaviour for a
+re-run, catastrophic for a collision. Reproduced against a throwaway copy of the
+real ledger:
+
+    integrate(ingest)   -> ['LL-0024', 'LL-0023']
+    integrate(research) -> []          # the entire entry, gone
+    research heading present in ledger: False
+
+No exception, no warning, no diff. A lane's whole session record disappears and
+the only symptom is an empty list nobody reads.
+
+**Worked around, not fixed.** The integrator renumbered by hand before
+integrating - research to `LL-0025`, and the safety lane's two entries, which
+had been written in a **different namespace entirely** (`SAF-0001`/`SAF-0002`,
+against the `LL-NNNN` convention the ledger preamble states), to `LL-0026` and
+`LL-0027`. The result was verified: 27 entries, `LL-0001` to `LL-0027`, zero
+duplicates, strictly descending. A hand fix is not a fix, and the next session
+that runs three lanes hits this again.
+
+**Worth noticing before choosing a design:** the safety lane's accidental
+`SAF-NNNN` namespace is **collision-free by construction**, which the global
+`LL-NNNN` space is not. The lane that broke the convention may have stumbled
+onto the answer.
+
+**Acceptance:** a failing test first, proving that two fragments claiming one id
+lose an entry today. Then either (a) `integrate` REFUSES a fragment whose id is
+present with different content - distinguishing "already integrated" from
+"collision", which is the distinction it currently cannot make - or (b) ids
+become lane-namespaced and the global space is retired. Whichever is chosen,
+the guard must be shown to go red when removed, and the ledger's stated `LL-NNNN`
+convention must be updated to match reality rather than left contradicting it.
+
+## 2d. The suite is only green IN PLACE - OPEN, ops lane, confirmed twice
+
+`OPS-4` was recorded in `LL-0021` as "path-dependent" and has now been
+confirmed by an independent pass with the consequence spelled out.
+
+`ops/lane_contract.py:render()` bakes the **absolute** `REPO_ROOT` into the
+contract text, so
+`tests/test_lane_contract.py::TestOnDiskMatchesTheRoster::test_the_files_on_disk_equal_what_the_roster_renders`
+can only pass at `C:\Lanternlight`. In a fresh clone it FAILS - measured at
+`060d48d` **and** at `548e5b6`, so it predates this session and is not a
+regression. Substituting the root makes all eight lane contracts byte-equal.
+
+**Why it matters more than it looks:** every "N passed" this project has ever
+recorded, including `LL-0028`'s **927**, is true **in place** and not in a
+clone. A fresh clone measures one failure. `README.md` tells a new contributor
+to clone and run `python -m pytest`, so the documented first-run experience is
+a red suite.
+
+**Acceptance:** the contract renders a path relative to the checkout, or the
+test compares modulo the root; a fresh `git clone` plus `python -m pytest`
+goes green, demonstrated end to end rather than argued; and the guard is shown
+to go red when the relativisation is removed.
+
+## 2b. Sanitised fixture for the transient save - CLOSED 2026-08-11
 
 Split out of item 2 rather than left implied, because it is a different lane's
 work and a different risk.
@@ -241,20 +311,116 @@ work and a different risk.
 The captured bytes are held **outside** the repository and are not committed.
 A fixture cannot be a copy: the filename embeds the operator's roleId, so it
 needs a **rename**, not merely redaction. Inside, it carries `BattleId`, the
-`AutoSaveTempSlot` / `FinalSlot` names, a 23-entry
-`IdGeneratorData.NumIdToUUID` map, and `ownerRoleId` inside the `ItemCell`
-JSON - and **several of those fire no existing `lanternlight.redact`
-detector**. It is also ~177 KB raw, so it needs size reduction as well.
+`AutoSaveTempSlot` / `FinalSlot` names, an `IdGeneratorData.NumIdToUUID` map,
+and `ownerRoleId` inside the `ItemCell` JSON - and **several of those fire no
+existing `lanternlight.redact` detector**. It is also ~177 KB raw, so it needs
+size reduction as well.
+
+**Three statements in the paragraph above were WRONG and are corrected here
+rather than quietly edited, because each one would have produced a leaking
+fixture:**
+
+1. **"The filename embeds the roleId" implies the bytes do not. They do.** The
+   roleId appears **verbatim inside the file**, twice, as `AutoSaveFinalSlot`
+   and `AutoSaveTempSlot`. A rename alone ships it. Found by the research lane.
+2. **The map has 91 entries, not 23.** 23 is true of exactly 5 of the 263
+   generations; the map grows monotonically from 16 to 91. A filed count is a
+   hypothesis - this file's own anti-pattern, hit twice more this session.
+3. **The `LONG_ID` floor makes same-length substitution useless.** The rule is
+   `\d{15,}` - length only - so an authored 19-digit id fires exactly like a
+   real one. Every identifier has to get SHORTER, which changes FString
+   lengths, which is why the serialiser in `LL-0023` had to exist first.
+
+**And a fourth hazard that was in nobody's plan.** The save carries a **third
+party's display name** in plaintext - `KillPlayerHistoryDatas.PlayerName`, plus
+`MsgSubChannelString` and `MsgAppearanceString`. Measured: **no content rule
+can reach it.** Keyed rules are structurally blind because GVAS writes the key
+and the value as separate length-prefixed strings with no separator, persona
+discovery returns zero candidates, and a display name has no shape to match. The
+safety lane's answer is a **structural** rule, `NAME_FIELD`, which recognises
+the property and demands an authored-value marker beside it.
+
+**The trap inside that hazard, and it is the sharpest thing this item found.**
+Those bytes are refused today - but **only** because a Blueprint GUID beside
+them trips `PRODUCTUSERID`, which is a **false positive**. The false positive
+was accidentally load-bearing. Authoring the GUIDs, which this item **requires**
+in order to clear that same false positive, removes the only thing standing
+between a stranger's name and a public repository. A remediation that opens a
+hole is worth more written down than any number here.
 
 Related and newly measured (`SAF-3`): inventory instance ids share a
 **12-digit prefix** with the operator's roleId, so masking the roleId alone
 does not mask them and each one leaks that prefix.
 
-**Acceptance:** a renamed, sanitised, size-reduced fixture that parses with
-`undecoded_trailing == 0`, is not byte-identical to any live save, passes
-`tests/test_no_pii.py` under `ALL_LABELS`, and carries a redact detector for
-every id shape found above - with the detectors proven non-vacuous against a
-positive control.
+**Acceptance - MET 2026-08-11.** Ledger `LL-0023` through `LL-0027`. Every
+criterion below was re-measured by the integrator rather than relayed.
+
+`tests/fixtures/gvas/standalone_slot.gvas.b64`, **19,867 raw bytes** from a
+177,878-byte source, built by the committed
+`tests/fixtures/build_standalone_slot_fixture.py` and reproducible byte for
+byte on a second run.
+
+- parses with `undecoded_trailing == b""`, `is_complete`, zero unknown
+  properties, 17 top-level properties
+- `serialise(parse(fixture)) == fixture`
+- sha256 collides with none of the 7 live saves and none of the 273 captures
+- `iter_sensitive` returns **empty** under `FILE_SCAN_LABELS` **and** under the
+  stricter `ALL_LABELS`; `iter_encoded_sensitive` over the committed base64
+  returns **empty**
+- **POSITIVE CONTROL, which is what makes those zeroes mean anything.** The
+  same scans over the pre-sanitised source: **882 plain findings**
+  (PRODUCTUSERID 772, LONG_ID 100, OWNER_ROLEID 3, NAME_FIELD 3, SAVE_SLOT 2,
+  ACTOR 2), **96 through the encoded pass**, **21 on the base64 text itself**.
+  Fixture: 0, 0, 0. A clean result and a dead scanner are otherwise identical.
+
+**Three things the build discovered that no plan anticipated:**
+
+1. **The authored decoration width is load-bearing, not cosmetic.**
+   `iter_encoded_sensitive` decodes each base64 **run** separately, so a
+   76-column fixture is scanned as 57-byte windows. `NAME_FIELD` needs
+   `len(name)+17` bytes present and goes quiet only if the marker follows
+   within 64, and no 57-byte window holds both unless the decoration is at
+   least 27 characters. An 11-character first attempt was refused by the
+   builder's own gate.
+2. **24 zero bytes encode to 32 `A` characters, and `A` is a hex digit.** So an
+   all-zero native `Vector` payload makes the committed TEXT trip
+   `PRODUCTUSERID` while the save it encodes is clean. Three payloads hit this
+   and no choice of entries avoids it. The builder authors those payloads and a
+   new test guards the whole fixture directory.
+3. **It is 19,867 bytes, not the under-10 KB the spec asked for, and the reason
+   is measured rather than conceded.** 12,972 bytes are tag overhead - 5,046
+   property names, **7,311 recursive type names**, 615 size and flag fields
+   across 123 tagged properties. Those type names are the game's own struct
+   identities and package paths; authoring them down would be lying about what
+   the game writes. The JSON the spec expected to dominate is 2,964 bytes.
+   Reaching 10 KB means dropping a container the brief required, so the brief
+   won. Recorded as `ING-12` for whoever decides otherwise.
+
+**Kept verbatim, stated rather than hidden:** game config ids and counts in the
+item JSON, the non-zero native struct payloads, the in-run damage numbers and
+timestamps, and the `LevelDetail` / `BotSpawnerData` values. None is an
+identifier under any detector.
+
+**A P0 WAS FOUND IN THE GUARD AFTER THIS ITEM WAS CLOSED.** Ledger `LL-0029`
+and `LL-0030`. The fixture was, and remains, clean - verified by direct scan
+and by an independent scan of all 113 blobs on the pushed remote. **Nothing
+leaked.** What was broken was the protection: `redact()` rewrites the Blueprint
+decoration to `<PRODUCTUSERID>`, `NAME_FIELD`'s anchor required
+`[0-9A-Za-z]`, and angle brackets are not alphanumeric - so **redacting a file
+disarmed the rule**, and `assert_clean(redact(raw))` approved bytes still
+carrying a third party's display name verbatim.
+
+That is the second time in one session that a **remediation opened the hole it
+was cleaning** - the first being that authoring the GUIDs removes the false
+positive which was accidentally the only thing refusing the same record. Two
+instances is a pattern, not a coincidence, and the pattern is: **check what
+your fix removes, not only what it adds.**
+
+Fixed by matching the decoration as a run of units where a unit is either one
+alphanumeric character or a whole placeholder taken from the module's own
+constants, so a placeholder added later cannot silently disarm it again.
+
+### The original acceptance, for the record
 
 **Still unidentified:** the 4 zero bytes after every tagged property list. An
 `int32` zero, an empty FString and four zero flag bytes all fit and nothing
@@ -360,13 +526,319 @@ change joined to the toggle input, or a documented negative stating what was
 tried and over how many attempts. Note item 1 may answer this incidentally - the
 toggle may be more legible in a raid than on the creation screen.
 
+## 7. Emberforge is NOT blocked - the save records damage - READY, high value
+
+Opened 2026-08-11. This item exists because the "deliberately not on this list"
+section at the bottom of this file was **wrong**, and it was wrong in the
+direction that cost the most: it said Emberforge cannot be filled until numbers
+exist, and named item 1 as the only unblocker.
+
+**Measured this session, first-party, from bytes already on disk.** The
+transient save carries `DamageCollectonDataSet`, a JSON array of per-source
+damage records. Each entry has `sourceType`, `monsterId`, `monsterGuid`,
+`bDeathCauser`, `totalDamage`, and a `damageChildList` of individual hits. Each
+hit carries `damageValue` (a float), `timeStamp` (a Unix epoch float with
+sub-millisecond resolution), `nameId`, `Key` and `bChildDeathCauser`.
+
+Two consecutive hits on one target in the captured run measured 17.356201171875
+and 92.13079833984375, 0.256 seconds apart. Those are the first damage numbers
+this project has ever held, and nobody published them - the game wrote them.
+
+**263 generations of that file are already captured** at `C:\ll-captures\saves\`,
+so a damage timeline for a whole 20-minute run exists right now without the
+operator doing anything.
+
+Two properties of the field are measured and constrain any reader:
+
+- It is a **rolling window, not a cumulative log.** Summed `totalDamage` across
+  generations went 74.66, 251.20, 137.52, 89.09, 89.09, 227.94 - it falls as
+  well as rises, so entries age out. A reader must accumulate across
+  generations and must not treat one snapshot as a run total.
+- `nameId` was **0** on every hit observed. If `nameId` binds to the ability
+  that dealt the damage, that is damage-per-ability and it is the single most
+  valuable binding available to Emberforge. It is **unmeasured** - 0 may mean
+  basic attack, or unset. Do not assume.
+
+**EXTRACTED 2026-08-11.** All **263** generations parsed, **278** window
+readings deduplicated by `(monsterGuid, timeStamp, damageValue)` down to
+**21 distinct hits** over a **1020.3-second** span. Damage ranged 9.745483 to
+137.517426 against **8 distinct monsterIds** (1005, 1006, 1014, 1029, 2003,
+2007, 2017, 2021) across 9 monster instances.
+
+**The load-bearing result: damage is DETERMINISTIC, not rolled.** Three values
+repeat exactly, and every repeat has a distinct timestamp, so none is a
+deduplication artifact:
+
+| value | hits | detail |
+|---|---|---|
+| `9.745483398` | 5 | one monster instance, gaps 1.712, **1.501, 1.499, 1.499** |
+| `83.740417480` | 3 | monsterId 2003, across **two different instances** |
+| `30.472595215` | 2 | gap 1.709 |
+
+**Both halves of that were overstated, and an adversarial pass corrected them.**
+Kept visible rather than edited away, because the overstatement is instructive:
+
+- **"a float to nine places" is wrong.** Every value is exactly `float32`; the
+  ULP at 83.74 is 7.6e-6, so a repeat pins about **7 significant digits**, not
+  9. Still far too tight for a per-hit roll, but say the true number.
+- **The five repeats of `9.745483398` are ONE computation, not five.** They are
+  the 1.5-second tick itself, so counting them as independent evidence
+  double-counts. The genuinely independent evidence is a single fact:
+  `83.740417480` landing identically on **two different instances of the same
+  monster type**.
+- **"the first timing constant this project has measured" is too strong.** It
+  is n=3 intervals, from one monster instance in one encounter, at a 1 ms
+  quantisation floor. It is a strong lead, not a constant.
+
+**Three negatives, each worth as much as the positives:**
+
+- `nameId` is **0 on all 424 readings** in every one of the 263 generations,
+  and `Key` is empty on all 424. So the save's window carries no attribution
+  at all, and the ~1.5 s interval cannot be attributed from the save alone.
+
+  **PROBABLY the same id space as `SkillNameId` - a strong hypothesis, NOT
+  proven.** The value `6130017` appears as `skillNameId` in the log's
+  kill-history payload and as `nameId` inside a `damageChildList` in the same
+  log. An earlier draft of this item called that "proven" and "not inferred".
+  **Both were over-claims and an adversarial pass refuted them:**
+
+  - **n = 1.** `skillNameId` has exactly **one** distinct value in the entire
+    12.7 MB log. One shared value between two fields is a strong lead, not a
+    demonstration that the spaces coincide.
+  - **`6130007` never appears as a `skillNameId` at all**, so the overlap is
+    not reciprocal on the sample available.
+  - **"from the same component family" was simply WRONG.** `skillNameId` is
+    emitted by `leaderRankScoreComponent`, `battleSnapUpdate` and
+    `battleSettlement` - **not** by `DamageCollectionComponent`. That sentence
+    asserted a shared provenance that does not exist, which is exactly the kind
+    of detail that makes a weak claim read as a strong one.
+
+  `nameId: 0` still most likely means **unset**. Closing this needs a second
+  distinct `skillNameId` seen also as a `nameId`.
+
+## 7a. The log carries what the save's window does not - MEASURED 2026-08-11
+
+The log's `[DamageCollectionComponent]: jsonString:` emits the **same structure**
+the save stores in `DamageCollectonDataSet`, but with `Key` **populated** where
+all 424 save readings had it empty. That makes the log the attribution surface
+and the save the sampling surface.
+
+**Three id-to-name bindings, first-party, read off the game's own emission:**
+
+| id | Key | range |
+|---|---|---|
+| 6130017 | `NormalArrow` | `613xxxx` - player ability |
+| 6130007 | `ExplosionArrow` | `613xxxx` - player ability |
+| 6250000 | `MonsterDamage` | `625xxxx` - monster as source |
+
+No Key maps to two ids and no id maps to two Keys across the sample. These are
+the first ability bindings the project holds, and they are **distinct from the
+`1205xx` ammoId space** already recorded, so ability and ammo are not one space.
+
+**`sourceType` is the direction flag, and it is now read rather than guessed:**
+
+- `sourceType: 0` - `monsterId` is **null** and the Key is a player ability.
+  The **player** is the source.
+- `sourceType: 1` - `monsterId` is **populated** and the Key is `MonsterDamage`.
+  The **monster** is the source.
+
+**CONSEQUENCE, and it inverts the natural reading of item 7's series.** All 21
+extracted hits carry `sourceType: 1` with a populated `monsterId`, so they are
+**damage the operator TOOK**. This was written as a strong inference from a
+single log payload; it has since been **CONFIRMED independently** by the
+`PlayerData.Hp` join in item 7 above, which is first-party and does not depend
+on the log at all.
+
+**One caveat on generalising the log half.** The only `sourceType: 1` payload
+in the log carries `monsterId` **99021**, which appears **once** in the whole
+log against 105 mentions of the `1xxx`/`2xxx` space. It looks like a synthetic
+death-source bucket rather than a real monster, so its semantics should not be
+stretched. The direction conclusion does not rest on it any more - the Hp join
+carries it.
+
+**Also measured here:** the log emits **one payload per death event** with
+`bDeathCauser: true`, so the log holds the killing blow that the save's rolling
+window drops. A reader that wants complete combat needs both surfaces. And a
+new monsterId, **99021**, appears only as the source that killed the operator -
+a range no other observation has touched.
+
+**SAFETY, routed to the safety lane:** the log line adjacent to these payloads
+carries the operator's persona in a bare `name:` field, and the kill-history
+line carries a third party's `playerName` **in CJK**, confirming `SAF-4` on a
+second surface. No excerpt of this region may be committed, and the
+`DamageCollectionComponent` region is now a named redaction target.
+- `bDeathCauser` and `bChildDeathCauser` are **False on all 21**, yet the run
+  recorded kills. So `DamageCollectonDataSet` is **not a complete combat log** -
+  it drops or rotates out the killing blow.
+- `sourceType` is **1** on all 21 and `Key` is empty on all 21. One source type,
+  no key. Whatever those fields discriminate was never exercised here.
+
+**DIRECTION - SETTLED 2026-08-11. These are damage the operator TOOK.**
+
+Not an inference and not from the log. The answer was in the captured bytes the
+whole time, in a **second field of the same file**: `PlayerData.Hp`, sampled
+262 times across the run.
+
+- **13 HP drops, totalling 1286.**
+- **21 damage hits, totalling 1284.84.**
+- The 1.16 gap is integer rounding across 13 drops, and the drops pair to hits
+  **individually**: 108.53 + 83.74 = 192.27 against a 192 drop, 17.36 + 92.13 =
+  109.49 against a 110 drop, 137.52 against 138, 89.09 against 89.
+- **No HP drop is unaccounted for.**
+
+Found by the adversarial pass and re-measured independently by the integrator.
+An earlier draft of this item left direction open and called it the blocking
+question; it was answerable from data already on disk, and the reason it stayed
+open is that nobody joined the two fields.
+
+**AND THIS IS THE DEFLATING PART, which matters more than the result.** The 21
+hits are **incoming** damage. Emberforge needs **outgoing** damage - what the
+player's build does - and the save's rolling window does not carry it. So:
+
+- Everything above describes what monsters do to the player. It constrains
+  survivability, not build math.
+- **Outgoing damage exists, but only in the log**, in the four
+  `DamageCollectionComponent` payloads at `sourceType: 0` - `NormalArrow` at
+  409.03, 278.26 and 378.79, `ExplosionArrow` at 273.22. Four samples, emitted
+  at kill events, WITH ability attribution.
+- So item 7's headline holds but shrinks: Emberforge is unblocked by the
+  **log**, at four samples, not by the save at twenty-one.
+
+Item 7b is now more important, not less: the training ground is the only route
+to outgoing damage in quantity, and `sourceType: 0` is what to look for.
+
+**Remaining acceptance:** the extractor is currently merger analysis in a
+scratchpad, not shipped code. It needs a home in a lane, tests, and the
+timestamps joined to log wall-clock. Plus: no damage coefficient may be
+published until the same value is seen from an **independent run** - one run
+cannot separate a coefficient from a lucky repeat, however precise.
+
+**A sampling limit to design against:** 278 window readings over ~20 minutes of
+play yielded only 21 hits, because the window holds roughly two monster entries
+at a time and combat rotates them out fast. Most of the run's combat was never
+observed. Polling faster will not fix a window that small - this is a ceiling
+on what this surface can ever give, and it is an argument for the controlled
+environment in item 7b rather than for a faster poller.
+
+## 7b. Training grounds as a controlled measurement rig - READY, needs the client
+
+Opened 2026-08-11 from third-party player testimony (see item 8), and it is the
+cheapest unblocker on this list.
+
+The game ships a **training ground** where the host can spawn bots of chosen
+class, difficulty and gear quality, freeze them, and restore their own health
+and consumables. If that is accurate, it is a repeatable, zero-stake
+environment with a controlled input - which is exactly what item 7 needs to
+turn a damage number into a coefficient. Every previous plan for measuring
+combat math assumed a real run, with its gear loss, its variance and its
+single-attempt sampling.
+
+**This claim is UNVERIFIED.** It comes from one creator's video and no
+first-party observation here has seen the training ground at all.
+
+**Acceptance:** enter the training ground with the log tailing and a frame
+poller running, and record whether (a) it exists, (b) `DamageCollectonDataSet`
+is written there at all - it lives in `StandaloneSlot_<roleId>.sav`, which is
+created at match start, and a training ground may not be a "match", so this may
+be a clean negative - and (c) whether a repeated identical attack yields an
+identical `damageValue`. A written negative on any of the three is a result.
+
+## 8. Third-party data sources - reviewed 2026-08-11, tier and provenance fixed
+
+Reviewed at the operator's request. Recorded here so the assessment is not
+re-done, and so nothing absorbs these as facts by accident.
+
+**`questlog.gg` is DATAMINED, not hand-mapped.** Measured, not inferred: its
+monster database is addressed by numeric id at `/db/monster/<id>` in the same
+id space this project observed in the save's `Id2cnt` maps, and its listing
+carries developer-internal rows no player can ever see - a
+`[Debug]OrdinaryMonsterTemplate`, a `Test Dummy Monster` and a `[Discarded]`
+entry. A wiki built from play cannot contain a discarded placeholder. Its
+category slugs are internal too: the UI says "Greater Elite" while the URL says
+`BigElite`.
+
+The consequence is **not** that we use it more, and **not** that we relax
+[ADR-002](docs/adr/ADR-002-no-asset-extraction.md). Someone else decrypted the
+paks; this project still does not, and nothing about that changes. What it
+means is that the site is a **hypothesis and cross-check source**, tier 4, and
+that an id learned there is **never** written into
+[`docs/OBSERVED_IDS.md`](docs/OBSERVED_IDS.md) as an observation. A
+**contradiction** between their table and our measurement is a real result and
+is worth chasing; an agreement is not corroboration.
+
+**One cross-check already ran and held.** Their `1029` is "Hallowgrove
+Woodling". This project independently measured `1029` in the save's
+`TeamKillMonsterData` on a run the operator attested was Hallowgrove, whose
+internal map is `Whitewoods_Day` with the save's own zone key
+`WhiteWoodsOutskirts`. Their player-facing name and our internal name agree
+from opposite directions, which is worth something precisely because neither
+was derived from the other.
+
+**A second map name is now known and unmeasured here: `Brandrgarde`.** Their
+Brandrgarde (South) layer counts 316 treasure chests, 63 extraction points, 327
+enemies (2 Boss, 4 Greater Elite, 22 Elite, 68 Mini-Elite, 231 Normal), 13
+merchants and 9 quest interactables. **None of that is recorded as fact here.**
+It is a set of expectations to test the first time the operator loads that map,
+and the useful form of the test is the count, because a count that disagrees is
+immediately informative.
+
+**A live example of why the word matters.** That site says "Extraction Point".
+The game says **escape**, and `extract` appears zero times in the log - already
+recorded under item 1. Anyone grepping the log for a term learned from a map
+site gets a clean negative that means nothing.
+
+**`gamerguides.com` is HAND-MAPPED, and it is a DIFFERENT provenance from the
+site above.** Its maintainer states it plainly in the announcement thread: a
+small team "filling them out as we play", with a "Suggest Markers" function for
+readers to add their own findings. So it is **first-party player observation,
+crowd-sourced** - a higher trust tier than a datamined dump for anything about
+where a thing actually is, and a **lower** one for completeness, because
+whatever nobody has walked past yet is simply absent.
+
+Two caveats the maintainer volunteers, and both matter more than the maps:
+
+- **Its database's first iteration was built on the DEMO.** A demo-derived
+  table is stale by construction against a shipped build, and this is
+  self-declared rather than inferred. Nothing from that database may be treated
+  as current without a first-party check.
+- **They are "being mindful of randomization"**, which implies spawn or loot
+  randomization exists. That is a game-mechanic claim from a credible source
+  and it is **UNMEASURED here**. It also means a hand-placed marker for
+  randomised content is a probability, not a location - so a marker that fails
+  to match observation refutes nothing on its own.
+
+Also from that thread, unmeasured here: **Brandrgarde has North and South
+layers**, and **Chaos Mode gets its own map layers**, which implies difficulty
+changes map content rather than only scaling it. If true, `roomModeId` or
+`matchType` in the map URL is the axis that selects it - see item 1, which
+already established that four axes exist and that `matchId` is not the
+discriminator.
+
+**The general rule this item exists to fix:** "third-party site" is not a trust
+tier. Two sites for the same game, reviewed on the same day, turned out to have
+opposite provenances - one datamined from encrypted assets, one walked by hand.
+They fail in opposite directions and must be cited differently. Check how a
+source was built before quoting it, every time.
+
 ---
 
 ## Ordering note
 
-Item 1b is CLOSED and item 2's decode landed the same day, so **item 2b is
-NEXT** - the sanitised fixture, which is safety-lane work. Items 3 and 4's watcher
-are independent of everything and of each other.
+**Item 2b is CLOSED 2026-08-11.** The next item is **7** - extract the damage
+series into shipped code - because it is the only thing on this list that
+unblocks Emberforge, and because the numbers are already on disk. **Item 7b** is
+the cheapest thing here and answers item 7's one blocking question, so fold it
+into whichever session next has the client open. **Item 2c** is a defect in the
+continuity machinery and should be fixed before the next multi-lane session,
+not after it silently eats another entry.
+
+One ownership correction, measured this session: `tests/fixtures/**` is owned by
+**ingest**, not safety. This document called 2b "safety-lane work" and the
+roster in `ops/lanes.py` disagreed. What actually worked was a split - ingest
+built the artifact, safety owned the detectors and held the veto. Read the
+roster, not this file, for who owns a path.
+
+Items 3 and 4's watcher remain independent of everything and of each other.
 
 Each lane now carries its own queue in `lanes/<lane_id>.STATE.json`, so the
 right way to pick work is to read the state file of the lane that owns the
@@ -388,7 +860,13 @@ mid-session.
   ([ADR-001](docs/adr/ADR-001-no-game-process-interaction.md)).
 - Anything requiring decrypted paks
   ([ADR-002](docs/adr/ADR-002-no-asset-extraction.md)).
-- Emberforge formula work. The engine cannot be filled before there are measured
-  numbers to fill it with, and as of 2026-08-09 **no cooldown values, damage
+- ~~Emberforge formula work.~~ **REFUTED 2026-08-11 - see item 7.** This line
+  said the engine could not be filled before measured numbers existed, and named
+  item 1 as the unblocker. It is still true that **no cooldown values, damage
   coefficients or stealth durations are published anywhere**
-  (`docs/CLASS_RESEARCH.md`). Item 1 is the unblocker.
+  (`docs/CLASS_RESEARCH.md`). It is **false** that no numbers exist: the
+  transient save writes per-hit `damageValue` with sub-millisecond timestamps,
+  and 263 generations of it were captured on 2026-08-09. The blocker was never
+  the game - it was that nobody had read the field. Left here struck through
+  rather than deleted, because "we checked and there is nothing" was wrong for
+  two days and the shape of that error is the useful part.

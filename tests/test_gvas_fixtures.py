@@ -249,6 +249,46 @@ def test_every_fixture_is_valid_base64(fixture: Path):
     assert base64.b64encode(decoded).decode("ascii") == payload
 
 
+#: How many consecutive zero bytes it takes to encode to a 32-character run of
+#: ``A``. Base64 spends 4 characters on every 3 bytes, so 24 zero bytes become
+#: 32 zero sextets, and the character for a zero sextet is ``A``.
+_ZEROS_PER_HEX32_RUN = 24
+
+
+@pytest.mark.parametrize("fixture", fixture_files(), ids=lambda p: p.name)
+def test_no_fixture_encodes_a_long_run_of_zero_bytes(fixture: Path):
+    """A trap that belongs to base64 rather than to any save.
+
+    ``A`` is a hexadecimal digit, so 24 consecutive zero bytes encode to a
+    32-character hex run - which is exactly the shape ``PRODUCTUSERID`` is, and
+    the repository's plain scan reads a committed fixture as TEXT before it
+    reads it as an encoding. The result is a red tree scan pointing at a file
+    whose decoded bytes are provably clean, with nothing in the message to
+    suggest that the finding is an artifact of the encoding.
+
+    Measured while building ``standalone_slot.gvas.b64``: three native
+    ``Vector`` payloads in the game's transient save are entirely zero, and the
+    builder authors them for this reason and no other. This check states the
+    constraint for the next fixture rather than leaving it to be rediscovered
+    from a confusing failure.
+
+    Stated rather than hidden: whether a given run actually MATCHES also depends
+    on its alignment and on the characters either side, so a fixture can carry
+    such a run and still pass the tree scan today. That makes this check
+    stricter than the scan on purpose - the alignment is luck, and a fixture
+    that depends on luck is a fixture that breaks when something before it
+    changes length.
+    """
+    raw = fixture_bytes(fixture)
+    run = b"\x00" * _ZEROS_PER_HEX32_RUN
+    assert run not in raw, (
+        f"{fixture.name} decodes to {_ZEROS_PER_HEX32_RUN} or more consecutive "
+        "zero bytes, which base64 turns into a 32-character run of 'A' - a hex "
+        "run, and therefore a PRODUCTUSERID finding on the committed text. "
+        "Author the zero payload where the fixture is built."
+    )
+
+
 @pytest.mark.parametrize("fixture", fixture_files(), ids=lambda p: p.name)
 def test_every_fixture_carries_the_expected_suffix(fixture: Path):
     # The enumeration above is what makes a new fixture covered automatically,
