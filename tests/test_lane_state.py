@@ -731,6 +731,113 @@ class TestAnUnclosedFenceCannotSuppressTheGuard:
             lane_state.fragment_entry_ids(path)
 
 
+class TestALaneCanClaimAPathItIsAdding:
+    """`OPS-2`. A lane adding a NEW file could not go green on its own.
+
+    The orphan guard walks the real tree, including untracked files, and fails
+    any path no lane owns. Ownership is declared in `ops/lanes.py`, which the
+    **ops** lane owns - so any other lane that creates a file is red for its
+    whole session and cannot fix it without writing outside its slice.
+
+    Reproduced before this existed: a clone plus one new `lanternlight/` module
+    gives `1 failed, 34 passed`.
+
+    **Neither option the item offered removes that.** "ops declares ownership
+    first" needs the filename known before the work starts, which is often
+    false. "The integrator declares it at merge" is what shipped `LL-0035`, and
+    it works - but only for an integrator spanning both lanes; a lane running
+    alone still sits red. A lane sitting red all session is precisely the
+    pressure that makes somebody weaken a guard to go green, which `CLAUDE.md`
+    forbids in as many words.
+
+    So a lane may CLAIM a path in its own `STATE.json` - a file it owns - and
+    the orphan guard honours exactly one claimant. The roster stays the single
+    source of truth: a claim is a promissory note the integrator redeems, and
+    the guards below make sure it cannot quietly become a second ownership map.
+    """
+
+    def test_a_claimed_path_has_a_claimant(self, tmp_path):
+        state = lane_state.claim_path(
+            "ingest", "lanternlight/newthing.py", path=tmp_path / "s.json"
+        )
+        assert "lanternlight/newthing.py" in state.claimed_paths
+        assert lane_state.claimants_of(
+            "lanternlight/newthing.py", states={"ingest": state}
+        ) == ["ingest"]
+
+    def test_an_unclaimed_path_has_none(self, tmp_path):
+        state = lane_state.claim_path("ingest", "lanternlight/a.py", path=tmp_path / "s.json")
+        assert lane_state.claimants_of("lanternlight/b.py", states={"ingest": state}) == []
+
+    def test_a_claim_matches_by_pattern_not_by_string(self, tmp_path):
+        state = lane_state.claim_path("ingest", "lanternlight/new*.py", path=tmp_path / "s.json")
+        assert lane_state.claimants_of("lanternlight/newthing.py", states={"ingest": state})
+        assert not lane_state.claimants_of("lanternlight/other.py", states={"ingest": state})
+
+    def test_a_claim_can_be_released(self, tmp_path):
+        target = tmp_path / "s.json"
+        lane_state.claim_path("ingest", "lanternlight/x.py", path=target)
+        state = lane_state.release_path("ingest", "lanternlight/x.py", path=target)
+        assert state.claimed_paths == ()
+
+    def test_claiming_twice_does_not_duplicate(self, tmp_path):
+        target = tmp_path / "s.json"
+        lane_state.claim_path("ingest", "lanternlight/x.py", path=target)
+        state = lane_state.claim_path("ingest", "lanternlight/x.py", path=target)
+        assert list(state.claimed_paths) == ["lanternlight/x.py"]
+
+    def test_a_read_only_lane_may_not_claim_anything(self, tmp_path):
+        # verify owns nothing on purpose. A claim is a write.
+        with pytest.raises(lane_state.ReadOnlyLane):
+            lane_state.claim_path("verify", "anything.py", path=tmp_path / "s.json")
+
+    def test_a_claim_survives_a_round_trip(self, tmp_path):
+        target = tmp_path / "s.json"
+        lane_state.claim_path("ingest", "lanternlight/x.py", path=target)
+        assert lane_state.load("ingest", target).claimed_paths == ("lanternlight/x.py",)
+
+    def test_a_state_file_written_before_claims_existed_still_loads(self, tmp_path):
+        # Every committed STATE.json predates this field. A loader that treated
+        # the missing key as corruption would wipe seven lanes' open items.
+        target = tmp_path / "s.json"
+        target.write_text(
+            json.dumps({"schema": 1, "lane_id": "ingest", "sessions": 2, "open_items": []}),
+            encoding="utf-8",
+        )
+        state = lane_state.load("ingest", target)
+        assert state.claimed_paths == ()
+        assert state.recovered is False, state.recovery_note
+
+    def test_a_claim_must_be_ascii(self, tmp_path):
+        # Built with an escape, not typed: this repository is 7-bit ASCII in
+        # every authored file, and writing the character here would fail
+        # tests/test_ascii_hygiene.py. It did, on the first attempt.
+        non_ascii = "lanternlight/na" + chr(0xEF) + "ve.py"
+        with pytest.raises(ValueError):
+            lane_state.claim_path("ingest", non_ascii, path=tmp_path / "s.json")
+
+    def test_a_stale_claim_is_reported(self, tmp_path):
+        # The whole point. Once the integrator folds a claim into ops/lanes.py,
+        # the claim MUST be removed - otherwise it becomes a permanent second
+        # ownership map, which is the thing the roster exists to prevent.
+        state = lane_state.claim_path(
+            "ingest", "lanternlight/gvas.py", path=tmp_path / "s.json"
+        )
+        stale = lane_state.stale_claims(states={"ingest": state})
+        assert stale == [("ingest", "lanternlight/gvas.py")]
+
+    def test_a_fresh_claim_is_not_stale(self, tmp_path):
+        state = lane_state.claim_path(
+            "ingest", "lanternlight/not_in_the_roster_yet.py", path=tmp_path / "s.json"
+        )
+        assert lane_state.stale_claims(states={"ingest": state}) == []
+
+    def test_the_live_repository_has_no_stale_claim(self):
+        # Runs over the real state files every suite run, like its collision
+        # sibling. A claim left behind after a merge is invisible otherwise.
+        assert lane_state.stale_claims() == []
+
+
 class TestAnEditedEntryIsNotACollision:
     """`OPS-8`. Two different faults gave one diagnosis, and it was the wrong one.
 

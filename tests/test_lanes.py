@@ -30,7 +30,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from ops import lanes  # noqa: E402
+from ops import lane_state, lanes  # noqa: E402
 
 
 class TestRosterShape:
@@ -107,17 +107,40 @@ class TestNoFileIsOrphaned:
     """
 
     def test_every_tracked_file_is_owned_or_explicitly_cross_cutting(self):
-        orphans = [
-            path.as_posix()
-            for path in lanes.tracked_files(REPO_ROOT)
-            if lanes.owner_of(path) is None and not lanes.is_cross_cutting(path)
-        ]
+        # A path CLAIMED by exactly one lane counts as owned-pending - `OPS-2`.
+        # Without that a lane adding a file is red for its whole session and
+        # cannot fix it in slice, because ownership lives in ops/lanes.py.
+        # Two claimants is still a failure; see the sibling test below.
+        orphans = lane_state.unowned_paths(list(lanes.tracked_files(REPO_ROOT)))
         assert not orphans, (
             f"{len(orphans)} file(s) are neither lane-owned nor declared "
             "cross-cutting, so nothing arbitrates a concurrent edit to them. "
             "Give each one an owner in ops/lanes.py, or add it to CROSS_CUTTING "
-            "if it is genuinely governed rather than worked:\n  "
+            "if it is genuinely governed rather than worked. A lane that cannot "
+            "edit the roster may claim it for now with "
+            "ops.lane_state.claim_path(<lane>, <pattern>):\n  "
             + "\n  ".join(orphans)
+        )
+
+    def test_no_path_is_claimed_by_two_lanes(self):
+        """A pending claim relaxes WHERE ownership is written, never that it is
+        unique. Two owners for one file is the invariant the whole architecture
+        rests on, and a promissory note must not be a way around it."""
+        contested = []
+        for path in lanes.tracked_files(REPO_ROOT):
+            claimants = lane_state.claimants_of(path)
+            if len(claimants) > 1:
+                contested.append(f"{path.as_posix()} claimed by {claimants}")
+        assert not contested, "\n  ".join(contested)
+
+    def test_a_claim_the_roster_already_covers_is_stale(self):
+        """Once the integrator writes a claimed path into ops/lanes.py, the
+        claim has been redeemed. Leaving it behind builds the second ownership
+        map the roster exists to prevent, so it fails until released."""
+        stale = lane_state.stale_claims()
+        assert not stale, (
+            "claim(s) already covered by ops/lanes.py - release them with "
+            f"ops.lane_state.release_path(): {stale}"
         )
 
     def test_the_two_states_are_mutually_exclusive(self):
@@ -126,6 +149,53 @@ class TestNoFileIsOrphaned:
         for path in lanes.tracked_files(REPO_ROOT):
             if lanes.is_cross_cutting(path):
                 assert lanes.owner_of(path) is None, path
+
+    def test_a_path_claimed_by_a_lane_is_not_an_orphan(self, tmp_path):
+        """`OPS-2`. A lane adding a file must be able to go green on its own.
+
+        Ownership lives in `ops/lanes.py`, which only the ops lane may edit, so
+        without this any other lane creating a file is red for its whole session
+        with no in-slice remedy. That is the pressure that gets a guard
+        weakened, so the guard gives a supported way through instead.
+        """
+        probe = "lanternlight/a_brand_new_module.py"
+        assert lanes.owner_of(probe) is None
+        state = lane_state.claim_path("ingest", probe, path=tmp_path / "s.json")
+        assert lane_state.claimants_of(probe, states={"ingest": state}) == ["ingest"]
+
+    def test_the_orphan_predicate_honours_a_single_claim(self, tmp_path):
+        # Exercises the guard's own predicate on a SYNTHETIC tree. The real
+        # repository has no claimed path, so without this the claim branch of
+        # the guard above never executes and could be deleted unnoticed.
+        probe = "lanternlight/a_brand_new_module.py"
+        claimed = lane_state.claim_path("ingest", probe, path=tmp_path / "i.json")
+        assert lanes.owner_of(probe) is None, "the probe must be genuinely unowned"
+        # With the claim, nothing is orphaned. Without it, the same path is.
+        assert lane_state.unowned_paths([probe], states={"ingest": claimed}) == []
+        assert lane_state.unowned_paths([probe], states={}) == [probe]
+
+    def test_the_orphan_predicate_refuses_two_claimants(self, tmp_path):
+        probe = "lanternlight/contested.py"
+        ingest = lane_state.claim_path("ingest", probe, path=tmp_path / "i.json")
+        safety = lane_state.claim_path("safety", probe, path=tmp_path / "s.json")
+        both = {"ingest": ingest, "safety": safety}
+        assert lane_state.unowned_paths([probe], states=both) == [probe]
+
+    def test_the_orphan_predicate_still_passes_a_roster_owned_path(self):
+        assert lane_state.unowned_paths(["lanternlight/gvas.py"], states={}) == []
+
+    def test_two_lanes_claiming_one_path_is_still_a_failure(self, tmp_path):
+        """A claim relaxes WHERE ownership is written, never that it is unique.
+
+        Two owners for one file is the invariant the whole lane architecture
+        rests on, and a promissory note must not be a way around it.
+        """
+        probe = "lanternlight/contested.py"
+        ingest = lane_state.claim_path("ingest", probe, path=tmp_path / "i.json")
+        safety = lane_state.claim_path("safety", probe, path=tmp_path / "s.json")
+        claimants = lane_state.claimants_of(probe, states={"ingest": ingest, "safety": safety})
+        assert sorted(claimants) == ["ingest", "safety"]
+        assert len(claimants) > 1, "two claimants must be visible, not silently merged"
 
     def test_the_orphan_check_would_actually_notice_one(self):
         # A guard over a set that happens to be empty proves nothing. Confirm

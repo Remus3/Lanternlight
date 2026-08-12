@@ -995,9 +995,14 @@ to outgoing damage in quantity, and `sourceType: 0` is what to look for.
 `LL-0035`. `lanternlight/damage.py`, owned by **ingest**, with 37 tests.
 
 - **A home in a lane.** Ownership declared in `ops/lanes.py` and the contracts
-  regenerated. This is `OPS-2`'s second option - the integrator declares it at
+  regenerated. This was `OPS-2`'s second option - the integrator declares it at
   merge - taken deliberately, because the orphan guard goes red the moment the
-  file exists, so the file and its ownership cannot land separately.
+  file exists, so the file and its ownership cannot land separately. **`OPS-2`
+  is now CLOSED** (`LL-0041`) with a third option that neither of its two
+  offered: a lane may **claim** a path in its own `STATE.json`, the orphan
+  guard honours exactly one claimant, and the claim goes **stale** - failing
+  the suite - once the roster absorbs it. That works for a lane running alone,
+  which is what the two filed options did not.
 - **Tests.** The JSON shape is characterised against the **committed fixture**,
   which does carry `DamageCollectonDataSet` (one record, one hit), so no
   out-of-repo data is needed to ship or to test. Cross-generation dedup is our
