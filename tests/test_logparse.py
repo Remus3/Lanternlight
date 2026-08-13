@@ -909,26 +909,111 @@ def test_a_huge_frame_number_never_raises():
     assert list(iter_events([text])) == []
 
 
+def _gift_hazard(path):
+    """A LogUGiftAgent redemption line whose URL path is ``path``.
+
+    A structural stand-in for the real thing. Neither the real values nor the
+    real parameter names are committed: tests/test_no_pii.py has a detector for
+    one of those names and flags it regardless of the value, which is correct,
+    and a fake secret in a fixture is still noise for anyone grepping this repo
+    for real ones. The real line's captured path would be 26 characters over
+    five segments; the stand-in keeps the shape, not the bytes.
+
+    Nothing in the query string is one of the four measured axes, so the axis
+    branch cannot fire and the "/Game/" anchor is the only thing deciding
+    whether these lines become events.
+    """
+    return (
+        "[2026.08.09-14.55.01:001][ 12]LogUGiftAgent: Display: GetCDKeyGift, "
+        "url == https://example.invalid" + path
+        + "?aid=222222&credentialA=REDACTED&credentialB=REDACTED"
+    )
+
+
+#: The path shape that IS under /Game/ - the twin every hazard below is one
+#: character (or one word) away from. Kept here so each test can show that its
+#: hazard is rejected for the anchor and for no other reason.
+_GIFT_TWIN_PATH = "/Game/redeem/api/use/111111"
+
+
 def test_a_non_game_url_with_a_query_is_not_a_map_url():
     # The "/Game/" anchor in the map-URL pattern is the only thing keeping a
-    # secrets-bearing URL out of an event payload. The real log carries a
+    # secrets-bearing line out of the event stream. The real log carries a
     # LogUGiftAgent redemption URL whose query string holds a redemption key
-    # and an auth token; relaxing the anchor to a bare "/<path>?" takes the
-    # match count from 36 lines to 37 and that line is the extra one.
-    #
-    # The URL below is a structural stand-in. Neither the real values nor the
-    # real parameter names are committed: tests/test_no_pii.py has a detector
-    # for one of those names and flags it regardless of the value, which is
-    # correct, and a fake secret in a fixture is still noise for anyone
-    # grepping this repo for real ones.
-    hazard = (
-        "[2026.08.09-14.55.01:001][ 12]LogUGiftAgent: Display: GetCDKeyGift, "
-        "url == https://example.invalid/game/redeem/api/use/111111"
-        "?aid=222222&credentialA=REDACTED&credentialB=REDACTED"
-    )
+    # and an auth token; relaxing the anchor to a bare "/<path>?" - or adding
+    # re.IGNORECASE - takes the match count from 36 lines to 37 and that line
+    # is the extra one. Its path is lower-case "/game/", which is why case
+    # alone is enough to discriminate this particular case.
+    hazard = _gift_hazard("/game/redeem/api/use/111111")
     assert list(iter_events([hazard])) == []
     # ... while a genuine /Game/ map URL still is a map URL.
     assert isinstance(_only(BROWSE_OPAQUE_OPTION_LINE), MapUrlEvent)
+
+
+def test_a_map_url_target_stops_at_the_query_so_a_secret_would_ride_in_the_raw():
+    # Pins the MECHANISM the anchor guards, which the comment beside
+    # _MAP_URL_TARGET_RE used to state incorrectly. If the anchor let one of
+    # these lines through, no MapUrl FIELD would hold the key or the token -
+    # target stops dead at the "?". The whole query string reaches a consumer
+    # through the LogLine the event embeds instead. The hazard is therefore a
+    # whole extra event on a secrets-bearing line, not a poisoned field.
+    #
+    # This also proves the hazard fixtures below are well formed: they parse,
+    # they reach the map-URL branch, and their rejection is the anchor's doing
+    # rather than a malformed header quietly returning None.
+    event = _only(_gift_hazard(_GIFT_TWIN_PATH))
+    assert isinstance(event, MapUrlEvent)
+    assert event.url.target == _GIFT_TWIN_PATH
+    assert "?" not in event.url.target
+    assert "credentialA" not in event.url.target
+    assert event.url.axes == {}
+    # ... and the query string is right there in the embedded line.
+    assert "credentialA=REDACTED" in event.line.raw
+    assert "credentialA=REDACTED" in event.line.message
+
+
+def test_a_path_starting_game_without_the_trailing_slash_is_not_a_map_url():
+    # Discriminates the trailing slash. "/GameGift/..." starts with "/Game"
+    # but not with "/Game/", so relaxing the anchor to a bare "/Game" admits
+    # it. That weakening is INERT on the 2026-08-09 log - "/Game" and "/Game/"
+    # both match the same 36 lines there - so this constructed line is the
+    # only thing pinning it.
+    assert list(iter_events([_gift_hazard("/GameGift/redeem/api/use/111111")])) == []
+    # The same URL one inserted slash later IS under /Game/ and does parse, so
+    # the rejection above is attributable to the slash and to nothing else.
+    twin = _only(_gift_hazard("/Game/Gift/redeem/api/use/111111"))
+    assert isinstance(twin, MapUrlEvent)
+    assert twin.url.target == "/Game/Gift/redeem/api/use/111111"
+    assert twin.url.map_name == "111111"
+
+
+def test_a_path_starting_with_g_but_not_game_is_not_a_map_url():
+    # Discriminates the word, not just its first letter. Truncating the anchor
+    # to "/G" is likewise inert on the 2026-08-09 log (still 36 lines), and
+    # "/Gift/..." is the shape that notices.
+    assert list(iter_events([_gift_hazard("/Gift/redeem/api/use/111111")])) == []
+    # Swap that one word for "Game" and the very same line parses.
+    twin = _only(_gift_hazard(_GIFT_TWIN_PATH))
+    assert isinstance(twin, MapUrlEvent)
+    assert twin.url.target == _GIFT_TWIN_PATH
+
+
+def test_a_hyphen_in_the_path_is_outside_the_measured_character_class():
+    # The character class is an allowlist of the characters observed in real
+    # map paths, and no measured map path carries a "-". Widening it to
+    # [A-Za-z0-9_/.-] is inert on the 2026-08-09 log (still 36 lines), so only
+    # a constructed pair can tell the two apart.
+    #
+    # Caveat, written down rather than left in someone's head: this case
+    # asserts that a hyphen has never been MEASURED in a map path, not that
+    # the game can never write one. If a hyphenated map path is ever observed,
+    # widen the class and retire this test - do not weaken it to stay green.
+    assert list(iter_events([_gift_hazard("/Game/redeem-api/use/111111")])) == []
+    # One character apart: an underscore is inside the measured class, so the
+    # otherwise identical URL parses and yields the whole path.
+    twin = _only(_gift_hazard("/Game/redeem_api/use/111111"))
+    assert isinstance(twin, MapUrlEvent)
+    assert twin.url.target == "/Game/redeem_api/use/111111"
 
 
 def test_match_state_beats_match_id_when_a_line_carries_both():

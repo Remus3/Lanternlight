@@ -189,6 +189,38 @@ Limits, stated rather than hidden:
   cannot-certify path narrows this to slots that share a marker with a known
   one; an entirely novel shape in otherwise unremarkable text is still a silent
   pass.
+- **The ``CDKEY`` rule constrains the VALUE by shape, and a gift code with
+  no digit in it is not caught.** The measured code is 15 alphanumeric
+  characters carrying upper case, lower case and digits; the rule accepts an
+  alphanumeric run of :data:`_CDKEY_MIN_CHARS` or more that contains at least
+  one digit. Both halves are needed and neither is decoration - a claim that
+  was measured rather than asserted, and one of them was measured WRONG first.
+  :data:`RULES` runs over every tracked file and the word this rule is keyed on
+  appears in ordinary prose in this repository in ten places, so a rule that
+  simply took the next word would mask "parameter", "and" and "tokens" and
+  redden the tree scan on every commit. The length floor alone stops those
+  three. Dropping the digit requirement was then expected to redden the tree
+  scan and DID NOT, because no word of 12 or more characters happens to follow
+  the key anywhere in the repository today - which is luck, not a property of
+  the rule, since "configuration", "documentation" and "implementation" all
+  clear the floor on their own. The digit is what separates a code from a long
+  word, and ``tests/test_redact.py`` now carries such words so that removing it
+  goes red. The cost of the digit is the blind spot: a purely alphabetic code,
+  or one shorter than the floor, is stated here and not covered. The
+  three-letter abbreviation of the key is deliberately NOT a key: this
+  repository writes it followed by spaces and a colon inside a code block,
+  which a keyed rule would read as a key and a value, and in the log it
+  produced the one false positive - a run of binary garbage.
+- **``DEVICE_ID`` and ``USER_UNIQUE_ID`` are a renaming, exactly like the
+  save-file ids above.** Measured 2026-08-12 at TOKEN level rather than by the
+  weaker "the line changed" check: 202 tokens under the first key and 198 under
+  the second, one distinct value each, every one of them a 19-digit run, and 0
+  of those 400 survived :func:`redact` before these rules existed - ``LONG_ID``
+  was already catching all of them by length alone. Naming them adds a label
+  and no coverage, and costs nothing because each takes a digit run at
+  ``LONG_ID``'s own floor. The limit is the one :data:`_ID_VALUE` already
+  states: a value under either key written as fewer than 15 digits, or as a
+  UUID or a hex blob, is named by neither rule and caught by neither.
 - **The encoded pass reads standard base64, hex and wide characters only.** The
   URL-safe base64 alphabet is not accepted, because ``_`` separates every
   snake_case identifier in this repository and admitting it would fuse ordinary
@@ -387,6 +419,87 @@ def _keyed_id(label: str, keys: Iterable[str], placeholder: str) -> Rule:
     return Rule(label=label, pattern=pattern, replacement=rf"\g<key>\g<sep>{placeholder}")
 
 
+# --------------------------------------------------------------------------
+# a redeemable gift code
+# --------------------------------------------------------------------------
+#
+# Measured first-party against the live log on 2026-08-12. 7 lines mention the
+# key or its three-letter abbreviation; FIVE of them carry a value, all five the
+# same token, 15 characters of ``[A-Za-z0-9]`` carrying upper case, lower case
+# AND digits. Four syntactic positions, and the rule has to reach all four:
+#
+#   1. the bare word followed by a space and the code
+#   2. a bare ``key=value`` inside a comma-separated TS.UI list  (x2)
+#   3. a query parameter in a redemption URL
+#   4. JSON, ``"key":"value"``
+#
+# Before this rule :func:`redact` masked 0 of those 5 and :func:`assert_clean`
+# certified 7 of 7 lines. Nothing had leaked; what was broken was the
+# protection - the same shape of failure as the GVAS name field above. The
+# ROADMAP filed 9 tokens; that count is REFUTED, it is 5, and the difference is
+# an over-broad probe counting ordinary words that followed a CamelCase mention
+# of the key.
+#
+# The contrast that shows this was the only gap: the same redemption URL carries
+# a 304-character credential under a 12-character lowercase key that is already
+# in the ``TOKEN`` rule, and that one was already masked.
+#
+# WHY THE VALUE IS SHAPED AND NOT ``_VALUE``. This is the same argument
+# :data:`_ID_VALUE` makes, arriving from the other direction. These rules run
+# over every tracked file, and the key here is an ordinary English noun in this
+# repository's own prose - the ROADMAP, the ledger, the wakeup notes and
+# ``logparse.py`` all discuss it in sentences. ``key <next word>`` would mask
+# "parameter", "and" and "tokens", and a guard that fires on the documentation
+# describing it is a guard that gets switched off.
+#
+# The digit is what separates a code from a word. It is also the accepted cost,
+# stated in the module docstring and pinned by a test: a purely alphabetic code
+# is not caught by a digit-requiring rule.
+
+#: Shortest alphanumeric run treated as a gift code. The measured code is 15
+#: characters; the floor sits below that so a rotated format still lands, and
+#: well above the length of an English word that could follow the key in prose.
+_CDKEY_MIN_CHARS = 12
+
+#: All four measured separators in one alternation. The ``=``/``:`` branch
+#: carries the same trailing ``"?`` as :data:`_ID_KEY_SEP`, so a redacted JSON
+#: blob keeps its closing quote and stays parseable. The bare-whitespace branch
+#: is horizontal-only: the game never splits a key from its value across a line
+#: and prose does.
+_CDKEY_SEP = r'(?:"?[ \t]*[=:][ \t]*"?|[ \t]+)'
+
+#: An alphanumeric run at the floor containing at least one digit, and never an
+#: existing placeholder. The lookahead is what keeps this off prose.
+_CDKEY_VALUE = (
+    rf"(?!{_PLACEHOLDER})(?=[A-Za-z0-9]*\d)"
+    rf"[A-Za-z0-9]{{{_CDKEY_MIN_CHARS},}}(?![A-Za-z0-9])"
+)
+
+#: Only the lowercase spelling was observed carrying a value. The case variants
+#: are listed because a shipped build renaming the field's case would otherwise
+#: reopen the hole silently, and they cost nothing: the value shape, not the
+#: key, is what keeps this rule off the source tree. The three-letter
+#: abbreviation is NOT here - see the module docstring.
+_CDKEY_KEYS: tuple[str, ...] = (
+    "cdkey",
+    "cdKey",
+    "CdKey",
+    "CDKey",
+    "CDKEY",
+    "cd_key",
+    "CD_KEY",
+)
+
+# ``\b`` rather than a character-class lookbehind, matching every other keyed
+# rule in this module. It is also what keeps the rule off a CamelCase mention:
+# in a token like ``...GetCDKeyGift`` there is no boundary on either side of the
+# key, so the following word is never read as a value.
+_CDKEY = re.compile(
+    rf"(?P<key>\b(?:{'|'.join(_CDKEY_KEYS)})\b)"
+    rf"(?P<sep>{_CDKEY_SEP})(?P<value>{_CDKEY_VALUE})"
+)
+
+
 def _dashed(label: str, keys: Iterable[str], placeholder: str) -> Rule:
     """Build a ``key-value`` rule. The game emits this shape for names.
 
@@ -560,6 +673,11 @@ RULES: tuple[Rule, ...] = (
         ),
         "<TOKEN>",
     ),
+    # A redeemable, account-bound gift code. Sits with the other credential
+    # rules and well ahead of LONG_ID, so a code that happened to be all digits
+    # keeps its own label rather than collapsing into a bare digit run. See the
+    # block above _CDKEY_MIN_CHARS for why the value is shaped.
+    Rule(label="CDKEY", pattern=_CDKEY, replacement=r"\g<key>\g<sep><CDKEY>"),
     _keyed(
         "OPENID",
         ("openID", "openId", "OpenID", "open_id", "openid"),
@@ -628,6 +746,27 @@ RULES: tuple[Rule, ...] = (
         "<OWNER_ROLEID>",
     ),
     _keyed_id("ROLEID", ("roleId", "RoleId", "RoleID", "role_id", "roleid"), "<ROLEID>"),
+    # The two TS.SDK telemetry ids. Same renaming argument as the three above,
+    # and the decision ROADMAP item 9 asked for is recorded in the module
+    # docstring with the token-level measurement it rests on. Neither key
+    # overlaps the USERID rule earlier in this tuple - ``user_id`` is not a
+    # substring of ``user_unique_id`` - so ordering between them is free.
+    _keyed_id(
+        "DEVICE_ID",
+        ("device_id", "deviceId", "DeviceId", "DeviceID", "deviceid"),
+        "<DEVICE_ID>",
+    ),
+    _keyed_id(
+        "USER_UNIQUE_ID",
+        (
+            "user_unique_id",
+            "userUniqueId",
+            "UserUniqueId",
+            "UserUniqueID",
+            "useruniqueid",
+        ),
+        "<USER_UNIQUE_ID>",
+    ),
     # Bare 32-char hex: an EOS ProductUserId with no key in sight.
     Rule(
         label="PRODUCTUSERID",
