@@ -8,9 +8,23 @@ fidelity and archive older ones rather than deleting them.
 # Session 2026-08-12h - the cdkey hole shut, and a guard that was never pinned
 
 Three slices on disjoint files plus two independent refutation passes, merged
-to `main` and **pushed** - `main` is `0998b95`. Ledger `LL-0046`. **1196 tests
-at the start, 1222 at the end**, ruff clean, both measured by the integrator on
-a clean tree with `__pycache__` purged. `ops.merge_gate.verify`: OK.
+to `main` and **pushed** - `main` is `e956942`. Ledger `LL-0046` and `LL-0047`.
+**1196 tests at the start, 1223 at the end**, ruff clean, both measured by the
+integrator on a clean tree with `__pycache__` purged. `ops.merge_gate.verify`:
+OK.
+
+**The wrap refutation confirmed all six claims and then found three defects**,
+closed in `LL-0047`: dead regex in `_CDKEY_VALUE`, a comment crediting the
+wrong condition, and an anchor test with no unique kill. See the section at the
+end of this entry - the way the second one was fixed is the most useful thing
+here.
+
+**Process failure, on the record:** `LL-0046` was merged and pushed **before**
+that refutation returned a verdict, on the operator's explicit instruction. It
+came back CONFIRMED so nothing unsafe landed, but the merge was unreviewed at
+the moment it happened. The pass also noted that at `43693b3` the roadmap still
+read `READY` and no ledger entry existed - **"item 9 CLOSED" was never a
+property of the commit that was merged**; the docs landed separately.
 
 **Checked first, as the hand-off said to:** the game was NOT running - log mtime
 2026-08-09 18:03:53, 74 hours stale, no process. So item 7b was not startable
@@ -89,6 +103,38 @@ Percent-encoding is not one of the three the module claims to reach. Measured:
 3 runs, **0** hiding a persona, and percent-decoding a **redacted** log brings
 back **0 of 12** personas. n=3 - a fact about this capture, not the encoding.
 No rule added; a guard built on three runs is decoration.
+
+## Three wrong answers in a row, each refuted by its own mutation
+
+The single most useful thing this session produced, and it is a reasoning
+failure rather than a result. Asked what keeps the `CDKEY` rule off a CamelCase
+mention of the key:
+
+| claim written | mutation run | outcome |
+|---|---|---|
+| the `\b` word boundary does | delete both boundaries | suite **green** |
+| no - the separator does | make the separator optional | suite **green** |
+| then the two together | remove **both** at once | suite **still green** |
+
+The real answer is the **value shape**: the token after such a mention is
+`Gift`, four characters with no digit, nowhere near the floor. All three
+conditions block it independently.
+
+Every one of those comments would have shipped as confident prose explaining a
+mechanism that does not exist. **And the first attempt at fixing this shipped a
+decoration comment while fixing a decoration comment** - it claimed widening
+the value class would redden the placeholder test; that mutation was run and
+**survived**. Writing the claim and then testing it is what caught it.
+
+The same over-determination turned out to hold for idempotence: measured
+against every placeholder `RULES` can emit, each is blocked by at least two of
+the class, the digit requirement and the floor, so **no single edit exposes any
+of them**. `<PRODUCTUSERID>` at 15 characters is the only one long enough to
+clear the floor, and it carries no digit.
+
+**The habit worth carrying:** when you write "X is what prevents Y", run the
+mutation that removes X before you commit the sentence. In this module that
+sentence has now been wrong four times in two sessions.
 
 ## Where to start next
 
