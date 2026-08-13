@@ -1210,78 +1210,153 @@ opposite provenances - one datamined from encrypted assets, one walked by hand.
 They fail in opposite directions and must be cited differently. Check how a
 source was built before quoting it, every time.
 
-## 9. `cdkey` is invisible to the redactor, and `assert_clean` approves it - READY, safety lane
+## 9. `cdkey` was invisible to the redactor - CLOSED 2026-08-12
 
-Found 2026-08-12 by the integrator while checking an unrelated claim from the
-log-tail session. Nothing leaked and nothing is committed. **What is broken is
-the protection, not the record** - which is the same shape as item 0 and
-`LL-0029`, and the third time in this project that a guard has certified text it
-had no basis to certify.
+Opened 2026-08-12 by the integrator, closed the same day. Ledger `LL-0046`.
+Nothing leaked and nothing raw is committed. **What was broken was the
+protection** - the same shape as item 0 and `LL-0029`, and the third time in
+this project that a guard has certified text it had no basis to certify.
 
-Measured first-party against the live log, by the integrator:
+The state before, re-measured by the integrator rather than relayed:
 
-    lines matching cdkey/cdk            : 7
-    candidate tokens found              : 9
-    tokens SURVIVING redact()           : 9  of 9
-    assert_clean() certified the result : 6  of 6 lines
+    lines matching the key or its abbreviation : 7
+    VALUE-BEARING tokens                       : 5
+    tokens SURVIVING redact()                  : 5 of 5
+    assert_clean() certified                   : 7 of 7 lines
 
-So a redeemable, account-bound gift code passes through the only sanctioned
-redaction path **entirely unmasked**, and the guard whose whole job is to refuse
-such text returns cleanly. One of those lines is a `LogUGiftAgent` redemption
-URL carrying both a cdkey parameter and an access-token parameter in one query
-string.
+**Acceptance - MET 2026-08-12.** Suite **1222 passed, 1222 collected**, ruff
+clean, `__pycache__` purged; the baseline before the work was **1196**.
 
-**The parameter names are deliberately not written out here.** Spelling the
-access-token key literally in this file trips `tests/test_no_pii.py`, which is
-the guard behaving exactly as designed - the integrator hit it while drafting
-this item and rewrote the prose rather than weakening the rule. Worth keeping,
-because the reflex to relax a guard that flags your own writing is the whole
-hazard this item is about.
+- **The `CDKEY` rule masks all four measured positions** - the bare word plus a
+  space, `key=value` in a comma list, a query parameter in the redemption URL,
+  and JSON. After: **0 of 5** survive, `assert_clean` **refuses** all five
+  token-bearing raw lines, redaction stays idempotent on the whole 12.8 MB log,
+  and the rule fires on **0 of 118** tracked files.
+- **A positive control** proves the detector fires when injected in each of the
+  four positions, so a zero finding cannot be confused with a dead scanner.
+- **The `/Game/` anchor is pinned** - see below, because it was not.
+- **The `device_id` / `user_unique_id` decision is taken**, with the
+  token-level check the acceptance demanded.
 
-**A second surface makes this urgent rather than theoretical.** The map-URL
-recogniser added in `LL-0045` extracts only a four-key allowlist, and the
-`/Game/` anchor on its target pattern is the **only** thing keeping that
-redemption URL out of an event payload. Verified: against that line the strict
-pattern matches `False` and a relaxed `/[A-Za-z0-9_/.]*\?` matches `True`. A
-future maintainer relaxing that anchor for a good-looking reason would route
-both of those parameters straight into a parsed event, and no detector
-downstream would object.
+### The filed count of 9 was wrong, and the reconciliation is the useful part
 
-**Related and weaker, same probe, needs tightening rather than a verdict:**
-`device_id` (202 lines) and `user_unique_id` (198 lines) in `TS.SDK` JSON.
-`redact()` changed every one of those lines, but "the line changed" does not
-prove the specific token was masked - a persona elsewhere on the line changes it
-too. That distinction is exactly what this item exists to stop being fudged.
+This item said "candidate tokens found: 9". It is **5**, confirmed by two
+independent probes and reconciled by a third. The 9 came from a probe that read
+the ordinary word after a **CamelCase mention** of the key as though it were a
+value: 5 real tokens plus 4 innocent neighbouring words. No value-based method
+yields 9 on this log.
 
-**Also measured, correcting a claim made the same day:** the operator's persona
-does reach query-string-shaped payloads. A narrow probe over lines containing
-`/Game/` or `http` found **0** and was wrongly reported as a clean negative; a
-broader probe found **72** candidate lines with **26** carrying a persona,
-including `[Login]` lines. An empty grep is a claim about your pattern.
+So the acceptance's own wording, "masks the token in all 9 observed positions",
+was **wrong on its face** - there are **4 positions and 5 occurrences**. A
+detector built against that wording would have been hunting four tokens that do
+not exist. A filed count is a hypothesis, for the fifth time in this file.
 
-**A third surface, found independently the same session and folded in here
-rather than left in a report nobody reads:** `OnRep_PlayStateTag` writes a
-player-name parameter carrying a display name on **20** lines, and those include
-**third-party** players, one of them non-ASCII. The key is again not spelled out
-literally, for the same reason as above - it is itself a keyed redaction rule, so
-writing it beside any placeholder makes this file trip its own guard, which it
-did on the first attempt. That confirms `SAF-4` on yet another surface and
-widens this item past the operator's own identifiers - a stranger's display name
-is in scope exactly as `2b` established for the save. No such name is written
-into this repository, here or anywhere else.
+Also corrected: this item recorded `assert_clean` certifying "6 of 6". Both are
+true and they count different things - 6 is the lines matching the full
+spelling, 7 is the lines matching the abbreviation as well. One of those 7 is a
+**false positive**: a three-letter fragment inside a run of binary garbage.
 
-**Acceptance:** a `CDKEY` detector in `lanternlight/redact.py` that masks the
-token in all 9 observed positions, with `assert_clean` **refusing** a line
-carrying one; a positive control proving the detector fires when injected, so a
-zero finding cannot be confused with a dead scanner; a decision recorded either
-way on `device_id` and `user_unique_id`, with the token-level check rather than
-the line-changed check; and a test pinning the `/Game/` anchor in
-`lanternlight/logparse.py` that names this URL as the hazard. A measured
-negative on any part is a result, provided it says what was tried.
+### Why the value is shaped, and the measurement that corrected the reason
 
-**Not to be closed by reading.** The whole failure mode here is a guard that
-returns cleanly, so no part of this may be signed off on the strength of a test
-passing - break the detector and watch the test go red first.
+`RULES` runs over every tracked file, and the key is an ordinary noun in this
+repository's own prose - the roadmap, the ledger, the wakeup notes and
+`logparse.py` all discuss it in sentences. A rule taking the next word masks
+"parameter", "and" and "tokens" and reddens the tree scan on every commit. The
+abbreviation is deliberately **not** a key for the same reason: this file
+writes it followed by spaces and a colon inside a code block, which a keyed
+rule reads as a key and a value.
+
+The slice first wrote that **the digit requirement** was what kept the rule off
+prose. A mutation **refuted** it: dropping the digit left the tree scan green,
+because the words following the key today are 3 to 9 characters and the
+**length floor** stops them. But "configuration", "documentation" and
+"implementation" all clear the floor on their own, so the digit is what
+separates a code from a long word - it is load-bearing for a case the tree does
+not currently contain. Such words are now in the tests, so removing the digit
+goes red. A guard that is green only because the corpus happens to be kind is
+not proven.
+
+**The accepted blind spots are in the module docstring and pinned by tests:** a
+purely alphabetic code, and a code shorter than the floor, are **not caught**.
+Stated rather than hidden, because a caveat dropped from the artifact is a lie
+in the artifact.
+
+### The `/Game/` anchor test existed and did NOT pin the anchor
+
+This is the sharpest finding of the item, and it came from refusing to accept
+that an existing test met the clause. `test_a_non_game_url_with_a_query_is_not_a_map_url`
+shipped in `LL-0045` and looks exactly like the test the acceptance asked for.
+Mutation-probed, each run with `__pycache__` purged and the mutation asserted
+present on disk before any survivor was believed:
+
+| mutation of `_MAP_URL_TARGET_RE` | before |
+|---|---|
+| relax to a bare `/<path>?` | KILLED |
+| add `re.IGNORECASE` | KILLED |
+| drop the trailing slash, `/Game` | **SURVIVED** |
+| truncate to `/G` | **SURVIVED** |
+| widen the class to admit `-` | **SURVIVED** |
+
+The committed stand-in used a **lowercase** path, so the only properties
+actually pinned were case-sensitivity and a leading `/G`. Three plausible
+weakenings were invisible. On today's log none of them is a leak - `/Game/`,
+`/Game` and `/G` all match the same 36 lines - so the guard was real while its
+own comment overstated what it pinned, which is the kind of comment a future
+maintainer relies on.
+
+Four cases added, each paired with a **positive twin** one character or one
+word away whose exact `target` is asserted, so no rejection rests on a bare
+negative. All five mutations are now KILLED.
+
+### Two comment claims were measured wrong and are corrected, not edited away
+
+- **The leak is a whole extra event on a secrets-bearing line, not a poisoned
+  field.** `MapUrl.target` stops dead at the `?`, so on that line it would hold
+  the 26-character path alone and **no `MapUrl` field would ever carry the key
+  or the token**. They would reach a consumer through the embedded
+  `LogLine.raw` and `.message`. The hazard is real; the mechanism was
+  misdescribed, and a test now pins the mechanism.
+- **The comment asserted what `lanternlight.redact` does not mask.** That
+  sentence is **removed rather than updated**: the anchor's job does not depend
+  on another module's state, and a comment asserting it goes stale the moment
+  that module changes - which it did, this session, three files away.
+
+### Two of the item's own surfaces were already closed
+
+Recorded rather than dropped, because the item widened its own scope onto
+hazards that did not exist:
+
+- **`OnRep_PlayStateTag` needs no new rule.** Measured at token level: **0 of
+  20** `PlayerName` values survive, including all three distinct third-party
+  names and the one non-ASCII value. `PlayerName` is already a distinctive
+  persona key. `TagName` and `lastState` survive and **should** - they are
+  `Game.PlayState.*` tags, not PII.
+- **`device_id` and `user_unique_id` were already masked.** 202 and 198 tokens,
+  one distinct value each, every one a **19-digit** run, **0 surviving** at
+  token level before any rule was added - caught by `LONG_ID`'s 15-digit floor.
+
+  **Decision taken: name them anyway.** `DEVICE_ID` and `USER_UNIQUE_ID` are
+  `_keyed_id` rules following the `BATTLEID` / `OWNER_ROLEID` / `ROLEID`
+  precedent. This is a **renaming, not a widening** - each takes a digit run at
+  `LONG_ID`'s own floor, so every value they decline `LONG_ID` declines too. It
+  adds a label and no coverage. The limit is `_ID_VALUE`'s existing one: a value
+  under either key written as fewer than 15 digits, or as a UUID or hex blob, is
+  named by neither rule and caught by neither.
+
+### A fourth encoding, measured and clean
+
+The module names three encodings it reaches - base64, hex, wide characters -
+and states anything else is out of reach. **Percent-encoding is a fourth**, it
+is plainly present in this log, and it was worth measuring rather than assuming:
+
+    lines containing a percent-escape             : 3
+    runs hiding a persona behind the encoding     : 0
+    labels reachable ONLY after percent-decoding  : NONE
+    redact the log, THEN percent-decode it        : 0 of 12 personas reappear
+
+**No rule is added.** It is n=3, which makes this a fact about this capture and
+not about the encoding, and a guard built for three runs is decoration. Recorded
+as a measured negative with its limit attached so nobody re-derives it.
 
 ---
 
@@ -1299,10 +1374,14 @@ damage in quantity - which is the half Emberforge actually needs, because the
 for. If the game is running, do 7b first and fold items 1, 4b, 5 and 6 into the
 same session, since all of them need the client and none deserves its own.
 
-**If the client is not open, the next item is 9** - the `cdkey` redaction hole.
-It needs nothing but work, it is safety-lane work so it holds a veto, and it is
-the only open item where the failure mode is a guard that *returns cleanly*.
-Item 4's watcher is equally independent and is the cheaper of the two.
+**Item 9 is CLOSED as of 2026-08-12** (ledger `LL-0046`). The `cdkey` hole is
+shut, the `/Game/` anchor is genuinely pinned, and two of that item's four
+surfaces turned out to have been closed already.
+
+**If the client is not open, the next item is 4's `AvgPrice` watcher** - it is
+fully specified, independent of everything else, and needs nothing but work.
+There is no longer an open safety item; the safety lane's queue in
+`lanes/safety.STATE.json` is all blocked on a candidate fixture existing.
 
 Item 3 is closed, so it is no longer the fallback. The tailer exists; what does
 not exist yet is anything consuming it, and nothing on this list currently asks

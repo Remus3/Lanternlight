@@ -5,6 +5,108 @@ fidelity and archive older ones rather than deleting them.
 
 ---
 
+# Session 2026-08-12h - the cdkey hole shut, and a guard that was never pinned
+
+Three slices on disjoint files plus two independent refutation passes, merged
+to `main` and **pushed** - `main` is `0998b95`. Ledger `LL-0046`. **1196 tests
+at the start, 1222 at the end**, ruff clean, both measured by the integrator on
+a clean tree with `__pycache__` purged. `ops.merge_gate.verify`: OK.
+
+**Checked first, as the hand-off said to:** the game was NOT running - log mtime
+2026-08-09 18:03:53, 74 hours stale, no process. So item 7b was not startable
+and **ROADMAP item 9** was the work.
+
+## Item 9 is CLOSED, and three of its four surfaces were already closed
+
+The real hole was one surface, not four. Measured first-party before touching
+anything:
+
+| surface | filed as | measured |
+|---|---|---|
+| `cdkey` | 9 tokens, 0 masked | **5** tokens, 0 masked - a real hole |
+| `device_id` / `user_unique_id` | needs a token-level check | 19-digit runs, **0 of 202** and **0 of 198** survive |
+| `OnRep_PlayStateTag` player name | open hazard, third-party names | **0 of 20** survive, non-ASCII one included |
+| `/Game/` anchor test | to be written | already existed - and did **not** pin the anchor |
+
+After the fix: **0 of 5** survive, `assert_clean` refuses all five
+token-bearing raw lines, **0 firings across 118 tracked files**, idempotent on
+the whole 12.8 MB log.
+
+## The sharpest finding: an existing test that looked exactly right
+
+`test_a_non_game_url_with_a_query_is_not_a_map_url` shipped in `LL-0045` and
+reads like the test item 9 asked for. Mutation-probed, it **survived three of
+five** weakenings - dropping the trailing slash, truncating to `/G`, and
+widening the character class - because the committed stand-in used a
+**lowercase** path, so the only things pinned were case and a leading `/G`. Not
+a leak on today's log (all three still match the same 36 lines), but the
+comment beside it claimed more than the test delivered. Four cases added, each
+with a **positive twin** one character or one word away. All five now killed.
+
+**The mechanism was also misdescribed.** `MapUrl.target` stops dead at the
+`?`, so no `MapUrl` field would ever hold the key or the token - they ride in
+the embedded `LogLine.raw` and `.message`. The hazard is a whole extra event on
+a secrets-bearing line, not a poisoned field. A test now pins that.
+
+## Three corrections that are worth more than the feature
+
+1. **A slice's own mutation refuted its own reasoning.** It wrote that the
+   digit requirement kept the CDKEY rule off prose. Dropping the digit left the
+   tree scan **green** - the length floor is what stops today's words. But
+   "configuration", "documentation" and "implementation" all clear the floor,
+   so the digit is load-bearing for a case the corpus does not happen to
+   contain. Those words are now in the tests. **A guard that is green only
+   because the corpus is kind is not proven.**
+2. **A slice inferred a live game from a size reading - second session
+   running.** It reported the log had grown and the game was up. **12,899,997
+   raw BYTES decode to 12,867,803 CHARACTERS**; the 32,194 difference is the
+   multi-byte UTF-8 `SAF-4` already documents. Byte counts and character counts
+   are different quantities on this log because it is not ASCII. Believed, it
+   would have started 7b against a game that is not running.
+3. **The integrator measured a moving tree and got two answers** - 1222 passed,
+   then 5 failed minutes later, because a slice was mid-mutation with
+   `re.IGNORECASE` spliced into the anchor. Last session's rule about freezing a
+   ref before a refutation **applies to the integrator's own measurements too**.
+   The filed numbers were taken against a clean tree matching the commit.
+
+Also: I handed a slice a number I had not checked - the URL credential is
+**304** characters, not the 122 I said. It was already masked, so the point
+survived, but an unverified number given to an agent as ground truth is worse
+than none.
+
+## The 9-versus-5 reconciliation
+
+The filed 9 came from a probe reading the ordinary word after a **CamelCase**
+mention of the key as a value: 5 real tokens plus 4 innocent neighbouring
+words. There are **4 positions and 5 occurrences**, so the acceptance's own
+wording "all 9 observed positions" was wrong on its face. One of the 7 matching
+lines is a false positive - a three-letter fragment inside binary garbage,
+which is why the abbreviation is deliberately not a key.
+
+## A fourth encoding, measured and clean
+
+Percent-encoding is not one of the three the module claims to reach. Measured:
+3 runs, **0** hiding a persona, and percent-decoding a **redacted** log brings
+back **0 of 12** personas. n=3 - a fact about this capture, not the encoding.
+No rule added; a guard built on three runs is decoration.
+
+## Where to start next
+
+**Check whether the game is running first.** If it is, **item 7b**, the
+training ground - still the only route to **outgoing** damage in quantity, and
+`sourceType: 0` is what to look for. Fold in items 1, 4b, 5 and 6.
+
+If it is not, **item 4's `AvgPrice` watcher**. There is no open safety item any
+more; `lanes/safety.STATE.json` is entirely blocked on a candidate fixture.
+
+Do **not** label any damage number dealt or taken beyond the 21 proven TAKEN,
+and publish **no** coefficient until a value repeats in an independent run.
+
+One operator decision remains, deliberately unanswered: **OPS-6** - retire the
+global `LL-NNNN` id space for per-lane namespacing.
+
+---
+
 # Session 2026-08-12g - the log tail shipped, and the refutation refused the merge
 
 Two parallel slices on disjoint files, one independent refutation pass, merged
