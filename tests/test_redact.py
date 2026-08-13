@@ -24,6 +24,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+import _tracked  # noqa: E402  (sits beside this file in tests/)
 import pytest  # noqa: E402  (path bootstrap must run first)
 
 from lanternlight import redact as redact_module  # noqa: E402
@@ -1833,3 +1834,288 @@ def test_the_module_docstring_states_the_property_list_limit():
     doc = redact_module.__doc__ or ""
     assert "measurement only" in doc
     assert "NAME_BEARING_PROPERTIES" in doc
+
+
+# --------------------------------------------------------------------------
+# ROADMAP item 9 - the cdkey detector
+# --------------------------------------------------------------------------
+#
+# Measured first-party against the live log on 2026-08-12: 7 lines mention
+# cdkey/cdk and FIVE of them carry a value token. All five hold the SAME token,
+# 15 alphanumeric characters carrying upper case, lower case and digits, in four
+# syntactic positions - a bare word, a bare key=value, a query parameter and
+# JSON. Before this section redact() masked 0 of 5 and assert_clean certified
+# 7 of 7 lines. The seventh line is a ``cDk`` inside a run of binary garbage and
+# carries no value at all. ROADMAP item 9 filed 9 tokens; that count is refuted.
+#
+# Nothing here is copied from the log. FAKE_CDKEY is invented, and it is
+# assembled from fragments and joined to its key at runtime for the reason the
+# module docstring gives: this file is itself scanned by tests/test_no_pii.py
+# with these very detectors, so a literal cdkey pair in the source would fail
+# that scan, and correctly.
+
+#: 15 alphanumeric characters with upper, lower and digits - the SHAPE measured
+#: in the log, with invented content.
+FAKE_CDKEY = "Lntrn" + "8kQ4" + "wZ2" + "j7X"
+
+#: 19-digit runs, the shape measured under both TS.SDK keys. Invented.
+FAKE_DEVICE_ID = "9182736450" + "918273645"
+FAKE_USER_UNIQUE_ID = "1029384756" + "102938475"
+
+_NEW_LABELS = frozenset({"CDKEY", "DEVICE_ID", "USER_UNIQUE_ID"})
+
+
+def _ks(key: str, value: str) -> str:
+    """Join a key and value with the bare space the get-cdkey line uses."""
+    return key + " " + value
+
+
+def test_the_cdkey_detector_fires_on_an_injected_code():
+    # THE POSITIVE CONTROL, and it comes first on purpose. Item 9 exists because
+    # a guard returned cleanly, so every "zero findings" claim below is
+    # worthless unless the same scanner is first shown to fire.
+    assert "CDKEY" in _labels_of(_kv("cdkey", FAKE_CDKEY))
+
+
+def test_a_cdkey_after_the_bare_word_is_masked():
+    # Position 1 of 4: the bare word, space separated, no key syntax at all.
+    anchored = "get " + "cdkey"
+    assert redact(_ks(anchored, FAKE_CDKEY)) == _ks(anchored, "<CDKEY>")
+
+
+def test_a_cdkey_in_a_bare_key_value_list_is_masked():
+    # Position 2 of 4: a bare key=value inside a comma-separated TS.UI list. The
+    # trailing field must survive - a rule that ate the rest of the line would
+    # be masking by accident rather than by design.
+    line = _kv("cdkey", FAKE_CDKEY) + ", " + _kv("count", "32758")
+    assert redact(line) == _kv("cdkey", "<CDKEY>") + ", " + _kv("count", "32758")
+
+
+def test_a_cdkey_query_parameter_is_masked():
+    # Position 3 of 4: a query parameter in the redemption URL. The neighbouring
+    # parameter is the contrast that shows CDKEY was the only gap - the module
+    # already masked the credential sitting beside it.
+    query = (
+        "?aid=123456&"
+        + _kv("cdkey", FAKE_CDKEY)
+        + "&"
+        + _kv("access_token", FAKE_TOKEN)
+        + "&app=1"
+    )
+    cleaned = redact(query)
+    assert FAKE_CDKEY not in cleaned
+    assert FAKE_TOKEN not in cleaned
+    assert cleaned == (
+        "?aid=123456&"
+        + _kv("cdkey", "<CDKEY>")
+        + "&"
+        + _kv("access_token", "<TOKEN>")
+        + "&app=1"
+    )
+
+
+def test_a_cdkey_in_json_is_masked_without_eating_the_quote():
+    # Position 4 of 4. The closing quote has to survive or a redacted telemetry
+    # blob stops being parseable - the same reason _ID_KEY_SEP steps over the
+    # opening one.
+    assert redact(_kj("cdkey", FAKE_CDKEY)) == _kj("cdkey", "<CDKEY>")
+
+
+def test_assert_clean_refuses_a_line_carrying_a_cdkey():
+    # The half that actually failed. iter_sensitive going quiet is a missing
+    # label; assert_clean going quiet is a redeemable account-bound code
+    # certified as safe to publish.
+    for text in (
+        _ks("get " + "cdkey", FAKE_CDKEY),
+        _kv("cdkey", FAKE_CDKEY),
+        _kj("cdkey", FAKE_CDKEY),
+    ):
+        with pytest.raises(RedactionError) as excinfo:
+            assert_clean(text, personas=[])
+        assert "CDKEY" in str(excinfo.value)
+
+
+def test_redacting_a_cdkey_is_idempotent():
+    for text in (
+        _ks("get " + "cdkey", FAKE_CDKEY),
+        _kv("cdkey", FAKE_CDKEY),
+        _kj("cdkey", FAKE_CDKEY),
+        "&" + _kv("cdkey", FAKE_CDKEY) + "&",
+    ):
+        once = redact(text)
+        assert FAKE_CDKEY not in once
+        assert redact(once) == once
+
+
+def test_an_existing_cdkey_placeholder_is_not_remasked():
+    already = _kv("cdkey", "<CDKEY>")
+    assert redact(already) == already
+    assert "CDKEY" not in _labels_of(already)
+    assert_clean(already, personas=[])
+
+
+def test_the_cdkey_label_reaches_the_repository_scan():
+    assert "CDKEY" in ALL_LABELS
+    assert "CDKEY" in FILE_SCAN_LABELS
+
+
+# --- the design constraint: RULES also runs over every tracked file ----------
+
+
+def test_the_cdkey_rule_is_quiet_on_the_prose_this_repository_already_contains():
+    # The word cdkey appears in ordinary prose in this repository in code
+    # blocks, sentences and comments. A naive rule reading the next word masks
+    # "parameter", "and" and "tokens", and reddens the tree scan on every
+    # commit. The first ten lines are the real shapes, transcribed from the
+    # tracked files.
+    #
+    # The last three are NOT in the tree, and they are the ones that make this
+    # test earn its place. Measured while mutation-testing this rule: dropping
+    # the digit requirement did NOT redden the tree scan, because no word of 12
+    # or more characters happens to follow the key anywhere in the repository
+    # today. That is luck, not a property of the rule. An ordinary English word
+    # of 12 or more letters clears the length floor on its own, so the digit is
+    # the constraint that separates a code from a word - and without a case
+    # that contains one, the digit requirement would be untested here and would
+    # look like decoration to whoever removed it.
+    prose = "\n".join(
+        (
+            "    lines matching cdkey/cdk            : 7",
+            "URL carrying both a cdkey parameter and an access-token parameter",
+            "  while admitting a redemption URL - carrying a cdkey and an",
+            "**`cdkey` tokens survive `redact()` 9 of 9, and the guard CERTIFIES",
+            "cdkey tokens survive redact() 9 of 9. Same vacuous-guard shape.",
+            "# a redemption URL whose query string carries a cdkey and an",
+            "# currently masks a cdkey, so until that is fixed this anchor is",
+            "        Display: GetCDKeyGift, ",
+            "an item 9 (the cdkey hole, safety lane) is next",
+            "**Acceptance:** a `CDKEY` detector in `lanternlight/redact.py`",
+            "the cdkey configuration is documented in the section below",
+            "cdkey documentation lives beside the redaction rules",
+            "a cdkey implementation note, filed against the safety lane",
+        )
+    )
+    assert list(iter_sensitive(prose, labels=FILE_SCAN_LABELS)) == []
+
+
+def test_cdk_on_its_own_is_not_a_cdkey_key():
+    # ROADMAP.md's code block writes ``cdk            : 7``, which a keyed rule
+    # reading ``cdk`` would parse as key and value. ``cdk`` is also the only
+    # shape that produced a false positive in the log - a run of binary garbage
+    # - so it is deliberately not a key.
+    assert list(iter_sensitive("cdk            : 7", labels=FILE_SCAN_LABELS)) == []
+    assert list(iter_sensitive(_kv("cdk", FAKE_CDKEY), labels=FILE_SCAN_LABELS)) == []
+
+
+def test_the_tracked_tree_is_quiet_under_the_new_labels():
+    # The positive control runs FIRST, inside this test, with the same labels
+    # and the same scanner. A zero finding over the tree proves nothing unless
+    # the scanner that produced it is shown alive in the same breath.
+    planted = "\n".join(
+        (
+            "&" + _kv("cdkey", FAKE_CDKEY) + "&",
+            _kv("device_id", FAKE_DEVICE_ID),
+            _kj("user_unique_id", FAKE_USER_UNIQUE_ID),
+        )
+    )
+    fired = {label for label, _, _ in iter_sensitive(planted, labels=_NEW_LABELS)}
+    assert fired == set(_NEW_LABELS), fired
+
+    findings = []
+    scanned = 0
+    for path in _tracked.iter_scannable_files():
+        try:
+            text = path.read_bytes().decode("latin-1")
+        except OSError:
+            continue
+        scanned += 1
+        for label, matched, offset in iter_sensitive(text, labels=_NEW_LABELS):
+            findings.append((str(path), label, offset, len(matched)))
+    assert scanned >= _tracked.MIN_EXPECTED_FILES, scanned
+    assert findings == [], findings
+
+
+# --- the limits, written down rather than hedged in chat ---------------------
+
+
+def test_a_code_with_no_digit_in_it_is_not_caught():
+    # THE ACCEPTED LIMIT, pinned so it cannot quietly be forgotten. The digit
+    # requirement is the only thing keeping this rule off ordinary prose, and
+    # prose is the binding constraint because RULES runs over every tracked
+    # file. A purely alphabetic gift code walks past this detector.
+    alphabetic = "LanternKeyAbcde"
+    assert len(alphabetic) == len(FAKE_CDKEY)
+    assert not any(char.isdigit() for char in alphabetic)
+    assert redact(_kv("cdkey", alphabetic)) == _kv("cdkey", alphabetic)
+
+
+def test_a_code_below_the_measured_floor_is_not_caught():
+    # The other accepted limit. The floor sits below the 15 characters measured
+    # so a rotated format has headroom, but it is a floor and a shorter code is
+    # not reached.
+    short = "Ab1" + "cd2"
+    assert len(short) < redact_module._CDKEY_MIN_CHARS
+    assert redact(_kv("cdkey", short)) == _kv("cdkey", short)
+
+
+def test_the_module_states_the_cdkey_limits():
+    # A caveat stated in chat but dropped from the artifact is a lie in the
+    # artifact. These limits have to be readable where somebody meets the rule.
+    doc = redact_module.__doc__ or ""
+    assert "CDKEY" in doc
+    assert "no digit in it is not caught" in doc
+
+
+# --- device_id and user_unique_id: the recorded decision ---------------------
+
+
+def test_a_device_id_is_named_rather_than_only_measured_for_length():
+    assert "DEVICE_ID" in _labels_of(_kv("device_id", FAKE_DEVICE_ID))
+    assert redact(_kv("device_id", FAKE_DEVICE_ID)) == _kv("device_id", "<DEVICE_ID>")
+
+
+def test_a_user_unique_id_is_named_rather_than_only_measured_for_length():
+    assert "USER_UNIQUE_ID" in _labels_of(_kj("user_unique_id", FAKE_USER_UNIQUE_ID))
+    assert redact(_kj("user_unique_id", FAKE_USER_UNIQUE_ID)) == _kj(
+        "user_unique_id", "<USER_UNIQUE_ID>"
+    )
+
+
+def test_the_two_sdk_labels_reach_the_repository_scan():
+    for label in ("DEVICE_ID", "USER_UNIQUE_ID"):
+        assert label in ALL_LABELS, label
+        assert label in FILE_SCAN_LABELS, label
+
+
+def test_the_two_sdk_rules_are_a_renaming_and_not_a_widening():
+    # The BATTLEID / OWNER_ROLEID / ROLEID precedent. Each takes a digit run at
+    # LONG_ID's own floor, so every value they decline LONG_ID declines too -
+    # nothing that was caught before stops being caught, and nothing new starts.
+    short = "1234567890" + "123"
+    assert len(short) < redact_module._LONG_ID_MIN_DIGITS
+    for key in ("device_id", "user_unique_id"):
+        assert redact(_kv(key, short)) == _kv(key, short)
+        assert list(iter_sensitive(_kv(key, short))) == []
+
+
+def test_the_two_sdk_shapes_were_already_masked_before_being_named():
+    # The measured fact this decision rests on, re-derived here rather than
+    # cited: a bare 19-digit run is LONG_ID's business already. Naming it adds a
+    # label, not coverage - and the module says so.
+    assert "LONG_ID" in _labels_of(FAKE_DEVICE_ID)
+    assert redact(FAKE_DEVICE_ID) == "<LONG_ID>"
+
+
+def test_the_two_sdk_shapes_are_refused_by_assert_clean():
+    for text in (
+        _kv("device_id", FAKE_DEVICE_ID),
+        _kj("user_unique_id", FAKE_USER_UNIQUE_ID),
+    ):
+        with pytest.raises(RedactionError):
+            assert_clean(text, personas=[])
+
+
+def test_the_module_records_the_device_id_decision():
+    doc = redact_module.__doc__ or ""
+    assert "DEVICE_ID" in doc
+    assert "USER_UNIQUE_ID" in doc
