@@ -1948,10 +1948,59 @@ def test_redacting_a_cdkey_is_idempotent():
 
 
 def test_an_existing_cdkey_placeholder_is_not_remasked():
+    # A placeholder lookahead in _CDKEY_VALUE was DEAD REGEX and was removed
+    # rather than pinned - a guard that cannot fire is not made real by a test
+    # that cannot fail.
+    #
+    # THIS TEST DOES NOT PIN THE CHARACTER CLASS, and saying so is the point.
+    # An earlier version of this comment claimed that widening the class to
+    # admit angle brackets would redden it. That mutation was run and it
+    # SURVIVED. Idempotence is over-determined: every placeholder RULES can
+    # emit is blocked by at least two of the class, the digit requirement and
+    # the length floor - <PRODUCTUSERID> is the only one long enough, and it
+    # has no digit. So no single edit exposes any of them, and this test is a
+    # characterization rather than a guard. See the block above _CDKEY_VALUE.
     already = _kv("cdkey", "<CDKEY>")
     assert redact(already) == already
     assert "CDKEY" not in _labels_of(already)
     assert_clean(already, personas=[])
+
+    # The one condition that IS load-bearing on its own for a placeholder both
+    # long enough and digit-bearing - the shape no current placeholder has, and
+    # the one a future label could. Pins the class directly, without a mutation.
+    assert not list(iter_sensitive("cdkey=<FUTUREPLACEHOLDER9>", labels={"CDKEY"}))
+
+
+def test_a_camelcase_mention_with_no_separator_is_not_a_cdkey():
+    # A CHARACTERIZATION, NOT A GUARD, and it is labelled that way on purpose.
+    #
+    # This shape is real - the log writes a handler name of exactly this form,
+    # and the ROADMAP's filed count of 9 came from a probe that read the word
+    # after such a mention as a value. So it is worth having a test that says
+    # out loud what this rule does with it.
+    #
+    # But it pins NOTHING on its own, which was established the hard way. Three
+    # separate claims about which condition protects this shape were written
+    # and each was refuted by its own mutation: removing "\b" left the suite
+    # green, making the separator optional left it green, and removing BOTH at
+    # once still left it green. The real protection is the VALUE SHAPE - the
+    # following token is "Gift", four characters with no digit - and that is
+    # pinned by the floor and digit tests, not by this one.
+    #
+    # Do not read a green here as evidence that the key or separator handling
+    # is correct. It is evidence about the value shape, which is tested
+    # elsewhere.
+    mention = "Display: GetCDKeyGift, url == https://example.invalid/x"
+    assert redact(mention) == mention
+    assert "CDKEY" not in _labels_of(mention)
+
+    # The discriminator: the SAME CamelCase token, but now followed by a real
+    # separator and a code-shaped value. Here the key genuinely does introduce a
+    # value and the rule must fire - so the test above is not passing merely
+    # because nothing in it can ever match.
+    with_sep = "Display: GetCDKeyGift " + _kv("cdkey", FAKE_CDKEY)
+    assert FAKE_CDKEY not in redact(with_sep)
+    assert "CDKEY" in _labels_of(with_sep)
 
 
 def test_the_cdkey_label_reaches_the_repository_scan():

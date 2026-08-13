@@ -991,6 +991,16 @@ def test_a_path_starting_with_g_but_not_game_is_not_a_map_url():
     # Discriminates the word, not just its first letter. Truncating the anchor
     # to "/G" is likewise inert on the 2026-08-09 log (still 36 lines), and
     # "/Gift/..." is the shape that notices.
+    #
+    # HEDGE, measured and written down rather than left implied: this test has
+    # NO UNIQUE KILL. An adversarial pass tried to find a truncation it catches
+    # alone and could not - under every natural one, including "/G" itself, the
+    # trailing-slash test above fails too. It is kept because it asserts a
+    # DIFFERENT property in its own right (the whole word, not the first
+    # letter) and because a contrived anchor such as "/G[a-z]*/" would admit
+    # "/Gift/" while still rejecting "/GameGift/" - but it should not be
+    # counted as independent mutation coverage, and deleting it would not
+    # weaken the suite's kill set on any mutation tried so far.
     assert list(iter_events([_gift_hazard("/Gift/redeem/api/use/111111")])) == []
     # Swap that one word for "Game" and the very same line parses.
     twin = _only(_gift_hazard(_GIFT_TWIN_PATH))

@@ -468,12 +468,41 @@ _CDKEY_MIN_CHARS = 12
 #: and prose does.
 _CDKEY_SEP = r'(?:"?[ \t]*[=:][ \t]*"?|[ \t]+)'
 
-#: An alphanumeric run at the floor containing at least one digit, and never an
-#: existing placeholder. The lookahead is what keeps this off prose.
-_CDKEY_VALUE = (
-    rf"(?!{_PLACEHOLDER})(?=[A-Za-z0-9]*\d)"
-    rf"[A-Za-z0-9]{{{_CDKEY_MIN_CHARS},}}(?![A-Za-z0-9])"
-)
+#: An alphanumeric run at the floor containing at least one digit. The digit
+#: lookahead is what separates a code from a long word; the floor is what stops
+#: the short words this repository's prose actually puts after the key. Both
+#: were measured - see the block above :data:`_CDKEY_MIN_CHARS`.
+#:
+#: There is deliberately NO placeholder lookahead here, and its absence is the
+#: measured thing rather than an oversight. Every other value pattern in this
+#: module needs one because ``_VALUE`` and friends accept ``<`` and ``>``; this
+#: one cannot match either character, so ``<CDKEY>`` is unreachable and a
+#: ``(?!<[A-Z0-9_]+>)`` guard in front of it is DEAD REGEX. An adversarial pass
+#: proved it: deleting that lookahead left the whole suite green, because
+#: nothing could ever have exercised it. It was removed rather than pinned -
+#: a guard that cannot fire is not made real by a test that cannot fail.
+#:
+#: WHAT PROTECTS IDEMPOTENCE IS TRIPLE-COVERED, AND THAT IS WHY NO TEST PINS THE
+#: CHARACTER CLASS ALONE. The first draft of this comment claimed that widening
+#: the class to admit angle brackets would redden
+#: ``test_an_existing_cdkey_placeholder_is_not_remasked``. It does not - the
+#: mutation was run and SURVIVED, so that sentence was itself decoration of the
+#: kind this module keeps catching. Measured against every placeholder
+#: :data:`RULES` can emit: each is blocked by at least two of the three
+#: independent conditions below, so no single edit exposes any of them.
+#:
+#: - the class excludes ``<``, so a value cannot even begin at a placeholder
+#: - the digit lookahead rejects ``<CDKEY>``, ``<PERSONA>``, ``<ACTOR>``,
+#:   ``<LONG_ID>``, ``<SAVE_SLOT>`` and ``<PRODUCTUSERID>``, none of which
+#:   carries a digit
+#: - the floor rejects ``<IPV4>`` (6) and ``<STEAMID64>`` (11), which do carry
+#:   digits but are shorter than :data:`_CDKEY_MIN_CHARS`
+#:
+#: ``<PRODUCTUSERID>`` at 15 characters is the only placeholder that clears the
+#: floor, and it has no digit. So the honest statement is that idempotence here
+#: is over-determined rather than pinned, and a future placeholder that is both
+#: long enough AND carries a digit would rest on the character class alone.
+_CDKEY_VALUE = rf"(?=[A-Za-z0-9]*\d)[A-Za-z0-9]{{{_CDKEY_MIN_CHARS},}}(?![A-Za-z0-9])"
 
 #: Only the lowercase spelling was observed carrying a value. The case variants
 #: are listed because a shipped build renaming the field's case would otherwise
@@ -491,9 +520,32 @@ _CDKEY_KEYS: tuple[str, ...] = (
 )
 
 # ``\b`` rather than a character-class lookbehind, matching every other keyed
-# rule in this module. It is also what keeps the rule off a CamelCase mention:
-# in a token like ``...GetCDKeyGift`` there is no boundary on either side of the
-# key, so the following word is never read as a value.
+# rule in this module.
+#
+# WHAT KEEPS THIS RULE OFF A CAMELCASE MENTION IS THE VALUE SHAPE - not the
+# word boundary, and not the separator. This took THREE wrong answers to
+# establish, each refuted by its own mutation, and the sequence is kept because
+# the reasoning error is more instructive than the result:
+#
+#   1. "``\b`` keeps it off ``...GetCDKeyGift``"  -> deleting both boundaries
+#      left the suite green.
+#   2. "no, the SEPARATOR does"                   -> making the separator
+#      optional also left the suite green.
+#   3. "then surely the two together"             -> removing BOTH at once
+#      STILL left the suite green.
+#
+# The actual reason is that the token following such a mention is ``Gift``:
+# four characters, no digit, nowhere near :data:`_CDKEY_MIN_CHARS`. The value
+# shape refuses it however permissive the key and separator become. All three
+# conditions independently block the shape, so it is over-determined and no
+# single edit - nor that pair - can expose it.
+#
+# This matters beyond tidiness. The ROADMAP's filed count of 9 came from a probe
+# that read exactly such a following word as though it were a value. What
+# protects this rule from repeating that mistake is the value shape, which is
+# pinned in its own right by the floor and digit tests - so credit belongs
+# there, and ``\b`` is kept only for consistency with every other keyed rule in
+# this module.
 _CDKEY = re.compile(
     rf"(?P<key>\b(?:{'|'.join(_CDKEY_KEYS)})\b)"
     rf"(?P<sep>{_CDKEY_SEP})(?P<value>{_CDKEY_VALUE})"
