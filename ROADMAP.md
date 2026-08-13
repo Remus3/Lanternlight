@@ -1224,8 +1224,17 @@ The state before, re-measured by the integrator rather than relayed:
     tokens SURVIVING redact()                  : 5 of 5
     assert_clean() certified                   : 7 of 7 lines
 
-**Acceptance - MET 2026-08-12.** Suite **1222 passed, 1222 collected**, ruff
-clean, `__pycache__` purged; the baseline before the work was **1196**.
+That last line needs the qualifier it was first written without: **7 of 7 is
+true of REDACTED lines**, which is what was measured. On RAW lines the guard
+already refused 4 of the 5 token-bearing lines for unrelated labels. The
+vacuous-guard finding stands - the code itself survived the sanctioned path
+untouched - but the number was imprecise. Corrected in `LL-0047`.
+
+**Acceptance - MET 2026-08-12.** Suite **1222 passed, 1222 collected** at the
+moment of closure, ruff clean, `__pycache__` purged; the baseline before the
+work was **1196**. The follow-up in `LL-0047` added one test, so the suite is
+**1223** today - re-measure rather than quoting either number, because both are
+snapshots and this file has been wrong about a count five times already.
 
 - **The `CDKEY` rule masks all four measured positions** - the bare word plus a
   space, `key=value` in a comma list, a query parameter in the redemption URL,
@@ -1307,6 +1316,45 @@ maintainer relies on.
 Four cases added, each paired with a **positive twin** one character or one
 word away whose exact `target` is asserted, so no rejection rests on a bare
 negative. All five mutations are now KILLED.
+
+**One of those four does not earn independent coverage, and says so.** The wrap
+refutation found that `test_a_path_starting_with_g_but_not_game_is_not_a_map_url`
+has **no unique kill** - under every natural truncation the trailing-slash test
+fails too. It is kept, because it asserts a distinct property and a contrived
+anchor such as `/G[a-z]*/` would separate them, but the test now states outright
+that it is not independent mutation coverage rather than reading as though it
+were. `LL-0047`.
+
+### The follow-up, `LL-0047` - what the wrap refutation found after this closed
+
+The refutation returned **CONFIRMED on all six** claims above and then found
+three defects, all now closed. Two are worth carrying:
+
+- **Dead regex.** A placeholder lookahead in `_CDKEY_VALUE` could never fire,
+  because `[A-Za-z0-9]` cannot match `<`. Deleting it left the suite green,
+  which is what proved it dead. Removed rather than pinned.
+- **A comment crediting the wrong condition - and it took THREE wrong answers
+  to fix.** Asked what keeps the rule off a CamelCase mention of the key, the
+  integrator wrote that the `\b` boundary does it (refuted - deleting both
+  boundaries left the suite green), then that the separator does it (refuted -
+  making it optional left the suite green), then that the two together do it
+  (refuted - removing **both** still left the suite green). The real answer is
+  the **value shape**: the token after such a mention is four characters with no
+  digit. **The first attempt at fixing that comment was itself decoration**,
+  claiming a mutation would go red when it survived.
+
+The general shape, now measured twice in this module: **protections here are
+over-determined**, so a surviving mutant usually means redundancy rather than a
+dead guard. Idempotence is the other instance - every placeholder `RULES` can
+emit is blocked by at least two of the character class, the digit requirement
+and the length floor, so no single edit exposes any of them.
+
+**And a process failure, recorded rather than smoothed over.** This item was
+merged and pushed **before** that refutation returned its verdict, on the
+operator's explicit instruction. It came back clean, so nothing unsafe landed,
+but the merge was unreviewed at the moment it happened. The pass also noted that
+at the commit which was merged, this file still read `READY` and no ledger entry
+existed - **"item 9 CLOSED" was never a property of that commit**.
 
 ### Two comment claims were measured wrong and are corrected, not edited away
 
