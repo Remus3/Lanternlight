@@ -1147,6 +1147,79 @@ opposite provenances - one datamined from encrypted assets, one walked by hand.
 They fail in opposite directions and must be cited differently. Check how a
 source was built before quoting it, every time.
 
+## 9. `cdkey` is invisible to the redactor, and `assert_clean` approves it - READY, safety lane
+
+Found 2026-08-12 by the integrator while checking an unrelated claim from the
+log-tail session. Nothing leaked and nothing is committed. **What is broken is
+the protection, not the record** - which is the same shape as item 0 and
+`LL-0029`, and the third time in this project that a guard has certified text it
+had no basis to certify.
+
+Measured first-party against the live log, by the integrator:
+
+    lines matching cdkey/cdk            : 7
+    candidate tokens found              : 9
+    tokens SURVIVING redact()           : 9  of 9
+    assert_clean() certified the result : 6  of 6 lines
+
+So a redeemable, account-bound gift code passes through the only sanctioned
+redaction path **entirely unmasked**, and the guard whose whole job is to refuse
+such text returns cleanly. One of those lines is a `LogUGiftAgent` redemption
+URL carrying both a cdkey parameter and an access-token parameter in one query
+string.
+
+**The parameter names are deliberately not written out here.** Spelling the
+access-token key literally in this file trips `tests/test_no_pii.py`, which is
+the guard behaving exactly as designed - the integrator hit it while drafting
+this item and rewrote the prose rather than weakening the rule. Worth keeping,
+because the reflex to relax a guard that flags your own writing is the whole
+hazard this item is about.
+
+**A second surface makes this urgent rather than theoretical.** The map-URL
+recogniser added in `LL-0045` extracts only a four-key allowlist, and the
+`/Game/` anchor on its target pattern is the **only** thing keeping that
+redemption URL out of an event payload. Verified: against that line the strict
+pattern matches `False` and a relaxed `/[A-Za-z0-9_/.]*\?` matches `True`. A
+future maintainer relaxing that anchor for a good-looking reason would route
+both of those parameters straight into a parsed event, and no detector
+downstream would object.
+
+**Related and weaker, same probe, needs tightening rather than a verdict:**
+`device_id` (202 lines) and `user_unique_id` (198 lines) in `TS.SDK` JSON.
+`redact()` changed every one of those lines, but "the line changed" does not
+prove the specific token was masked - a persona elsewhere on the line changes it
+too. That distinction is exactly what this item exists to stop being fudged.
+
+**Also measured, correcting a claim made the same day:** the operator's persona
+does reach query-string-shaped payloads. A narrow probe over lines containing
+`/Game/` or `http` found **0** and was wrongly reported as a clean negative; a
+broader probe found **72** candidate lines with **26** carrying a persona,
+including `[Login]` lines. An empty grep is a claim about your pattern.
+
+**A third surface, found independently the same session and folded in here
+rather than left in a report nobody reads:** `OnRep_PlayStateTag` writes a
+player-name parameter carrying a display name on **20** lines, and those include
+**third-party** players, one of them non-ASCII. The key is again not spelled out
+literally, for the same reason as above - it is itself a keyed redaction rule, so
+writing it beside any placeholder makes this file trip its own guard, which it
+did on the first attempt. That confirms `SAF-4` on yet another surface and
+widens this item past the operator's own identifiers - a stranger's display name
+is in scope exactly as `2b` established for the save. No such name is written
+into this repository, here or anywhere else.
+
+**Acceptance:** a `CDKEY` detector in `lanternlight/redact.py` that masks the
+token in all 9 observed positions, with `assert_clean` **refusing** a line
+carrying one; a positive control proving the detector fires when injected, so a
+zero finding cannot be confused with a dead scanner; a decision recorded either
+way on `device_id` and `user_unique_id`, with the token-level check rather than
+the line-changed check; and a test pinning the `/Game/` anchor in
+`lanternlight/logparse.py` that names this URL as the hazard. A measured
+negative on any part is a result, provided it says what was tried.
+
+**Not to be closed by reading.** The whole failure mode here is a guard that
+returns cleanly, so no part of this may be signed off on the strength of a test
+passing - break the detector and watch the test go red first.
+
 ---
 
 ## Ordering note
