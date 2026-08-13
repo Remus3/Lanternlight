@@ -684,7 +684,7 @@ constants, so a placeholder added later cannot silently disarm it again.
 observed separates them, so they are handed back as `GvasSave.epilogue` rather
 than named.
 
-## 3. Live log tail - READY
+## 3. Live log tail - CLOSED 2026-08-12
 
 `MistfallHunter.log` appends while the game runs - 567 KB in the first ten
 minutes. A tail that follows it and emits structured events is the spine of
@@ -701,6 +701,69 @@ already known (`setClassGender inclassid`, `OnRep_WeaponCfgId`,
 sublevel transitions), and passes every event through the redactor before it
 reaches any sink. Tested against a synthetic appending file, so the suite does
 not need the game.
+
+**Acceptance - MET 2026-08-12.** Ledger `LL-0045`. `lanternlight/tail.py` with
+49 tests, plus five new recognisers in `lanternlight/logparse.py`. Suite **1196
+passed, 1196 collected, ruff clean**, measured by the integrator with
+`__pycache__` purged; the baseline before the work was **1108**. Port 8811
+stays reserved and **unbound** - the acceptance asked for a library and nothing
+binds a socket.
+
+**Three things were measured that no plan anticipated, and each changed the
+design rather than decorating it:**
+
+1. **`st_ino` is preserved across in-place truncation and changes on
+   delete-and-recreate.** So file identity alone cannot see a truncation, and
+   size alone cannot see replacement by a larger file. Both checks are kept for
+   that reason, and the size-only degradation when the inode reads zero is
+   written into the docstring and pinned by a test rather than left as prose.
+2. **The log carries 594 embedded control characters** - 98 VT, 106 FF, 113 FS,
+   85 GS, 97 RS, 95 NEL. `str.splitlines()` treats every one as a line break
+   and the file does not, so a reader that decodes before splitting fragments
+   lines at all 594. **The integrator first stated this as a hazard of
+   `splitlines()` and was corrected by measurement:** `bytes.splitlines()` does
+   **not** split on them, only `str.splitlines()` does. On
+   `b"A\x0bB\x0cC\x1cD\x85E\nF"` the counts are bytes **2**, str **6**,
+   `split("\n")` **2**. The hazard is the decode-then-split **order**, not the
+   method name - established because the first mutant, written against the
+   method name, **survived**. Worth keeping: the event **count** does not catch
+   that mutation, because the first shard keeps a complete header and still
+   parses. Only the exact emitted text does.
+3. **`MapTransitionEvent` was pointed at the wrong lines all along.** It fires
+   on `at world`, and **all 4408** of those are `TS.UI` widget lines, while it
+   recognised **0** of the 44 real `[LevelSwitch]` map changes. It is **not**
+   renamed or weakened - that is public API and a separate decision - but its
+   docstring now says outright that it is not a transition, and
+   `LevelSwitchEvent` is the type that answers "did the map just change".
+   Note one user-visible map change emits **four** `LevelSwitchEvent`s (11
+   switches, 4 verbs, 44 lines), so a consumer that counts events counts four
+   times too many.
+
+**A documented never-raise contract was already broken on `main`, and the
+independent refutation pass is what found it.** `parse_line` and `iter_events`
+are documented never to raise; an unbounded digit run made them raise
+`ValueError`. Six conversion sites were involved - three added this session,
+one in the **header's own `frame` group** so the input reached `parse_line`
+before any recogniser could see it, and **one pre-existing on `main`** via
+`_eqeq_fields`. `_as_int` is now the module's only integer conversion: an
+unreadable **required** field drops the event, an unreadable **optional** axis
+is omitted and the event survives.
+
+**The refutation pass returned "not safe to merge as-is" and was right.** It is
+recorded because a green suite could see neither defect, and because it
+corrected the integrator three times - see `LL-0045` for all three, the sharpest
+being that a shape count collapsed per digit **character** counts id **widths**
+rather than shapes.
+
+**And one integrator verification was itself vacuous.** The first probe of the
+tailer's redaction reported zero personas surviving while emitting **zero
+events**. Re-run with a positive control - 4 lines fed, 4 events emitted, 4
+personas in the raw text, 0 surviving - the property holds. But naive per-line
+redaction also scores 0 on those same four lines and the tailer learned 0
+personas doing it, so **the persona-accumulation design is correct but not yet
+load-bearing on this log**. It is kept because the leaking shape exists and any
+new recogniser makes it reachable, and the docstring says exactly that rather
+than claiming credit it has not earned.
 
 ## 4. `AvgPrice` market cache - PARSER DONE, watcher still to build
 
@@ -1224,9 +1287,10 @@ passing - break the detector and watch the test go red first.
 
 ## Ordering note
 
-**Items 2b, 2c, 2d and item 7's shipped-code half are CLOSED as of
-2026-08-12.** `lanternlight/damage.py` reads the series, so the extractor is no
-longer scratchpad analysis.
+**Items 2b, 2c, 2d, item 7's shipped-code half and item 3 are CLOSED as of
+2026-08-12.** `lanternlight/damage.py` reads the damage series and
+`lanternlight/tail.py` follows the log, so both the extractor and the live spine
+are shipped code rather than scratchpad analysis.
 
 **The next item is 7b, the training ground**, and it needs the client open. It
 is the cheapest thing on this list and the **only** route to **outgoing**
@@ -1235,9 +1299,14 @@ damage in quantity - which is the half Emberforge actually needs, because the
 for. If the game is running, do 7b first and fold items 1, 4b, 5 and 6 into the
 same session, since all of them need the client and none deserves its own.
 
-**If the client is not open, the next item is 3, the live log tail.** It is
-fully specified, depends on nothing, and is the spine of every live feature.
-Item 4's watcher is equally independent.
+**If the client is not open, the next item is 9** - the `cdkey` redaction hole.
+It needs nothing but work, it is safety-lane work so it holds a veto, and it is
+the only open item where the failure mode is a guard that *returns cleanly*.
+Item 4's watcher is equally independent and is the cheaper of the two.
+
+Item 3 is closed, so it is no longer the fallback. The tailer exists; what does
+not exist yet is anything consuming it, and nothing on this list currently asks
+for that - do not invent a consumer without an acceptance criterion.
 
 Item 7 itself stays **open** on one thing only: no coefficient may be published
 until the same value is seen in an **independent run**.
@@ -1248,7 +1317,7 @@ roster in `ops/lanes.py` disagreed. What actually worked was a split - ingest
 built the artifact, safety owned the detectors and held the veto. Read the
 roster, not this file, for who owns a path.
 
-Items 3 and 4's watcher remain independent of everything and of each other.
+Item 4's watcher remains independent of everything else. Item 3 is closed.
 
 Each lane now carries its own queue in `lanes/<lane_id>.STATE.json`, so the
 right way to pick work is to read the state file of the lane that owns the

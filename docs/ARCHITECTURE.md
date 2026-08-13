@@ -130,8 +130,10 @@ See [ADR-004](adr/ADR-004-redaction-is-mandatory.md).
 | `lanternlight.paths` | early | Locating the Saved tree, the log, the saves, the market cache. One place that knows Windows paths |
 | `lanternlight.logparse` | early | Log lines to structured events |
 | `lanternlight.redact` | early, tested | Strip PII. The gate on the commit boundary |
-| `lanternlight` (save reader) | **not built** | GVAS parse. ROADMAP item 2 |
-| `lanternlight` (log tail) | **not built** | Follow the appending log. ROADMAP item 3 |
+| `lanternlight.gvas` (save reader and writer) | **done** | GVAS parse and byte-identical re-serialise. ROADMAP item 2. This row read "not built" until 2026-08-12, long after the reader shipped - a stale recital found while closing item 3 |
+| `lanternlight.tail` (log tail) | **done, library only** | Follows the appending log; no service and nothing bound. ROADMAP item 3 |
+| `lanternlight.damage` | **done** | The rolling damage window, accumulated and deduplicated across generations. ROADMAP item 7 |
+| `lanternlight.savewatch` | **done** | Snapshots every generation of every save; refuses a destination inside a repo working directory |
 | `emberforge` | **empty** | The combat and build math engine. **It computes nothing.** No formulas are published anywhere, so there is nothing yet to encode |
 | `tests/` | early | Every feature starts with a failing test here |
 | `tools/` | **not built** | Operator-run probes. `probe_paks.py` currently lives in `scratchpad/` and is slated to move here |
@@ -153,7 +155,7 @@ them.** They are reserved so that two future services do not collide.
 | Port | Service | State |
 |---|---|---|
 | 8810 | Dashboard | not built (`BACKLOG.md`) |
-| 8811 | Log-tail service | not built (ROADMAP item 3) |
+| 8811 | Log-tail service | not built - the `lanternlight.tail` **library** shipped 2026-08-12 and deliberately binds nothing (ROADMAP item 3) |
 | 8813 | Emberforge | not built |
 
 8812 is deliberately skipped, leaving a gap between the two surfaces most likely

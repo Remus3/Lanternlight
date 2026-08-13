@@ -3,9 +3,21 @@
   "open_items": [
     {
       "blocked_on": "",
-      "item_id": "ING-2",
-      "opened": "2026-08-09",
-      "text": "ROADMAP 3 - live log tail on port 8811, survives truncation and rotation"
+      "item_id": "ING-13",
+      "opened": "2026-08-12",
+      "text": "MEASURED, keep when touching tail.py: st_ino is PRESERVED across in-place truncation and CHANGES on delete-and-recreate, so identity alone cannot see a truncation and size alone cannot see replacement by a larger file. Both checks are load-bearing. A zero ino degrades to size-only and that blind spot is pinned by a test"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "ING-14",
+      "opened": "2026-08-12",
+      "text": "MEASURED: the log carries 594 embedded control characters (98 VT, 106 FF, 113 FS, 85 GS, 97 RS, 95 NEL). str.splitlines() treats each as a line break, bytes.splitlines() does NOT. The hazard is the decode-then-split ORDER, not the method name - a mutant written against the method name survived. tail.py splits on b newline BEFORE decoding. Note the event COUNT does not catch that mutation, only the exact text does"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "ING-15",
+      "opened": "2026-08-12",
+      "text": "logparse had a documented never-raise contract it did not keep, and ONE of the six raising sites was PRE-EXISTING on main via _eqeq_fields; another was the header's own frame group, so an unbounded digit run reached parse_line before any recogniser. _as_int is now the module's only integer conversion - keep it that way, and never add a bare int() to this module"
     },
     {
       "blocked_on": "",
@@ -62,8 +74,8 @@
       "text": "standalone_slot.gvas.b64 is 19867 raw bytes rather than the under-10-KB target. 12972 of them are tag overhead (5046 names, 7311 recursive type names, 615 size and flag fields over 123 properties) and the type names are the game's own struct identities. Reaching 10 KB means dropping a container the brief asked to keep - reopen only with a decision about which shape to lose"
     }
   ],
-  "resume_note": "ROADMAP 2b done - standalone_slot.gvas.b64 is committed, clean under ALL_LABELS both plain and encoded, and its builder refuses to write a leaking fixture. Next is ROADMAP 3, the live log tail on port 8811",
+  "resume_note": "ROADMAP 3 done - lanternlight/tail.py follows the log with 49 tests, and logparse gained five recognisers. Port 8811 stays reserved and UNBOUND; the library exists and no service does. Nothing on the roadmap currently asks for a consumer of the tailer - do not invent one without an acceptance criterion. Next ingest work is ROADMAP 4's AvgPrice watcher, which is independent of everything",
   "schema": 1,
-  "sessions": 3,
-  "updated": "2026-08-12T00:45:45+00:00"
+  "sessions": 4,
+  "updated": "2026-08-12T19:40:00+00:00"
 }
