@@ -144,12 +144,28 @@ _MAP_URL_AXIS_RE = re.compile(
 )
 
 # The "/Game/" anchor is load-bearing and is NOT decoration. Relaxing it to a
-# bare "/<path>?" takes this from 36 matching lines to 37, and the extra one is
-# a LogUGiftAgent redemption URL whose query string carries a cdkey and an
-# access token. Measured separately: no detector in lanternlight.redact
-# currently masks a cdkey, so until that is fixed this anchor is the only thing
-# keeping those out of an event payload. Pinned by
-# test_a_non_game_url_with_a_query_is_not_a_map_url.
+# bare "/<path>?", or adding re.IGNORECASE, takes this from 36 matching lines
+# to 37 on the 2026-08-09 log, and the extra one is a LogUGiftAgent redemption
+# URL whose query string carries a redemption key and an access token.
+#
+# What the leak would look like, measured rather than assumed: the capture
+# stops dead at the "?", so on that line MapUrl.target would be the
+# 26-character path alone and NO MapUrl field would ever hold the key or the
+# token. They would reach a consumer through the LogLine the event embeds -
+# .raw and .message carry the whole line, query string included. The hazard is
+# therefore a whole extra event on a secrets-bearing line, not a poisoned
+# target field. What happens to that line downstream is lanternlight.redact's
+# business; this anchor's own job is simply not to promote the line to an
+# event in the first place, and that job does not depend on what any other
+# module does or does not mask.
+#
+# The character class is an allowlist of the characters observed in real map
+# paths, and no measured map path carries a "-". Three weakenings are INERT on
+# the 2026-08-09 log - dropping the trailing slash, truncating to "/G", and
+# widening the class to admit "-" each still match exactly the same 36 lines -
+# so each is pinned by a constructed test rather than by an observed line.
+# Pinned by test_a_non_game_url_with_a_query_is_not_a_map_url and the four
+# tests beside it in tests/test_logparse.py.
 _MAP_URL_TARGET_RE = re.compile(r"(?P<target>/Game/[A-Za-z0-9_/.]*)\?")
 
 # "..., match id 11111" and "with level id 117,". Irregular whitespace, and
