@@ -5,6 +5,111 @@ fidelity and archive older ones rather than deleting them.
 
 ---
 
+# Session 2026-08-12g - the log tail shipped, and the refutation refused the merge
+
+Two parallel slices on disjoint files, one independent refutation pass, merged
+to `main` and **pushed** - `main` is `1890c40`. Ledger `LL-0045`. **1108 tests
+at the start, 1196 at the end**, ruff clean, both measured by the integrator
+with `__pycache__` purged.
+
+ROADMAP **item 3 is CLOSED**. `lanternlight/tail.py` follows the log with 49
+tests; `logparse` gained five recognisers. Port 8811 is still reserved and
+**unbound** - the acceptance asked for a library and nothing binds a socket.
+
+## The refutation pass returned "not safe to merge as-is", and it was right
+
+Both blocking defects were invisible to a green suite.
+
+- **`iter_events` RAISED `ValueError`** on a digit run over 4300, breaking a
+  contract the module docstring and one of the slice's own tests both assert.
+  Six sites: three new, one in the header's own `frame` group so the input
+  reached `parse_line` before any recogniser, and **one PRE-EXISTING on `main`**
+  via `_eqeq_fields`. **`main` had been violating its own never-raise promise
+  and nobody had noticed.** `_as_int` is now the only integer conversion in the
+  module - never add a bare `int()` there again (`ING-15`).
+- **The `/Game/` anchor was decoration.** Relaxing it keeps the suite green
+  while admitting a `LogUGiftAgent` redemption URL - carrying a cdkey and an
+  access-token parameter - into an event payload. Now pinned.
+
+## The integrator was wrong three times, and each is on the record
+
+1. **"8 distinct shapes" was a method artifact.** Collapsing per digit
+   CHARACTER counts id WIDTHS, not shapes. Per-run gives **4**; the slice was
+   right and I refuted it twice with the same broken method - which is the
+   "two measurements sharing one bug agree" trap, with me on both sides.
+2. **"101299 lines refuted" was wrong.** 101198 LF + 101 lone CR = **101299** =
+   exactly `readlines()` in text mode. Three methods give 101199, 101299 and
+   101893 on the same bytes. The slice's *inference* that the log grows live is
+   still wrong - size and mtime were identical all session.
+3. **"zero personas in URL query strings" came from too narrow a filter** -
+   it required `/Game/` or `http`, missing the producer that logs a query string
+   alone. Broader: **72 lines, 26 carrying a persona.** An empty grep is a claim
+   about your pattern.
+
+## A merger verification was itself VACUOUS, caught by its own counter
+
+The first probe of the tailer's redaction reported **0 personas surviving while
+emitting 0 EVENTS**. Only printing the event count revealed it. Re-run with a
+positive control - 4 fed, 4 emitted, 4 personas in the raw text, 0 surviving -
+the property holds.
+
+But naive per-line redaction **also** scores 0 on those four, and the tailer
+learned **0** personas doing it. So the accumulation design is **correct but
+not yet load-bearing on this log**; it is kept because the leaking shape exists
+and any new recogniser makes it reachable, and the docstring says exactly that.
+
+## Three mutant survivors exposed WEAK TESTS, not weak code - one of them mine
+
+Writing my own control-character finding into a docstring produced a documented
+property with **nothing behind it** until it was pinned. A note in a docstring
+is not a guard.
+
+## Measured, and none of it was in any plan
+
+- **`st_ino` is PRESERVED across in-place truncation and CHANGES on
+  delete-and-recreate.** So identity alone cannot see a truncation and size
+  alone cannot see replacement by a larger file. Both checks are load-bearing.
+- **The log carries 594 embedded control characters** (98 VT, 106 FF, 113 FS,
+  85 GS, 97 RS, 95 NEL). **`bytes.splitlines()` does NOT split on them; only
+  `str.splitlines()` does** - I stated this as a `splitlines()` hazard and was
+  corrected by measurement. The hazard is the **decode-then-split ORDER**. The
+  first mutant, written against the method name, **survived**. And the event
+  COUNT does not catch the real mutation - the first shard keeps a complete
+  header and still parses - only the exact text does.
+- **`MapTransitionEvent` was pointed at the wrong lines all along.** All
+  **4408** `at world` lines are `TS.UI` widgets; it matched **0** of the 44 real
+  `[LevelSwitch]` map changes. Not renamed - public API, separate decision - but
+  its docstring now says outright that it is not a transition. One user-visible
+  map change emits **four** `LevelSwitchEvent`s.
+
+## NEW: ROADMAP item 9, a safety hole the guard approves
+
+**`cdkey` tokens survive `redact()` 9 of 9, and `assert_clean` CERTIFIES the
+line.** Same vacuous-guard shape as item 0 and `LL-0029` - the third time in
+this project. Also there: a player-name parameter on **20** lines including
+**third-party** players (one non-ASCII), and `device_id` / `user_unique_id`
+needing a token-level rather than a line-changed check.
+
+**Nothing leaked. No raw excerpt is committed. What is broken is the
+protection.** Drafting the item tripped `tests/test_no_pii.py` **twice** on my
+own prose - the guard working exactly as designed. The prose was rewritten both
+times and the guard was not touched.
+
+## Where to start next
+
+**Check whether the game is running first** - the log's mtime plus a process
+check settles it in one command. If it is, **item 7b**, the training ground,
+and fold in items 1, 4b, 5 and 6. If it is not, **item 9** (the cdkey hole,
+safety lane, holds a veto) or **item 4's watcher**, the cheaper of the two.
+
+Do **not** label any damage number dealt or taken beyond the 21 proven TAKEN,
+and publish **no** coefficient until a value repeats in an independent run.
+
+One operator decision remains, deliberately unanswered: **OPS-6** - retire the
+global `LL-NNNN` id space for per-lane namespacing.
+
+---
+
 # Session 2026-08-12 - a clone finally runs green, and a P0 in the machinery that guards the record
 
 Branch work on `lane/ops` and `session/2026-08-12-damage-extractor`, both
