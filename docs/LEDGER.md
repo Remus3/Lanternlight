@@ -84,6 +84,29 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0045 - 2026-08-12 - ROADMAP 3 closed - the live log tail ships, with five recognisers the acceptance named, and a documented never-raise contract that main was already violating
+
+**Evidence:**
+- Suite 1196 passed, 1196 collected, ruff clean - measured by the integrator with __pycache__ purged. Baseline before the work was 1108, measured the same way with -o addopts= because pytest.ini's own -q makes a second -q suppress the summary line.
+- merge_gate.verify(claimed_paths=[lanternlight/tail.py, tests/test_tail.py, lanternlight/logparse.py, tests/test_logparse.py], baseline=1108) -> OK.
+- lanternlight/tail.py, tests/test_tail.py - 49 tests. Follows an appending file, holds back bytes not yet newline-terminated, survives in-place truncation and delete-and-recreate, holds no handle between polls, redacts before any sink. Port 8811 stays reserved and unbound.
+- MEASURED, not assumed: st_ino is populated and stable on this machine, is PRESERVED across in-place truncation and CHANGES on delete-and-recreate. So identity cannot see a truncation and size cannot see replacement by a larger file - both checks are load-bearing and the size-only degradation on a zero ino is pinned by a test.
+- The log carries 594 embedded control characters (98 VT, 106 FF, 113 FS, 85 GS, 97 RS, 95 NEL). bytes.splitlines() does NOT split on them; str.splitlines() does. Measured on b'A\x0bB\x0cC\x1cD\x85E\nF': bytes 2, str 6, split(nl) 2. The hazard is the decode-then-split ORDER, and the first mutant written against the method NAME survived.
+- logparse gains WeaponConfigEvent (270 lines, previously 0 events), LevelSwitchEvent (44), MapUrlEvent (44), MatchIdEvent (23), SubLevelEvent (6) and a shared MapUrl carrying four axes. An axis the line did not write stays absent rather than defaulting to zero.
+- MapTransitionEvent is not renamed or weakened; its docstring now says it is not a transition. All 4408 at-world lines are TS.UI widget lines. One user-visible map change emits FOUR LevelSwitchEvents - 11 switches, 4 verbs, 44 lines.
+- test_logparse.py went 27 -> 59 test functions with git diff --numstat against main reading 582 0, so no pre-existing test lost an assertion.
+
+THE INDEPENDENT REFUTATION PASS RETURNED 'not safe to merge as-is', and it was right on both blocking defects. Recorded because the green suite could not see either.
+D1 - iter_events RAISED ValueError on a digit run over 4300, breaking a contract the module docstring and one of the slice's own tests both assert. Six conversion sites: three new, one in the header's own frame group so the bomb reached parse_line before any recogniser, and ONE PRE-EXISTING ON MAIN via _eqeq_fields. main already violated its own never-raise promise and nobody had noticed. _as_int is now the only integer conversion in the module.
+D2 - the /Game/ anchor in the map-URL pattern was untested and load-bearing: relaxing it kept the suite green while admitting a LogUGiftAgent redemption URL carrying a cdkey and an access-token parameter into an event payload. Now pinned.
+THE INTEGRATOR WAS WRONG THREE TIMES AND EACH IS RECORDED RATHER THAN EDITED AWAY. (1) '8 distinct shapes' was a method artifact - collapsing per digit CHARACTER counts id WIDTHS, not shapes; per-run gives 4 and the slice was right. (2) '101299 lines refuted' was wrong: 101198 LF + 101 lone CR = 101299 = exactly readlines() in text mode. The slice's INFERENCE that the log grows live is still wrong, since size and mtime were identical all session. (3) 'zero personas in URL query strings' came from a filter requiring /Game/ or http, which misses the producer that logs a query string alone - a broader probe found 72 lines with 26 carrying a persona. An empty grep is a claim about your pattern.
+A MERGER VERIFICATION WAS ITSELF VACUOUS AND IS RECORDED AS SUCH. The first probe of the tailer's redaction reported 0 personas surviving while emitting 0 EVENTS. Re-run with a positive control - 4 lines fed, 4 events emitted, 4 personas in the raw text, 0 surviving - the property holds. But naive per-line redaction also scores 0 on those four and the tailer learned 0 personas, so the accumulation design is correct-but-not-yet-load-bearing on this log. The docstring says so rather than claiming credit.
+Three mutant survivors this session exposed WEAK TESTS rather than weak code, including one the integrator's own finding created: writing the control-character note into a docstring produced a documented property with nothing behind it until it was pinned.
+ROADMAP item 9 opened, safety lane: cdkey tokens survive redact() 9 of 9 and assert_clean CERTIFIES the line. Same vacuous-guard shape as item 0 and LL-0029. Also recorded there: a player-name parameter on 20 lines including third-party players, one non-ASCII, and device_id / user_unique_id needing a token-level rather than line-changed check. Nothing leaked and no raw excerpt is committed - what is broken is the protection.
+Drafting item 9 tripped tests/test_no_pii.py TWICE on the integrator's own prose - once on an access-token literal, once because a player-name key is itself a keyed rule and matched its placeholder as a value. The prose was rewritten both times and the guard was not touched.
+OPEN, deliberately not answered on the operator's behalf: OPS-6, retire the global LL-NNNN id space for per-lane namespacing.
+ROADMAP 7b remains blocked on the client being open. No damage coefficient is published, and nothing beyond the 21 hits already proven TAKEN is labelled.
+
 ### LL-0044 - 2026-08-12 - The ops sweep was refuted - a catch-all claim made the orphan guard vacuous, and two of the pass's own findings did not reproduce
 
 **Evidence:**
