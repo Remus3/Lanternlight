@@ -129,12 +129,23 @@ the value class would redden the placeholder test; that mutation was run and
 The same over-determination turned out to hold for idempotence: measured
 against every placeholder `RULES` can emit, each is blocked by at least two of
 the class, the digit requirement and the floor, so **no single edit exposes any
-of them**. `<PRODUCTUSERID>` at 15 characters is the only one long enough to
-clear the floor, and it carries no digit.
+of them**.
+
+**That paragraph used to end with a false sentence** - "`<PRODUCTUSERID>` at 15
+characters is the only one long enough to clear the floor". Four clear it, and
+`LL-0048` corrects it in all four places it was written. The conclusion above
+survived because all four are digit-free, which is exactly what makes it worth
+recording: a true conclusion resting on a false reason reads identically to a
+sound one. The enumeration is now DERIVED from `RULES` in
+`test_no_placeholder_rests_on_a_single_cdkey_condition` rather than recited, and
+that derived test kills the class-widening mutation the older test survived.
 
 **The habit worth carrying:** when you write "X is what prevents Y", run the
 mutation that removes X before you commit the sentence. In this module that
-sentence has now been wrong four times in two sessions.
+sentence has now been wrong five times in three sessions - and the fifth was a
+list of facts rather than a causal claim, so the habit has to extend to
+enumerations too. If you catch yourself typing a list of identifiers into a
+comment, derive it in a test instead.
 
 ## Where to start next
 
