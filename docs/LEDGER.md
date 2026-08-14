@@ -84,6 +84,20 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0048 - 2026-08-13 - Corrects LL-0047 - the over-determination evidence recited a placeholder enumeration that was false, and the derivation that replaces it kills a mutation the old test survived
+
+**Evidence:**
+- Suite 1225 passed, 1225 collected, up from a measured baseline of 1223. Two tests added, none removed. ruff clean, __pycache__ purged.
+- THE WRONG FACT: LL-0047's evidence line, the comment above _CDKEY_VALUE and the comment in test_an_existing_cdkey_placeholder_is_not_remasked all state that <PRODUCTUSERID> at 15 characters is the ONLY placeholder clearing _CDKEY_MIN_CHARS. FOUR clear it, measured this run by deriving them from RULES: <USER_UNIQUE_ID> (16), <PRODUCTUSERID> (15), <ACCOUNT_NAME> (14), <OWNER_ROLEID> (14). RULES emits 17 distinct placeholders, not the 21 an intermediate report claimed - <NAME_FIELD> does not exist anywhere in this repository and <AUTHORED_NAME> is a module-level marker constant, not a RULES placeholder.
+- THE CONCLUSION SURVIVES, THE STATED REASON DID NOT. All four are digit-free, so the minimum blocker count over every placeholder is still 2 and no single edit exposes any of them. A safety claim that happens to hold is not evidence that the reasoning under it was true, and this one was false the day it was written.
+- Exactly two placeholders carry a digit - <STEAMID64> (11) and <IPV4> (6) - and both fall below the floor. <STEAMID64> is ONE character short: lowering _CDKEY_MIN_CHARS to 11 leaves it resting on the character class alone.
+- THE RECITAL IS REPLACED BY A DERIVATION. test_no_placeholder_rests_on_a_single_cdkey_condition takes _CDKEY_VALUE apart by surgery on the live pattern string and counts, for every placeholder RULES emits, how many of the three conditions independently reject it. It cannot go stale the way a typed list does, and it reddens if a future placeholder is ever both at the floor and digit-bearing.
+- MUTATION RESULTS, anchors asserted applied and __pycache__ purged each run: floor 12 -> 11 -> 2 failed (KILLED); widen the class to admit <>_ -> 1 failed (KILLED); drop the digit requirement from the lookahead -> 2 failed (KILLED); floor 12 -> 15 -> 1 failed (KILLED). The class-widening mutation is the one LL-0047 recorded as SURVIVING against test_an_existing_cdkey_placeholder_is_not_remasked. The derived test kills it.
+- THE FIX SHIPPED THE SAME DEFECT ONCE BEFORE PASSING. The first draft of _cdkey_blockers hard-coded "the class excludes '<'" as a Python assumption instead of reading the pattern, and the class-widening mutation SURVIVED it - the third consecutive session in which a claim about this rule was written as prose and refuted by its own mutation. Isolating each condition with the other two relaxed is what fixed it: read as it stands, the digit lookahead fails on a leading '<' because of the CLASS, which would have scored <STEAMID64> as digit-blocked while it plainly carries digits.
+- SMALLER CORRECTION, verified rather than relayed: the comment on test_a_camelcase_mention_with_no_separator_is_not_a_cdkey said the test "pins NOTHING on its own". Its second half does pin that the rule fires - deleting the CDKEY rule from RULES reddens it. Measured this run, eleven tests redden under that deletion, so it is not the rule's backstop either, and the comment now says both.
+
+THE LESSON IS THE SHAPE, NOT THE FACT. An enumeration written into a comment is a filed count, and this repository's own anti-pattern list already says a filed count is a hypothesis. The list was correct about the conditions and wrong about which placeholders they applied to, and nothing could have caught it, because prose has no failure mode. What makes the difference is not care - three sessions of care did not catch it - but moving the claim into something that runs.
+
 ### LL-0047 - 2026-08-12 - Corrects LL-0046 - the wrap refutation found dead regex and two comments crediting the wrong condition, and fixing them took three wrong answers
 
 **Evidence:**
