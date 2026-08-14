@@ -482,26 +482,35 @@ _CDKEY_SEP = r'(?:"?[ \t]*[=:][ \t]*"?|[ \t]+)'
 #: nothing could ever have exercised it. It was removed rather than pinned -
 #: a guard that cannot fire is not made real by a test that cannot fail.
 #:
-#: WHAT PROTECTS IDEMPOTENCE IS TRIPLE-COVERED, AND THAT IS WHY NO TEST PINS THE
-#: CHARACTER CLASS ALONE. The first draft of this comment claimed that widening
-#: the class to admit angle brackets would redden
-#: ``test_an_existing_cdkey_placeholder_is_not_remasked``. It does not - the
-#: mutation was run and SURVIVED, so that sentence was itself decoration of the
-#: kind this module keeps catching. Measured against every placeholder
-#: :data:`RULES` can emit: each is blocked by at least two of the three
-#: independent conditions below, so no single edit exposes any of them.
+#: WHAT PROTECTS IDEMPOTENCE IS TRIPLE-COVERED. Every placeholder :data:`RULES`
+#: can emit is refused by at least two of three independent conditions, so no
+#: single edit to this pattern exposes any of them:
 #:
 #: - the class excludes ``<``, so a value cannot even begin at a placeholder
-#: - the digit lookahead rejects ``<CDKEY>``, ``<PERSONA>``, ``<ACTOR>``,
-#:   ``<LONG_ID>``, ``<SAVE_SLOT>`` and ``<PRODUCTUSERID>``, none of which
-#:   carries a digit
-#: - the floor rejects ``<IPV4>`` (6) and ``<STEAMID64>`` (11), which do carry
-#:   digits but are shorter than :data:`_CDKEY_MIN_CHARS`
+#: - the digit lookahead rejects every placeholder carrying no digit, which is
+#:   most of them - ``<CDKEY>`` and ``<PERSONA>`` among them
+#: - the floor rejects ``<IPV4>`` (6) and ``<STEAMID64>`` (11). Those are the
+#:   ONLY two placeholders carrying a digit, and both fall short of
+#:   :data:`_CDKEY_MIN_CHARS`; ``<STEAMID64>`` by a single character
 #:
-#: ``<PRODUCTUSERID>`` at 15 characters is the only placeholder that clears the
-#: floor, and it has no digit. So the honest statement is that idempotence here
-#: is over-determined rather than pinned, and a future placeholder that is both
-#: long enough AND carries a digit would rest on the character class alone.
+#: THE ENUMERATION IS NOT RECITED HERE, because the recital was wrong. This
+#: comment previously claimed ``<PRODUCTUSERID>`` was the only placeholder
+#: clearing the floor. Four clear it - ``<USER_UNIQUE_ID>`` (16),
+#: ``<PRODUCTUSERID>`` (15), ``<ACCOUNT_NAME>`` (14) and ``<OWNER_ROLEID>`` (14)
+#: - and the claim was false the day it was written. All four are digit-free, so
+#: the SAFETY conclusion survived the error, but a stated reason that is untrue
+#: is not made acceptable by a conclusion that happens to hold.
+#:
+#: So the property is pinned by derivation instead, in
+#: ``test_no_placeholder_rests_on_a_single_cdkey_condition``, which takes this
+#: pattern apart and counts the blockers for every placeholder RULES emits. It
+#: reddens if a future placeholder is both at the floor AND digit-bearing - the
+#: one shape that would rest on the character class alone. Note also that
+#: lowering the floor to 11 puts ``<STEAMID64>`` in exactly that position.
+#:
+#: ``test_an_existing_cdkey_placeholder_is_not_remasked`` does NOT pin the class:
+#: the class-widening mutation was run against it and SURVIVED. The derived test
+#: above is what kills that mutation.
 _CDKEY_VALUE = rf"(?=[A-Za-z0-9]*\d)[A-Za-z0-9]{{{_CDKEY_MIN_CHARS},}}(?![A-Za-z0-9])"
 
 #: Only the lowercase spelling was observed carrying a value. The case variants

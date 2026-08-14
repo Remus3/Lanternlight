@@ -1957,9 +1957,15 @@ def test_an_existing_cdkey_placeholder_is_not_remasked():
     # admit angle brackets would redden it. That mutation was run and it
     # SURVIVED. Idempotence is over-determined: every placeholder RULES can
     # emit is blocked by at least two of the class, the digit requirement and
-    # the length floor - <PRODUCTUSERID> is the only one long enough, and it
-    # has no digit. So no single edit exposes any of them, and this test is a
-    # characterization rather than a guard. See the block above _CDKEY_VALUE.
+    # the length floor, so no single edit exposes any of them, and this test is
+    # a characterization rather than a guard.
+    #
+    # This comment also used to say <PRODUCTUSERID> was the only placeholder
+    # long enough to clear the floor. FOUR clear it, and that sentence was
+    # false when written - see test_the_cdkey_floor_is_cleared_by_more_than_one
+    # _placeholder below, which derives the enumeration instead of reciting it,
+    # and test_no_placeholder_rests_on_a_single_cdkey_condition, which is what
+    # actually kills the class-widening mutation this test survives.
     already = _kv("cdkey", "<CDKEY>")
     assert redact(already) == already
     assert "CDKEY" not in _labels_of(already)
@@ -1971,6 +1977,122 @@ def test_an_existing_cdkey_placeholder_is_not_remasked():
     assert not list(iter_sensitive("cdkey=<FUTUREPLACEHOLDER9>", labels={"CDKEY"}))
 
 
+def _cdkey_conditions():
+    """The three conditions of _CDKEY_VALUE, each isolated from the LIVE pattern.
+
+    Taken apart by surgery on ``redact_module._CDKEY_VALUE`` rather than retyped
+    here. That distinction is the whole point: a first draft of these tests
+    hard-coded "the class excludes '<'" as an assumption, and widening the class
+    to admit angle brackets left them GREEN - the same decoration these tests
+    exist to catch, reproduced inside the fix for it. Reading the real string
+    means a change to the class, the lookahead or the floor changes what is
+    measured here.
+    """
+    value = redact_module._CDKEY_VALUE
+    lookahead = re.match(r"\(\?=[^)]*\)", value)
+    assert lookahead, f"no leading digit lookahead in {value!r}"
+    body = value[lookahead.end() :]
+    char_class = re.match(r"\[[^\]]*\]", body)
+    assert char_class, f"no character class in {body!r}"
+    floor = re.search(r"\{(\d+),\}", body)
+    assert floor, f"no repetition floor in {body!r}"
+    return lookahead.group(0), char_class.group(0), int(floor.group(1))
+
+
+def _cdkey_blockers(placeholder: str) -> frozenset[str]:
+    """Which of the three conditions INDEPENDENTLY reject ``placeholder``.
+
+    A condition blocks the placeholder if that condition ALONE refuses it - so
+    the count is a count of conditions any one of which would have to be undone
+    before the placeholder became reachable.
+
+    Derived, never typed. The enumeration this replaces was written out as prose
+    in two places and was WRONG in both - it named ``<PRODUCTUSERID>`` as the
+    only placeholder clearing the length floor when four clear it. A recited
+    list goes stale the first time a rule is added; a derivation cannot.
+    """
+    lookahead, char_class, floor = _cdkey_conditions()
+
+    # EACH CONDITION IS MEASURED WITH THE OTHER TWO RELAXED, which is what makes
+    # the count a count of INDEPENDENT blockers. Reading the digit lookahead as
+    # it stands would conflate it with the class: ``(?=[A-Za-z0-9]*\d)`` anchored
+    # at a leading ``<`` fails because of the CLASS, not because the placeholder
+    # lacks a digit, and <STEAMID64> would then be scored as digit-blocked when
+    # it plainly carries digits. Substituting the class inside the lookahead
+    # keeps the ``\d`` requirement - the thing being isolated - and drops the
+    # class from it.
+    relaxed_lookahead = re.sub(r"\[[^\]]*\]", ".", lookahead)
+
+    blockers = set()
+    if not re.fullmatch(char_class + "+", placeholder):
+        blockers.add("class")
+    if not re.match(relaxed_lookahead, placeholder):
+        blockers.add("digit")
+    if len(placeholder) < floor:
+        blockers.add("floor")
+    return frozenset(blockers)
+
+
+def _placeholders_rules_can_emit() -> dict[str, frozenset[str]]:
+    """Every distinct ``<LABEL>`` token any rule in RULES can write."""
+    found = {}
+    for rule in redact_module.RULES:
+        for match in re.finditer(r"<([A-Z][A-Z0-9_]*)>", rule.replacement):
+            token = f"<{match.group(1)}>"
+            found[token] = _cdkey_blockers(token)
+    return found
+
+
+def test_no_placeholder_rests_on_a_single_cdkey_condition():
+    # THE PROPERTY THE PROSE USED TO RECITE, now derived from RULES so it cannot
+    # rot. Idempotence of the CDKEY rule against an already-redacted string is
+    # over-determined: three independent conditions reject placeholders, and
+    # every placeholder is refused by at least two of them, so no single edit to
+    # the pattern exposes any of them.
+    #
+    # This is the assertion that reddens if a future rule emits a placeholder
+    # that is BOTH at or above the floor AND carries a digit. Such a token would
+    # rest on the character class alone, and the class is not otherwise pinned by
+    # a mutation - see test_an_existing_cdkey_placeholder_is_not_remasked, whose
+    # class-widening mutation SURVIVED.
+    blockers = _placeholders_rules_can_emit()
+
+    # The positive control: the derivation must actually find rules. A green
+    # over an empty mapping would prove nothing, and a replacement template
+    # rename is exactly the kind of change that would silently empty it.
+    assert len(blockers) >= 17, sorted(blockers)
+
+    single = {token: sorted(b) for token, b in blockers.items() if len(b) < 2}
+    assert single == {}, single
+
+
+def test_the_cdkey_floor_is_cleared_by_more_than_one_placeholder():
+    # The specific wrong fact, pinned so the corrected comments cannot drift
+    # back. Four placeholders clear the floor, not one. All four are digit-free,
+    # which is why the conclusion above survived the error - but "the safety
+    # claim happened to hold" is not the same as "the stated reason was true".
+    blockers = _placeholders_rules_can_emit()
+
+    clears_floor = {t for t, b in blockers.items() if "floor" not in b}
+    assert clears_floor == {
+        "<USER_UNIQUE_ID>",
+        "<PRODUCTUSERID>",
+        "<ACCOUNT_NAME>",
+        "<OWNER_ROLEID>",
+    }, sorted(clears_floor)
+    assert all("digit" in blockers[token] for token in clears_floor)
+
+    # The mirror image, and the reason the floor bullet is allowed to read as
+    # exhaustive where the digit bullet is not: exactly two placeholders carry a
+    # digit, and both sit below the floor. <STEAMID64> at 11 is one character
+    # short of it - lowering _CDKEY_MIN_CHARS to 11 would leave it resting on
+    # the character class alone, and would redden the test above.
+    carries_digit = {t for t, b in blockers.items() if "digit" not in b}
+    assert carries_digit == {"<STEAMID64>", "<IPV4>"}, sorted(carries_digit)
+    assert all("floor" in blockers[token] for token in carries_digit)
+    assert len("<STEAMID64>") == redact_module._CDKEY_MIN_CHARS - 1
+
+
 def test_a_camelcase_mention_with_no_separator_is_not_a_cdkey():
     # A CHARACTERIZATION, NOT A GUARD, and it is labelled that way on purpose.
     #
@@ -1979,13 +2101,17 @@ def test_a_camelcase_mention_with_no_separator_is_not_a_cdkey():
     # after such a mention as a value. So it is worth having a test that says
     # out loud what this rule does with it.
     #
-    # But it pins NOTHING on its own, which was established the hard way. Three
+    # But its FIRST half pins nothing, which was established the hard way. Three
     # separate claims about which condition protects this shape were written
     # and each was refuted by its own mutation: removing "\b" left the suite
     # green, making the separator optional left it green, and removing BOTH at
     # once still left it green. The real protection is the VALUE SHAPE - the
     # following token is "Gift", four characters with no digit - and that is
     # pinned by the floor and digit tests, not by this one.
+    #
+    # The SECOND half is not decoration: deleting the CDKEY rule from RULES
+    # reddens this test. It is not the only test that catches that - measured,
+    # eleven do - so do not read this one as the rule's backstop either.
     #
     # Do not read a green here as evidence that the key or separator handling
     # is correct. It is evidence about the value shape, which is tested
