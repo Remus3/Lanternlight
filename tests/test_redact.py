@@ -2033,13 +2033,29 @@ def _cdkey_blockers(placeholder: str) -> frozenset[str]:
     return frozenset(blockers)
 
 
+#: Every rule collection in the module, not just RULES. A refutation pass caught
+#: the first draft enumerating RULES alone while ``redact()`` also applies
+#: LOG_TEXT_RULES - which today emits only ``<PERSONA>``, already covered, so
+#: there was no live gap, but a future log-text-only placeholder that was long
+#: AND digit-bearing would have gone unseen by the guard. Scanning every
+#: collection means adding one cannot silently escape the check.
+_RULE_COLLECTIONS = ("RULES", "LOG_TEXT_RULES", "DETECT_ONLY_RULES")
+
+
 def _placeholders_rules_can_emit() -> dict[str, frozenset[str]]:
-    """Every distinct ``<LABEL>`` token any rule in RULES can write."""
+    """Every distinct ``<LABEL>`` token any rule in the module can write.
+
+    DETECT_ONLY_RULES contributes nothing today - a detect-only rule has an
+    empty replacement and so emits no token - but it is scanned rather than
+    assumed empty, because "it has no replacement" is exactly the kind of fact
+    that stops being true without anyone editing this file.
+    """
     found = {}
-    for rule in redact_module.RULES:
-        for match in re.finditer(r"<([A-Z][A-Z0-9_]*)>", rule.replacement):
-            token = f"<{match.group(1)}>"
-            found[token] = _cdkey_blockers(token)
+    for name in _RULE_COLLECTIONS:
+        for rule in getattr(redact_module, name):
+            for match in re.finditer(r"<([A-Z][A-Z0-9_]*)>", rule.replacement):
+                token = f"<{match.group(1)}>"
+                found[token] = _cdkey_blockers(token)
     return found
 
 

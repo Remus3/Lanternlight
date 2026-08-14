@@ -5,6 +5,51 @@ fidelity and archive older ones rather than deleting them.
 
 ---
 
+# Session 2026-08-13a - a correct conclusion resting on a false reason
+
+Small session, one item, no new feature. Ledger `LL-0048`. **1223 tests at the
+start, 1225 at the end**, ruff clean, both measured on a clean tree with
+`__pycache__` purged; `ops.merge_gate.verify` OK against baseline 1223.
+
+**What was wrong.** `LL-0047` published an enumeration to justify its claim that
+CDKEY idempotence is over-determined: "`<PRODUCTUSERID>` at 15 characters is the
+only placeholder clearing the floor". **Four clear it** - `<USER_UNIQUE_ID>`
+(16), `<PRODUCTUSERID>` (15), `<ACCOUNT_NAME>` (14), `<OWNER_ROLEID>` (14). The
+sentence was copied into **four** artifacts and was false in every one, and it
+was false the day it was written.
+
+**Why it survived three sessions.** All four are digit-free, so the minimum
+blocker count really is 2 and the safety conclusion really does hold. **A true
+conclusion resting on a false reason is indistinguishable from a sound one by
+reading.** Nothing could have caught this, because prose has no failure mode.
+
+**The fix.** The recital is replaced by a derivation -
+`test_no_placeholder_rests_on_a_single_cdkey_condition` takes `_CDKEY_VALUE`
+apart by surgery on the live pattern string and counts independent blockers for
+every placeholder any rule collection can emit. It kills the class-widening
+mutation the older test survives.
+
+**Three things this session got wrong before getting right,** all caught by
+mutation or by the wrap refutation, none by review:
+
+1. The first draft of the fix **hard-coded the assumption it was testing**
+   ("the class excludes `<`") instead of reading the pattern - so the
+   class-widening mutation survived the fix too. Isolating each condition with
+   the other two relaxed is what fixed it.
+2. Two mutation counts were filed from a **`-k` filtered run** into a document
+   whose convention is full-suite. Re-measured: 1 -> 4 and 2 -> 6. **A count
+   without its scope is a wrong count.**
+3. The derivation read `RULES` alone; `redact()` also applies `LOG_TEXT_RULES`.
+   No live gap today, but a future log-text-only placeholder would have escaped
+   the guard. It now scans all three collections.
+
+**The habit to carry, sharpened:** `LL-0047` said to run the mutation before
+committing a sentence of the form "X is what prevents Y". That is necessary and
+not sufficient - this defect was **a list of identifiers**, not a causal claim.
+If you type an enumeration into a comment, derive it in a test instead.
+
+---
+
 # Session 2026-08-12h - the cdkey hole shut, and a guard that was never pinned
 
 Three slices on disjoint files plus two independent refutation passes, merged
