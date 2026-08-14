@@ -1454,6 +1454,29 @@ as a measured negative with its limit attached so nobody re-derives it.
 
 ---
 
+## OPS-7. `advance_cycle` silently credits an item that was never started - OPEN
+
+Hit for real during the `LL-0048` wrap, and caught only because the return value
+was printed and read. `ops.loop.state.advance_cycle(directive, item="7b")`
+defaults to `complete_current=True`, which moves the **previous** cycle's
+in-flight item into `completed`. The previous in-flight item was also `7b`, so
+passing the same item forward - the normal shape of "I did not get to this,
+carry it" - **credited `7b` as finished when nothing had been done to it**. The
+state was repaired by hand in the same session.
+
+`completed` is meant to be, in the docstring's own words, the honest answer to
+what the loop finished. A cold session reading `7b` in that list would skip the
+single highest-value item on this roadmap and never know why.
+
+**Acceptance:** a failing test first, asserting that
+`advance_cycle(directive, item=X)` where `X == current.item` does **not** append
+`X` to `completed` - because carrying the same item forward is a retry, not a
+completion. Then the minimum change that makes it pass. The existing
+`complete_current=False` escape hatch stays; the point is that the **default**
+must not manufacture a completion. Check `tests/test_loop_state.py` for the
+current pins before touching the semantics, and verify the guard is not vacuous
+by reverting the fix and watching the new test go red.
+
 ## Ordering note
 
 **Items 2b, 2c, 2d, item 7's shipped-code half and item 3 are CLOSED as of
