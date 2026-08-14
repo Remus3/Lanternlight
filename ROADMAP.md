@@ -1232,9 +1232,10 @@ untouched - but the number was imprecise. Corrected in `LL-0047`.
 
 **Acceptance - MET 2026-08-12.** Suite **1222 passed, 1222 collected** at the
 moment of closure, ruff clean, `__pycache__` purged; the baseline before the
-work was **1196**. The follow-up in `LL-0047` added one test, so the suite is
-**1223** today - re-measure rather than quoting either number, because both are
-snapshots and this file has been wrong about a count five times already.
+work was **1196**. The follow-up in `LL-0047` added one test and `LL-0048` added
+two more, so the suite was **1225** at the latter's close - re-measure rather
+than quoting any of these numbers, because every one of them is a snapshot and
+this file has been wrong about a count five times already.
 
 - **The `CDKEY` rule masks all four measured positions** - the bare word plus a
   space, `key=value` in a comma list, a query parameter in the redemption URL,
@@ -1348,6 +1349,51 @@ over-determined**, so a surviving mutant usually means redundancy rather than a
 dead guard. Idempotence is the other instance - every placeholder `RULES` can
 emit is blocked by at least two of the character class, the digit requirement
 and the length floor, so no single edit exposes any of them.
+
+### The follow-up to the follow-up, `LL-0048` - the evidence for that last sentence was false
+
+The over-determination claim above is TRUE. The enumeration `LL-0047` published
+to justify it was not, and it was copied into four artifacts before anyone
+re-derived it.
+
+- **The wrong fact.** `redact.py`, `test_redact.py`, the `LL-0047` ledger entry
+  and `WAKEUP_NOTES.md` all stated that `<PRODUCTUSERID>` at 15 characters is
+  the **only** placeholder clearing `_CDKEY_MIN_CHARS`. **Four clear it** -
+  `<USER_UNIQUE_ID>` (16), `<PRODUCTUSERID>` (15), `<ACCOUNT_NAME>` (14) and
+  `<OWNER_ROLEID>` (14). `RULES` emits **17** distinct placeholders.
+- **Why nobody caught it for three sessions.** All four are digit-free, so the
+  minimum blocker count is still 2 and the safety conclusion held anyway. **A
+  true conclusion resting on a false reason reads exactly like a sound one**,
+  and prose has no failure mode.
+- **The fix is a derivation, not a corrected sentence.**
+  `test_no_placeholder_rests_on_a_single_cdkey_condition` takes `_CDKEY_VALUE`
+  apart by surgery on the live pattern string and counts independent blockers
+  for every placeholder `RULES` emits. It reddens if a future placeholder is
+  ever both at the floor **and** digit-bearing - the one shape that would rest
+  on the character class alone. Note that lowering the floor to 11 puts
+  `<STEAMID64>` in exactly that position.
+- **It kills a mutation the old test survived.** `LL-0047` recorded that
+  widening the value class leaves `test_an_existing_cdkey_placeholder_is_not_
+  remasked` green. The derived test goes red.
+- **The fix shipped the same defect twice before passing**, both caught by
+  mutation or by the wrap refutation rather than by review. Its first draft
+  hard-coded "the class excludes `<`" as a Python assumption instead of reading
+  the pattern, and the class-widening mutation survived it too. Then the ledger
+  entry filed **two mutation counts taken from a `-k` filtered run** into a
+  document whose convention is full-suite - re-measured, 1 became 4 and 2
+  became 6. **A count without its scope is a wrong count.**
+- **A scope gap, also found by the refutation.** The derivation read `RULES`
+  alone while `redact()` also applies `LOG_TEXT_RULES` and `DETECT_ONLY_RULES`.
+  No live gap - the former emits only `<PERSONA>`, the latter has empty
+  replacements - but a future log-text-only placeholder that was long and
+  digit-bearing would have escaped the guard. All three are scanned now.
+
+**The habit this adds** to the one below: `LL-0047` said to run the mutation
+before committing a sentence of the form "X is what prevents Y". That is not
+enough, because this defect was a **list of identifiers**, not a causal claim.
+If you catch yourself typing an enumeration into a comment, derive it in a test
+instead - a filed count is a hypothesis, and this repository's own anti-pattern
+list already said so.
 
 **And a process failure, recorded rather than smoothed over.** This item was
 merged and pushed **before** that refutation returned its verdict, on the
