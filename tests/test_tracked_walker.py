@@ -15,6 +15,7 @@ The fix is to include untracked-but-not-ignored files as well. `.gitignore` is
 still respected, so `ops/runtime/`, caches and scratch directories stay out.
 """
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -35,7 +36,7 @@ def _walked() -> set[str]:
 
 class TestUntrackedFilesAreScanned:
     def test_a_new_untracked_file_is_visible_to_the_walker(self, tmp_path):
-        target = REPO_ROOT / "_walker_probe_untracked.md"
+        target = _tracked.probe_path("walker_untracked.md")
         target.write_text("probe\n", encoding="utf-8")
         try:
             assert target.resolve().as_posix() in _walked(), (
@@ -78,7 +79,7 @@ class TestIgnoredFilesStayOut:
         # drag it in, or every guard run starts tripping over runtime JSON.
         runtime = REPO_ROOT / "ops" / "runtime"
         runtime.mkdir(parents=True, exist_ok=True)
-        probe = runtime / "_walker_probe_ignored.json"
+        probe = runtime / f"_walker_probe_ignored_{os.getpid()}.json"
         probe.write_text("{}\n", encoding="utf-8")
         try:
             assert probe.resolve().as_posix() not in _walked()
@@ -102,7 +103,7 @@ class TestBinariesAreScannedForPii:
     """
 
     def test_a_binary_file_is_scannable_even_though_it_is_not_authored_text(self):
-        target = REPO_ROOT / "_walker_probe_binary.zip"
+        target = _tracked.probe_path("walker_binary.zip")
         target.write_bytes(b"PK\x03\x04\x00\x01binary probe\x00\x02")
         try:
             scannable = {
@@ -146,7 +147,7 @@ class TestBinariesAreScannedForPii:
     def test_ignored_files_stay_out_of_the_scannable_view_too(self):
         runtime = REPO_ROOT / "ops" / "runtime"
         runtime.mkdir(parents=True, exist_ok=True)
-        probe = runtime / "_walker_probe_ignored.bin"
+        probe = runtime / f"_walker_probe_ignored_{os.getpid()}.bin"
         probe.write_bytes(b"\x00\x01")
         try:
             scannable = {
@@ -171,3 +172,166 @@ class TestWalkerStillSane:
         # Tracked and untracked sets must not overlap into double-scanning.
         paths = [p.resolve().as_posix() for p in _tracked.iter_authored_files(REPO_ROOT)]
         assert len(paths) == len(set(paths))
+
+
+class TestConcurrentSuitesDoNotCollide:
+    """Two pytest processes at once must not destroy each other's evidence.
+
+    Measured 2026-08-26, and the mechanism is not subtle. Every guard probe
+    used to be planted at a FIXED path at the repository root, so two suites
+    running at once planted the SAME file and the first to reach its
+    ``finally`` unlinked the other's evidence mid-scan. Five concurrent full
+    suites went red in **9 of 10 runs**, across five different tests.
+
+    A process that plants nothing was hit too: a foreign probe appearing
+    between two consecutive walks of the same tree broke
+    ``test_the_scannable_view_is_a_superset_of_the_authored_view``, whose two
+    walks are supposed to differ only by the binary filter.
+
+    This matters beyond flakiness. ``ops/merge_gate.py`` re-runs pytest and
+    ``CLAUDE.md`` mandates a parallel multi-agent workflow, so the gate that
+    exists to catch a dropped test could redden for a reason unrelated to the
+    work being gated - and a gate that cries wolf is a gate people override.
+
+    The rule these pin: a probe is named for the process that owns it, its
+    owner always sees it, and nobody else ever does. **The probes stay at the
+    repository root**, because scanning the real root is the point of the
+    guards they exercise; only the NAME changed.
+    """
+
+    FOREIGN_STEM = "foreign_suite_probe.bin"
+
+    def _foreign(self) -> Path:
+        """A probe that is foreign to the WALKER but still unique on DISK.
+
+        Both properties are required, and the first draft of this class only
+        had one. It used a fixed ``<prefix>0_`` name - pid 0 is never a live
+        process, so it reads as foreign - and six concurrent suites promptly
+        fought over that single file: ``PermissionError: [WinError 32]`` on
+        ``unlink`` while another suite was still writing it. 17 of 18 runs
+        green, red for exactly the bug this class exists to prevent,
+        reproduced inside the test for it.
+
+        So the owner tag is this process's pid with a marker appended. It does
+        not match ``<prefix><pid>_``, so every walker treats it as somebody
+        else's, and no two processes ever name the same path. The marker
+        cannot collide with a longer pid either: the character after the
+        digits is never the ``_`` the owner check requires.
+        """
+        return REPO_ROOT / f"{_tracked.PROBE_PREFIX}{os.getpid()}other_{self.FOREIGN_STEM}"
+
+    def test_a_probe_path_is_unique_to_this_process(self):
+        path = _tracked.probe_path("binary.png")
+        assert str(os.getpid()) in path.name, (
+            "a probe named the same in every process is the collision itself"
+        )
+        assert path.parent == REPO_ROOT, (
+            "probes must stay at the repository root - scanning the real root "
+            "is what the guards they exercise are for"
+        )
+
+    def test_two_processes_would_not_pick_the_same_probe_path(self):
+        # The pid is the whole isolation mechanism, so pin that it is what
+        # varies. Same stem, different owner, different file.
+        ours = _tracked.probe_path(self.FOREIGN_STEM)
+        assert ours != self._foreign()
+
+    def test_a_foreign_probe_is_invisible_to_the_authored_walk(self):
+        foreign = self._foreign()
+        foreign.write_text("another suite is mid-test\n", encoding="ascii")
+        try:
+            assert foreign.resolve().as_posix() not in _walked(), (
+                "another process's probe must not enter this process's walk - "
+                "it is about to be unlinked under us"
+            )
+        finally:
+            foreign.unlink(missing_ok=True)
+
+    def test_a_foreign_probe_is_invisible_to_the_scannable_walk(self):
+        foreign = self._foreign()
+        foreign.write_bytes(b"\x00another suite\x00")
+        try:
+            scannable = {
+                p.resolve().as_posix() for p in _tracked.iter_scannable_files(REPO_ROOT)
+            }
+            assert foreign.resolve().as_posix() not in scannable
+        finally:
+            foreign.unlink(missing_ok=True)
+
+    def test_our_own_probe_is_still_visible_to_both_walks(self):
+        """The other half. Hiding foreign probes must not hide our own.
+
+        A probe its owner cannot see proves nothing, and a guard proved by
+        nothing is decoration - so this is the assertion that stops the
+        isolation being implemented by simply blinding the walker.
+        """
+        own_text = _tracked.probe_path("own_visible.md")
+        own_binary = _tracked.probe_path("own_visible.zip")
+        own_text.write_text("mine\n", encoding="ascii")
+        own_binary.write_bytes(b"PK\x03\x04mine")
+        try:
+            walked = _walked()
+            scannable = {
+                p.resolve().as_posix() for p in _tracked.iter_scannable_files(REPO_ROOT)
+            }
+            assert own_text.resolve().as_posix() in walked
+            assert own_text.resolve().as_posix() in scannable
+            assert own_binary.resolve().as_posix() in scannable
+            assert own_binary.resolve().as_posix() not in walked, (
+                "the binary suffix policy still applies to our own probes"
+            )
+        finally:
+            own_text.unlink(missing_ok=True)
+            own_binary.unlink(missing_ok=True)
+
+    def test_a_foreign_probe_is_filtered_on_the_non_git_fallback_path(self, tmp_path):
+        """The ignore rule cannot reach a tree git is not managing.
+
+        ``_published`` falls back to a filesystem walk for a source tarball or
+        a tree before ``git init``, and that walk never reads ``.gitignore``.
+        So the explicit foreign-probe filter is the only thing standing between
+        that path and the race the ignore rule closes everywhere else.
+
+        This test exists because a mutation proved the filter was decoration:
+        replacing its body with ``return False`` left the whole suite green,
+        since every other test runs on the git path where the ignore rule has
+        already removed the file.
+        """
+        import pytest
+
+        if _tracked._git_tracked(tmp_path) is not None:
+            pytest.skip("tmp_path is inside a git work tree; the fallback is not exercised")
+
+        foreign = tmp_path / f"{_tracked.PROBE_PREFIX}{os.getpid()}other_fallback.bin"
+        ours = _tracked.probe_path("fallback.bin", root=tmp_path)
+        foreign.write_bytes(b"another suite")
+        ours.write_bytes(b"mine")
+
+        names = {p.name for p in _tracked.iter_scannable_files(tmp_path)}
+        assert foreign.name not in names, (
+            "the fallback walk let another process's probe through - "
+            ".gitignore does not apply to a tree git is not managing"
+        )
+        assert ours.name in names, "our own probe must survive the filter"
+
+    def test_the_two_walks_stay_consistent_while_a_foreign_probe_exists(self):
+        """The failure a process that plants nothing still suffered.
+
+        ``test_the_scannable_view_is_a_superset_of_the_authored_view`` walks
+        the tree twice and subtracts. A foreign probe that appears between the
+        two walks breaks it, so the invariant is pinned here with one present
+        for the whole test rather than left to a race to expose.
+        """
+        foreign = self._foreign()
+        foreign.write_text("still here for both walks\n", encoding="ascii")
+        try:
+            scannable = {
+                p.resolve().as_posix() for p in _tracked.iter_scannable_files(REPO_ROOT)
+            }
+            authored = {
+                p.resolve().as_posix() for p in _tracked.iter_authored_files(REPO_ROOT)
+            }
+            assert authored <= scannable
+            assert foreign.resolve().as_posix() not in scannable
+        finally:
+            foreign.unlink(missing_ok=True)

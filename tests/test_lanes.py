@@ -18,6 +18,7 @@ removes a safety property rather than breaking anything visibly:
   a verifier that can be asked to grade its own work
 """
 
+import os
 import re
 import subprocess
 import sys
@@ -121,6 +122,34 @@ class TestNoFileIsOrphaned:
             "ops.lane_state.claim_path(<lane>, <pattern>):\n  "
             + "\n  ".join(orphans)
         )
+
+    def test_a_concurrent_suites_guard_probe_is_not_reported_as_an_orphan(self):
+        """A second pytest process must not make this test red.
+
+        ``ops/lanes.py`` keeps its own git listing, separate from
+        ``tests/_tracked.py``, so it needs the same protection and gets it from
+        the same place - the probe prefix is gitignored, which removes it from
+        every ``git ls-files --others --exclude-standard`` in the repository at
+        once rather than from one walker at a time.
+
+        Measured 2026-08-26: five concurrent full suites went red in 9 of 10
+        runs. ``ops/merge_gate.py`` re-runs pytest, so a gate could redden for
+        a reason unrelated to the work it gates.
+        """
+        # Foreign to the walker, unique on disk. See the same helper in
+        # tests/test_tracked_walker.py for why a FIXED name here would be
+        # the very bug under test.
+        probe = REPO_ROOT / f"_guard_probe_{os.getpid()}other_orphan_check.md"
+        probe.write_text("another suite is mid-test", encoding="ascii")
+        try:
+            walked = {p.as_posix() for p in lanes.tracked_files(REPO_ROOT)}
+            assert probe.name not in walked, (
+                "a concurrent suite's probe reached the ownership walk, so it "
+                "would be reported as a file no lane owns"
+            )
+            assert not lane_state.unowned_paths(list(lanes.tracked_files(REPO_ROOT)))
+        finally:
+            probe.unlink(missing_ok=True)
 
     def test_no_path_is_claimed_by_two_lanes(self):
         """A pending claim relaxes WHERE ownership is written, never that it is

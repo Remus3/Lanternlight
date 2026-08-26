@@ -181,8 +181,8 @@ def test_the_tree_scan_pipeline_flags_a_planted_file():
     at runtime, and both probes are removed in ``finally``.
     """
     fake_id = "76561190" + "000000042"
-    binary_probe = REPO_ROOT / "_pipeline_probe_binary.png"
-    encoded_probe = REPO_ROOT / "_pipeline_probe_encoded.b64"
+    binary_probe = _tracked.probe_path("pipeline_binary.png")
+    encoded_probe = _tracked.probe_path("pipeline_encoded.b64")
     try:
         binary_probe.write_bytes(b"\x89PNG\r\n\x1a\n" + fake_id.encode("ascii") + b"\x00\xff")
         encoded_probe.write_bytes(
@@ -195,11 +195,11 @@ def test_the_tree_scan_pipeline_flags_a_planted_file():
         _assert_scanned_enough(plain_scanned)
         _assert_scanned_enough(encoded_scanned)
 
-        assert any("_pipeline_probe_binary.png" in f for f in plain_findings), (
+        assert any(binary_probe.name in f for f in plain_findings), (
             "the plain pipeline missed a raw identifier planted in a binary. "
             f"findings: {plain_findings}"
         )
-        assert any("_pipeline_probe_encoded.b64" in f for f in encoded_findings), (
+        assert any(encoded_probe.name in f for f in encoded_findings), (
             "the encoded pipeline missed a base64-encoded identifier. "
             f"findings: {encoded_findings}"
         )
@@ -223,7 +223,7 @@ def test_the_tree_scan_pipeline_flags_a_raw_utf16_binary():
     skip binaries.
     """
     fake_id = "76561190" + "000000042"
-    probe = REPO_ROOT / "_pipeline_probe_utf16.bin"
+    probe = _tracked.probe_path("pipeline_utf16.bin")
     try:
         # Split so this source file does not itself carry a literal key=value
         # secret shape - the scanner cannot tell an invented id from a real one.
@@ -234,11 +234,11 @@ def test_the_tree_scan_pipeline_flags_a_raw_utf16_binary():
         encoded_findings, encoded_scanned = _scan_tree(_scan_encoded)
         _assert_scanned_enough(encoded_scanned)
 
-        assert not any("_pipeline_probe_utf16.bin" in f for f in plain_findings), (
+        assert not any(probe.name in f for f in plain_findings), (
             "the plain pass is expected to be blind to raw UTF-16 - that is why "
             "the wide reading has to exist"
         )
-        assert any("_pipeline_probe_utf16.bin" in f for f in encoded_findings), (
+        assert any(probe.name in f for f in encoded_findings), (
             "a raw UTF-16 identifier in a published file must be flagged. "
             f"findings: {encoded_findings}"
         )
