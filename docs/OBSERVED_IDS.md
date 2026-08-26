@@ -771,6 +771,40 @@ id=0` appears once per arrow (63 times), and
 value of that id has been observed, so nothing here binds an ammo family - it
 is the first sight of the distinction ROADMAP 4b is about, and no more.
 
+## Classic dungeon run - 2026-08-25b, on buildid 24813185
+
+Read live off the log while the operator played, and the run is the one written
+up in `docs/FINDINGS.md` section 12 - a complete dungeon that wrote **no**
+transient save at all.
+
+| id or name | What it is | How established |
+|---|---|---|
+| `DA_DungeonSettings_Classic` | the run's settings data asset | log, during the run - **the first non-Training settings asset ever observed here** |
+| `113` | `levelId` on the map URL | `LoadMap(...)` and the connect URL |
+| `11114` | `matchId` on the same URL | same lines |
+| `BP_Dungeon_GameMode_C` | the game mode | `?game=` on the LoadMap URL |
+| `/Game/Project/Maps/Map_2/Whitewoods_Day` | the map | `LogNet: Welcomed by server`, 02:56:19 UTC |
+| `WhiteWoods_Enemy_Day_Solo01` | a **solo** enemy spawner sublevel | sublevel load line |
+| `WhiteWoods_Enemy_Easy` | easy enemy spawner sublevel | sublevel load line |
+| `WhiteWoods_Treasure_Easy` | easy treasure spawner sublevel | sublevel load line |
+| `WhiteWoods_Easy_Traps` | easy trap sublevel | sublevel load line |
+| `WhiteWoods_Easy_EscapePoint` | easy escape point sublevel | sublevel load line |
+| `WhiteWoods_Easy_Gameplay` / `WhiteWoods_Easy_MapConfig` | easy gameplay and map config sublevels | sublevel load lines |
+| `Whitewoods_TaskInteractable` | task interactable sublevel | sublevel load line |
+| `onPartEscape` / `getPartEscape` | a third escape noun | `TS.UI` and `TS.Dungeon`, uninterpreted |
+
+**`WhiteWoods_Enemy_Day_Solo01` is first-party corroboration of a solo run.**
+The operator attested "solo" and the game loaded a spawner set whose own name
+says `Solo01`. Two independent sources, one of them the game's own asset path.
+
+**The difficulty here is `Easy`, from the sublevel names**, and it is worth
+saying that the word `difficulty` occurs **zero** times in the log - the
+difficulty is legible only through which `Spawners_<tier>` sublevels load.
+`Normal` appears 20 times and **none of them is a difficulty**: they are Wwise
+audio events, an arrow blueprint (`Arrow_Normal`) and a config-path helper.
+Grepping for the player-facing difficulty word finds nothing, exactly as
+grepping for `raid` and `extract` did.
+
 ## Rule
 
 Every future id binding gets recorded here at the moment it is observed, with
