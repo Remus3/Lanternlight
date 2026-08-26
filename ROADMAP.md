@@ -1215,24 +1215,30 @@ third is not, and no single value fits them under either display model.
 
 **What this opens, and it is now the highest-value thread on this list:**
 
-- **The distance term - MEASURED at five points, and it is a gradient.**
-  Ten body hits at 8, 6, 4 and 0 paces gave **10.35**, **~26.5**, **~55.2** and
-  **~68.4** per hit, with a 4-pace repeat at ~54.8. Factors 2.56x, 2.08x, then
-  1.24x, so the curve saturates near the target. A pace is defined - a full
-  stride, counted off the run-cycle animation loop reset, no crouch, sprint or
-  roll.
-- **Is there a damage FLOOR at long range?** Only the 8-pace runs admit a
-  constant per-hit value; every closer run refuses one, and the operator
-  attributed the widest spread to being "a little off the mark" rather than to
-  anything the game did. The hypothesis is that 8 paces is already on a clamped
-  floor, so jitter is absorbed there and shows everywhere closer.
-  **Acceptance:** a ten-hit run at 10 or 12 paces. Reading 10.35 again, and
-  constant, supports the floor; a lower value kills it and leaves the constancy
-  at 8 paces needing another explanation.
-  **Controls the next sweep must hold:** take the paces, stop, then fire all ten
-  without repositioning, aiming at one named point on the bot.
-  Note that a delta wobbling by one is NOT evidence of variance - a constant
-  value produces that wobble too, and the 8-pace run proves it.
+- **The distance term - MEASURED, six points, one controlled sweep.** Ten body
+  hits at 10, 8, 6, 4, 2 and 0 paces gave 104, 104, 309, 546, 687 and 691. The
+  curve is **clamped at both ends**: 10 and 8 paces are identical - a floor,
+  where the per-hit value is exactly **10.35** - and 2 and 0 are within 0.6%, a
+  ceiling. The slope between them is steep and the ceiling is 6.64x the floor.
+  A pace is defined: a full stride counted off the run-cycle animation loop
+  reset, no crouch, sprint or roll.
+- **Constancy tracks the flat parts of the curve.** A constant per-hit value
+  fits both floor runs and NO run on the slope, and the only same-distance
+  readings that disagree across the session are on the slope - 6 paces read 265
+  once and 309 once, 16% apart. Nothing observed requires the game to roll
+  damage; the uncontrolled variable is the operator's own position, which he
+  reported himself. A delta wobbling by one is NOT evidence of variance - a
+  constant value produces that wobble too, and the floor runs prove it.
+- **Where are the breakpoints?** The floor begins somewhere in (6, 10] paces
+  and the ceiling somewhere in [0, 4). **Acceptance:** ten-hit runs at 7 and 9
+  paces, and at 1 and 3, each solved for a constant per-hit value. The
+  breakpoint lies between the last range that admits one and the first that
+  does not.
+- **Is the headshot bonus a constant multiplier?** At the floor, head reads
+  ~12.2 against body 10.35, about 1.18x, but head has only ever been measured
+  at one range. **Acceptance:** the same six-distance sweep in headshots, with
+  the head/body ratio computed per distance. A constant ratio means a
+  multiplier; a varying one means headshots and range interact.
 - **What separates a headshot from a crit.** The client renders headshots in
   red crit text (operator), so the two cannot be told apart by eye and were not
   separated by this data. **Acceptance:** a run where the two are forced apart,
