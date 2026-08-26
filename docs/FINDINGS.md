@@ -1240,8 +1240,16 @@ it is still the only value consistent with all three. So:
 
 This is the first value in this project to clear the independent-run bar. It is
 bound to everything around it and to nothing beyond: Blackarrow, right-click,
-standard arrow, this bot, **8 paces**, buildid `24813185`. It is not a
-coefficient, a formula, or a claim about any other class or range.
+standard arrow, this bot, buildid `24813185`, and a range **on the damage floor
+measured in 11.6** - at or beyond roughly 8 paces, where the value stops
+falling. It is not a coefficient, a formula, or a claim about any other class
+or range.
+
+One caveat on the range, because it is an inference rather than a reading: the
+first two runs were fired before the operator had defined a pace, from a spot
+recorded only as "the same spot". They are ASSIGNED to the floor because they
+produce the floor's series and its exact value, not because anybody counted
+their distance. The sweep in 11.6 measured the floor properly, twice.
 
 ### The head series reproduces too, but NOT to a single value
 
@@ -1323,86 +1331,97 @@ carry `id=0` only; no family id has been observed taking any other value.
 So shot cadence is measurable from the log and damage is not, and the two join
 on wall clock the same way class ids were bound.
 
-### 11.6 Distance changes the number enormously, and it is a gradient
+### 11.6 The distance curve, measured at six points in one controlled sweep
 
-The operator ran a distance protocol, ten body hits per run, same right-click
-standard arrow, meter reset between runs.
+The operator ran a full sweep - 10, 8, 6, 4, 2 and 0 paces, ten body hits at
+each, meter reset between runs, same right-click standard arrow. Two controls
+were held that the earlier runs did not have: take the paces, **stop moving**,
+then fire all ten without repositioning, aiming at one point on the bot.
 
 **The distance unit is the operator's, and it is defined:** one pace is a full
 stride, counted by watching the run-cycle animation loop reset while moving
-straight forward, with no crouch, sprint or roll. That is reproducible by the
-same operator on the same character. It is not metres - it is a unit this
-project can re-use, not a measurement of the world.
+straight forward, with no crouch, sprint or roll. It is not metres. It is a
+unit this project can re-use, not a measurement of the world.
 
-| run | distance | ten-hit total | per hit |
+| paces | ten-hit total | per hit | a constant per-hit value fits? |
 |---|---|---|---|
-| 19:01:47 | 8 paces | 103 | **10.35**, constant |
-| 19:07:51 | 6 paces | 265 | ~26.5 |
-| 19:02:33 | 4 paces | 552 | ~55.2 |
-| 19:08:28 | 4 paces, repeat | 548 | ~54.8 |
-| 19:03:13 | 0 paces | 684 | ~68.4 |
+| 10 | **104** | 10.40 | **YES** - `[10.3500, 10.3571]` |
+| 8 | **104** | 10.40 | **YES** - `[10.3500, 10.3571]` |
+| 6 | 309 | 30.90 | no |
+| 4 | 546 | 54.60 | no |
+| 2 | 687 | 68.70 | no |
+| 0 | 691 | 69.10 | no |
 
-**It is a gradient, not a cliff.** The 6-pace reading was taken precisely to
-separate those, and it lands between its neighbours rather than beside one of
-them:
+Step factors, closing:
 
 | step | factor |
 |---|---|
-| 8 -> 6 paces | 2.56x |
-| 6 -> 4 paces | 2.08x |
-| 4 -> 0 paces | 1.24x |
+| 10 -> 8 | **1.000x** |
+| 8 -> 6 | 2.971x |
+| 6 -> 4 | 1.767x |
+| 4 -> 2 | 1.258x |
+| 2 -> 0 | **1.006x** |
 
-Four paces of closing buys 5.3x; the last four buy 1.24x. The curve saturates
-near the target, and the far end is where the interesting behaviour is.
+**The curve is clamped at both ends.** Ten paces and eight paces produce the
+identical ten-hit total, so damage stops falling somewhere at or before 8
+paces - a **floor**. Two paces and zero paces are within 0.6% of each other, so
+it stops rising too - a **ceiling**. Between them is a steep slope. End to end
+the ceiling is **6.64x** the floor.
 
-An earlier draft of this section recorded a 5.4x step from two points and an
-operator attestation of "changed nothing". The five-point profile supersedes
-it. The attestation was accurate - two points were simply never enough to say
-what the shape was.
+This was the acceptance test written into ROADMAP 7b before it was run: "if the
+floor hypothesis holds it reads 10.35 again, and constant". It did, on the
+nose, and the ceiling was not predicted at all.
 
-### 11.7 Only the far value is constant, and the operator named the reason
+### 11.7 Constancy tracks the flat parts of the curve exactly
+
+This is the result that makes the rest interpretable, and it needed the solve
+rather than the eye.
 
 **A constant per-hit value always makes the displayed deltas wobble by one.**
-The 8-pace run wobbles 10, 11, 10, 10, 11 and is nonetheless a perfectly
-constant 10.35 - the wobble is the rounding, not the damage. A wobbling delta
-is not evidence of variance, so reading one off the screen proves nothing
-either way.
+The 8-pace run wobbles 10, 11, 10, 10, 11 and is a perfectly constant 10.35 -
+the wobble is the rounding, not the damage. A wobbling delta is not evidence of
+variance, so reading one off the screen proves nothing either way. What IS
+evidence is a contradiction, and the contradictions line up with the curve:
 
-What IS evidence is a contradiction. Solving `round(n*v) == total_n` over each
-run exactly:
+- **On the floor (10 and 8 paces): a constant value fits.** Same interval both
+  times, containing 10.35, which three earlier runs at that range had already
+  pinned exactly.
+- **On the slope (6, 4, 2 paces): no constant value fits any run.**
+- **At 0 paces: still none**, though 0 and 2 are on the ceiling by total - the
+  ten-hit sums agree while the individual hits do not.
 
-| run | feasible constant v | verdict |
-|---|---|---|
-| 8 paces | `[10.3125, 10.3500]`, and exactly 10.35 across all three runs at that range | **constant** |
-| 6 paces | EMPTY | not constant |
-| 4 paces | EMPTY - contradiction first at hit 5 | not constant |
-| 4 paces, repeat | EMPTY | not constant |
-| 0 paces | EMPTY - contradiction first at hit 9 | not constant |
+**The same-distance runs disagree only on the slope.** Comparing nominally
+identical distances across the session:
 
-**Only the 8-pace runs admit a constant value. Every closer run refuses one.**
+| nominal | earlier runs | sweep | spread |
+|---|---|---|---|
+| 8 paces | 103, 104, 104 | 104 | one point, and that point is a rounding tie |
+| 6 paces | 265 | 309 | **16%** |
+| 4 paces | 552, 548 | 546 | ~1% |
+| 0 paces | 684 | 691, 690 | ~1% |
 
-The two 4-pace runs are also not identical to each other - 552 against 548,
-with the first hit reading 55 in one and 49 in the other, a 12% spread on one
-hit.
+Six paces is the middle of the steep section and it is the reading that moved
+16%. The operator's own account fits: he reported being "a little off the mark
+on the 4 pace run" without being asked. **A pace counted by animation loop is
+good to a fraction of a pace, and on a slope this steep a fraction of a pace is
+several damage.**
 
-**The operator then named the cause, unprompted: "I was a little off the mark
-on the 4 pace run."** That is a control failure being reported honestly, and it
-is the difference between two conclusions. The wider spread in the repeat is
-attributable to aim and stance, not to a damage roll in the game. **Nothing
-here establishes that the game rolls damage at all.**
+**What is established:** damage depends on range, is clamped at both ends, and
+is exactly 10.35 per hit on the floor for this attack, this bot and this build.
 
-**A hypothesis that fits all of it, and is not established:** damage falls off
-with range down to a **floor**, and 8 paces is already on that floor. On the
-floor the value is clamped, so it is exactly 10.35 every time and positional
-jitter is absorbed. Off the floor the value sits on a steep slope, so the same
-jitter - a step, a shifted aim point, being a little off the mark - moves it by
-several points. One mechanic explains the constant far value, the varying close
-values, and the wider spread in the run the operator says was off.
+**What is NOT established, and must not be written down as though it were:**
 
-**Acceptance for turning that into a finding:** a run at 10 or 12 paces. If the
-floor hypothesis holds it reads 10.35 again and is constant. If damage keeps
-dropping past 8 paces the hypothesis is dead, and the constancy at 8 paces
-needs a different explanation.
+- That the game rolls damage at all. Every non-constant run is on the slope,
+  where the operator's own position is the uncontrolled variable. There is no
+  observation here that requires randomness to explain it.
+- Where the floor and ceiling breakpoints are. They are somewhere in (6, 10]
+  and somewhere in [0, 4) paces, and no reading narrows them further.
+- The shape between them. Three interior points on a monotone curve fit many
+  functions and this project has no business naming one.
+- Anything about another class, weapon, arrow, target or build.
+
+**No coefficient enters Emberforge from this.** A measured floor value with its
+conditions attached is a fact; a falloff formula would be a story.
 
 ### 11.8 The game log is PERISHABLE, and one was already lost
 
