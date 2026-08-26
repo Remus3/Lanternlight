@@ -84,6 +84,22 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0063 - 2026-08-25 - A stack buff the OPERATOR spotted explains the broken solves - and it means 11.7's 'constancy tracks the clamp' may be a rounding artifact
+
+**Evidence:**
+- OPERATOR FOUND IT, not the analysis: he reported an icon climbing to 5 while he keeps hitting the same target inside a time limit, with damage 'gently nudged' upward, and located it centre screen above the energy bar.
+- CONFIRMED IN THE CAPTURE: cropping x 600-690, y 600-665 of the 1280x720 wide frame renders the icon and its stack count. Joining that crop to the meter crop by wall clock yields one row per hit carrying BOTH cumulative damage and stack count - the class-id frame join applied to two regions of one frame.
+- READING RULE: the count runs 1 to 5 and holds at 5. At ONE stack no digit is rendered - the icon appears bare - so 'no number' means one, not zero.
+- OPERATOR-DESIGNED EXPERIMENT: runs deliberately held to a maximum of 1, 2, 3, 4 and 5 stacks, slower cadence, no movement, letting the buff reset between. Ten-hit totals at one fixed floor distance - 1 stack: 135; 2-3 stacks: 136; 5 stacks: 137 and 139. Monotone in stack count.
+- MAGNITUDE, and it is small: under damage = base*(1 + (s-1)c), a run building 1,2,3,4,5,5,5,5,5,5 totals (10+30c) against 10 pinned at one stack, so the observed ratios imply c ~ 0.5% to 1% per stack, about +2% to +4% at five.
+- NO COEFFICIENT PUBLISHED. The spread is 135 to 139 on integer totals near 137, while same-distance run-to-run variation was already 137 against 138 in the same session. The signal is barely above the noise.
+- Written up as docs/FINDINGS.md section 15; section 14.4's advice corrected in place.
+
+14.4 WAS HALF WRONG AND IS CORRECTED: it proposed the floor as the decisive test because a clamp makes positional drift harmless. The drift reasoning holds; what it ignored is the display. At ~13.5 per hit a ~1%-per-stack effect is ~0.135 and rounds away, so the floor is INSENSITIVE rather than decisive - visible in the joined rows as stacks climbing 2,3,4,5 beside deltas flat on 14. The ceiling (~90 per hit, where 1% is 0.9) is the instrument.
+THE CONSEQUENCE FOR 11.7, and it is not small: 11.7 reports a constant per-hit value fitting every FLOOR run and no off-floor run, and reads that as constancy being a property of the clamp. A ~1%-per-stack buff reproduces that split exactly WITHOUT any distance term - invisible at 10.35 per hit, visible at 55-69. The observation stands; the INTERPRETATION is now contested between the operator's positional variance and this buff. The ten-point curve itself is unaffected - those totals are measured.
+WHETHER THE BUFF PREDATES TONIGHT IS UNMEASURED. Focus Fire was taken this session and its tooltip ('Rapid Arrows increase the Damage Multiplier with each hit on the same enemy') matches the shape - but the operator was NOT using Rapid Arrows: inter-hit intervals of 2.27-2.87 s are drawn shots, and Rapid Arrows is Volley. So either the talent's scope exceeds its tooltip, or this is a base mechanic that was always there and too small to see at 10.35 per hit. The logs that could settle it were destroyed before anything archived them.
+NEXT MEASUREMENT: at the CEILING, ten hits pinned at one stack against ten allowed to reach five, without moving - the difference should be 3-4 display units per hit rather than a fraction of one. To separate talent from base mechanic, fire ten hits alternating between two targets; 'the same enemy' implies the stack resets per enemy.
+
 ### LL-0062 - 2026-08-25 - A re-anchor run after an item change REFUSED to solve constant, so it cannot attribute 143-vs-104 to gear - and equipment turns out to be server-side
 
 **Evidence:**
