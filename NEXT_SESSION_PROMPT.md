@@ -156,11 +156,18 @@ the floor where body shots do.
   and no count is repeated here, because a tally in a document is stale the
   next time the pass runs. What matters is the **severity curve**, not the
   count. The early rounds found that BOTH arguments made for the WRONG distance
-  mapping were arithmetically invalid - each mixed two mappings - and that one
-  run had been solved using points belonging to its neighbour. The middle
+  mapping were arithmetically invalid - each mixed two mappings. The middle
   rounds found a fix applied in one of the two places the defect lived, and
   then a fix applied in both places with a number nobody re-derived, which is
-  worse because it reads as corrected. The late rounds found stale line counts.
+  worse because it reads as corrected. The late rounds found stale counts and a
+  misattribution.
+
+  **The single worst defect of that session was not found by the pass at all.**
+  One run had been solved using data points belonging to its neighbour, and it
+  surfaced while re-deriving during the fix for something else the pass HAD
+  found. So: acting on a refutation is itself where you find what the
+  refutation missed, and a pass that comes back empty is not the same as a
+  document that is right.
   **When you act on a refutation, re-derive the arithmetic of your correction,
   not just its presence** - and stop when the findings go cosmetic, not when
   you get bored.
