@@ -42,8 +42,8 @@ clean tree with `__pycache__` purged - that is your merge-gate baseline, and
 re-measure it yourself before dispatching work rather than trusting this line.
 The session's ledger entries start at `LL-0049` and run to the end of the file's
 newest block - `grep -n '^### LL-00' docs/LEDGER.md | head` lists them, and no
-end-point is filed here because that literal went stale three times in one
-session. **Read the corrections first.** Several entries correct the ones before
+end-point is filed here because that literal went stale twice in one session
+and was one commit away from a third time. **Read the corrections first.** Several entries correct the ones before
 them; the correcting entries are the ones that explain why the measurements are
 trustworthy, and they are more useful than the entries they correct.
 
@@ -149,15 +149,20 @@ the floor where body shots do.
   first distance sweep had to be re-run because its distances came from clock
   order. Record the independent variable in the same stream as the dependent
   one.
-- **The wrap refutation was run three times and found 13, then 5, then 2.** It
-  is not a step you complete, it is a step you repeat until it comes back
-  empty. Round one found that BOTH arguments made for the WRONG distance
+- **The wrap refutation is not a step you complete, it is a step you repeat
+  until it comes back empty.** It was run several times on the 2026-08-25 wrap
+  and found something every time; the ledger carries the round-by-round tally
+  and no count is repeated here, because a tally in a document is stale the
+  next time the pass runs. What matters is the **severity curve**, not the
+  count. The early rounds found that BOTH arguments made for the WRONG distance
   mapping were arithmetically invalid - each mixed two mappings - and that one
-  run had been solved using points belonging to its neighbour. Round two found
-  the fix had been applied in one of the two places the defect lived. Round
-  three found it applied in both places with a number nobody re-derived, which
-  is worse because it reads as corrected. **When you act on a refutation,
-  re-derive the arithmetic of your correction, not just its presence.**
+  run had been solved using points belonging to its neighbour. The middle
+  rounds found a fix applied in one of the two places the defect lived, and
+  then a fix applied in both places with a number nobody re-derived, which is
+  worse because it reads as corrected. The late rounds found stale line counts.
+  **When you act on a refutation, re-derive the arithmetic of your correction,
+  not just its presence** - and stop when the findings go cosmetic, not when
+  you get bored.
 - **A Windows path in a non-raw Python string** turns `\2026` into an octal
   escape and writes byte `0x82`. It happened twice in one session. Use forward
   slashes.
