@@ -102,6 +102,25 @@ one.
 - Tesseract is not installed. ROADMAP 7c is the template-matching reader, and
   its acceptance insists it REFUSE rather than guess.
 
+**Where this session's evidence actually is**, since none of it is in the repo
+and nothing in the repo said so:
+
+```
+C:/ll-captures/2026-08-25/
+  panel/  panel2/     HUD crops at 2 fps - every number came from these
+  scene/              half-scale wide shots at 1 fps - where the operator stood
+  frames/             full-resolution PNGs from the first hour, 4.8 GB
+  logs/               MistfallHunter.log snapshotted every 5 minutes
+  savegames/  saved-root/   every changed generation of every save
+  sheets/             the contact sheets the numbers were read off
+```
+
+About 6.8 GB in total, outside every checkout on purpose - these contain the
+operator's account name and third-party player ids and must never be committed.
+`frames/` is the redundant one: everything needed was extracted from it into
+`sheets/`, and it is the obvious thing to delete if the disk gets tight. It
+was at 48 GB free when this session ended.
+
 ## The finished curve
 
 Ten distances, ten body hits each, distance recorded in the capture rather than
