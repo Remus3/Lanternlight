@@ -5,6 +5,110 @@ fidelity and archive older ones rather than deleting them.
 
 ---
 
+# Session 2026-08-25 - the client was open, and 7b turned into a measurement rig
+
+The first session in four with the game actually running, so ROADMAP 7b was the
+work exactly as the hand-off said it should be. **1225 tests at the start and
+1225 at the end**, ruff clean, measured on a clean tree with `__pycache__`
+purged. No code changed - this session was measurement and documentation, so
+the count is unchanged by design and a merge gate baseline of 1225 is correct.
+
+Ledger `LL-0049`. Commits `9ac4b1b`, `07db784`, `0f292ed`, `146418d`,
+`3d68ad9`, `fe44c38`.
+
+## Check the world before anything else - it had moved three ways
+
+1. **The game was patched.** buildid `24619162` -> `24813185`, 2026-08-19.
+   Every id in `docs/OBSERVED_IDS.md` was read on a build that no longer
+   exists, and the file now says so at the top.
+2. **The 6.1 MB log from 2026-08-09 is gone.** The game truncates its log on
+   launch and keeps no backup. `docs/FINDINGS.md` 11.8, ROADMAP 4c.
+   `lanternlight/savewatch.py` already solves this - point it at `Logs/` and at
+   `Saved/` and the log plus the market cache archive themselves. That is also
+   item 4's remaining acceptance, met by shipped code.
+3. **`AvgPrice_937566.ini` is back to 37 bytes**, its empty state. It had
+   filled to 343. Nothing watched it empty.
+
+## ROADMAP 7b is ANSWERED, and two of its three answers are negatives
+
+- **(a) The training ground exists.** `/Game/Project/Maps/TrainingGround/
+  Training`, `DA_DungeonSettings_Training`, `BP_Adventure_Bot_C`.
+- **(b) `DamageCollectonDataSet` is NOT written there.** No
+  `StandaloneSlot_<roleId>.sav` for the whole 36-minute session across roughly
+  200 shots, against 17 seconds to appear in a real dungeon. Empty
+  `StandaloneLevel/`, no `EnterBattle`, and seven occurrences of "damage" in
+  the entire log, **none carrying a number**. `lanternlight/damage.py` has
+  nothing to read in that room. **The rig is a PIXEL rig.**
+- **(c) Body yes, head no.** See below.
+
+## The measurement method, which is the reusable part
+
+The room renders a cumulative **Total Damage** meter - a running total and a
+hit count - and writes it nowhere. Differencing it across frames gives per-hit
+damage. `Progress Record` beneath it holds the **previous run's** pair, not a
+best; the meter resets per run, which makes a run a self-delimiting window.
+
+**Solve, do not eyeball.** A constant per-hit value ALWAYS makes the displayed
+deltas wobble by one, because the meter rounds a real-valued cumulative sum. So
+a wobbling delta is not evidence of variance. Solving `round(n*v) == total_n`
+across a ten-hit run either yields an interval or is contradictory, and only
+the contradiction is evidence.
+
+**The body value is 10.35 and it is exact.** Three runs at the long range gave
+the same series, and the one hit that ever disagreed - 104 against 103 on the
+tenth - is the ONLY cumulative in the series that lands on an exact .5 tie.
+Searching every two- and three-decimal value that fits all three runs with ties
+free returns exactly one candidate. First number in this project to clear the
+independent-run bar. Corroborated as a PROPERTY by the transient save, whose
+`damageValue` is a float.
+
+**Headshots never yield a constant**, not even at the range where body shots
+are perfectly constant. Head totals reproduce (123 twice, 817 against 818,
+122/123/123 earlier) while individual hits do not. A headshot is not a body
+shot times a number.
+
+## The live mistake, and it is the most useful thing here
+
+Both sweeps produced **seven** completed runs. Distances were assigned to the
+body runs **by clock order** and committed. The operator then labelled the head
+runs and listed **six**, starting `123 = 10 paces` - implying an uncounted run
+first. If the body sweep also opened with one, every run shifts by one and the
+**damage floor disappears**.
+
+`docs/FINDINGS.md` 11.10 lays out both mappings, what each implies, and the
+evidence on both sides; 11.6 carries a banner saying not to cite its floor.
+**Unresolved at hand-off** - the operator was asked to redo 10 and 8 paces with
+a wide-shot poller running, so the frames label themselves.
+
+**Every total in both sweeps is exact. What broke was the LABEL**, and it broke
+silently because clock order looked like an obvious ordering and nobody had
+said that it was. A measurement whose independent variable was inferred rather
+than recorded is not a measurement of that variable, and it reads exactly like
+one.
+
+## Capture economics, measured
+
+- Full-screen PNG at 2 fps: **4.8 MB a frame, 34 GB an hour**, on a disk with
+  52 GB free. Do not leave that running.
+- Cropping the HUD rectangle at capture time: ~150 KB a frame, 20x less, and it
+  lost nothing this measurement used.
+- Half-scale JPEG wide shot at 1 fps: ~140 KB a frame, and it is what records
+  where the operator was standing.
+- Deduping panel frames by pixel hash **fails** - the plate is semi-transparent
+  so the scene behind it changes the hash while the number stands still. A
+  coarse column-occupancy signature is what works.
+- Tesseract is not installed. ROADMAP 7c is the template-matching reader, and
+  its acceptance insists it REFUSE rather than guess.
+
+## Next
+
+Read ROADMAP 7b's open threads first - they carry the acceptance criteria for
+the breakpoints, the floor, and the headshot mechanism. If the client is open,
+those are all cheap. If it is not, ROADMAP 4c and 7c are both unblocked and
+need nothing but work.
+
+---
+
 # Session 2026-08-13a - a correct conclusion resting on a false reason
 
 Small session, one item, no new feature. Ledger `LL-0048`. **1223 tests at the
