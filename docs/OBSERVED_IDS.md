@@ -771,7 +771,7 @@ id=0` appears once per arrow (63 times), and
 value of that id has been observed, so nothing here binds an ammo family - it
 is the first sight of the distinction ROADMAP 4b is about, and no more.
 
-## Classic dungeon run - 2026-08-25b, on buildid 24813185
+## Dungeon run - 2026-08-25b, on buildid 24813185
 
 Read live off the log while the operator played, and the run is the one written
 up in `docs/FINDINGS.md` section 12 - a complete dungeon that wrote **no**
@@ -779,7 +779,7 @@ transient save at all.
 
 | id or name | What it is | How established |
 |---|---|---|
-| `DA_DungeonSettings_Classic` | the run's settings data asset | log, during the run - **the first non-Training settings asset ever observed here** |
+| `DA_DungeonSettings_Classic` | a settings data asset name the log MENTIONS - **not bound to this run**, see the note below | log, 02:29:05 and 02:29:31 UTC |
 | `113` | `levelId` on the map URL | `LoadMap(...)` and the connect URL |
 | `11114` | `matchId` on the same URL | same lines |
 | `BP_Dungeon_GameMode_C` | the game mode | `?game=` on the LoadMap URL |
@@ -792,6 +792,19 @@ transient save at all.
 | `WhiteWoods_Easy_Gameplay` / `WhiteWoods_Easy_MapConfig` | easy gameplay and map config sublevels | sublevel load lines |
 | `Whitewoods_TaskInteractable` | task interactable sublevel | sublevel load line |
 | `onPartEscape` / `getPartEscape` | a third escape noun | `TS.UI` and `TS.Dungeon`, uninterpreted |
+
+**`DA_DungeonSettings_Classic` is NOT this run's settings asset, and an earlier
+draft of this file said it was.** Refuted by an independent pass and verified
+directly: the string occurs **exactly twice** in the whole log, at 02:29:05 and
+02:29:31 UTC - **27 minutes BEFORE** this run's `EnterBattle` at 02:56:01 - and
+both occurrences are inside
+`Puerts: Error: call TsConstruct of DA_DungeonSettings_Classic(...)`. They are
+**construction-failure lines**, not evidence that the run loaded that asset.
+The name is real and worth recording as a name; the binding was invented. The
+section heading named a mode off it and has been changed too.
+
+**So this run's settings asset is UNKNOWN**, and the "sharpest discriminator
+candidate" that `docs/FINDINGS.md` 12.1 built on it is withdrawn with it.
 
 **`WhiteWoods_Enemy_Day_Solo01` is first-party corroboration of a solo run.**
 The operator attested "solo" and the game loaded a spawner set whose own name
@@ -824,9 +837,20 @@ last two would miscount a loadout:
 
 | Rendering | Meaning |
 |---|---|
-| **Gold border** | owned AND equipped |
+| **Solid tan-gold border, no glow** | owned AND equipped |
+| **Gold border WITH a halo/glow** | **hovered** - says nothing about equipped |
 | **Dashed border, no padlock** | owned/unlocked but NOT equipped |
 | **Padlock glyph** | locked |
+| **Solid white border** | a fourth state, seen on Skills slot 4 - **meaning unknown** |
+
+**An earlier draft collapsed the first two rows into "gold border = equipped",
+and that is REFUTED by its own frames.** Hunter's slot 2 - `Barbed Arrow`,
+never equipped - renders dashed in one frame and a bright glowing gold in
+another, under the cursor. Hover paints a gold halo. Reading any gold border as
+"equipped" would have counted a hovered slot as an owned-and-equipped one.
+
+**The loadout counts below were re-verified against seven frames after this was
+found, and they hold.**
 
 ### Loadout at level 5
 

@@ -8,10 +8,15 @@ thing missing was that arming it was something each session had to REMEMBER.
 Two losses came out of exactly that, and both are the reason this file exists
 rather than a note in a hand-off:
 
-- The **6.1 MB log of 2026-08-09 is gone.** The game truncates
-  ``MistfallHunter.log`` in place on launch. Measured 2026-08-25: the live
-  log's creation time is ``2026-08-09 08:18:56`` and has never changed, so it
-  is the same file being emptied, not a new one being made.
+- The **6.1 MB log of 2026-08-09 is gone.** The game empties
+  ``MistfallHunter.log`` on launch. Measured across ONE launch, 2026-08-25:
+  afterwards the live log still carried its original ``2026-08-09 08:18:56``
+  creation time, so that launch emptied the file that was already there rather
+  than making a new one. **One launch, watched once** - nothing here shows the
+  timestamp survived any earlier launch, and on NTFS a delete-and-recreate
+  inside about 15 seconds restores the original creation time anyway, so this
+  evidence does not separate truncate-in-place from delete-and-recreate. See
+  ``docs/FINDINGS.md`` 11.12.
 - The **market cache emptied itself unobserved.** ``AvgPrice_<id>.ini`` had
   filled to 343 bytes and was back to its empty 37-byte state with nothing
   watching the transition.
