@@ -84,6 +84,23 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0049 - 2026-08-25 - ROADMAP 7b answered - the training ground is a PIXEL rig not a file rig, and the first outgoing damage measured is fractional and reproduced
+
+**Evidence:**
+- Game running first-party 2026-08-25, log opened 23:34:46 UTC; operator in /Game/Project/Maps/TrainingGround/Training from 23:38:16 UTC.
+- 7b(a) EXISTS: LoadMap line, DA_DungeonSettings_Training, WBP_Level_Room_Setting, BP_Adventure_Bot_C - docs/OBSERVED_IDS.md, new section 'Training ground - 2026-08-25'.
+- 7b(b) CLEAN NEGATIVE: no StandaloneSlot_<roleId>.sav after ~18 minutes in the room, Saved/StandaloneLevel/ empty, no EnterBattle and no onRequestMatch in the log, and 7 occurrences of the substring 'damage' in the whole log, none carrying a number. DamageCollectonDataSet is not written in the training ground.
+- 7b(c) BODY YES: runs at 18:41:47 and 18:49:32 are identical hit for hit - 10 21 31 41 52 62 72 83 93 104 - eight minutes and four intervening runs apart, each from its own meter reset.
+- Solving round(n*v) == total_n over the ten points gives v in [207/20, 145/14) = [10.3500, 10.3571) and NO integer lies in it, so the meter displays a rounded real-valued cumulative sum.
+- 7b(c) HEAD NO: runs at 18:51:17 and 18:53:37 are identical to each other (sum 123) but the run at 18:45:47 is not (sum 122), and the identical pair fits floor() while the body runs fit round() - one meter cannot do both, so the single-value model is wrong for head.
+- Corroboration from an unrelated surface: the transient save's damageValue is a float (17.356201171875), so two independent surfaces agree the engine quantity is real-valued.
+- Build re-pinned: Steam buildid 24619162 -> 24813185, LastUpdated 1786281053 -> 1787126796 (2026-08-19T08:06:36Z), MistfallHunter.exe dated 2026-08-19. Every id in docs/OBSERVED_IDS.md predating that patch is now marked UNCONFIRMED on the current build.
+- Full suite on a clean tree with __pycache__ purged: 1225 passed, 1225 collected, ruff clean. No code changed this entry - docs and measurement only, so the count is unchanged by design.
+
+NO COEFFICIENT PUBLISHED. The body interval has its independent run and nothing more; the head numbers have not earned even that.
+OPEN, recorded not answered: the operator halved the range and measured ~55.6 per body hit against ~10.35 far - a 5.4x step, attested as 'changed nothing'. Two points cannot show a falloff, two bots were in the room and neither far run pinned which was hit, and the far firing position was never recorded. Acceptance for turning it into a finding is in ROADMAP 7b.
+The full-screen frame poller wrote 4.8 MB per frame - 3.2 GB in 12 minutes on a disk with 52 GB free. A panel-only poller cropping the HUD rectangle at capture time costs about 150 KB per frame, 20x less, and loses nothing this measurement used.
+
 ### LL-0048 - 2026-08-13 - Corrects LL-0047 - the over-determination evidence recited a placeholder enumeration that was false, and the derivation that replaces it kills a mutation the old test survived
 
 **Evidence:**

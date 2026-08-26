@@ -1110,7 +1110,7 @@ observed. Polling faster will not fix a window that small - this is a ceiling
 on what this surface can ever give, and it is an argument for the controlled
 environment in item 7b rather than for a faster poller.
 
-## 7b. Training grounds as a controlled measurement rig - READY, needs the client
+## 7b. Training grounds as a controlled measurement rig - ANSWERED 2026-08-25
 
 Opened 2026-08-11 from third-party player testimony (see item 8), and it is the
 cheapest unblocker on this list.
@@ -1132,6 +1132,43 @@ is written there at all - it lives in `StandaloneSlot_<roleId>.sav`, which is
 created at match start, and a training ground may not be a "match", so this may
 be a clean negative - and (c) whether a repeated identical attack yields an
 identical `damageValue`. A written negative on any of the three is a result.
+
+**All three answered, 2026-08-25, operator in the client.** Full write-up in
+`docs/FINDINGS.md` section 11; ids in `docs/OBSERVED_IDS.md`.
+
+| acceptance | answer |
+|---|---|
+| (a) does it exist | **YES** - `/Game/Project/Maps/TrainingGround/Training`, `DA_DungeonSettings_Training`, `BP_Adventure_Bot_C` |
+| (b) is `DamageCollectonDataSet` written there | **NO** - a clean negative. It is not a match: no `StandaloneSlot_<roleId>.sav`, empty `StandaloneLevel/`, no `EnterBattle`, no `damageValue` anywhere on disk |
+| (c) does a repeated identical attack repeat its value | **YES for body, NO for head** |
+
+The rig is real but it is a **pixel** rig, not a file rig. The room renders a
+cumulative **Total Damage** meter and writes nothing, so the measurement path
+is frame capture joined to the log on wall clock - the same join that bound
+class ids - and `lanternlight/damage.py` has nothing to read here.
+
+Two body runs eight minutes apart are **identical hit for hit** and solve to a
+**fractional** per-hit value in `[10.3500, 10.3571)`, no integer in the
+interval. Two of three head runs are likewise identical to each other and the
+third is not, and no single value fits them under either display model.
+
+**What this opens, and it is now the highest-value thread on this list:**
+
+- **The distance term.** The operator attested mid-session that damage differs
+  with range, having halved the distance. That is first-party and unmeasured.
+  **Acceptance:** two ten-hit runs at two named distances, same attack, same
+  target point, each solving to a non-overlapping interval - plus a written
+  statement of how distance was held constant WITHIN each run, because
+  "same spot" was assumed rather than controlled in the runs above.
+- **What separates a headshot from a crit.** The client renders headshots in
+  red crit text (operator), so the two cannot be told apart by eye and were not
+  separated by this data. **Acceptance:** a run where the two are forced apart,
+  or a written negative saying they cannot be.
+- **What `Progress Record` counts.** Measured: it holds the PREVIOUS run's
+  total and hit count, not a best. That is established; what resets a run is
+  not.
+- **`capabilityId 13003`** is emitted beside `DA_DungeonSettings_Training` and
+  its meaning is unknown. Recorded, not interpreted.
 
 ## 8. Third-party data sources - reviewed 2026-08-11, tier and provenance fixed
 

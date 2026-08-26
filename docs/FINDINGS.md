@@ -22,7 +22,8 @@ anything was designed.
 | Engine | Unreal Engine 5 (IoStore, pak v12, utoc v8) | measured, section 3 |
 | Installed locally | yes, `C:\Program Files (x86)\Steam\steamapps\common\Mistfall Hunter` | appmanifest_3282300.acf |
 | Install size | 41,633,338,986 bytes (41.6 GB) | appmanifest |
-| Build pin | buildid `24619162`, LastUpdated epoch `1786281053` | appmanifest |
+| Build pin | buildid `24813185`, LastUpdated epoch `1787126796` (2026-08-19T08:06:36Z) | appmanifest, re-read 2026-08-25 |
+| Previous build pin | buildid `24619162`, epoch `1786281053` (2026-08-09T13:10:53Z) | appmanifest, 2026-08-09 - every id observed on or before 2026-08-09 predates the patch and is UNCONFIRMED on the current build |
 
 The class list is the only line here taken from community sources. It is
 UNVERIFIED and must not become an authoritative table without a first-party
@@ -1102,3 +1103,226 @@ Named so they are not later mistaken for absent:
   unbound, and not to be written down as a binding (10.9).
 - What `MatchID 11112` selects. It is constant across the run and matches the
   solo-explore ids in LL-0022, and nothing observed says what the number means.
+
+## 11. The training ground is a damage meter, 2026-08-25
+
+First-party, operator in the client, log plus frame capture joined on wall
+clock. This closes the two open questions of ROADMAP 7b and hands item 7 its
+first **outgoing** damage - every number before this one was damage taken.
+
+### 11.1 It exists, and it is not a match
+
+`LoadMap(/Game/Project/Maps/TrainingGround/Training)` at 23:38:16 UTC, 0.884s.
+The room carries `DA_DungeonSettings_Training`, its configuration panel is
+`WBP_Level_Room_Setting` / `PracticeRoomSettingView_C`, and the spawned dummy
+is `BP_Adventure_Bot_C`. So 7b's question (a) is answered YES.
+
+Question (b) is a **clean negative, and it matters**:
+
+| checked | result |
+|---|---|
+| `StandaloneSlot_<roleId>.sav` created | **NO** - absent 87s after map load and after 63 shots |
+| `Saved/StandaloneLevel/` populated | **NO** - still empty |
+| `EnterBattle` / `onRequestMatch` in log | **NO** - neither appears |
+| per-hit `damageValue` anywhere on disk | **NO** |
+
+The training ground is **not a match**, so it does not create the transient
+save, so `DamageCollectonDataSet` is **not written there at all**. The entire
+plan of measuring combat math out of that save in a zero-stake room does not
+work. Anyone re-reading `lanternlight/damage.py` expecting training data will
+find nothing to read.
+
+The log is no better. Seven occurrences of the substring `damage` in the whole
+session, and **not one of them carries a number**: a settings echo
+(`ClientSideDamagePrediction changed: 0`), a Puerts module bind
+(`module/Character/DamageCollectionComponent`), and gameplay-cue class loads
+(`GameplayCue.Damage.BeDamaged`, `GameplayCue.NumberPops.DamageCrit`). Those
+cue lines are **async-load** messages - they fire the first time the class
+loads, not once per hit. Counting them as hits would be a wrong number.
+
+### 11.2 What the room does provide: an on-screen cumulative meter
+
+The HUD carries a **Total Damage** panel - a running total and a hit count -
+and a **Progress Record** panel beneath it. Both are pixels only; nothing
+writes them to a file.
+
+`Progress Record` is **not** a best-single-hit. Measured at the reset of
+18:41:46 local: the live meter went to `0 / 0 Hit` and the record became
+`337 / 30 Hit`, which is exactly the total and hit count of the run that had
+just ended. It holds the **previous run's** pair. An earlier reading of
+`12 / 1 Hit` looked like a max-single-hit and was not one.
+
+The meter resets per run, so a run is a self-delimiting measurement window.
+
+### 11.3 The per-hit value is FRACTIONAL, and the display rounds
+
+Ten consecutive hits from a clean reset, one identical bow attack, captured at
+2 fps with no gap - local clock, then the displayed total:
+
+| hit | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| total | 10 | 21 | 31 | 41 | 52 | 62 | 72 | 83 | 93 | 104 |
+| delta | 10 | 11 | 10 | 10 | 11 | 10 | 10 | 11 | 10 | 11 |
+
+The deltas are not constant, and that is the interesting part. If each hit
+dealt the same integer, every delta would be that integer. Solving
+`round(n * v) == total_n` across all ten points gives
+
+> **v is in [10.3500, 10.3571)** - exactly `[207/20, 145/14)`, width 0.0071 -
+> and **NO integer fits all ten**.
+
+So the meter holds a real-valued running sum and rounds it for display, and the
+alternating 10/11 is that rounding, not variance in the hit. Reading a single
+delta off the screen and calling it "the damage" would have published a number
+that is wrong by up to half a point in either direction.
+
+**Operator attestation, given in the same session:** every run above and below
+used the right-click attack with the standard arrow, at the same distance and
+the same spot on the bot. Runs 1 and 6 were **body** shots; runs 5 and 7 were
+**headshots**, which the client renders in red crit text. The operator's own
+reading off the screen was "10 damage going to 12".
+
+Four ten-hit runs were captured with no gaps. Each row is the displayed total
+after hits 1 through 10:
+
+| run | target | series | sum |
+|---|---|---|---|
+| 1, 18:41:47 | body | 10 21 31 41 52 62 72 83 93 104 | 104 |
+| 6, 18:49:32 | body | 10 21 31 41 52 62 72 83 93 104 | 104 |
+| 5, 18:45:47 | head | 12 24 37 49 61 73 86 98 110 122 | 122 |
+| 7, 18:51:17 | head | 12 24 37 49 61 74 86 99 111 123 | 123 |
+| 8, 18:53:37 | head | 12 24 37 49 61 74 86 99 111 123 | 123 |
+
+### The body value IS reproduced, and it is fractional
+
+Runs 1 and 6 are **identical, hit for hit**, eight minutes and four intervening
+runs apart, each from its own meter reset. Both solve to
+
+> **[10.3500, 10.3571)** - exactly `[207/20, 145/14)` - with **NO integer** in
+> the interval.
+
+That is an independent reproduction, which is the bar this project sets before
+a measured value may be called anything more than a reading. The per-hit body
+damage of a Blackarrow right-click standard arrow, on this bot, at this
+distance, on buildid `24813185`, is a **fractional** quantity in that interval,
+and the meter displays a rounded running sum of it.
+
+The interval is what is measured. `10.35` sits exactly on its lower bound and
+is the obvious candidate, and **the measurement does not distinguish it** from
+anything else up to 10.3571. Writing `10.35` down as the value would be
+choosing a pretty number over the evidence.
+
+### The head series reproduces too, but NOT to a single value
+
+Runs 7 and 8 are also identical hit for hit, two minutes apart. Run 5 is not:
+it diverges from hit 6 and ends one point lower, 122 against 123. So headshots
+are reproducible in the large and something still separates run 5 from the
+other two.
+
+Solving both display models across the three head runs is where this stops
+being tidy:
+
+| run | `round(n*v)` fits | `floor(n*v)` fits |
+|---|---|---|
+| 1, 6 body | **[10.3500, 10.3571)** | no fit |
+| 5 head | [12.2143, 12.2500) | no fit |
+| 7, 8 head | **no fit** | [12.3750, 12.4000) |
+
+The body runs fit rounding and not truncation. The two identical head runs fit
+truncation and not rounding. **One meter cannot display its total both ways**,
+so at least one of those fits is a coincidence rather than a mechanism - ten
+points and a free choice of two models is enough rope to fit noise. The
+single-value model is simply wrong for headshots.
+
+What that leaves, stated as measurement rather than theory: the per-hit head
+damage is **not one constant**. The delta multiset is 8x12 + 2x13 in run 5 and
+7x12 + 3x13 in runs 7 and 8, so the variation is in how many hits land on the
+higher value, not in some third number appearing.
+
+A crit roll on top of the headshot fits that shape and is **not established** -
+the client does render headshots in red crit text per the operator, which makes
+"headshot" and "crit" hard to separate by eye and impossible to separate from
+this data. The body/head midpoint ratio is **1.1814** against run 5, recorded
+as an observation and published as nothing.
+
+**No coefficient enters Emberforge from this session.** The body interval has
+earned its independent run; it has not earned a name, a formula slot, or a
+claim about any other class, weapon, distance, or build. The head numbers have
+not earned even that.
+
+### The fractional result is corroborated from an unrelated surface
+
+This did not have to agree with anything, and it does. The transient dungeon
+save's `DamageCollectonDataSet` stores `damageValue` as a **float** - the two
+hits read out of it in ROADMAP item 7 are `17.356201171875` and
+`92.13079833984375`, neither remotely an integer.
+
+So two independent surfaces, a save file written during a real dungeon and a
+HUD meter rendered in a practice room, agree that the engine's damage quantity
+is real-valued and that any integer a player sees is a presentation of it. A
+build calculator that treats displayed damage as the underlying number is
+wrong by construction, not merely imprecise.
+
+**This is corroboration of a property, not of a value.** Nothing here says the
+body interval `[10.3500, 10.3571)` and those two floats belong to the same
+formula - they are different attacks, different targets, different directions
+(dealt against taken) and different builds.
+
+### 11.6 Distance changes the number, and by far more than expected
+
+Late in the same session the operator halved the range to the bot and, asked
+directly whether anything else had changed, answered **"changed nothing"** -
+same right-click, same standard arrow, same bot.
+
+| run | target | range | series | per hit |
+|---|---|---|---|---|
+| 10, 18:56:09 | body | close | 55 110 166 221 277 333 388 444 500 556 | ~55.6 |
+| 9, 18:55:xx | head | close | ... 456 521 585 651 705 (hits 7-11) | ~64.1 over 11 |
+| 1 and 6 | body | far | 10 21 31 41 52 62 72 83 93 104 | in [10.3500, 10.3571) |
+
+The close body run is **5.4 times** the far body run. That is not a small
+correction, and it is the single largest unexplained factor this project has
+measured.
+
+**It is recorded as an observation and it is NOT established as a distance
+law.** Reasons to distrust the obvious reading, all of them concrete:
+
+- Two points cannot show the shape of a falloff. A 5.4x step is equally
+  consistent with a threshold, with a minimum-range cutoff, and with the far
+  shots simply being weak in some way nobody controlled.
+- Two bots were present in this room (`BP_Adventure_Bot_C` instances). Nothing
+  in the far runs pinned WHICH one was hit.
+- Neither close run fits a single per-hit value under either display model, so
+  even within one distance something varies.
+- "Changed nothing" is an honest report of intent, not an instrumented control.
+  The far runs were fired from an unrecorded spot.
+
+**Acceptance for turning this into a finding** is in ROADMAP 7b: three runs of
+ten body hits at three named distances, distance recorded in paces from a fixed
+landmark, one named bot, plus a statement of what was held constant. Two points
+and an attestation is a hypothesis.
+
+### 11.4 Two other runs provably were NOT uniform
+
+Same solve, same session, applied to the two runs between them:
+
+| run | points | result |
+|---|---|---|
+| 18:42:21-18:43:01 | 9 | **no single value fits** |
+| 18:43:04-18:43:51 | 10 | **no single value fits** |
+
+That is a positive result, not a failed measurement: it proves at least two
+distinct per-hit values occurred inside each of those runs. The solve is what
+separates "the attack varies" from "the display rounds", and by eye the two are
+indistinguishable - both look like deltas that wobble by one.
+
+### 11.5 What the log DOES carry per shot
+
+`TS.Dungeon: SpawnDefaultAmmunition spawn id=0, AmmunitionComponent_C_<inst>,
+BP_Adventure_Bot_C_<inst>` - 63 of them in this session, one per arrow. Also
+`[AmmunitionComponent]: UsingCustomizedAmmunition: id=0`, which is the first
+first-party sight of the ammo-family distinction ROADMAP 4b is about. Both
+carry `id=0` only; no family id has been observed taking any other value.
+
+So shot cadence is measurable from the log and damage is not, and the two join
+on wall clock the same way class ids were bound.
