@@ -84,6 +84,21 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0052 - 2026-08-25 - Corrects LL-0050 and LL-0051 - the wrap refutation found two invalid arguments, an overstated discipline claim, and points invented to fill a gap in a run this project had just finished warning itself about
+
+**Evidence:**
+- docs/FINDINGS.md 11.10 argued for the WRONG mapping on two grounds and BOTH were arithmetically invalid: each compared head runs under mapping B against body runs under mapping A. Re-derived consistently - A gives ratios 1.183, 1.183, 1.133, 1.192, 1.163, 1.182 and B gives 1.183, 1.133, 1.192, 1.163, 1.182, 1.186. The '3.37x that makes nonsense of A' is the MIXED pairing, not A. Under consistent A both sweeps step 1.000x from 10 to 8 paces, which matches rather than conflicts.
+- Mapping A was correct, so the reasoning pointed at the wrong answer and only re-running the measurement recovered it. Both arguments are now quoted in 11.10 and refuted in place rather than deleted.
+- LL-0051 claimed 'every distance in this entry was recorded by the wide-shot poller at capture time'. FALSE for four of the ten: the 9, 7, 3 and 1-pace labels were assigned in clock order from the order the operator named them. The wide shot recorded the operator's POSITION, which is not the same as a distance being read off it - the attempt to read one saturated twice and is written up as failed in 11.11.
+- The four inferred labels are nonetheless forced by monotonicity, and that check is recorded in docs/FINDINGS.md 11.6 rather than left implied.
+- The 10-pace run was solved using the points (1,10) and (2,21), which BELONG TO THE 8-PACE RUN - its own early states were never captured. Re-solved on its four genuinely observed points the interval is unchanged at [10.3500, 10.3571], so no conclusion moves. docs/FINDINGS.md 11.7 now publishes every observed cumulative state per run, with dashes for uncaptured intermediates, so the solve is re-runnable from the artifact instead of asserted by it.
+- LL-0049's note left the two-point 5.4x distance step OPEN. It is answered: the ten-point curve supersedes it and no two-point step is cited anywhere as current.
+- Full suite after the corrections, clean tree, __pycache__ purged: see the wrap commit. Docs only - no code changed anywhere in this session.
+
+THE PATTERN, and it is LL-0048's pattern again: a true conclusion is indistinguishable by reading from a sound one. Here it was worse - the argument was invalid AND pointed the wrong way, and the only thing that caught it was re-measuring. Had the invalid reasoning pointed at the right answer, nothing would have flagged it.
+THE SECOND PATTERN: the session wrote two sections on the cost of inferring a variable instead of recording it, and then filled a gap in its own data by copying a neighbouring run's points. Writing the lesson down does not immunise you against it.
+A ledger entry is append-only, so LL-0051's overstated sentence stands and this entry is the correction. Read them together.
+
 ### LL-0051 - 2026-08-25 - Both falloff breakpoints located - the curve is a clamped floor, about 1.3x per pace, and a clamped ceiling, and the floor is a step not a tangent
 
 **Evidence:**

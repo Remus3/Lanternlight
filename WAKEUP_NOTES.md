@@ -13,8 +13,8 @@ work exactly as the hand-off said it should be. **1225 tests at the start and
 purged. No code changed - this session was measurement and documentation, so
 the count is unchanged by design and a merge gate baseline of 1225 is correct.
 
-Ledger `LL-0049`. Commits `9ac4b1b`, `07db784`, `0f292ed`, `146418d`,
-`3d68ad9`, `fe44c38`.
+Ledger `LL-0049` through `LL-0052`. Fifteen commits from `9ac4b1b` to the
+wrap; `git log --oneline 9ac4b1b~1..HEAD` lists them.
 
 ## Check the world before anything else - it had moved three ways
 
@@ -111,9 +111,10 @@ recalled. Ledger `LL-0051`.
 |---|---|---|---|---|---|---|---|---|---|---|
 | total | 104 | 104 | 104 | 231 | 309 | 546 | 687 | 687 | 689 | 691 |
 
-Three regimes: a clamped floor at 104 (per hit exactly **10.35**), a slope of
+Three regimes: a clamped floor at 104 - per hit exactly **10.35**, the solved
+interval being `[10.3500, 10.3571]` at all three floor distances - a slope of
 about **1.3x per pace** across four consecutive paces, and a clamped ceiling
-spanning 3 through 0 paces at 0.6% spread. The floor boundary is between 8 and
+spanning 3 through 0 paces at 0.6% spread. **Ceiling is 6.64x the floor.** The floor boundary is between 8 and
 7 paces and it is a **step** - extrapolating the slope outward predicts ~174 at
 8 paces and it reads 104.
 

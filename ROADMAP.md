@@ -1215,7 +1215,8 @@ third is not, and no single value fits them under either display model.
 
 **What this opens, and it is now the highest-value thread on this list:**
 
-- **The distance term - MEASURED, six points, one controlled sweep.** Ten body
+- **The distance term - SUPERSEDED by the ten-point curve below, kept for
+  the record.** The first controlled sweep was six points. Ten body
   hits at 10, 8, 6, 4, 2 and 0 paces gave 104, 104, 309, 546, 687 and 691. The
   curve is **clamped at both ends**: 10 and 8 paces are identical - a floor,
   where the per-hit value is exactly **10.35** - and 2 and 0 are within 0.6%, a
@@ -1225,7 +1226,7 @@ third is not, and no single value fits them under either display model.
 - **Constancy tracks the flat parts of the curve.** A constant per-hit value
   fits both floor runs and NO run on the slope, and the only same-distance
   readings that disagree across the session are on the slope - 6 paces read 265
-  once and 309 once, 16% apart. Nothing observed requires the game to roll
+  once and 309 once, 16.6% apart. Nothing observed requires the game to roll
   damage; the uncontrolled variable is the operator's own position, which he
   reported himself. A delta wobbling by one is NOT evidence of variance - a
   constant value produces that wobble too, and the floor runs prove it.
@@ -1636,28 +1637,47 @@ by reverting the fix and watching the new test go red.
 `lanternlight/tail.py` follows the log, so both the extractor and the live spine
 are shipped code rather than scratchpad analysis.
 
-**The next item is 7b, the training ground**, and it needs the client open. It
-is the cheapest thing on this list and the **only** route to **outgoing**
-damage in quantity - which is the half Emberforge actually needs, because the
-21 hits measured so far are damage **taken**. `sourceType: 0` is what to look
-for. If the game is running, do 7b first and fold items 1, 4b, 5 and 6 into the
-same session, since all of them need the client and none deserves its own.
+**Item 7b is ANSWERED as of 2026-08-25** (ledger `LL-0049`, `LL-0051`,
+corrected by `LL-0052`). The training ground exists, it is **not a match** so it
+writes no `DamageCollectonDataSet`, and its damage surface is the on-screen
+**Total Damage** meter - a pixel rig, not a file rig. Outgoing damage is
+measured: **10.35 per hit** on the damage floor, plus a ten-point falloff curve.
+What remains open under 7b is listed in that item: the step-versus-tangent
+question, the headshot mechanism, and whether the ~1.3x per pace is real.
+
+**The next item depends on whether the client is open.**
+
+- **Client open:** 7b's remaining threads are all cheap and all need it. Fold
+  in items 1, 4b, 5 and 6, which also need the client and none of which
+  deserves its own session. **Arm the wide-shot poller before the first run** -
+  the first sweep of 2026-08-25 had to be re-run because its distances were
+  inferred from clock order rather than recorded (`docs/FINDINGS.md` 11.10).
+- **Client closed:** item **4c** (arm the archiving watchers - no new code) or
+  item **7c** (read the meter without a human reading it). Both are fully
+  specified and need nothing but work.
 
 **Item 9 is CLOSED as of 2026-08-12** (ledger `LL-0046`). The `cdkey` hole is
 shut, the `/Game/` anchor is genuinely pinned, and two of that item's four
 surfaces turned out to have been closed already.
 
-**If the client is not open, the next item is 4's `AvgPrice` watcher** - it is
-fully specified, independent of everything else, and needs nothing but work.
-There is no longer an open safety item; the safety lane's queue in
-`lanes/safety.STATE.json` is all blocked on a candidate fixture existing.
+**Item 4's remaining acceptance is met by shipped code**, measured 2026-08-25:
+`lanternlight/savewatch.py` pointed at `Saved/` snapshots `AvgPrice_<id>.ini` on
+change with a timestamp and never writes to it, which is exactly what that item
+asked for. Item **4c** is the part that is genuinely left - arming it without a
+session having to remember. There is no longer an open safety item; the safety
+lane's queue in `lanes/safety.STATE.json` is all blocked on a candidate fixture
+existing.
 
 Item 3 is closed, so it is no longer the fallback. The tailer exists; what does
 not exist yet is anything consuming it, and nothing on this list currently asks
 for that - do not invent a consumer without an acceptance criterion.
 
-Item 7 itself stays **open** on one thing only: no coefficient may be published
-until the same value is seen in an **independent run**.
+Item 7 itself stays **open**, but its blocker has been cleared once: no
+coefficient may be published until the same value is seen in an **independent
+run**, and **10.35 has now cleared that bar** - three runs at the damage floor,
+whose only disagreement is a rounding tie that 10.35 itself predicts. It is a
+floor value with its conditions attached, not a coefficient, and nothing has
+entered Emberforge.
 
 One ownership correction, measured this session: `tests/fixtures/**` is owned by
 **ingest**, not safety. This document called 2b "safety-lane work" and the
