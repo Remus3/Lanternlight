@@ -75,10 +75,12 @@ runs and listed **six**, starting `123 = 10 paces` - implying an uncounted run
 first. If the body sweep also opened with one, every run shifts by one and the
 **damage floor disappears**.
 
-`docs/FINDINGS.md` 11.10 lays out both mappings, what each implies, and the
-evidence on both sides; 11.6 carries a banner saying not to cite its floor.
-**Unresolved at hand-off** - the operator was asked to redo 10 and 8 paces with
-a wide-shot poller running, so the frames label themselves.
+`docs/FINDINGS.md` 11.10 lays out both mappings and the evidence on both sides.
+**RESOLVED before hand-off, by re-running rather than arguing.** A wide-shot
+poller was armed and the operator redid only the ambiguous pair - ten body hits
+at 10 paces, reset, ten at 8. **Both read 104.** The floor is real and the
+committed mapping was right. 11.11 records how, including a measurement that
+failed twice and is written up as failed.
 
 **Every total in both sweeps is exact. What broke was the LABEL**, and it broke
 silently because clock order looked like an obvious ordering and nobody had
