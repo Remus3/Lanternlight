@@ -39,6 +39,46 @@ independent refutation pass and it overturns things the entries before it claim.
   "constancy tracks the clamp" an artifact. Measure it at the CEILING; the floor
   is insensitive because the increment rounds away.
 
+## Capture was pruned at the operator's request - 4.5 GB to 3.0 GB
+
+Recorded here because this project's expensive lesson is deleted evidence, and
+the precedent set when `frames/` was removed is **downsample, keep a record,
+then delete, and write down what was lost.** Same method here.
+
+**Provably lossless, 220 MB.** 76 superseded log generations. The game APPENDS
+within a session, and every deleted generation was verified a strict **byte
+prefix** of the one that supersedes it, re-checked at the moment of deletion.
+One of two byte-identical backup copies also went. **A `MANIFEST.txt` stays in
+each `logs/` directory** listing every original name, size, sha256 and mtime -
+because `LL-0056`'s measured negative is "N generations at these timestamps and
+not one a `*-backup-*.log`", and that claim lives in the LISTING, not the bytes.
+
+**`2026-08-25/panel2/` overlap, 278 MB.** `panel/` and `panel2/` were two
+simultaneous pollers on the same HUD rectangle. `panel/` runs to 19:51:31 and
+`panel2/` starts 19:34:50, so 1,775 frames were duplicated. Near-simultaneous
+pairs were compared first and showed identical meter content. **`panel/` was
+the copy kept, because ROADMAP 7c names that exact path as its ground truth.**
+`panel2/`'s unique window after 19:51:31 is untouched.
+
+**`2026-08-25b/reanchor/` downsampled, 1,084 MB.** 320 full-screen 2560x1440
+PNGs at ~3.1 MB became `reanchor_small/panel` (meter crops) plus
+`reanchor_small/wide` (half-scale JPEGs) - **all 320 frames, both streams**.
+Spot-checked afterwards: `143`/`10 Hit`, `129`/`9`, `42`/`3` and `28`/`2` are
+all still legible in the crops, which are the four readings FINDINGS 13 rests
+on.
+
+**24 frames were kept at FULL resolution** - every visually distinct equipment
+view: the inventory grid, several item tooltips with their stat text, the Affix
+Details screen and the character panel. They were kept because **equipment is
+server-side** (13.1), so those frames are the only record anywhere of the
+loadout that produced that run. A near-duplicate filter chose them; the
+threshold erred toward keeping.
+
+**What a future session can no longer do:** re-crop the reanchor capture at a
+different rectangle, or read equipment text from a frame that was not among the
+24. Everything published from that capture is preserved. The old capture-tree
+listing further down this file describes the pre-prune shape.
+
 ## The lesson worth carrying
 
 Four independent refuters found **zero arithmetic errors** and **eight bad
