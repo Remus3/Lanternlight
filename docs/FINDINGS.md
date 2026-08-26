@@ -1554,3 +1554,23 @@ measured exactly. The thing that broke was the **label**, and it broke silently
 because clock order looked like an obvious ordering and nobody had said it was.
 A measurement whose independent variable was inferred rather than recorded is
 not a measurement of that variable - and it reads exactly like one.
+
+**Update, same session:** asked to check, the operator corrected himself -
+"so yes sorry the 10 pace and 8 pace were the same" - which is mapping **A**,
+the one 11.6 was committed on, and restores the floor.
+
+That is not treated as the resolution. The same operator gave a different
+mapping twenty minutes earlier, in good faith both times, which is precisely
+the evidence that **recall is not a reliable instrument for this variable**.
+The banner on 11.6 stays until a sweep resolves it from the frames.
+
+The fix applied instead is to stop needing recall. A half-scale JPEG wide-shot
+poller now runs alongside the panel poller at about 140 KB a frame, so the
+operator's standing position is IN the capture: the bot's apparent size is the
+distance, and the frame labels itself. A relabelled body sweep was requested
+under that capture.
+
+**The general form of this, worth carrying past this game:** when a measurement
+depends on a variable the instrument does not record, the fix is to record the
+variable, not to ask someone to remember it. Two mappings from one honest
+operator is not a failure of the operator.
