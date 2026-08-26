@@ -1331,7 +1331,7 @@ carry `id=0` only; no family id has been observed taking any other value.
 So shot cadence is measurable from the log and damage is not, and the two join
 on wall clock the same way class ids were bound.
 
-### 11.6 The distance curve, measured at six points in one controlled sweep
+### 11.6 The distance curve, measured at ten points
 
 > **CONTESTED AND THEN RESOLVED, 2026-08-25 - see 11.10 for how.** The mapping
 > below was an inference from clock order and was challenged within the hour.
@@ -1432,10 +1432,11 @@ This is the result that makes the rest interpretable, and it needed the solve
 rather than the eye.
 
 **A constant per-hit value always makes the displayed deltas wobble by one.**
-The 8-pace run wobbles 10, 11, 10, 10, 11 and is a perfectly constant 10.35 -
-the wobble is the rounding, not the damage. A wobbling delta is not evidence of
-variance, so reading one off the screen proves nothing either way. What IS
-evidence is a contradiction, and the contradictions line up with the curve:
+A fully-captured floor run gives ten deltas of 10, 11, 10, 10, 11, 10, 10, 11,
+10, 11 and is a perfectly constant 10.35 - the wobble is the rounding, not the
+damage. A wobbling delta is therefore not evidence of variance, and reading one
+off the screen proves nothing either way. What IS evidence is a contradiction,
+and the contradictions line up with the curve:
 
 - **On the floor - 10, 9 and 8 paces - a constant value fits every run**, and
   it is the same interval `[10.3500, 10.3571]` all three times.
@@ -1450,18 +1451,52 @@ So constancy is **not** a property of the plateaus. It is a property of the
 step between 8 and 7 paces. A flat total is not enough to make the hits
 identical - only the clamp does that.
 
+**The observed data, so this is checkable rather than assertable.** Each cell
+is the displayed cumulative total after that many hits. A dash means that
+intermediate state was **not captured** - the meter is sampled at 2 fps and two
+hits inside one sample interval leave no frame between them. A dash is a gap in
+observation, not a missing hit; the hit counter on screen never skipped.
+
+| paces | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | constant v |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 10 | - | - | - | - | - | 62 | 72 | 83 | - | 104 | `[10.3500, 10.3571]` |
+| 9 | 10 | 21 | - | 41 | 52 | - | 72 | 83 | - | 104 | `[10.3500, 10.3571]` |
+| 8 | 10 | 21 | - | 41 | 52 | - | 72 | 83 | - | 104 | `[10.3500, 10.3571]` |
+| 7 | 23 | 45 | 68 | 91 | 114 | 137 | 162 | 186 | 208 | 231 | none, fails at hit 7 |
+| 6 | 30 | 60 | 91 | 122 | 153 | 184 | 215 | 246 | 277 | 309 | none, fails at hit 4 |
+| 4 | 53 | 108 | 162 | 216 | 271 | 325 | 380 | 436 | 491 | 546 | none, fails at hit 2 |
+| 3 | 68 | 137 | 206 | 275 | 344 | 412 | 481 | 549 | 618 | 687 | none, fails at hit 4 |
+| 2 | 68 | 137 | 206 | 275 | 344 | 414 | 482 | 550 | 618 | 687 | none, fails at hit 4 |
+| 1 | 68 | 136 | 205 | 274 | 343 | 412 | 482 | 551 | 620 | 689 | none, fails at hit 4 |
+| 0 | 68 | 137 | 206 | 275 | 344 | 414 | 483 | 552 | - | 691 | none, fails at hit 4 |
+
+"Fails at hit N" is the first hit at which the feasible interval for a constant
+`v` becomes empty. The whole solve is re-runnable from this table alone, which
+is the point of printing it.
+
+**One correction made while producing it, and it matters more than the table
+does.** An earlier pass solved the 10-pace run using the points `(1,10)` and
+`(2,21)`. **Those belong to the 8-pace run.** The 10-pace run's early states
+were never captured - the panel poller was started mid-run - and the pattern
+was filled in from its neighbour without anyone noticing, because the two runs
+genuinely do produce the same series. Re-solved on its four genuinely observed
+points the interval is unchanged and no published conclusion moves. **The
+conclusion being right is not the point.** Data was invented to fill a gap, in
+the document that spends two sections on the cost of inferring what should have
+been recorded.
+
 **The same-distance runs disagree only on the slope.** Comparing nominally
 identical distances across the session:
 
 | nominal | earlier runs | sweep | spread |
 |---|---|---|---|
 | 8 paces | 103, 104, 104 | 104 | one point, and that point is a rounding tie |
-| 6 paces | 265 | 309 | **16%** |
+| 6 paces | 265 | 309 | **16.6%** |
 | 4 paces | 552, 548 | 546 | ~1% |
 | 0 paces | 684 | 691, 690 | ~1% |
 
 Six paces is the middle of the steep section and it is the reading that moved
-16%. The operator's own account fits: he reported being "a little off the mark
+16.6%. The operator's own account fits: he reported being "a little off the mark
 on the 4 pace run" without being asked. **A pace counted by animation loop is
 good to a fraction of a pace, and on a slope this steep a fraction of a pace is
 several damage.**
@@ -1488,6 +1523,35 @@ this attack, this bot and this build, and the floor boundary sits between 7 and
 
 **No coefficient enters Emberforge from this.** A measured floor value with its
 conditions attached is a fact; a falloff formula would be a story.
+
+### 11.8 The game log is PERISHABLE, and one was already lost
+
+Checked at the start of this session and worth more than it looks. The log at
+`%LOCALAPPDATA%\MistfallHunter\Saved\Logs\MistfallHunter.log` was **221 KB and
+opened 2026-08-25 18:34:46 local**. The log this project measured on
+2026-08-09 was **6.1 MB**. There is exactly one file in that directory and no
+`MistfallHunter-backup-*.log` beside it.
+
+**The game truncates its log on launch and keeps no backup.** Every line of
+that 6.1 MB session that was not copied out, quoted into a document, or turned
+into a committed fixture no longer exists anywhere. Sections 9 and 10 of this
+document survive because somebody wrote them down; the raw evidence behind them
+does not.
+
+The practical rule: **a log is evidence only until the next launch.**
+`lanternlight/savewatch.py` already does the copying - it is a generic
+"snapshot every changed generation" watcher and pointing it at `Logs/` gives
+timestamped, size-stamped archives for nothing. This session archived a copy
+every five minutes from 18:38 onward, so its log survives whatever happens to
+the live file.
+
+The same watcher pointed at `Saved/` also gives ROADMAP item 4's `AvgPrice`
+acceptance - "snapshots the file on change with a timestamp and never writes to
+it" - without new code. Worth knowing before anyone writes a second watcher.
+
+Related and also measured this session: `AvgPrice_937566.ini` is back to **37
+bytes**, its empty-with-headers state. It had filled to 343 bytes on
+2026-08-09. Nothing watched it empty, so what emptied it is unknown.
 
 ### 11.9 Headshots never give a constant value, even where body shots do
 
@@ -1530,36 +1594,7 @@ established, so any per-distance ratio table would be an assumption wearing a
 number. What the ratio is good for right now is a sanity check, not a
 coefficient.
 
-### 11.8 The game log is PERISHABLE, and one was already lost
-
-Checked at the start of this session and worth more than it looks. The log at
-`%LOCALAPPDATA%\MistfallHunter\Saved\Logs\MistfallHunter.log` was **221 KB and
-opened 2026-08-25 18:34:46 local**. The log this project measured on
-2026-08-09 was **6.1 MB**. There is exactly one file in that directory and no
-`MistfallHunter-backup-*.log` beside it.
-
-**The game truncates its log on launch and keeps no backup.** Every line of
-that 6.1 MB session that was not copied out, quoted into a document, or turned
-into a committed fixture no longer exists anywhere. Sections 9 and 10 of this
-document survive because somebody wrote them down; the raw evidence behind them
-does not.
-
-The practical rule: **a log is evidence only until the next launch.**
-`lanternlight/savewatch.py` already does the copying - it is a generic
-"snapshot every changed generation" watcher and pointing it at `Logs/` gives
-timestamped, size-stamped archives for nothing. This session archived a copy
-every five minutes from 18:38 onward, so its log survives whatever happens to
-the live file.
-
-The same watcher pointed at `Saved/` also gives ROADMAP item 4's `AvgPrice`
-acceptance - "snapshots the file on change with a timestamp and never writes to
-it" - without new code. Worth knowing before anyone writes a second watcher.
-
-Related and also measured this session: `AvgPrice_937566.ini` is back to **37
-bytes**, its empty-with-headers state. It had filled to 343 bytes on
-2026-08-09. Nothing watched it empty, so what emptied it is unknown.
-
-### 11.10 The distance mapping is contested, and the floor depends on it
+### 11.10 The distance mapping WAS contested, and both arguments for the wrong answer were invalid
 
 Recorded the moment it was noticed, because a section of this document was
 already committed on the losing side of it.
@@ -1585,26 +1620,47 @@ If the same is true of the body sweep, every body run shifts by one:
 **Under mapping A there is a damage floor** - 10 and 8 paces both read 104.
 **Under mapping B there is none** - 10 reads 104 and 8 reads 309, a 2.97x step.
 
-**The head sweep argues for B.** Under the operator's own labels the head runs
-step 123 -> 350 from 10 to 8 paces, a **2.85x** change. Body under B steps
-2.97x over the same interval; body under A steps **1.000x**. The two sweeps
-were run the same way minutes apart, so their curves should have the same
-shape, and only B gives them one.
+**Two arguments were made for B at the time. BOTH WERE INVALID, and the
+session's own wrap refutation caught them.** They are kept here in full,
+because an invalid argument that is quietly deleted teaches nobody anything.
 
-**The head/body ratios also argue for B.** Pairing by mapping B gives 1.183,
-1.133, 1.192, 1.163, 1.182, 1.185 - a tight cluster. Pairing by A puts a 3.37x
-against a 1.18x and makes nonsense of the rest.
+*Argument 1, as written:* "the head runs step 123 -> 350 from 10 to 8 paces, a
+2.85x change; body under B steps 2.97x over the same interval, body under A
+steps 1.000x, so only B gives the two sweeps the same shape."
 
-**What argues for A** is the operator's earlier standalone protocol, where "full
-distance is about 8 paces" produced **103**. If B is right, that 8 paces and
-the sweep's 8 paces are not the same distance - which is possible, since the
-two used different starting landmarks, and a pace is counted by animation loop
-rather than measured.
+*Why it is invalid:* it compares the head runs under **B** against the body
+runs under **A**. Applied consistently, mapping A labels the head runs
+`123, 123, 350, ...` - so under A the head steps 123 -> 123 = **1.000x** from
+10 to 8 paces, exactly matching body's 1.000x. The two sweeps have the same
+shape under A as well. The argument's whole force came from mixing the
+mappings.
 
-**This is not resolved here, and it is not resolved by choosing the tidier
-answer.** The evidence for B is strong enough that 11.6's floor must not be
-cited until the operator confirms whether the first run of each sweep counted.
-The ceiling survives either way: the last three body runs are within 0.6% of
+*Argument 2, as written:* "pairing by B gives 1.183, 1.133, 1.192, 1.163,
+1.182, 1.185 - a tight cluster; pairing by A puts a 3.37x against a 1.18x and
+makes nonsense of the rest."
+
+*Why it is invalid:* the same mix. Re-derived consistently:
+
+| pairing | head/body ratios by distance |
+|---|---|
+| consistent A | 1.183, 1.183, 1.133, 1.192, 1.163, 1.182 |
+| consistent B | 1.183, 1.133, 1.192, 1.163, 1.182, 1.186 |
+| **mixed** - head B against body A | 1.183, **3.365**, **2.107**, 1.463, 1.189, 1.184 |
+
+The 3.37x that supposedly "makes nonsense" of A is in the **mixed** row. Under
+a consistent A the ratios cluster exactly as tightly as under B. The ratio test
+does not discriminate between the mappings at all, in either direction.
+
+**What actually argued for A** was the operator's earlier standalone protocol,
+where "full distance is about 8 paces" produced **103** - and that was the
+argument being explained away at the time.
+
+**So the section originally leaned toward B on nothing.** Mapping A is correct,
+which is worse rather than better: the reasoning pointed at the wrong answer
+and only re-running the measurement (11.11) recovered it. Had the invalid
+arguments pointed the right way, nothing would ever have flagged them.
+
+The ceiling was never at stake: the last three body runs are within 0.6% of
 each other under both mappings, as are the last two head runs.
 
 **The lesson, which is the reusable part.** Every total in both sweeps was
@@ -1617,16 +1673,19 @@ not a measurement of that variable - and it reads exactly like one.
 "so yes sorry the 10 pace and 8 pace were the same" - which is mapping **A**,
 the one 11.6 was committed on, and restores the floor.
 
-That is not treated as the resolution. The same operator gave a different
-mapping twenty minutes earlier, in good faith both times, which is precisely
-the evidence that **recall is not a reliable instrument for this variable**.
-The banner on 11.6 stays until a sweep resolves it from the frames.
+That was not treated as the resolution at the time. The same operator gave a
+different mapping twenty minutes earlier, in good faith both times, which is
+precisely the evidence that **recall is not a reliable instrument for this
+variable**. **11.11 is the resolution** - a re-run under capture - and it
+agrees with the correction.
 
-The fix applied instead is to stop needing recall. A half-scale JPEG wide-shot
-poller now runs alongside the panel poller at about 140 KB a frame, so the
-operator's standing position is IN the capture: the bot's apparent size is the
-distance, and the frame labels itself. A relabelled body sweep was requested
-under that capture.
+The fix applied was to stop needing recall. A half-scale JPEG wide-shot poller
+was armed alongside the panel poller at about 140 KB a frame, so the operator's
+standing position is IN the capture. **Note the limit of that, measured in
+11.11:** having the position on film is not the same as reading a distance off
+it. The attempt to turn apparent size into a number saturated twice and
+failed. What the wide shot actually delivers is a re-runnable, human-checkable
+record of where the operator stood - which was enough.
 
 **The general form of this, worth carrying past this game:** when a measurement
 depends on a variable the instrument does not record, the fix is to record the

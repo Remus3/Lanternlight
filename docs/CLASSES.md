@@ -74,7 +74,8 @@ can be read side by side. Within them:
 ## At a glance
 
 **Table A - identity and kit.** The weapon-id column is T0, measured on this
-machine at character creation (build `24619162`); see
+machine at character creation (build `24619162`, superseded by `24813185` on
+2026-08-19 and not re-confirmed since); see
 [`docs/OBSERVED_IDS.md`](OBSERVED_IDS.md) for the method.
 
 | id | Class | Weapon ids measured here | Weapons and stances | Role |
@@ -1837,6 +1838,10 @@ smoothed over.
 - [`docs/OBSERVED_IDS.md`](OBSERVED_IDS.md) - class ids 10-15, weapon config ids,
   gender ids, live item cfgIds, method recorded per row. Observed 2026-08-09,
   Steam build `24619162`. The authority for every id in this document.
+  **That build no longer exists.** The game was patched to buildid `24813185`
+  on 2026-08-19 and none of these ids has been re-confirmed since; see the
+  banner at the top of `OBSERVED_IDS.md`. Treat every id here as measured on a
+  build that is gone - probably still true, and nothing has checked.
 - [`docs/CLASS_RESEARCH.md`](CLASS_RESEARCH.md) - the earlier adjudicated
   Blackarrow-versus-Shadowstrix pass and the operator decision, 2026-08-09.
 
