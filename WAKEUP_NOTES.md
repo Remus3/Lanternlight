@@ -10,9 +10,10 @@ fidelity and archive older ones rather than deleting them.
 Client was **closed** all session, so this is the fallback item from the
 hand-off, worked end to end. No capture, no game data touched.
 
-**Suite 1252 passed / 1252 collected**, ruff clean, measured on a clean tree
-with `__pycache__` purged. Baseline was 1244; the +8 is the OPS-8 regression
-set. Ledger entry `LL-0066`.
+**Suite 1253 passed / 1253 collected**, ruff clean, measured on a clean tree
+with `__pycache__` purged. Baseline was 1244. Ledger entries `LL-0066` and
+`LL-0067` - **read `LL-0067`**, it records a PII hole the OPS-8 fix itself
+opened and an independent refuter caught.
 
 ## What shipped - OPS-8 is CLOSED
 
@@ -42,6 +43,17 @@ a live process. Six concurrent suites fought over that one file and it died on
 `WinError 32`: 17 of 18 green, red for exactly the bug under test, inside the
 test for it. Nothing sequential could have seen it.
 
+**The fix opened a PII hole, and only an out-of-domain pass saw it.**
+`_is_foreign_probe()` filtered by NAME across the whole candidate list -
+**tracked files included** - so a file committed as `docs/_guard_probe_notes.md`
+carrying a SteamID64 went GREEN through the repository-wide guard.
+`.githooks/pre-commit` does no content scan either. OPS-8 was a guard going red
+for the wrong reason; its fix made a guard go **green** for the wrong reason,
+which is strictly worse. Three self-run mutations missed it because every one
+asked "does this still catch what it caught" and none asked "does this now MISS
+something it used to catch". Fixed: the filter applies only on the non-git
+fallback walk.
+
 **A mutation that survived is the other thing worth carrying.**
 `_is_foreign_probe()` returning `False` left the whole suite green - the
 fallback filter was decoration, because every test ran on the git path where
@@ -52,6 +64,13 @@ Only mutating found it, and a test was written for it.
 files fully CRLF against a `.gitattributes` that mandates LF. `git diff --stat`
 hid it, because `text=auto` normalises the blob. Only `grep -c` for CR showed
 it. CLAUDE.md names this trap and it still landed.
+
+**A scripted edit wrote prose into `.gitignore` as ignore PATTERNS.** A
+variable named `new` was reused across blocks, so when the first anchor matched,
+a ROADMAP paragraph replaced a comment - with no leading `#`, so git would have
+read each line as a pattern. Nothing in the suite could catch it: valid ASCII,
+no identifier, all green. Only the verifying grep coming back empty exposed it.
+Verify a scripted edit by reading the file, not by trusting the assert.
 
 ## New open item - OPS-12, two ops ids each name two items
 

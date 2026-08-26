@@ -36,16 +36,19 @@ A fresh clone runs zero git hooks until that first command runs. The tracked
 
 ## Where the last session left it
 
-**Suite 1252 passed / 1252 collected, ruff clean**, measured on a clean tree
+**Suite 1253 passed / 1253 collected, ruff clean**, measured on a clean tree
 with `__pycache__` purged - that is your merge-gate baseline, and re-measure it
 yourself before dispatching work rather than trusting this line.
 
-The ledger runs to **`LL-0066`**. Read **`LL-0064`** and **`LL-0066`** first.
+The ledger runs to **`LL-0067`**. Read **`LL-0064`**, **`LL-0066`** and
+**`LL-0067`** first.
 LL-0064 is an independent four-agent refutation pass that **overturns claims
 earlier entries make** - reading LL-0056 through LL-0063 without it leaves you
 believing things that were withdrawn. LL-0066 closes OPS-8 and, more usefully,
 records that **the mechanism OPS-8 itself had on file was wrong about the
-dominant case**, found only by re-measuring before fixing.
+dominant case**, found only by re-measuring before fixing. LL-0067 is the
+refutation of LL-0066: it could not overturn the claim, but it found that the
+fix had **opened a PII hole**, hiding git-TRACKED files from the guard.
 
 ## Check the world before anything else
 
@@ -135,6 +138,13 @@ work it gates.
   write-up named two casualty tests. Re-measured before any fix, **neither
   failed even once** and the real mode was a different one. Re-run the
   measurement; do not fix what the write-up says is broken.
+- **Ask whether a change makes a guard MISS something, not only whether it
+  still catches what it caught.** Three mutations of the OPS-8 fix all asked
+  the first question. The hole was in the second: a name filter that hid
+  tracked files from the PII guard, green all the way through.
+- **Verify a scripted edit by READING the file.** A reused `new` variable wrote
+  a ROADMAP paragraph into `.gitignore`, where unprefixed lines are ignore
+  PATTERNS. Valid ASCII, no identifier, suite green - uncatchable by any test.
 - **A green suite says nothing about a branch no test reaches.** Mutating
   `_is_foreign_probe()` to `return False` left everything green - it was
   decoration. Mutate the thing you just wrote, not only the thing you changed.

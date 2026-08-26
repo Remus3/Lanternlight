@@ -1866,9 +1866,10 @@ diagnosis closed 2026-08-12 (ledger `LL-0040`). Two items, one id - see
 `OPS-12`. A grep for `OPS-8` returns both, so read the date.
 
 Found 2026-08-26 by two independent refuters running the suite while other
-agents ran it too. **Sequentially the suite is deterministic** - five clean runs
-in a row give `1244 passed`. Under **concurrent** runs it goes intermittently
-red: one refuter saw 3 failures in 12 runs, another 2 in 5.
+agents ran it too. Sequentially the suite was deterministic - five clean runs in
+a row **gave `1244 passed`, which was the count at the time and is not the
+current one**. Under **concurrent** runs it went intermittently red: one refuter
+saw 3 failures in 12 runs, another 2 in 5.
 
 **Mechanism, proven not guessed:** `tests/test_no_pii.py` plants probe files at
 the **repository root** (`_pipeline_probe_binary.png`, `_pipeline_probe_utf16.bin`)
@@ -1919,11 +1920,14 @@ neither guard weakened - only the NAME changed:
 - `tests/_tracked.py` gains `probe_path(stem)`, returning
   `_guard_probe_<pid>_<stem>` at the root. Unique per process, so no two suites
   can ever name the same file.
-- `.gitignore` ignores `_guard_probe_*`. That is **one lever for all three**
-  git-based walkers in this repo - `tests/_tracked.py`, `ops/lanes.py` and
-  `tests/test_lane_state.py` - because each takes its untracked pass with
-  `--exclude-standard`. Patching them one at a time would have rebuilt the
-  two-copies-of-a-rule trap that `tests/_tracked.py` exists to prevent.
+- `.gitignore` ignores `_guard_probe_*`. That is **one lever for all four**
+  `--exclude-standard` sites in this repo - `tests/_tracked.py`,
+  `ops/lanes.py`, `tests/test_lane_state.py` and `tests/test_tracked_walker.py`
+  - because each takes its untracked pass that way. Patching them one at a time
+  would have rebuilt the two-copies-of-a-rule trap that `tests/_tracked.py`
+  exists to prevent. (Filed as **three** on the first pass and corrected by an
+  independent refuter who counted them - a tally re-derived from the artifact
+  has now been wrong in this repo often enough to be a rule.)
 - `_published()` adds **this process's own** probes back, so a probe is still
   scanned by the guard that planted it, and filters foreign probes on the
   non-git fallback walk, which `.gitignore` cannot reach.
@@ -1947,6 +1951,18 @@ green guard proves nothing here until it has been seen failing:
 - Deleting the `.gitignore` line kills only the `test_lanes.py` orphan test -
   correctly, because `ops/lanes.py` carries no filter of its own and rests
   entirely on that rule.
+
+**An independent refutation pass then found a hole the fix itself opened, and
+it was a hygiene hole.** `_is_foreign_probe()` filtered by NAME across the whole
+candidate list, **tracked files included** - so a file committed as
+`docs/_guard_probe_notes.md` became invisible to the PII guard, demonstrated
+with a real-shaped SteamID64 going GREEN through the repository-wide guard.
+`.githooks/pre-commit` does no content scan, so nothing else caught it. A name
+test cannot tell a concurrent suite's scratch file from a tracked file under the
+same name, and on the git path `.gitignore` already draws that line correctly.
+The filter now applies **only on the non-git fallback walk**;
+`TestTheProbeFilterCannotHideATrackedFile` pins it, and the inverse mutation -
+re-applying the filter to the git listing - reddens exactly that test.
 
 **The trap this item set for its own fix**, recorded because it is the sharpest
 thing here. The first version of the regression tests named their foreign probe

@@ -84,6 +84,22 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0067 - 2026-08-26 - An independent refuter could not overturn LL-0066 but found the fix had opened a PII hole - a name filter that hid TRACKED files from the guard
+
+**Evidence:**
+- THE PASS: one out-of-domain refuter, read-only, instructed to default to REFUTED, given eight numbered claims to attack. It confirmed all eight and found three defects the self-run work had not.
+- D1, AND IT IS A HYGIENE HOLE THE FIX ITSELF OPENED. _is_foreign_probe() filtered by NAME across the whole candidate list, tracked files INCLUDED, while _own_probes() only re-added from the root's iterdir(). The refuter proved it: git add -f docs/_guard_probe_notes.md carrying a SteamID64 gave 'scanned: False, REPO-WIDE PII GUARD: GREEN'. .githooks/pre-commit does no content scan, so nothing else would have caught it.
+- D1 FIXED, not filed. A name test cannot tell a concurrent suite's scratch file from a tracked file under the same name, and on the git path .gitignore already draws that line correctly - it removes untracked probes and leaves tracked files alone. The filter now applies ONLY on the non-git fallback walk, which is the one path that has no .gitignore to consult.
+- TDD ON THE FIX: TestTheProbeFilterCannotHideATrackedFile builds a throwaway git repo in tmp_path, commits a file named _guard_probe_notes.md, asserts git really tracks it BEFORE asserting anything else, then requires iter_scannable_files to yield it. Watched failing first - 'assert _guard_probe_notes.md in set()'. The real repository's index is never touched.
+- BOTH DIRECTIONS MUTATED after the fix. _is_foreign_probe -> False reddens exactly test_a_foreign_probe_is_filtered_on_the_non_git_fallback_path; re-applying the filter to the git listing - the D1 defect itself - reddens exactly test_a_tracked_file_with_a_probe_name_is_still_scanned. Each mutation kills one test and a different one.
+- D2, a tally: LL-0066 and ROADMAP said 'all THREE git-based walkers'. Re-derived by grep, there are FOUR --exclude-standard sites - ops/lanes.py, tests/_tracked.py, tests/test_lane_state.py and tests/test_tracked_walker.py:54. The mechanism holds; the count was wrong. Corrected in ROADMAP and .gitignore. LL-0066 is append-only and stands as written.
+- D3, a stale tense: ROADMAP's OPS-8 preamble stated '1244 passed' in the present tense under a CLOSED heading. Reworded to say it was the count at the time.
+- SUITE THIS RUN, on a clean tree with __pycache__ purged: 1253 tests collected, 1253 passed, ruff check All checks passed. 1252 was the count before the D1 regression test.
+
+A SECOND DEFECT, FOUND BY EYE DURING THE CORRECTION AND WORTH MORE THAN D2 OR D3: the script applying the D2 fix reused a variable named 'new' from an earlier block, so when the first anchor matched, .gitignore was rewritten with a PARAGRAPH OF ROADMAP PROSE in place of a comment. Those lines carry no leading '#', so git would have read each as an IGNORE PATTERN. Nothing in the suite could have caught it - the file is valid ASCII, carries no identifier, and every test stayed green. Caught only because the verifying grep for the new text came back empty and the fallback sed printed the file. Restored with git checkout and redone; .gitignore now has 116 pattern lines and not one contains a space.
+THE LESSON REPEATS LL-0064's: the arithmetic was sound and the READINGS were not. Zero errors were found in the concurrency measurement, the mutation results or the acceptance numbers. All three defects were about SCOPE - which files a filter touches, how many call sites exist, what tense a sentence is in.
+AND THE SHAPE OF D1 IS THE ONE THIS PROJECT KEEPS PAYING FOR: a fix for one problem quietly widened a guard's blind spot. OPS-8 was about a guard going red for the wrong reason; the fix for it made a guard go GREEN for the wrong reason, which is strictly worse. A self-run pass had already mutated three ways and missed it, because every mutation asked 'does this still catch what it caught' and none asked 'does this now MISS something it used to catch'.
+
 ### LL-0066 - 2026-08-26 - OPS-8 closed - the suite is safe under concurrent pytest, and the mechanism filed for it was wrong about the dominant case
 
 **Evidence:**
