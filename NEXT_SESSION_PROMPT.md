@@ -8,9 +8,10 @@ You are working on **Lanternlight**, a companion and analysis project for the
 Steam game Mistfall Hunter. Repo root `C:\Lanternlight`, public at
 `github.com/Remus3/Lanternlight`, Apache-2.0.
 
-**Read first, in this order:** `CLAUDE.md`, `README.md`, `docs/FINDINGS.md`,
-`docs/OBSERVED_IDS.md`, `ROADMAP.md`, `docs/HEADLESS.md`, `WAKEUP_NOTES.md`
-(top entry only), then `git log --oneline -15`.
+**Read first, in this order:** `CLAUDE.md`, `README.md`, `docs/FINDINGS.md`
+(section 11 especially), `docs/OBSERVED_IDS.md`, `ROADMAP.md`,
+`docs/HEADLESS.md`, `WAKEUP_NOTES.md` (top entry only), then
+`git log --oneline -15`.
 
 **Before touching anything:**
 
@@ -36,102 +37,139 @@ A fresh clone runs zero git hooks until that first command runs. The tracked
 
 ## Where the last session left it
 
-Branch `session/2026-08-09-recon-redaction-lanes`, pushed, **not merged to
-`main`**. Ledger entries `LL-0002` through `LL-0012`. Two lane branches exist
-and are also pushed: `lane/ingest` and `lane/safety`.
+**2026-08-25. Suite 1225 passed / 1225 collected, ruff clean**, measured on a
+clean tree with `__pycache__` purged - that is your merge-gate baseline, and
+re-measure it yourself before dispatching work rather than trusting this line.
+`main` was pushed. Ledger `LL-0049` through `LL-0052`; **read `LL-0052` first,
+it corrects the other two.**
 
-**Re-probe live state before trusting any number below.** The single
-highest-value move of the last session was re-probing and finding three
-documented facts had gone stale inside one session - the log had grown 567 KB to
-6.1 MB, the market cache had filled, and a fifth save file had appeared. The
-operator plays between sessions. Assume the world moved.
+**No code changed all session.** It was measurement and documentation, so the
+test count is unchanged by design.
+
+### Check the world before anything else
+
+Three things had moved since the previous session and all three mattered:
+
+- **The game was patched** to Steam buildid `24813185` on 2026-08-19. Every id
+  in `docs/OBSERVED_IDS.md` was read on a build that no longer exists and none
+  has been re-confirmed.
+- **The 6.1 MB log from 2026-08-09 no longer exists.** The game truncates its
+  log on launch and keeps no backup. A log is evidence only until the next
+  launch.
+- The market cache had emptied itself back to 37 bytes and nobody saw it
+  happen.
+
+The command that settles whether the client is open - do this first, it decides
+what you work on:
+
+```
+tasklist | grep -i mistfall ; stat -c '%y' "$LOCALAPPDATA/MistfallHunter/Saved/Logs/MistfallHunter.log"
+```
+
+## ROADMAP 7b is ANSWERED - what that bought
+
+The **training ground exists** and is **not a match**: no
+`StandaloneSlot_<roleId>.sav` appeared in 36 minutes across ~200 shots, no
+`EnterBattle`, and the whole log carries seven occurrences of the substring
+`damage` with **not one number** among them. So `DamageCollectonDataSet` is not
+written there and `lanternlight/damage.py` has nothing to read in that room.
+
+It is a **pixel rig**. The room renders a cumulative **Total Damage** meter and
+writes it nowhere; differencing that meter across captured frames is the
+measurement. `Progress Record` beneath it holds the **previous run's** pair.
+
+**Per-hit body damage on the damage floor is exactly 10.35**, solved interval
+`[10.3500, 10.3571]`. First value in this project to clear the independent-run
+bar. No coefficient is published from it and none may be.
+
+The falloff curve, ten distances in paces:
+
+| paces | 10 | 9 | 8 | 7 | 6 | 4 | 3 | 2 | 1 | 0 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| total | 104 | 104 | 104 | 231 | 309 | 546 | 687 | 687 | 689 | 691 |
+
+Clamped floor, about 1.3x per pace over four paces, clamped ceiling. Ceiling is
+6.64x the floor. **Headshots never give a constant per-hit value**, not even on
+the floor where body shots do.
 
 ### Start here
 
-**Item 2 is REOPENED and its evidence is perishable.** A seventh save,
-`StandaloneSlot_<roleId>.sav`, appeared at 15:39 - 46 KB and growing while
-written, twenty times any other save, very likely the real character and
-progression store. It uses `StructProperty<F_PlayzoneSaveData>`, which the
-reader has never measured, so it **raises** rather than guessing. **It was
-deleted 13 minutes later.** It exists only while a standalone level is active,
-so capturing it means having a watcher running before the operator enters that
-mode. There is a crude snapshotter at
-`<scratchpad>/snapshot_saves.py` from the last session; a real one belongs in
-the ingest lane.
+1. **If the client is open**, work ROADMAP **7b's open threads** - why the floor
+   is a step rather than a tangent, what separates a headshot from a crit, and
+   whether ~1.3x per pace is real. All cheap, all need the client. Fold in items
+   1, 4b, 5 and 6, which also need it. **Arm the wide-shot poller before the
+   first run.**
+2. **If the client is closed**, work item **4c** (arm the archiving watchers -
+   no new code, `lanternlight/savewatch.py` already does the copying) or item
+   **7c** (read the meter without a human reading it).
 
-1. **ROADMAP item 1b, the lane build-out**, is the biggest ready piece. The
-   roster, launcher and generated contracts all landed and a lane has been run
-   end to end. What is missing: **per-lane on-disk state** (agent context does
-   not survive a session, so "persistent specialist" is fiction without it) and
-   **commit serialisation** (eight lanes and one `docs/LEDGER.md` will race).
-2. **Item 1's remainder needs the operator to enter a real raid.** Everything
-   measured is the Prologue at `matchId=0`. Do not schedule a capture session -
-   the log alone was sufficient last time. Just check for a run with a non-zero
-   `matchId`.
-3. **Items 3 (live log tail) and 4's watcher** are unblocked and independent.
+## How to measure the meter, so you do not rediscover this
 
-### How to run a lane
+- **Solve, do not eyeball.** A constant per-hit value ALWAYS makes the displayed
+  deltas wobble by one, because the meter rounds a real-valued cumulative sum.
+  A wobbling delta is not evidence of variance. Solve `round(n*v) == total_n`
+  across a run: you get an interval, or a contradiction, and only the
+  contradiction is evidence.
+- The observed cumulative states for all ten runs are published in
+  `docs/FINDINGS.md` 11.7, so the whole solve is re-runnable from the artifact.
+- **Capture economics, measured.** Full-screen PNG at 2 fps is **4.8 MB a
+  frame, 34 GB an hour** - do not leave it running. Cropping the HUD rectangle
+  at capture time is ~150 KB. A half-scale JPEG wide shot at 1 fps is ~140 KB
+  and is what records where the operator stood.
+- **Deduping panel frames by pixel hash FAILS.** The plate is semi-transparent,
+  so the scene behind it changes the hash while the number stands still. A
+  coarse column-occupancy signature over the digit colour is what works.
+- Tesseract is **not installed** and is not to be installed for this. Item 7c
+  is the template-matching reader, and its acceptance insists it **refuse**
+  rather than guess.
+- This session's evidence is at `C:/ll-captures/2026-08-25/`. It contains the
+  operator's account name and third-party player ids and **must never be
+  committed**.
 
-```python
-from ops import lane_launcher, lanes
-lane = lanes.by_id("ingest")
-lane_launcher.ensure_worktree(lane)          # C:\ll-worktrees\ll-lane-<id>
-lane_launcher.assert_in_lane_worktree(lane)  # refuses outside its own worktree
-```
-Each lane's contract is `.claude/commands/lane-<id>.md`, generated from
-`ops/lanes.py`. **Edit the roster, then run `python scripts/write_lane_contracts.py`** -
-a drift test fails otherwise. Lanes commit to `lane/<id>` and never merge to
-`main`.
+## Traps that will bite you, all measured
 
-### Traps that will bite you, all measured
-
-- **An empty grep is a claim about your pattern.** `cfgId:(\d+)` silently
-  dropped an entire subsystem because `TS.FTE` writes `cfgId: 123` with a space.
-  It cost a wrong number in a published document.
-- **Clear `__pycache__` before any mutation test.** A same-length mutation inside
-  one mtime tick leaves a stale `.pyc`, which can fake a GREEN under mutation and
-  therefore fake a non-vacuity proof outright.
-- **Do not pass `-q` to pytest.** `pytest.ini` already sets it; `-qq` suppresses
-  the summary line entirely.
-- **`git check-ignore -v` prints the pattern even for a negation.** Test the exit
-  code, not whether there was output.
-- **A path from `__file__` is not a fact about the repository.** Inside a
-  worktree it is that worktree. Use `lanes.primary_checkout()`.
+- **A measurement whose independent variable was INFERRED rather than RECORDED
+  is not a measurement of that variable** - and it reads exactly like one. The
+  first distance sweep had to be re-run because its distances came from clock
+  order. Record the independent variable in the same stream as the dependent
+  one.
+- **The wrap refutation found 13 real defects**, including that BOTH arguments
+  the session had made for the WRONG mapping were arithmetically invalid - each
+  mixed two mappings - and that one run had been solved using data points
+  belonging to its neighbour. Every conclusion survived re-derivation, which is
+  exactly why nothing else would have caught them. **Run the refutation pass.**
+- **A Windows path in a non-raw Python string** turns `\2026` into an octal
+  escape and writes byte `0x82`. It happened twice in one session. Use forward
+  slashes.
+- **An empty grep is a claim about your pattern**, not about the codebase.
+- **Do not pass `-q` to pytest.** `pytest.ini` already sets it; `-qq`
+  suppresses the summary line entirely.
+- **Clear `__pycache__` before any mutation test.**
 - **`ops/merge_gate.py` exists so you never relay an agent's claim.** Measure
-  per-file counts BEFORE dispatching and pass them as the baseline; a global
-  total lets one agent's additions mask another's deletions.
-- **Agreement is not verification.** An adversarial pass returned **nine**
-  defects in findings that had already been written up confidently. Dispatch the
-  refuter every time.
+  the baseline before dispatching and pass it in.
 
-### Open questions nobody has answered
+## Open questions nobody has answered
 
-- Is `matchId` what distinguishes the Prologue from a real raid? Predicted, not
-  observed.
-- Does the camp-return option byte (`GAA=` vs `GAU=`) carry the run outcome? Two
-  samples cannot establish an encoding.
-- What are the 4 zero bytes after every GVAS tagged property list? An `int32`
-  zero, an empty FString and four flag bytes all fit; nothing separates them.
-- Sorcerer's single weapon config id is still unexplained. **Nothing in this repo
-  may say Blackarrow is the only single-weapon class.**
-- Where do server-side settings live? `InvertCameraYAxis` is in the log and in no
-  save file, so a settings reader built on `.sav` alone is incomplete.
-- Raw UTF-16 in a file still defeats the PII guard; UTF-16 inside base64 does not.
+- Why is the damage floor a **step** rather than a tangent? Extrapolating the
+  slope predicts ~174 at 8 paces and it reads 104.
+- What separates a headshot from a crit? The client renders headshots in red
+  crit text, so the eye cannot do it and neither could this data.
+- Is `matchId` what distinguishes the Prologue from a real raid? Predicted,
+  never observed.
+- What are the 4 zero bytes after every GVAS tagged property list?
+- Sorcerer's single weapon config id is still unexplained. **Nothing in this
+  repo may say Blackarrow is the only single-weapon class.**
+- Where do server-side settings live? `InvertCameraYAxis` is in the log and in
+  no save file.
 
-### Operator context worth having
+## Operator context worth having
 
-Level 2, **first talent point spent on Measured Pace** (Battle Hardened). Holds
-Steel Arrow and Concussive Arrow; the whole Hunter's Arrow row is locked. The
-talent tree, all 36 nodes, is in `docs/OBSERVED_IDS.md`.
+Plays **Blackarrow** (classId 12), second character at classId 13. Right-click
+is the primary attack (binds swapped), standard arrow. Counts distance in
+**paces** - a full stride, counted off the run-cycle animation loop reset, no
+crouch, sprint or roll. Reliable, engaged, and volunteers control failures
+unprompted - when he says he was "a little off the mark", believe it and treat
+that run accordingly.
 
-**Concussive Arrow at full draw knocks back** - the game's own hint says to use
-it against fast-approaching enemies, which is the class's measured weakness.
-
-
-
-Plays Blackarrow (classId 12), has a second character at classId 13
-(Shadowstrix). Deluxe edition, three Twitch drops claimed, Discord linked - no
-entitlement id observed anywhere yet. Has swapped primary/secondary attack binds
-(right click primary) and turned off invert-look. Died once, in the tutorial.
-Cannot read chat while playing; use text-to-speech for anything urgent, and
-never block waiting for an answer.
+**He cannot read chat while playing.** Use text-to-speech for anything he needs
+mid-game, keep it short, and never block waiting for an answer.
