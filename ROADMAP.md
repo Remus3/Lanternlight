@@ -1234,11 +1234,20 @@ third is not, and no single value fits them under either display model.
   paces, and at 1 and 3, each solved for a constant per-hit value. The
   breakpoint lies between the last range that admits one and the first that
   does not.
-- **Is the headshot bonus a constant multiplier?** At the floor, head reads
-  ~12.2 against body 10.35, about 1.18x, but head has only ever been measured
-  at one range. **Acceptance:** the same six-distance sweep in headshots, with
-  the head/body ratio computed per distance. A constant ratio means a
-  multiplier; a varying one means headshots and range interact.
+- **Is the headshot bonus a constant multiplier? - SWEEP RUN, and it is not
+  that simple.** Seven ten-hit head runs across the six distances gave 123,
+  123, 350, 651, 799, 817, 818. **Not one admits a constant per-hit value** -
+  including the two on the floor, at the ranges where body shots are perfectly
+  constant at 10.35. The totals reproduce (123 twice, 817 against 818, and 122
+  / 123 / 123 from earlier runs) while the individual hits do not, so a
+  headshot is not a body shot times a number.
+  **Open, and blocking the ratio table:** seven runs were fired at six
+  distances and the mapping of the last three is unconfirmed, so no
+  per-distance ratio is recorded. The ratio is roughly 1.18 where both were
+  measured at the same nominal range.
+  **Acceptance for the mechanism:** something that separates a headshot from a
+  crit. The client renders headshots in red crit text, so the eye cannot do it
+  and neither can this data.
 - **What separates a headshot from a crit.** The client renders headshots in
   red crit text (operator), so the two cannot be told apart by eye and were not
   separated by this data. **Acceptance:** a run where the two are forced apart,

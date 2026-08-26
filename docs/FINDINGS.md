@@ -1423,6 +1423,47 @@ is exactly 10.35 per hit on the floor for this attack, this bot and this build.
 **No coefficient enters Emberforge from this.** A measured floor value with its
 conditions attached is a fact; a falloff formula would be a story.
 
+### 11.9 Headshots never give a constant value, even where body shots do
+
+The same six-distance sweep was run again in headshots. Seven ten-hit runs
+completed (one was aborted mid-run by the operator after a hit landed for 5,
+and is discarded rather than salvaged):
+
+| clock | ten-hit total | per hit | a constant per-hit value fits? |
+|---|---|---|---|
+| 19:20:16 | 123 | 12.3 | **no** |
+| 19:20:51 | 123 | 12.3 | **no** |
+| 19:21:26 | 350 | 35.0 | **no** |
+| 19:22:28 | 651 | 65.1 | **no** |
+| 19:23:06 | 799 | 79.9 | **no** |
+| 19:23:46 | 817 | 81.7 | **no** |
+| 19:24:30 | 818 | 81.8 | **no** |
+
+**Not one head run admits a constant per-hit value - including the two on the
+damage floor, at the exact ranges where body shots are perfectly constant at
+10.35.** That is the finding, and it does not depend on which run was fired at
+which pace count.
+
+It is not noise, either. The totals **reproduce**: 123 twice on the floor,
+matching 122 / 123 / 123 from three head runs earlier in the session, and
+817 against 818 on the ceiling. The sum is stable to a point or two while the
+individual hits are not.
+
+So a headshot is not simply a body shot times a number. Something in the head
+calculation has per-hit structure that the body calculation lacks at the same
+range, on the same target, with the same weapon, fired the same way. Candidates
+this session cannot separate: a crit roll that only applies to headshots, a
+head hitbox with sub-regions, or a multiplier applied to an already-rounded
+intermediate. The client renders headshots in red crit text, so "headshot" and
+"crit" cannot be told apart by eye either.
+
+**The head/body ratio is roughly 1.18** where both were measured at the same
+nominal range, and it is deliberately not published per-distance here: seven
+head runs were fired at six distances and the mapping of the last three is not
+established, so any per-distance ratio table would be an assumption wearing a
+number. What the ratio is good for right now is a sanity check, not a
+coefficient.
+
 ### 11.8 The game log is PERISHABLE, and one was already lost
 
 Checked at the start of this session and worth more than it looks. The log at
