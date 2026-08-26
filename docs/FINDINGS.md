@@ -1890,10 +1890,32 @@ load-bearing consequence and it is a constraint on Emberforge:
 of the runs that DID write the save carried four axes -
 `?levelId=119&roomModeId=0&matchType=1&matchId=11112`. This run's URL carries
 two: `?levelId=113?matchId=11114`, with **no `roomModeId` and no `matchType`
-anywhere in the log**. Whether the discriminator is `levelId`, the absent
-`matchType`, or something not in the URL at all is **unmeasured**, and the
-operator has not been asked which mode he chose, so no mode name is recorded
-here rather than a guessed one.
+anywhere in the log**.
+
+**PARTY SIZE IS REFUTED as the discriminator.** The obvious hypothesis was that
+the save belongs to solo play and this run was something else. The operator
+attested **solo**, and the game corroborates him independently: the run loaded
+`/Game/Project/Maps/Map_2/Spawners_Day/WhiteWoods_Enemy_Day_Solo01`, a spawner
+sublevel whose own name says `Solo01`. The 2026-08-09 runs that DID write the
+save were attested "Hallowgrove, Normal, Solo explore". **Both are solo, and
+only one wrote the file**, so being alone is not what selects the behaviour.
+
+**A named mode asset is now in evidence, and it is new.**
+`DA_DungeonSettings_Classic` appears in this run's log. The only settings asset
+this project had ever seen was `DA_DungeonSettings_Training`, so `Classic` is a
+first observation, recorded in `docs/OBSERVED_IDS.md`. That makes the settings
+asset the sharpest discriminator candidate available.
+
+**And here is why it cannot be settled from the artifact.** Checking it needs
+the settings asset from the 2026-08-09 runs, and **that log no longer exists** -
+it is the 6.1 MB log of 11.8, destroyed by a later launch before anything
+archived it. The question is unanswerable today *because a log was lost*, which
+is the single most concrete argument this project has yet produced for ROADMAP
+4c, closed the same session. From here the watcher keeps every log, so the next
+run that writes a transient save can be compared against this one directly.
+
+Until then the discriminator is **unmeasured**: it may be the settings asset,
+`levelId`, the absent `matchType`, or something not in the URL at all.
 
 ### 12.2 The market cache was finally watched changing
 
