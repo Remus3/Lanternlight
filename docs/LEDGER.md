@@ -84,6 +84,20 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0065 - 2026-08-26 - Capture pruned 4.5 GB -> 3.0 GB at the operator's request, by the downsample-record-delete method the frames/ deletion set as precedent
+
+**Evidence:**
+- LOSSLESS, 220 MB: 76 superseded log generations. The game appends within a session, so every deleted generation was verified a STRICT BYTE PREFIX of the one superseding it - and re-verified at the moment of deletion, not just in a survey pass. Plus one of two byte-identical backup copies.
+- A MANIFEST.txt was written into each logs/ directory FIRST, carrying every original name, size, sha256 and mtime. LL-0056's measured negative is 'N generations at these timestamps, not one a *-backup-*.log' - that claim lives in the listing, so the listing was preserved even though the bytes were not.
+- 278 MB: the 1,775 frames of 2026-08-25/panel2/ that duplicate 2026-08-25/panel/. Two simultaneous pollers on one HUD rectangle; panel/ runs to 19:51:31 and panel2/ starts 19:34:50. Near-simultaneous pairs were compared and showed identical meter content BEFORE deleting. panel/ was the copy kept because ROADMAP 7c names that exact path as its ground truth. panel2/'s unique window is untouched.
+- 1,084 MB: 2026-08-25b/reanchor/ downsampled. All 320 full-screen frames were reduced to meter crops and half-scale JPEGs in reanchor_small/ before any original was removed. Verified afterwards that 143/10, 129/9, 42/3 and 28/2 - the four readings FINDINGS 13 rests on - remain legible in the derived crops.
+- 24 frames kept at FULL resolution, chosen by a near-duplicate filter erring toward keeping: every distinct equipment view, including item tooltips with stat text and the Affix Details screen. Kept because equipment is SERVER-SIDE (13.1), making them the only record anywhere of the loadout behind that run.
+- Final: 4.5 GB -> 3.0 GB. Nothing cited by any published finding was removed.
+
+WHAT WAS DELIBERATELY NOT PRUNED, and why, since a future session will see the disk still at 96%: 2026-08-25/panel (1.1 GB) is named in ROADMAP 7c's acceptance; scene/ (301 MB) is the recorded independent variable for the ten-point curve; sheets/ (60 MB) is described as the contact sheets the numbers were read off; talents/ (244 MB) holds the tooltips behind the OBSERVED_IDS talent section. Deleting any of them destroys evidence behind a published claim.
+WHAT A FUTURE SESSION CAN NO LONGER DO: re-crop the reanchor capture at a different rectangle, or read equipment text from a frame outside the 24 kept. Everything already published from it survives.
+The method is the point and it is now twice-used: downsample first, write the record, verify the derived copy still carries the load-bearing readings, THEN delete. A raw survey said the log generations were redundant by size; the byte-prefix check is what made that safe to act on.
+
 ### LL-0064 - 2026-08-26 - FOUR INDEPENDENT refuters on LL-0056 through LL-0063 - the arithmetic held everywhere and eight filed READINGS and inferences did not
 
 **Evidence:**
