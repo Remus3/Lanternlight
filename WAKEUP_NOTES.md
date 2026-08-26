@@ -5,6 +5,53 @@ fidelity and archive older ones rather than deleting them.
 
 ---
 
+# Session 2026-08-25/26 - the operator played all session, and found the mechanic himself
+
+The first session where the operator was in the client the whole time, and the
+best result of the night came from him rather than from the analysis.
+
+**Suite 1244 passed / 1244 collected, ruff clean**, measured on a clean tree
+with `__pycache__` purged. Baseline was 1225; the +19 is `tests/test_armwatch.py`.
+Ledger entries start at `LL-0056`. **Read `LL-0064` FIRST** - it is the
+independent refutation pass and it overturns things the entries before it claim.
+
+## What shipped
+
+- **ROADMAP 4c is CLOSED.** `lanternlight/armwatch.py` arms all four capture
+  surfaces from one entry point: `python -m lanternlight.armwatch --dest-root
+  C:/ll-captures/<day>`. It reimplements no copying. Intervals carry their
+  rationale as a FIELD, and a test asserts each cites a digit.
+- **`FINDINGS` 11.8's "keeps no backup" is REFUTED.** A launch was watched
+  directly and it left a byte-identical `MistfallHunter-backup-<UTC>.log`. It is
+  NOT guaranteed - an entire earlier session had none - so archive regardless.
+  **Watch the `Logs/` DIRECTORY, never the log file**; that is what catches it.
+
+## What was learned, and it is mostly negative
+
+- **A full dungeon run wrote NO transient save.** `StandaloneLevel` occurs zero
+  times in its log. So a dungeon run is NOT a guarantee of damage data and item
+  7's source is mode-dependent. **Whether a patch or the mode causes it is
+  CONFOUNDED** - every prior sighting was on buildid 24619162, this run on
+  24813185.
+- **Equipment is SERVER-SIDE.** `Deck.sav` and `CampData` are byte-identical
+  across an item change. A loadout can only be baselined in pixels.
+- **The stack buff (ROADMAP 10) is the biggest thread.** It may make 11.7's
+  "constancy tracks the clamp" an artifact. Measure it at the CEILING; the floor
+  is insensitive because the increment rounds away.
+
+## The lesson worth carrying
+
+Four independent refuters found **zero arithmetic errors** and **eight bad
+readings**. Every defect was a misread frame, an invented explanation for a gap
+that did not exist, a circular citation, or a binding read off an error line.
+**Verification effort had been pointed at the arithmetic, which was already
+sound.** Point it at the readings.
+
+And `LL-0058` claimed to have fixed an over-claim in two places; it fixed two
+and missed a third in the same commit. A self-run refutation cannot see that.
+
+---
+
 # Session 2026-08-25 - the client was open, and 7b turned into a measurement rig
 
 The first session in four with the game actually running, so ROADMAP 7b was the

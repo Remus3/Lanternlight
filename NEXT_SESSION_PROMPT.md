@@ -9,9 +9,8 @@ Steam game Mistfall Hunter. Repo root `C:\Lanternlight`, public at
 `github.com/Remus3/Lanternlight`, Apache-2.0.
 
 **Read first, in this order:** `CLAUDE.md`, `README.md`, `docs/FINDINGS.md`
-(section 11 especially), `docs/OBSERVED_IDS.md`, `ROADMAP.md`,
-`docs/HEADLESS.md`, `WAKEUP_NOTES.md` (top entry only), then
-`git log --oneline -15`.
+(sections 11 to 15), `docs/OBSERVED_IDS.md`, `ROADMAP.md`, `docs/HEADLESS.md`,
+`WAKEUP_NOTES.md` (top entry only), then `git log --oneline -15`.
 
 **Before touching anything:**
 
@@ -37,184 +36,109 @@ A fresh clone runs zero git hooks until that first command runs. The tracked
 
 ## Where the last session left it
 
-**2026-08-25. Suite 1225 passed / 1225 collected, ruff clean**, measured on a
-clean tree with `__pycache__` purged - that is your merge-gate baseline, and
-re-measure it yourself before dispatching work rather than trusting this line.
-The session's ledger entries start at `LL-0049` and run to the end of the file's
-newest block - `grep -n '^### LL-00' docs/LEDGER.md | head` lists them, and no
-end-point is filed here because that literal went stale twice in one session,
-and a third occasion was avoided only because the same commit that would have
-staled it removed it instead. **Read the corrections first.** Several entries correct the ones before
-them; the correcting entries are the ones that explain why the measurements are
-trustworthy, and they are more useful than the entries they correct.
+**Suite 1244 passed / 1244 collected, ruff clean**, measured on a clean tree
+with `__pycache__` purged - that is your merge-gate baseline, and re-measure it
+yourself before dispatching work rather than trusting this line.
 
-**No code changed all session.** It was measurement and documentation, so the
-test count is unchanged by design.
+The session's ledger entries start at **`LL-0056`**. **Read `LL-0064` FIRST.**
+It is an independent four-agent refutation pass and it **overturns claims the
+earlier entries make**. Reading LL-0056 through LL-0063 without it will leave
+you believing things that were withdrawn.
 
-### Check the world before anything else
-
-Three things had moved since the previous session and all three mattered:
-
-- **The game was patched** to Steam buildid `24813185` on 2026-08-19. Every id
-  in `docs/OBSERVED_IDS.md` was read on a build that no longer exists and none
-  has been re-confirmed.
-- **The 6.1 MB log from 2026-08-09 no longer exists.** The game truncates its
-  log on launch. A log is evidence only until the next launch. **It may leave
-  a backup and it may not** - see `docs/FINDINGS.md` 11.12; treat one as a
-  windfall to grab, never as a reason to skip archiving.
-- The market cache had emptied itself back to 37 bytes and nobody saw it
-  happen.
-
-The command that settles whether the client is open - do this first, it decides
-what you work on. It **says which**, rather than printing nothing and leaving
-you to guess whether the check failed or the game is shut:
+## Check the world before anything else
 
 ```
 tasklist | grep -qi mistfall && echo "CLIENT OPEN" || echo "client closed"; stat -c '%y %s' "$LOCALAPPDATA/MistfallHunter/Saved/Logs/MistfallHunter.log"
 ```
 
-That is Bash, not PowerShell - this repo's shell is PowerShell by default and
-`grep` and `stat` do not exist there. Run it through the Bash tool.
+That is Bash, not PowerShell - `grep` and `stat` do not exist in this repo's
+default shell. Run it through the Bash tool.
 
-**Whatever the answer, archive the log first**, and it is now one command:
+**Then arm capture, whatever the answer. It is one command now:**
 
 ```
 python -m lanternlight.armwatch --dest-root C:/ll-captures/<today>
 ```
 
-That arms all four surfaces at intervals argued from measured triggers, and it
-is ROADMAP 4c, closed. Point it at a destination OUTSIDE every checkout - it
-refuses one inside a git working directory rather than trusting you to
-remember.
+That is ROADMAP 4c, closed last session. It arms all four surfaces at intervals
+argued from measured triggers, and it **refuses a destination inside a git
+working directory** rather than trusting you to remember. It watches the
+`Logs/` DIRECTORY, not the log file, which is what catches a launch's
+`MistfallHunter-backup-<UTC>.log` - so arming at session start recovers the
+PREVIOUS session as well as preserving the current one. Whether a launch leaves
+a backup at all is **unmeasured**: one did, an entire earlier session had none.
 
-**It watches the `Logs/` DIRECTORY, not the log file, and that is the whole
-point.** A launch may leave `MistfallHunter-backup-<UTC>.log` beside the live
-log, byte-identical to the previous run's; arming at session start therefore
-recovers the PREVIOUS session as well as preserving the current one. It did
-exactly that on 2026-08-25b, picking up a 5,080,313-byte backup for nothing.
-Whether a launch leaves one at all is **unmeasured** - one launch did, and an
-entire earlier session had none - so archive regardless.
+## NEXT: ROADMAP item 10 - the stack buff, measured AT THE CEILING
 
-## ROADMAP 7b is ANSWERED - what that bought
+**This is the highest-value open question, because an existing headline finding
+may be an artifact.**
 
-The **training ground exists** and is **not a match**: no
-`StandaloneSlot_<roleId>.sav` appeared in 36 minutes across ~200 shots, no
-`EnterBattle`, and the whole log carries seven occurrences of the substring
-`damage` with **not one number** among them. So `DamageCollectonDataSet` is not
-written there and `lanternlight/damage.py` has nothing to read in that room.
+The operator found a buff icon that climbs to **5** while he keeps hitting the
+same target inside a time limit, centre screen above the energy bar. It is
+readable in a half-scale wide shot at `x 600-690, y 600-665`, and joining that
+crop to the meter crop on wall clock puts stack count and cumulative damage on
+one row.
 
-It is a **pixel rig**. The room renders a cumulative **Total Damage** meter and
-writes it nowhere; differencing that meter across captured frames is the
-measurement. `Progress Record` beneath it holds the **previous run's** pair.
+`FINDINGS` 11.7 says a constant per-hit value fits every FLOOR run and no
+off-floor run, and reads that as constancy being a property of the clamp. **A
+buff of ~1% per stack reproduces that split with no distance term at all** -
+invisible at 10.35 per hit, visible at 55 to 69. The ten-point curve is
+untouched; the inference is contested.
 
-**Per-hit body damage on the damage floor is exactly 10.35**, solved interval
-`[10.3500, 10.3571]`. First value in this project to clear the independent-run
-bar. No coefficient is published from it and none may be.
+**Measure at the CEILING. The floor is insensitive** - at ~13.5 per hit the
+whole five-stack bonus rounds away, which is why nine floor runs gave only a
+4-count spread. At ~90 per hit it is several display units.
 
-The falloff curve, ten distances in paces:
+Acceptance is in ROADMAP 10, including the target-switch test that separates
+`Focus Fire` from a base mechanic. **Do not attribute the buff to Focus Fire
+without it**: the tooltip scopes that talent to `Rapid Arrows`, and 2.27-2.87 s
+inter-hit intervals prove drawn shots, not Volley.
 
-| paces | 10 | 9 | 8 | 7 | 6 | 4 | 3 | 2 | 1 | 0 |
-|---|---|---|---|---|---|---|---|---|---|---|
-| total | 104 | 104 | 104 | 231 | 309 | 546 | 687 | 687 | 689 | 691 |
+**If the client is shut:** work **OPS-8** (the suite reddens under concurrent
+pytest runs, which breaks the merge gate this project depends on) or **7c**
+(the meter reader needs one template set PER FIELD; the groundwork and the
+failure modes are written up).
 
-Clamped floor, about 1.3x per pace over four paces, clamped ceiling. Ceiling is
-6.64x the floor. **Headshots never give a constant per-hit value**, not even on
-the floor where body shots do.
+## Traps this session paid for
 
-### Start here
-
-1. **If the client is open**, work ROADMAP **7b's open threads** - why the floor
-   is a step rather than a tangent, what separates a headshot from a crit, and
-   whether ~1.3x per pace is real. All cheap, all need the client. Fold in items
-   1, 4b, 5 and 6, which also need it. **Arm the wide-shot poller before the
-   first run.**
-2. **If the client is closed**, work item **4c** (arm the archiving watchers -
-   no new code, `lanternlight/savewatch.py` already does the copying) or item
-   **7c** (read the meter without a human reading it).
-
-## How to measure the meter, so you do not rediscover this
-
-- **Solve, do not eyeball.** A constant per-hit value ALWAYS makes the displayed
-  deltas wobble by one, because the meter rounds a real-valued cumulative sum.
-  A wobbling delta is not evidence of variance. Solve `round(n*v) == total_n`
-  across a run: you get an interval, or a contradiction, and only the
-  contradiction is evidence.
-- The observed cumulative states for all ten runs are published in
-  `docs/FINDINGS.md` 11.7, so the whole solve is re-runnable from the artifact.
-- **Capture economics, measured.** Full-screen PNG at 2 fps is **4.8 MB a
-  frame, 34 GB an hour** - do not leave it running. Cropping the HUD rectangle
-  at capture time is ~150 KB. A half-scale JPEG wide shot at 1 fps is ~140 KB
-  and is what records where the operator stood.
-- **Deduping panel frames by pixel hash FAILS.** The plate is semi-transparent,
-  so the scene behind it changes the hash while the number stands still. A
-  coarse column-occupancy signature over the digit colour is what works.
-- Tesseract is **not installed** and is not to be installed for this. Item 7c
-  is the template-matching reader, and its acceptance insists it **refuse**
-  rather than guess.
-- This session's evidence is at `C:/ll-captures/2026-08-25/`. It contains the
-  operator's account name and third-party player ids and **must never be
-  committed**.
-
-## Traps that will bite you, all measured
-
-- **A measurement whose independent variable was INFERRED rather than RECORDED
-  is not a measurement of that variable** - and it reads exactly like one. The
-  first distance sweep had to be re-run because its distances came from clock
-  order. Record the independent variable in the same stream as the dependent
-  one.
-- **The wrap refutation is not a step you complete, it is a step you repeat
-  until it comes back empty.** It was run several times on the 2026-08-25 wrap
-  and found something every time; the ledger carries the round-by-round tally
-  and no count is repeated here, because a tally in a document is stale the
-  next time the pass runs. What matters is the **severity curve**, not the
-  count. The early rounds found that BOTH arguments made for the WRONG distance
-  mapping were arithmetically invalid - each mixed two mappings. The middle
-  rounds found a fix applied in one of the two places the defect lived, and
-  then a fix applied in both places with a number nobody re-derived, which is
-  worse because it reads as corrected. The late rounds found stale counts and a
-  misattribution.
-
-  **The single worst defect of that session was not found by the pass at all.**
-  One run had been solved using data points belonging to its neighbour, and it
-  surfaced while re-deriving during the fix for something else the pass HAD
-  found. So: acting on a refutation is itself where you find what the
-  refutation missed, and a pass that comes back empty is not the same as a
-  document that is right.
-  **When you act on a refutation, re-derive the arithmetic of your correction,
-  not just its presence** - and stop when the findings go cosmetic, not when
-  you get bored.
-- **A Windows path in a non-raw Python string** turns `\2026` into an octal
-  escape and writes byte `0x82`. It happened twice in one session. Use forward
-  slashes.
-- **An empty grep is a claim about your pattern**, not about the codebase.
-- **Do not pass `-q` to pytest.** `pytest.ini` already sets it; `-qq`
-  suppresses the summary line entirely.
-- **Clear `__pycache__` before any mutation test.**
-- **`ops/merge_gate.py` exists so you never relay an agent's claim.** Measure
-  the baseline before dispatching and pass it in.
-
-## Open questions nobody has answered
-
-- Why is the damage floor a **step** rather than a tangent? Extrapolating the
-  slope predicts ~174 at 8 paces and it reads 104.
-- What separates a headshot from a crit? The client renders headshots in red
-  crit text, so the eye cannot do it and neither could this data.
-- Is `matchId` what distinguishes the Prologue from a real raid? Predicted,
-  never observed.
-- What are the 4 zero bytes after every GVAS tagged property list?
-- Sorcerer's single weapon config id is still unexplained. **Nothing in this
-  repo may say Blackarrow is the only single-weapon class.**
-- Where do server-side settings live? `InvertCameraYAxis` is in the log and in
-  no save file.
+- **Point verification at the READINGS, not the arithmetic.** Four independent
+  refuters found **zero** arithmetic errors and **eight** bad readings: a
+  misread frame, an invented explanation for a sampling gap that did not exist,
+  a circular citation, a binding read off a `Puerts: Error` line, a delta
+  transposition that summed correctly either way.
+- **A sum is not a check on an ordering.** A transposed delta list summed to the
+  same total, so every total-based check passed it.
+- **A self-run refutation cannot find a fix you applied in only one place.**
+  LL-0058 corrected an over-claim in two files and missed a third in the same
+  commit. An independent pass found it immediately.
+- **"Which conclusion feels less exciting" is not evidence.** The mode-versus-
+  patch call was made that way and was refuted; build and mode are perfectly
+  confounded.
+- **Quote the DELIVERED capture rate, not the requested one.** A poller asked
+  for 2 fps delivered 1.19.
+- **A full-screen PNG is ~3.1 MB; the panel crop is ~235 KB.** Crop at capture
+  time. Disk sat at 95% all session.
+- **`taskkill /F /PID` needs `//F //PID` from Git Bash**, or MSYS mangles the
+  flags into paths. `Stop-Process` is forbidden.
+- **An over-constrained grep gives a false negative.** One here did, and was
+  caught only by re-checking with a positive control. Always prove the pattern
+  on a file that DOES contain the string.
 
 ## Operator context worth having
 
-Plays **Blackarrow** (classId 12), second character at classId 13. Right-click
-is the primary attack (binds swapped), standard arrow. Counts distance in
-**paces** - a full stride, counted off the run-cycle animation loop reset, no
-crouch, sprint or roll. Reliable, engaged, and volunteers control failures
-unprompted - when he says he was "a little off the mark", believe it and treat
-that run accordingly.
+Plays **Blackarrow** (classId 12), now **level 5**, second character at classId
+13. Right-click is the primary attack (binds swapped). Counts distance in
+**paces** - a full stride off the run-cycle animation loop reset, no crouch,
+sprint or roll.
+
+**He is the reason the best result of the session exists.** He spotted the stack
+icon, then designed and ran the capped-stack experiment himself without being
+asked. When he reports a mechanic, capture it and check it - do not explain it
+away.
 
 **He cannot read chat while playing.** Use text-to-speech for anything he needs
 mid-game, keep it short, and never block waiting for an answer.
+
+Capture evidence from the session is under `C:/ll-captures/2026-08-25b/` and
+contains his account name and third-party player ids. **It must never be
+committed.**
