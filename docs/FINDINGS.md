@@ -2037,3 +2037,212 @@ ratio is a gear effect.
 breakpoint at 12-14 paces, fire ten body shots. Constant at ~10.35 means the
 gear did not move the floor; constant at another value means it did, and that
 is a real finding; still no solution means the target was moving.
+
+## 14. The sweep re-run with new gear AND a new talent, 2026-08-25b
+
+Eight complete ten-hit runs, panel captured at 2 fps with a half-scale wide
+shot every 2 s. **Two variables changed since the section 11 curve** - the
+operator's items, and a talent point spent on `Focus Fire`. Nothing below can
+attribute an effect to either one alone, and this section does not try.
+
+### 14.1 The totals
+
+Runs are listed in **capture order**, which the wide shots confirm is order of
+**decreasing distance** - the target grows monotonically across R1 to R8.
+**No pace labels are assigned.** Eight runs were fired against six planned
+distances and the operator did not state the mapping, so labelling them would
+be reconstructing the independent variable from clock order - the exact defect
+that forced the previous sweep to be re-run (11.10).
+
+| run | 10-hit total | prior sweep, by pace |
+|---|---|---|
+| R1 (farthest) | **137** | 10p = 104 |
+| R2 | **138** | 8p = 104 |
+| R3 | **299** | 6p = 309 |
+| R4 | **680** | 4p = 546 |
+| R5 | **914** | 2p = 687 |
+| R6 | **898** | 0p = 691 |
+| R7 | 879 | - |
+| R8 (nearest) | 893 | - |
+
+**Both clamps survive.** R1 and R2 differ by 0.7%; R6, R7 and R8 span 2.2%. The
+three-regime shape - floor, steep middle, ceiling - is unchanged.
+
+**The level moved by about a third at both ends**: floor 104 -> ~137 (1.32x),
+ceiling ~689 -> ~900 (1.31x). **The middle did not move the same way** - the
+third run reads 299 against a prior 309, slightly LOWER. With the distance
+mapping unstated and the prior 6-pace figure itself contested (265 once, 309
+once, 16.6% apart), no ratio is published here.
+
+### 14.2 The real change: within-run constancy is GONE
+
+This is the finding, and it is a negative.
+
+**Every floor run in the previous sweep admitted a constant per-hit value**, the
+same interval `[10.3500, 10.3571]` three times over. That constancy is what
+made 10.35 the first number in this project to clear the independent-run bar.
+
+**Of the eight runs here, exactly one admits a constant value** - R2, and only
+under a truncating display model. Every other run contradicts under both
+round-to-nearest and truncation.
+
+A **proportional ramp** - each consecutive hit worth slightly more - was fitted
+against every run:
+
+| run | first hit | increment/hit | %/hit | fit error |
+|---|---|---|---|---|
+| R1 | 13.45 | 0.045 | 0.335% | 0 |
+| R2 | 13.75 | 0 | - | 1 |
+| R3 | 29.92 | 0 | - | 1 |
+| R4 | 66.49 | 0.343 | 0.516% | 1 |
+| R5 | 89.78 | 0.383 | 0.427% | 1 |
+| R6 | 86.26 | 0 | - | 3 |
+| R7 | 83.50 | 0 | - | 3 |
+| R8 | 87.42 | 0.409 | 0.468% | 2 |
+
+**The model does not hold uniformly and is therefore not adopted.** Four runs
+fit a ramp of roughly 0.34-0.52% per hit, two fit constant, and two fit neither
+well. A two-parameter model reproducing ten cumulative readings with an
+absolute error of 1 is a good fit where it lands - but a mechanic that appears
+in half the runs and not the other half is not a mechanic this project will
+write down.
+
+### 14.3 What is NOT claimed, and why
+
+**Not claimed: that `Focus Fire` causes the ramp.** Its tooltip reads *"Rapid
+Arrows increase the Damage Multiplier with each hit on the same enemy"*, and
+**the operator was not using Rapid Arrows.** Measured inter-hit intervals were
+**2.27 to 2.87 seconds** across R4 and R5 - individually drawn shots. Rapid
+Arrows is Volley mode, up to five arrows fired rapidly; it cannot produce a
+2.3-second cadence. So either the talent's effect exceeds its stated scope, or
+the ramp has another cause entirely. Both are open.
+
+**Not claimed: that the 1.32x level shift is a gear effect.** A talent point
+was also spent. Two variables, one observation.
+
+**Not excluded: positional drift.** A steady creep toward the target during a
+run reproduces exactly this signature on the steep middle of the curve. The
+wide shots show the target's apparent size roughly constant across R4, which
+weakens the explanation - but apparent size was already established as
+unreliable in this scene, having saturated twice when it was attempted
+deliberately, so this is a weak instrument and not a refutation.
+
+### 14.4 The experiment that separates them
+
+**Repeat ten-hit runs on the FLOOR, three or four times.** The floor is a
+clamp: distance changes do not move the number there, which is what makes it
+the only regime where positional drift cannot manufacture a ramp. **Any ramp
+observed on the floor is a real mechanic.**
+
+> **This was run, and the advice was HALF WRONG - see 15.3.** The reasoning
+> about drift holds. What it ignored is the display: at ~13.5 per hit a
+> ~1%-per-stack effect is ~0.135 and rounds away entirely, so the floor is
+> insensitive rather than decisive. The ceiling is the instrument. The runs
+> were still worth firing - they produced the stack-count table in 15.2 - but
+> the "any ramp on the floor is real" framing overstated what the floor can
+> show.
+
+The two floor runs here **disagree with each other** - R1 fits a 0.335%/hit
+ramp with zero error, R2 fits constant. One-all. That is precisely why it needs
+repeating rather than interpreting.
+
+A second, sharper test if the first shows a ramp: fire ten hits alternating
+between **two different targets**. "With each hit on the same enemy" implies
+the stack resets per enemy, so an alternating run should show no ramp. If it
+does, whatever is happening is not a same-enemy stacking effect.
+
+## 15. The stack buff - a mechanic the operator saw and the capture confirms
+
+**The operator found this, not the analysis.** He reported an icon that climbs
+to **5** while he keeps hitting the same target inside a time limit, and said
+damage seemed "gently nudged" upward as it climbed. That is the mechanic
+section 14 was circling without being able to name.
+
+### 15.1 It is on screen, and it is readable
+
+The icon sits **centre screen above the energy bar** (operator), which puts it
+in the half-scale wide shots already being captured. Cropping `x 600-690,
+y 600-665` of the 1280x720 wide frame renders it plainly, with its stack count
+beside it. Joining that crop to the meter crop by wall clock gives a row per
+hit carrying **both** the cumulative damage and the stack count - the same
+frame-to-frame join that bound class ids, applied to two regions of one frame.
+
+Observed: the count runs **1 to 5** and holds at 5 while hits continue. At one
+stack **no digit is rendered at all** - the icon appears bare - which is a
+reading rule worth having, because "no number" means one, not zero.
+
+### 15.2 It explains the broken solves, and the magnitude is SMALL
+
+The operator then ran the right experiment unprompted: **runs deliberately held
+to a maximum of 1, 2, 3, 4 and 5 stacks**, slower cadence, without moving,
+letting the buff reset between. Ten-hit totals, all at the same floor distance:
+
+| max stacks reached | 10-hit total |
+|---|---|
+| 1 (bare icon) | **135** |
+| 2 to 3 | **136** |
+| 5 | **137** and **139** |
+
+**Monotone in stack count.** Under a model where stack `s` multiplies damage by
+`1 + (s-1)c`, a run that builds 1,2,3,4,5,5,5,5,5,5 totals `(10 + 30c)` against
+`10` for a run pinned at one stack, so the observed ratios imply
+**c ~ 0.5% to 1% per stack, about +2% to +4% at five stacks.**
+
+**No coefficient is published from that**, and the reason is precision: the
+spread is 135 to 139 on integer totals near 137, while run-to-run variation at
+the same distance was already 137 against 138 in the same session. The signal
+is barely above the noise.
+
+### 15.3 The floor is the WRONG place to measure this - correcting 14.4
+
+Section 14.4 proposed repeating floor runs as the decisive test, on the grounds
+that a clamp makes positional drift harmless. **The reasoning about drift was
+right and the conclusion was wrong**, because it ignored the display:
+
+At the floor a hit is about **13.5**, so a 1%-per-stack effect is **0.135 per
+hit** and the whole five-stack bonus is well under one displayed unit per hit.
+It **rounds away**. That is exactly what the joined rows show - stacks climbing
+2, 3, 4, 5 beside deltas that sit flat on 14.
+
+**The ceiling is the sensitive instrument.** At about 90 per hit, 1% is 0.9 and
+five stacks is roughly 3.6 - several display units, far above rounding. Any
+future measurement of this mechanic belongs at the near end of the curve, not
+the far end.
+
+### 15.4 What this does to the earlier sections, and it is not small
+
+**11.7's headline may be an artifact.** It reports that a constant per-hit value
+fits every FLOOR run and no off-floor run, and reads that as constancy being a
+property of the clamp. A stack buff of about 1% per stack reproduces that split
+exactly **without any distance term**: invisible at 10.35 per hit where it
+rounds away, visible at 55 to 69 per hit where it does not.
+
+So the observation stands and **the interpretation is now contested**. Two
+explanations survive:
+
+- the operator's own positional variance off the floor, which 11.7 assumed, or
+- this stack buff, which nobody knew existed when 11.7 was written.
+
+**This is NOT a retraction of the ten-point curve.** The totals are measured and
+unaffected. What is contested is the *inference* that constancy tracks the
+clamp.
+
+**Whether the buff predates tonight is UNMEASURED.** The operator spent a talent
+point on `Focus Fire` this session, whose tooltip reads "Rapid Arrows increase
+the Damage Multiplier with each hit on the same enemy" - a same-enemy stacking
+multiplier, which matches. But **he was not using Rapid Arrows**: measured
+inter-hit intervals of 2.27 to 2.87 seconds are individually drawn shots, and
+Rapid Arrows is Volley. So either the talent's scope exceeds its tooltip, or
+the icon is a base mechanic that was present all along and too small to see at
+10.35 per hit. **The old logs that could settle it no longer exist.**
+
+### 15.5 The measurement that would settle it
+
+At the **ceiling**, where the effect clears rounding: ten hits pinned at one
+stack, then ten allowed to reach five, without moving. The difference should be
+about 3 to 4 display units per hit rather than a fraction of one, which turns
+`c` from an inference into a measurement.
+
+To separate talent from base mechanic, fire ten hits **alternating between two
+targets**. "With each hit on the same enemy" implies the stack resets per
+enemy; if the buff survives target switching it is not that talent.
