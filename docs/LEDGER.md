@@ -84,6 +84,23 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0062 - 2026-08-25 - A re-anchor run after an item change REFUSED to solve constant, so it cannot attribute 143-vs-104 to gear - and equipment turns out to be server-side
+
+**Evidence:**
+- WHY IT WAS RUN: FINDINGS section 11 never records which loadout produced 10.35. It scopes its claims carefully ('the same weapon', and it disclaims other weapons/arrows/targets/builds) but the configuration itself was never written down, so the whole ten-point curve rested on an unstated baseline that an item change would silently invalidate.
+- EQUIPMENT IS SERVER-SIDE, measured across the change: Deck.sav 7 generations all byte-identical INCLUDING after the change; CampData_<userId>.sav 8 generations all byte-identical despite the game rewriting the file; only Scav.sav changed content, at 21:31, and it flipped straight back. So a loadout baseline can only be pixels.
+- THE RUN: meter reset observed at 22:55:17 (0, 0 Hit), ten body shots, panel captured at 2 fps. Series by hit count - 1:14, 2:(sampling gap), 3:42, 4:57, 5:71, 6:85, 7:100, 8:114, 9:129, 10:143.
+- NO CONSTANT PER-HIT VALUE FITS, under either display model. Round-to-nearest is empty: 129 at 9 hits forces v >= 14.2778 while 42 at 3 hits forces v < 14.1667. Truncation is empty by a hairline, both bounds meeting at exactly 43/3.
+- THE CONTRADICTION IS NOT A MISREAD: both binding readings (42 at 3, 129 at 9) were re-read individually at 3x zoom, and the solve was re-run against only the individually-verified readings, where the contradiction survives unchanged.
+- THE DELTAS LOOK CONSTANT AND ARE NOT EVIDENCE - 14, 14, 15, 14, 15, 14, 15, 14, exactly the one-wobble a constant value produces through a rounding display. This is 11.7's trap and only the solve separates the cases.
+- PANEL RECTANGLE LOCATED: the Total Damage value and hit count occupy x 2085-2330, y 468-520 at 2560x1440. A cropped poller costs about 150 KB a frame against 3.1 MB full-screen, a 20x saving.
+- The Progress Record independently read '42, 3 Hit', corroborating the mid-run 42-at-3 from a second on-screen source.
+
+WHAT IS DELIBERATELY NOT CLAIMED: that 143 vs 104 (ratio 1.375) is a gear effect. Constancy is the measured signature of the FLOOR (11.7), this run admits none, so it was fired from inside the floor breakpoint - distance is confounded with gear and NEITHER can be attributed. Reporting 1.375x as a gear multiplier would have been the exciting wrong answer.
+TWO CANDIDATE CONFOUNDS, neither excluded: pacing drift (143 sits in the never-measured gap between 7 paces at 231 and 8 paces at 104), and an unfrozen target (the room can freeze bots; a moving target varies distance shot to shot and no such run can ever solve constant). The freeze state was not checked during this run.
+NEXT ATTEMPT IS SPECIFIED: freeze the bot, stand clearly past the old breakpoint at 12-14 paces, fire ten body shots. Constant at ~10.35 means gear did not move the floor; constant at another value means it did, and that is a real finding; no solution again means the target was moving.
+The run was still worth its disk: the loadout is on pixels for the first time, and the panel rectangle it located makes every future capture 20x cheaper.
+
 ### LL-0061 - 2026-08-25 - Blackarrow talents read at level 5 - six new nodes verbatim, a slot-state reading rule, and Battle-fed proven inert from the screen rather than assumed
 
 **Evidence:**

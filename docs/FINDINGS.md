@@ -1955,3 +1955,85 @@ escape mechanics seen so far. `PartEscape` is recorded here as an observed
 token and is **not interpreted** - "part" may mean partial, or a party, and
 nothing in this capture separates those.
 
+## 13. A re-anchor run that refused to anchor, 2026-08-25b
+
+Fired after the operator changed items, to test whether the loadout behind the
+section 11 curve still holds. **It does not answer that question, and the
+reason it cannot is the result.**
+
+### 13.1 Why a re-anchor was needed at all
+
+**Section 11 never records which loadout produced 10.35.** It is careful to
+SCOPE its claims - "the same weapon", and it explicitly disclaims anything
+about another weapon, arrow, target or build - but the configuration itself was
+never written down. The whole ten-point curve therefore rested on an unstated
+baseline, and an item change would have invalidated comparisons with nothing on
+disk to reveal it.
+
+**And it cannot be baselined from files.** Measured directly across the item
+change: `Deck.sav` produced **7 generations, all byte-identical**, including
+after the change; `CampData_<userId>.sav` produced **8 generations, all
+byte-identical**, despite the game rewriting the file. Only `Scav.sav` changed
+content, at 21:31, and it flipped straight back. **Equipment is server-side**,
+like `InvertCameraYAxis`. So a loadout baseline can only be pixels, and the
+equipment screen must ride in the same frame stream as the damage numbers.
+
+### 13.2 The run, and the solve that refuses it
+
+Meter reset observed at 22:55:17 (`0`, `0 Hit`), ten body shots, panel captured
+throughout at 2 fps.
+
+| hits | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| total | 14 | - | 42 | 57 | 71 | 85 | 100 | 114 | 129 | 143 |
+
+A dash is a sampling gap - two hits inside one 0.5 s interval - not a missing
+hit; the on-screen counter never skipped.
+
+**No constant per-hit value fits, under either display model.**
+
+- Round-to-nearest: **empty**. `129` at 9 hits forces `v >= 14.2778`; `42` at 3
+  hits forces `v < 14.1667`.
+- Truncation: **empty by a hairline**, both bounds meeting at exactly `43/3`.
+
+Both binding readings were re-read individually at 3x zoom, so the
+contradiction is not a misread. The solve was run again against only the
+individually-verified readings and the contradiction survives unchanged.
+
+**The deltas look constant and are not evidence.** They run 14, 14, 15, 14, 15,
+14, 15, 14 - exactly the one-wobble a constant value produces through a
+rounding display, which is the trap 11.7 exists to name. Only the solve
+separates the two cases.
+
+### 13.3 What that means, and what it deliberately does not
+
+Constancy is the measured signature of the **floor** (11.7): every floor run
+admits a constant value, no off-floor run does. This run admits none, so **it
+was fired from inside the floor breakpoint.** Distance is therefore confounded
+with gear and **neither can be attributed**. The 10-hit total is 143 against
+the floor's 104, a ratio of 1.375, and this document does **not** claim that
+ratio is a gear effect.
+
+**Two candidate confounds, neither excluded:**
+
+- **Pacing drift.** 143 sits in the gap between 7 paces (231) and 8 paces
+  (104), which the ten-point sweep never measured.
+- **An unfrozen target.** The room can freeze bots. A moving target varies the
+  distance shot to shot, and no such run can ever solve constant. Not checked
+  during this run - freeze the bot before the next one.
+
+### 13.4 What the run did establish
+
+- **The panel's screen rectangle is now known**: the Total Damage value and hit
+  count occupy `x 2085-2330, y 468-520` at 2560x1440. A cropped poller can
+  capture it at roughly 150 KB a frame against the 3.1 MB a full-screen frame
+  costs - a 20x saving that makes a long run affordable.
+- **The loadout is on disk for the first time**, captured as equipment-screen
+  frames in the same stream as the meter.
+- The `Progress Record` independently read `42, 3 Hit`, corroborating the
+  mid-run 42-at-3 from a second on-screen source.
+
+**The next attempt is specified:** freeze the bot, stand clearly past the old
+breakpoint at 12-14 paces, fire ten body shots. Constant at ~10.35 means the
+gear did not move the floor; constant at another value means it did, and that
+is a real finding; still no solution means the target was moving.
