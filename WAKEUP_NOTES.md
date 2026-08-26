@@ -116,17 +116,27 @@ and nothing in the repo said so:
 C:/ll-captures/2026-08-25/
   panel/  panel2/     HUD crops at 2 fps - every number came from these
   scene/              half-scale wide shots at 1 fps - where the operator stood
-  frames/             full-resolution PNGs from the first hour, 4.8 GB
+  scene_early/        half-scale sample of 18:40:30-18:55:30, every 42nd frame
   logs/               MistfallHunter.log snapshotted every 5 minutes
   savegames/  saved-root/   every changed generation of every save
   sheets/             the contact sheets the numbers were read off
 ```
 
-About 6.8 GB in total, outside every checkout on purpose - these contain the
-operator's account name and third-party player ids and must never be committed.
-`frames/` is the redundant one: everything needed was extracted from it into
-`sheets/`, and it is the obvious thing to delete if the disk gets tight. It
-was at 48 GB free when this session ended.
+About **2.5 GB** in total, outside every checkout on purpose - these contain
+the operator's account name and third-party player ids and must never be
+committed.
+
+**A `frames/` directory was deleted at the operator's request** - 1026
+full-resolution PNGs at 4.8 GB, covering 18:40:30 to 18:55:30. Everything the
+measurements used had already been extracted from it into `sheets/`, and the
+disk was at 96%. Before deleting, every 42nd frame was kept as a half-scale
+JPEG in `scene_early/` - 25 frames, 4 MB - because that window is the **only**
+wide-scene record of the runs that first produced 10.35, fired before a pace
+was defined and before the wide-shot poller existed. Nothing published depends
+on it; the floor value was independently confirmed later by the labelled 10, 9
+and 8-pace runs. But if anyone ever wants to know where the operator was
+standing for those early runs, `scene_early/` is now the only place to look,
+and it is a sample rather than a record.
 
 ## The finished curve
 
