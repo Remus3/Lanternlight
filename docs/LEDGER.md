@@ -84,6 +84,17 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0055 - 2026-08-25 - Corrects LL-0054 - a line count it filed came from the refuter's report rather than from the file, which is the exact failure LL-0054 was written about
+
+**Evidence:**
+- LL-0054 said NEXT_SESSION_PROMPT.md was 'rewritten this session at 232 lines'. The file is 191 lines - `wc -l` says 191. 232 is the diff churn: `git show --numstat f9bf1d9` reports 135 added and 97 removed, and 135 + 97 = 232.
+- PROVENANCE OF THE WRONG NUMBER, which is the point of this entry: it did not come from the repo. The fourth refutation pass wrote '232 lines' in its round-three report, having read the bar width off `git show --stat` without running `wc -l`, and it was copied into an append-only entry without being re-derived. The refuter identified and owned this itself in round four.
+- Also corrected, in NEXT_SESSION_PROMPT.md which is editable so no entry is forced: it claimed the final log was 'archived four minutes before the operator quit'. The archive is stamped 20:28:25 and the live log's last write is 20:27:09, so the copy was taken about 76 seconds AFTER the log stopped growing - the clause pointed the wrong way and no quit time was ever established. The load-bearing half is true and now says how it is known: both files sha256 to 1c44235c962a89a3..., byte-identical.
+- Suite: 1225 passed, 1225 collected, ruff clean, zero .py changed all session.
+
+THE LESSON, and it is LL-0054's own lesson landing on LL-0054: a number handed to you by a verifier is still a filed count. It arrives wearing the authority of an adversarial check and it has not been checked. Re-derive numbers from the artifact even when - especially when - the source is the process you set up to catch you.
+Four refutation rounds found 13, then 5, then 2, then 2. The severity curve is what matters more than the count: rounds 1-3 found invalid arithmetic, an inert correction and a wrong number wearing a fixed number's clothes; round 4 found a stale line count and an unsupported clause. That is where a pass is close to empty.
+
 ### LL-0054 - 2026-08-25 - Third refutation pass - the correction from the second pass was applied in both places and its arithmetic was still wrong, which reads as fixed and is worse
 
 **Evidence:**

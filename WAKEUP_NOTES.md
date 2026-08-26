@@ -13,7 +13,10 @@ work exactly as the hand-off said it should be. **1225 tests at the start and
 purged. No code changed - this session was measurement and documentation, so
 the count is unchanged by design and a merge gate baseline of 1225 is correct.
 
-Ledger `LL-0049` through `LL-0054`. The session's commits run from `9ac4b1b`
+The session's ledger entries start at `LL-0049`; `grep -n '^### LL-00'
+docs/LEDGER.md | head` lists them, and no end-point is filed here because that
+literal went stale three times in one session. The session's commits run from
+`9ac4b1b`
 to the wrap - `git log --oneline 9ac4b1b~1..HEAD` lists them, and no count is
 filed here on purpose: the first draft of this line said "six", the second said
 "fifteen", and both were wrong. Count it if you need it.
@@ -125,8 +128,9 @@ was at 48 GB free when this session ended.
 
 ## The finished curve
 
-Ten distances, ten body hits each. Ledger `LL-0051`, **corrected by `LL-0052`
-and `LL-0054` - read them together.**
+Ten distances, ten body hits each. Ledger `LL-0051`, **and every entry after it
+corrects something - read the whole block, newest first, rather than any one
+entry.**
 
 **How each label was actually established, since two earlier drafts of this
 paragraph got it wrong:**
