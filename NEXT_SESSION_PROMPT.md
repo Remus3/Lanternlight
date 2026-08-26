@@ -42,8 +42,9 @@ clean tree with `__pycache__` purged - that is your merge-gate baseline, and
 re-measure it yourself before dispatching work rather than trusting this line.
 The session's ledger entries start at `LL-0049` and run to the end of the file's
 newest block - `grep -n '^### LL-00' docs/LEDGER.md | head` lists them, and no
-end-point is filed here because that literal went stale twice in one session
-and was one commit away from a third time. **Read the corrections first.** Several entries correct the ones before
+end-point is filed here because that literal went stale twice in one session,
+and a third occasion was avoided only because the same commit that would have
+staled it removed it instead. **Read the corrections first.** Several entries correct the ones before
 them; the correcting entries are the ones that explain why the measurements are
 trustworthy, and they are more useful than the entries they correct.
 

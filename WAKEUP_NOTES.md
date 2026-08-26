@@ -15,8 +15,9 @@ the count is unchanged by design and a merge gate baseline of 1225 is correct.
 
 The session's ledger entries start at `LL-0049`; `grep -n '^### LL-00'
 docs/LEDGER.md | head` lists them, and no end-point is filed here because that
-literal went stale twice in one session and was one commit away from a third
-time. The session's commits run from
+literal went stale twice in one session, and a third occasion was avoided only
+because the same commit that would have staled it removed it instead. The
+session's commits run from
 `9ac4b1b`
 to the wrap - `git log --oneline 9ac4b1b~1..HEAD` lists them, and no count is
 filed here on purpose: the first draft of this line said "six", the second said
