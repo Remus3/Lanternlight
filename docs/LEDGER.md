@@ -84,6 +84,23 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0061 - 2026-08-25 - Blackarrow talents read at level 5 - six new nodes verbatim, a slot-state reading rule, and Battle-fed proven inert from the screen rather than assumed
+
+**Evidence:**
+- Method: tools/frame_poller.py at 2 s for a bounded 360 s while the operator hovered nodes; 164 frames, 244 MB, at C:/ll-captures/2026-08-25b/talents/, not committed (full-screen, shows the account panel). Every name and effect line read off a rendered tooltip.
+- Level confirmed on screen: Lv. 5, three arrow slots bound (Z/X/C), three skills equipped.
+- Archer's Arrow Enhancement 1, all with an Activate bar - Astound (knockback distance of fully drawn Concussive Arrows), Sepsis (Damage Multiplier of fully charged Splatter Arrow's splash), Lightning Spread (chaining range of lightning from a fully drawn Lightning Arrow).
+- Mighty Archer, all with an Activate bar - Unstoppable Edge (Sky Piercer's Physical Damage partially converted to True Damage), Focus Fire (Rapid Arrows increase the Damage Multiplier with each hit on the same enemy), Powerful Scattershot (knockback into an obstruction Stuns; greater impact force means longer Stun).
+- STRUCTURAL FINDING: Archer's Arrow Enhancement buffs specific ARROWS, Mighty Archer buffs specific SKILLS. A node's value therefore depends entirely on whether the named arrow or skill is owned - the same loadout gating that made the level-2 pick inert.
+- SLOT-STATE READING RULE, three distinguishable states: gold border = owned AND equipped; dashed border with no padlock = owned but NOT equipped; padlock glyph = locked. Conflating the middle state with owned-and-active would overstate a loadout.
+- BATTLE-FED IS INERT, and this time it is read off the screen rather than inferred: the Hunter's Arrow row shows 0 equipped, exactly 1 unlocked-not-equipped, and 4 locked, against a requirement of 'carrying at least 2 Hunter's Arrows'.
+- Dodge Power Shot now renders an Activate bar where it rendered none at level 2, so it has become selectable in the interim.
+- Rapid Arrows tooltip recorded verbatim - Volley mode, hold to fire up to 5 arrows, shooting during Volley does not reduce Movement Speed, dodging removes Volley.
+
+WHAT IS DELIBERATELY NOT CLAIMED: three skill NAMES are now first-party - Rapid Arrows, Sky Piercer and Scattershot, the latter two because the Mighty Archer tooltips name them. That the operator OWNS Sky Piercer and Scattershot is NOT established; it is an inference from two equipped icons, and this repo does not bind a name to an icon. Only Rapid Arrows is confirmed both named and owned, by its own tooltip rendering.
+NO MAGNITUDE APPEARS ON ANY NODE. 'Increases the Damage Multiplier' and 'Increases the knockback distance' carry no number, so no coefficient is recorded and the recommendation made to the operator was explicitly flagged as mechanical reasoning rather than measured math.
+ROADMAP 4b's types-versus-charges question is now SEPARABLE for the first time: the operator holds exactly ONE Hunter's Arrow. Equipping it and taking Battle-fed distinguishes '2 equipped types' from '2 available charges', a case that could not exist at level 2 when he had 2 types and 3 charges simultaneously. Recorded as an experiment, not scheduled - it costs a talent point.
+
 ### LL-0060 - 2026-08-25 - ROADMAP 7c groundwork measured and the naive reader REFUTED - a draft that refused every real frame was removed rather than shipped
 
 **Evidence:**
