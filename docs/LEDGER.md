@@ -84,6 +84,49 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0058 - 2026-08-25 - Refutation pass on LL-0056 and LL-0057 while writing them - five defects, all mine, and the two worst were over-claims of continuity I never observed
+
+**Evidence:**
+- ROUND 1, three findings. (a) 'the live log has carried the same creation time THROUGHOUT' and 'has not moved since 2026-08-09' - both assert continuity across launches nobody watched. One launch was observed. Corrected in ROADMAP 4c and FINDINGS 11.12 to claim only what one launch shows. (b) The sha256 comparison had been made against the hand-off's prose ('1c44235c...') rather than against the archived file; re-run directly against C:/ll-captures/2026-08-25/logs/20260825-202825_5080313_MistfallHunter.log and it holds. (c) '23 listings' was asserted from wc -l without checking what was in them; re-derived - 23 files, span 18:38:20 to 20:28:25, gaps 300/301 s, zero entries not named *_MistfallHunter.log.
+- ROUND 2, two findings, both in text that round 1 had already rewritten. (d) 'So one launch produced a backup and the launch before it did not' - an absence measured over a window, stated as an absence at an event. This is the round-2 defect that matters and it came from my own summary sentence, not from the data. (e) '11.8 was written from a directory listing at 18:34' invented a precision the source does not carry - 18:34:46 is the log's OPEN time, not the time anyone listed the directory.
+- Also round 2: 'the day this project started reading it' was wrong about what 2026-08-09 08:18:56 marks. Saved/Config was created 2026-08-09 08:18:57, so it is the game's own first run on this machine, not a Lanternlight artifact.
+- Claims re-verified rather than assumed: the refuted sentence's other homes were found by grep, not by memory - NEXT_SESSION_PROMPT.md lines 62 and 79 and WAKEUP_NOTES.md line 32 still carried it, and all three are corrected in the same commit as the finding.
+- Suite after all corrections: 1244 passed, 1244 collected, ruff clean, ascii and no-PII guards green.
+
+The severity curve, which the hand-off says matters more than the count: round 1 found unverified provenance and two over-claims; round 2 found one real logical error and one invented precision. Not yet cosmetic, so this is not where a pass stops.
+CONFIRMING THE HAND-OFF'S OWN LESSON: every round-2 finding was in text round 1 had just rewritten. Acting on a refutation is where the next defect gets made, so a correction needs re-deriving as hard as the original did.
+DEPARTURE FROM THE SESSION DEFAULT, recorded rather than hidden: this pass was self-run, not run by a distinct agent. CLAUDE.md requires an independent refuter, and this session's harness was instructed not to dispatch subagents unless asked. Agreement with myself is not evidence, so LL-0056 through LL-0058 have NOT had an out-of-domain check and the next session should give them one before building on them.
+
+### LL-0057 - 2026-08-25 - ROADMAP 4c CLOSED - lanternlight/armwatch.py arms all four surfaces from one entry point, and it reimplements none of the copying
+
+**Evidence:**
+- lanternlight/armwatch.py + tests/test_armwatch.py, 19 tests. Suite 1225 -> 1244 collected, +19, exactly the tests added. Ruff clean. Measured on a clean tree with __pycache__ purged.
+- ops/merge_gate.verify(claimed_paths=[armwatch.py, test_armwatch.py, ops/lanes.py], baseline=1225) -> 'merge gate: OK (1244 tests collected)'. Baseline measured this session with --collect-only before any work, not carried forward from a document.
+- Acceptance 'one entry point': python -m lanternlight.armwatch --dest-root C:/ll-captures/<day>. Run for real against the live game directory, rc=0, and it captured all four surfaces including the backup log in one pass.
+- Acceptance 'a test that the destination guard refuses a path inside a checkout': pinned three ways - a hand-built .git fixture, this actual checkout, and an assertion that the refusal happens BEFORE any destination directory is created. Confirmed live too: --dest-root C:/Lanternlight/captures returns rc=2 and C:/Lanternlight/captures does not exist afterwards.
+- Acceptance 'a written note of what each interval is for': the rationale is a FIELD on WatchPlan, not a comment, and a test asserts every rationale cites at least one digit so it cannot decay into prose. SaveGames and StandaloneLevel 3 s (transient save appears 17 s after EnterBattle, 7 generations in about 70 s, 2190 -> 44517 bytes); Saved root 30 s (the market cache changes state, it does not grow); Logs 300 s (5,080,313 bytes in a session; 23 generations at that cadence).
+- GUARDS PROVEN NON-VACUOUS - four mutations, each red in the right place, green on restore: LOG_POLL_S 300 -> 3 (1 failed); logs source changed from the directory to the file (4 failed, including the backup-capture test); a rationale stripped of its numbers (1 failed); arm() made to construct nothing (10 failed). __pycache__ cleared before each.
+- Not one byte of copying was reimplemented - the module builds a plan and hands it to SaveWatcher, as the item demanded.
+
+THE DESIGN DECISION WORTH CARRYING: watch the Logs/ DIRECTORY, never the log FILE. That is what picked up the 5,080,313-byte backup at 21:30:40, so arming at session start now recovers the PREVIOUS session as well as preserving the current one - a capability nobody knew existed before LL-0056.
+It also makes LL-0056's open question self-measuring: because Logs/ is archived wholesale, every future launch records whether a backup appeared beside the log. Nobody has to run an experiment.
+Armed and running against the live game for the rest of this session, dogfooding the documented command rather than the stopgap it replaced.
+
+### LL-0056 - 2026-08-25 - FINDINGS 11.8's 'the game truncates its log on launch and keeps no backup' is REFUTED in its second half - a launch watched directly copied the whole log first
+
+**Evidence:**
+- The game exited 20:27:09 local and relaunched 21:28:59 (the live log's own first line, 'Log file open, 08/25/26 21:28:59'). Logs/ then held TWO files where 11.8 recorded one.
+- MistfallHunter-backup-2026.08.26-01.27.09.log, 5,080,313 bytes, sha256 1c44235c962a89a32dc97fdbf24e2afc0952e5fe7418dd4b8ba51ad41dc8f050 - byte-identical to the previous session's final archived log at C:/ll-captures/2026-08-25/logs/20260825-202825_5080313_MistfallHunter.log, verified by sha256sum against the ARCHIVED FILE and not against the hand-off's prose quoting it.
+- The backup was made BY the launch: creation time 2026-08-25 21:28:59 (the second the new log opened) while its content stops at 20:27:09. Its name encodes the previous log's close time in UTC - 2026.08.26-01.27.09 is 20:27:09 local, matching that log's own last line 'Log file closed, 08/25/26 20:27:09'.
+- The previous run exited cleanly - 'LogExit: Exiting.' - so the backup is not a crash artifact.
+- The first half of 11.8 SURVIVES: after the launch the live MistfallHunter.log still carries creation time 2026-08-09 08:18:56, the same minute Saved/Config was created, so this launch emptied the existing file rather than making a new one.
+- CAVEAT WRITTEN INTO THE ARTIFACT, not just said: NTFS tunneling restores a creation time when a file is deleted and recreated under the same name inside about 15 seconds, so creation time alone does NOT separate truncate-in-place from delete-and-recreate. Nothing actionable changes; the document does not pretend the evidence settles it.
+- MEASURED NEGATIVE bounding the claim: across 23 archived generations of Logs/ spanning 18:38:20 to 20:28:25 on 2026-08-25, gaps of 300 or 301 s, every one a copy of MistfallHunter.log and zero of anything else, NO *-backup-*.log existed at any point.
+- Written up as docs/FINDINGS.md 11.12, with 11.8 left standing and marked rather than edited away.
+
+WHAT THIS DOES NOT LICENSE, and the second refutation round is what caught it: the absence over 18:38:20-20:28:25 does NOT show the launch that began that session made no backup. Nobody was watching before 18:38:20, and a backup made at that launch and removed before the first listing is indistinguishable from here. An absence over a window is not an absence at a launch.
+So the mechanism is real and the CONDITION is unmeasured. One launch left a backup; an entire earlier session had none. No rule is written from n=1 in either direction.
+
 ### LL-0055 - 2026-08-25 - Corrects LL-0054 - a line count it filed came from the refuter's report rather than from the file, which is the exact failure LL-0054 was written about
 
 **Evidence:**

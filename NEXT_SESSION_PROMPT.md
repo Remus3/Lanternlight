@@ -59,8 +59,9 @@ Three things had moved since the previous session and all three mattered:
   in `docs/OBSERVED_IDS.md` was read on a build that no longer exists and none
   has been re-confirmed.
 - **The 6.1 MB log from 2026-08-09 no longer exists.** The game truncates its
-  log on launch and keeps no backup. A log is evidence only until the next
-  launch.
+  log on launch. A log is evidence only until the next launch. **It may leave
+  a backup and it may not** - see `docs/FINDINGS.md` 11.12; treat one as a
+  windfall to grab, never as a reason to skip archiving.
 - The market cache had emptied itself back to 37 bytes and nobody saw it
   happen.
 
@@ -75,13 +76,24 @@ tasklist | grep -qi mistfall && echo "CLIENT OPEN" || echo "client closed"; stat
 That is Bash, not PowerShell - this repo's shell is PowerShell by default and
 `grep` and `stat` do not exist there. Run it through the Bash tool.
 
-**Whatever the answer, archive the log first.** It is truncated on the next
-launch with no backup kept, and it took one deleted 6.1 MB log to learn that.
-Pointing `lanternlight.savewatch.SaveWatcher` at the `Logs/` directory with a
-long poll interval is the whole job - the 2026-08-25 session's final 5,080,313
-byte log sits under `C:/ll-captures/2026-08-25/logs/`, verified byte-identical
-to the live file by sha256 (`1c44235c...`), and therefore survives the next
-launch's truncation.
+**Whatever the answer, archive the log first**, and it is now one command:
+
+```
+python -m lanternlight.armwatch --dest-root C:/ll-captures/<today>
+```
+
+That arms all four surfaces at intervals argued from measured triggers, and it
+is ROADMAP 4c, closed. Point it at a destination OUTSIDE every checkout - it
+refuses one inside a git working directory rather than trusting you to
+remember.
+
+**It watches the `Logs/` DIRECTORY, not the log file, and that is the whole
+point.** A launch may leave `MistfallHunter-backup-<UTC>.log` beside the live
+log, byte-identical to the previous run's; arming at session start therefore
+recovers the PREVIOUS session as well as preserving the current one. It did
+exactly that on 2026-08-25b, picking up a 5,080,313-byte backup for nothing.
+Whether a launch leaves one at all is **unmeasured** - one launch did, and an
+entire earlier session had none - so archive regardless.
 
 ## ROADMAP 7b is ANSWERED - what that bought
 

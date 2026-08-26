@@ -840,13 +840,23 @@ actually dedupes. And a full-screen poller writes 4.8 MB a frame, 34 GB an
 hour; cropping the HUD rectangle at capture time costs about 150 KB a frame and
 loses nothing.
 
-## 4c. Archive the log and the market cache on every session - READY, no new code
+## 4c. Archive the log and the market cache on every session - CLOSED 2026-08-25b
 
 Opened 2026-08-25 after measuring that the 6.1 MB log from 2026-08-09 no longer
-exists. The game **truncates its log on launch and keeps no backup** - one file
-in `Logs/`, nothing beside it (`docs/FINDINGS.md` 11.8). Every line not copied
-out before the next launch is gone, and this project's own findings now rest on
-prose whose raw evidence was destroyed.
+exists. The game **truncates its log on launch** - after the launch that
+emptied it, the live `MistfallHunter.log` still carries its original
+2026-08-09 08:18:56 creation time. Every line
+not copied out before the next launch is gone, and this project's own findings
+now rest on prose whose raw evidence was destroyed.
+
+**"and keeps no backup" was part of this item's premise and it is REFUTED**
+(`docs/FINDINGS.md` 11.12). A launch watched directly on 2026-08-25 at 21:28:59
+left `MistfallHunter-backup-<UTC>.log` beside the live log, byte-identical to
+the previous run's final 5,080,313-byte log. **It does not weaken this item, it
+sharpens it:** no backup existed at any point across 23 listings of `Logs/`
+during the session before it, so a backup is a windfall of unmeasured
+conditions rather than a mechanism to rely on - and the archiving it argues for
+is what captures the windfall when it does appear.
 
 `lanternlight/savewatch.py` already solves it. It is a generic "copy every
 changed generation, never write to the source, refuse a destination inside a
@@ -864,6 +874,36 @@ and a written note of what each interval is for.
 
 **Do not** re-implement the copying. The one thing this item adds is that
 arming it is not something a session has to remember.
+
+**MET 2026-08-25b by `lanternlight/armwatch.py`**, 19 tests in
+`tests/test_armwatch.py`, suite 1225 -> 1244. Not one byte of copying was
+reimplemented: the module builds a four-surface plan and hands it to
+`SaveWatcher`.
+
+- **All four surfaces** are covered and each gets its own destination, because
+  the snapshot name is `<stamp>_<size>_<name>` and two sources sharing a
+  destination would collide on any same-named file.
+- **Each interval carries its own argument, as a field rather than a comment.**
+  A test asserts every `rationale` cites at least one digit, so an interval
+  cannot quietly become prose. `SaveGames/` and `StandaloneLevel/` poll at 3 s
+  (the transient save appears 17 s after `EnterBattle` and grows through 7
+  generations in about 70 s); `Saved/` root at 30 s (the market cache changes
+  state, it does not grow); `Logs/` at 300 s (5,080,313 bytes in one session,
+  23 generations at that cadence).
+- **The destination guard is pinned three ways** - against a hand-built `.git`
+  fixture, against this actual checkout, and by asserting the refusal happens
+  before any destination directory is created.
+- **Guards proven non-vacuous.** Four mutations were applied and each went red
+  in the right place before being restored: `LOG_POLL_S` 300 -> 3, the logs
+  source changed from the directory to the file, a rationale stripped of its
+  numbers, and `arm()` made to construct nothing.
+
+**The one design decision worth carrying forward: watch the DIRECTORY, never
+the log FILE.** That is what captured the 5,080,313-byte backup at 21:30:40
+this session, which means arming at session start now recovers the PREVIOUS
+session's log as well as preserving the current one. It also makes the open
+question in 11.12 - what decides whether a launch leaves a backup - answer
+itself over enough launches, with nobody running an experiment.
 
 ## 4b. Ammo-family and talent measurement - READY, cheap, needs the client
 

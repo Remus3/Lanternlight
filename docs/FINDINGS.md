@@ -1556,7 +1556,12 @@ opened 2026-08-25 18:34:46 local**. The log this project measured on
 
 **The game truncates its log on launch and keeps no backup.** Every line of
 that 6.1 MB session that was not copied out, quoted into a document, or turned
-into a committed fixture no longer exists anywhere. Sections 9 and 10 of this
+into a committed fixture no longer exists anywhere.
+
+> **The second half of that sentence is REFUTED - see 11.12.** A launch was
+> watched directly on 2026-08-25 at 21:28:59 and it left a byte-identical
+> backup of the previous run's log. The first half survives. The practical
+> rule below is unchanged, because the backup is not guaranteed either. Sections 9 and 10 of this
 document survive because somebody wrote them down; the raw evidence behind them
 does not.
 
@@ -1747,3 +1752,87 @@ marker in frame rather than trying to segment a character against a cave.
 recording the independent variable at capture time, in the same stream as the
 dependent one. That is the whole lesson of 11.10 and it cost about 140 KB a
 frame.
+
+### 11.12 A launch COPIES the log before it truncates - "keeps no backup" refuted
+
+11.8 was written from a check at the start of that session which showed one
+file in `Logs/` and no `MistfallHunter-backup-*.log` beside it, and it turned
+that into **"the game truncates its log on launch and keeps no backup"**. The
+observation was right. The generalisation was not, and it was load-bearing: it
+was the stated premise of ROADMAP 4c and it is repeated in `WAKEUP_NOTES.md`
+and in `NEXT_SESSION_PROMPT.md`, all of which are corrected alongside this
+entry.
+
+**A launch was watched directly this time.** The game exited at 20:27:09 local
+and relaunched at 21:28:59. Measured immediately afterwards:
+
+| file | bytes | created | last written |
+|---|---|---|---|
+| `MistfallHunter.log` | growing | **2026-08-09 08:18:56** | now |
+| `MistfallHunter-backup-2026.08.26-01.27.09.log` | 5,080,313 | **2026-08-25 21:28:59** | 2026-08-25 20:27:09 |
+
+Three things fall straight out of that table:
+
+- **The backup is the previous run, intact.** Its sha256 is
+  `1c44235c962a89a32dc97fdbf24e2afc0952e5fe7418dd4b8ba51ad41dc8f050`, which is
+  byte-for-byte the previous session's final archived log. Nothing was lost at
+  that launch.
+- **The backup was made BY the launch.** Its creation time is 21:28:59, the
+  same second the new log was opened, while its content stops at 20:27:09. A
+  file born at that second holding only pre-launch content is a copy taken at
+  launch. Its name had never been used before, so unlike the live log's
+  timestamp this one cannot be a tunneling artifact.
+- **Its name is the previous log's close time in UTC.** `2026.08.26-01.27.09`
+  is 20:27:09 local, which is exactly the previous log's own last line,
+  `Log file closed, 08/25/26 20:27:09`.
+
+The previous run had exited **cleanly** - `LogExit: Exiting.` - so the backup
+is not a crash artifact.
+
+**After the launch, the live log still carries a creation time of 2026-08-09
+08:18:56** - the same minute the rest of the `Saved/` tree was created, so that
+is the game's own first run on this machine and not a Lanternlight artifact.
+So THIS launch emptied
+the file that was already there rather than deleting it and making a new one.
+That is one launch, watched once. Nothing here shows the creation time survived
+every launch in between, because nobody was looking during any of them.
+
+**Caveat, and it is a real one: NTFS tunneling.** If a file is deleted and
+recreated under the same name within about 15 seconds, NTFS restores the
+original creation time, so creation time alone does NOT separate
+truncate-in-place from delete-and-recreate here. The distinction does not
+change anything actionable - the old content is gone from that path either way
+- but the evidence does not settle it and this document should not pretend it
+does.
+
+**A backup is NOT guaranteed, and that is measured too.** Across **23**
+archived generations of `Logs/` spanning 18:38:20 to 20:28:25 on 2026-08-25 -
+gaps of 300 or 301 seconds, every one of them a copy of `MistfallHunter.log`
+and not one of anything else - **no `*-backup-*.log` existed at any point**.
+The watcher copies every file it finds in the directory, so a backup sitting
+there would have been archived; and it can only have been watching the
+directory, because pointing `SaveWatcher` at a file makes `iterdir()` raise and
+yields no copies at all.
+
+**Be careful what that licenses.** It establishes that no backup was present
+between 18:38:20 and 20:28:25. It does **not** establish that the launch which
+began that session failed to make one - nobody was watching before 18:38:20,
+and a backup made at that launch and removed before the first listing looks
+identical from here. What is measured is an absence over a window, not an
+absence at a launch. **What decides whether a launch leaves a backup is
+unmeasured.** Do not write a rule from n=1 in either direction.
+
+**What actually changes as a result:**
+
+- **Archiving stays mandatory.** A windfall that appeared once and was absent
+  through an entire previous session is not a backup strategy.
+- **Watch the Logs/ DIRECTORY, never the log FILE.** This is the whole
+  difference between recovering the previous session and walking past it. The
+  watcher armed at 21:30:40 this session picked the 5,080,313-byte backup up
+  for nothing, which means arming at session start now recovers the PREVIOUS
+  session as well as preserving the current one. `lanternlight/armwatch.py`
+  does this by construction and `tests/test_armwatch.py` pins it.
+- **The condition measures itself from here.** Because the watcher archives
+  `Logs/` wholesale, every future launch records whether a backup appeared
+  beside the log. Nobody has to run an experiment; the question answers itself
+  over enough launches.
