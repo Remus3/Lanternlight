@@ -1561,9 +1561,10 @@ into a committed fixture no longer exists anywhere.
 > **The second half of that sentence is REFUTED - see 11.12.** A launch was
 > watched directly on 2026-08-25 at 21:28:59 and it left a byte-identical
 > backup of the previous run's log. The first half survives. The practical
-> rule below is unchanged, because the backup is not guaranteed either. Sections 9 and 10 of this
-document survive because somebody wrote them down; the raw evidence behind them
-does not.
+> rule below is unchanged, because the backup is not guaranteed either.
+
+Sections 9 and 10 of this document survive because somebody wrote them down;
+the raw evidence behind them does not.
 
 The practical rule: **a log is evidence only until the next launch.**
 `lanternlight/savewatch.py` already does the copying - it is a generic
