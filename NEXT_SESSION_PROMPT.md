@@ -40,8 +40,9 @@ A fresh clone runs zero git hooks until that first command runs. The tracked
 **2026-08-25. Suite 1225 passed / 1225 collected, ruff clean**, measured on a
 clean tree with `__pycache__` purged - that is your merge-gate baseline, and
 re-measure it yourself before dispatching work rather than trusting this line.
-`main` was pushed. Ledger `LL-0049` through `LL-0052`; **read `LL-0052` first,
-it corrects the other two.**
+Ledger `LL-0049` through `LL-0054`. **Read the corrections first** - `LL-0052`,
+`LL-0053` and `LL-0054` each correct the entries before them, and `LL-0054` is
+the one that explains why.
 
 **No code changed all session.** It was measurement and documentation, so the
 test count is unchanged by design.
@@ -60,11 +61,22 @@ Three things had moved since the previous session and all three mattered:
   happen.
 
 The command that settles whether the client is open - do this first, it decides
-what you work on:
+what you work on. It **says which**, rather than printing nothing and leaving
+you to guess whether the check failed or the game is shut:
 
 ```
-tasklist | grep -i mistfall ; stat -c '%y' "$LOCALAPPDATA/MistfallHunter/Saved/Logs/MistfallHunter.log"
+tasklist | grep -qi mistfall && echo "CLIENT OPEN" || echo "client closed"; stat -c '%y %s' "$LOCALAPPDATA/MistfallHunter/Saved/Logs/MistfallHunter.log"
 ```
+
+That is Bash, not PowerShell - this repo's shell is PowerShell by default and
+`grep` and `stat` do not exist there. Run it through the Bash tool.
+
+**Whatever the answer, archive the log first.** It is truncated on the next
+launch with no backup kept, and it took one deleted 6.1 MB log to learn that.
+Pointing `lanternlight.savewatch.SaveWatcher` at the `Logs/` directory with a
+long poll interval is the whole job - the 2026-08-25 session's final 5,080,313
+byte log was archived four minutes before the operator quit, byte-identical to
+the live file, and therefore still exists.
 
 ## ROADMAP 7b is ANSWERED - what that bought
 
@@ -133,11 +145,15 @@ the floor where body shots do.
   first distance sweep had to be re-run because its distances came from clock
   order. Record the independent variable in the same stream as the dependent
   one.
-- **The wrap refutation found 13 real defects**, including that BOTH arguments
-  the session had made for the WRONG mapping were arithmetically invalid - each
-  mixed two mappings - and that one run had been solved using data points
-  belonging to its neighbour. Every conclusion survived re-derivation, which is
-  exactly why nothing else would have caught them. **Run the refutation pass.**
+- **The wrap refutation was run three times and found 13, then 5, then 2.** It
+  is not a step you complete, it is a step you repeat until it comes back
+  empty. Round one found that BOTH arguments made for the WRONG distance
+  mapping were arithmetically invalid - each mixed two mappings - and that one
+  run had been solved using points belonging to its neighbour. Round two found
+  the fix had been applied in one of the two places the defect lived. Round
+  three found it applied in both places with a number nobody re-derived, which
+  is worse because it reads as corrected. **When you act on a refutation,
+  re-derive the arithmetic of your correction, not just its presence.**
 - **A Windows path in a non-raw Python string** turns `\2026` into an octal
   escape and writes byte `0x82`. It happened twice in one session. Use forward
   slashes.
