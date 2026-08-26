@@ -1471,8 +1471,29 @@ observation, not a missing hit; the hit counter on screen never skipped.
 | 0 | 68 | 137 | 206 | 275 | 344 | 414 | 483 | 552 | - | 691 | none, fails at hit 4 |
 
 "Fails at hit N" is the first hit at which the feasible interval for a constant
-`v` becomes empty. The whole solve is re-runnable from this table alone, which
-is the point of printing it.
+`v` becomes empty.
+
+**The solve needs one convention, so it is stated here rather than 300 lines
+away in 11.3.** Solve `round(n * v) == total_n`, and where `n * v` lands on an
+exact `.5` the display may round **either way** - both integers are accepted.
+Without that allowance four of these rows report a different failure hit (7
+paces fails at 6 rather than 7; 3, 2 and 0 paces at 3 rather than 4), which the
+session's own wrap refutation duly reproduced by taking the obvious reading.
+With it, every cell above is exactly reproducible. Ties are not a fudge - they
+are the whole reason 10.35 is pinned at all, since the only hit that ever
+disagreed between floor runs is the one that lands on `103.5`.
+
+**The 9-pace and 8-pace rows are identical including their gaps, and that was
+challenged.** Two runs sharing not just their totals but the exact hits the
+sampler missed is the same shape as data copied from a neighbour, which is
+precisely what the confession below describes. So it was re-sourced from the
+capture rather than defended: tiling the three floor windows out of
+`panel2/` gives 8 distinct states for the 10-pace run, 9 for the 8-pace and 12
+for the 9-pace, and reading them off yields observed hits `{6,7,8,10}`,
+`{1,2,4,5,7,8,10}` and `{1,2,4,5,7,8,10}` respectively - matching the table.
+The shared gap pattern is real and has a dull cause: the operator fired both
+runs at a steady cadence, and at 2 fps a steady cadence misses the same
+positions every time.
 
 **One correction made while producing it, and it matters more than the table
 does.** An earlier pass solved the 10-pace run using the points `(1,10)` and

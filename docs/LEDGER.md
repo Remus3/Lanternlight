@@ -84,6 +84,20 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0053 - 2026-08-25 - The wrap refutation was run a SECOND time on its own fixes and found five more - including that the first fix had been applied in one of the two places the defect lived
+
+**Evidence:**
+- Defect A, the worst: LL-0052 corrected the 'every distance was recorded at capture time' overclaim in the ledger, where append-only rules FORCED a correcting entry - and left the identical sentence standing in WAKEUP_NOTES.md, which is freely editable, was edited in the same commit, and is the first file a cold session reads. A correction filed only where the rules compel it is half a correction.
+- Defect B: the hand-off filed a commit count of 'fifteen' when the command printed in the same sentence returns fourteen. The first draft said 'six'. No count is filed there now - the line names the command instead.
+- Defect C: ROADMAP.md asserted in one place that item 4's acceptance was met by shipped code and in three others that its watcher was still to build, 895 lines apart. Item 4 is now CLOSED with the evidence attached, and item 4c named as the part genuinely left.
+- Defect D: FINDINGS 11.7 claimed its solve was 're-runnable from this table alone'. It was not - the tie convention sat 300 lines away in 11.3, and the refuter taking the obvious reading got four different failure hits. The convention is now stated beside the table.
+- Defect E: the 7b citation named LL-0049 and LL-0051 and omitted LL-0050.
+- Flagged residual F, resolved by re-sourcing rather than by argument: the 9-pace and 8-pace rows are byte-identical including their gap positions, which is the shape of copied data. Re-tiled from panel2/ the three floor windows give 8, 9 and 12 distinct states and observed hits {6,7,8,10}, {1,2,4,5,7,8,10} and {1,2,4,5,7,8,10}, matching the table. A steady firing cadence sampled at 2 fps misses the same positions every time.
+- Suite after all corrections, clean tree, __pycache__ purged: 1225 passed, 1225 collected, ruff clean. Still zero .py files changed all session.
+
+THE LESSON: an adversarial pass is not a step you complete, it is a step you REPEAT until it comes back empty. The first pass found 13 defects; acting on them introduced one new contradiction and left one old defect half-fixed, and only re-running found that.
+The corollary is sharper: the ONE defect the second pass called worst was the one where an append-only rule had forced a correction. The rule did its job in the ledger and nothing did its job in the editable file beside it. Being compelled to write something down is not the same as understanding why.
+
 ### LL-0052 - 2026-08-25 - Corrects LL-0050 and LL-0051 - the wrap refutation found two invalid arguments, an overstated discipline claim, and points invented to fill a gap in a run this project had just finished warning itself about
 
 **Evidence:**

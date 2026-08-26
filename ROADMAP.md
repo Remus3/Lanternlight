@@ -765,7 +765,7 @@ load-bearing on this log**. It is kept because the leaking shape exists and any
 new recogniser makes it reachable, and the docstring says exactly that rather
 than claiming credit it has not earned.
 
-## 4. `AvgPrice` market cache - PARSER DONE, watcher still to build
+## 4. `AvgPrice` market cache - CLOSED 2026-08-25
 
 **The file filled.** Measured 2026-08-09: 37 bytes to 343 bytes, carrying
 `[PriceTime]` plus 30 `cfgId=price` rows. The moment that only happens once has
@@ -787,10 +787,22 @@ followed a successful escape (14:53:35.681 to 14:53:36.656), with
 `CampData_<userId>.sav` 1.010s after that. An earlier draft said 1.7s, which
 came from subtracting a truncated whole second from a fractional one.
 
-**Remaining acceptance:** a watcher that snapshots the file on change with a
-timestamp and never writes to it. Given the measured trigger, it should expect a
-burst at camp re-entry and silence otherwise, and a poll interval chosen against
-that rather than against a guess.
+**Remaining acceptance was:** a watcher that snapshots the file on change with
+a timestamp and never writes to it. Given the measured trigger, it should
+expect a burst at camp re-entry and silence otherwise, and a poll interval
+chosen against that rather than against a guess.
+
+**CLOSED 2026-08-25, by code that had already shipped.**
+`lanternlight/savewatch.py` is a generic "copy every changed generation, never
+write to the source, refuse a destination inside a git working directory"
+watcher, and pointing it at `Saved/` does exactly what this item asked for -
+verified functionally during the session wrap, not by reading: it snapshots on
+change and not otherwise, embeds the timestamp and size in the filename, leaves
+the source's mtime and size untouched across repeated polls, and its
+`DestinationInsideRepoError` guard fires live.
+
+**Do not build a second watcher.** What is genuinely left is item **4c** -
+arming it without a session having to remember to.
 
 ## 7c. Read the training ground meter without a human reading it - READY
 
@@ -1637,8 +1649,8 @@ by reverting the fix and watching the new test go red.
 `lanternlight/tail.py` follows the log, so both the extractor and the live spine
 are shipped code rather than scratchpad analysis.
 
-**Item 7b is ANSWERED as of 2026-08-25** (ledger `LL-0049`, `LL-0051`,
-corrected by `LL-0052`). The training ground exists, it is **not a match** so it
+**Item 7b is ANSWERED as of 2026-08-25** (ledger `LL-0049`, `LL-0050` and
+`LL-0051`, all corrected by `LL-0052`). The training ground exists, it is **not a match** so it
 writes no `DamageCollectonDataSet`, and its damage surface is the on-screen
 **Total Damage** meter - a pixel rig, not a file rig. Outgoing damage is
 measured: **10.35 per hit** on the damage floor, plus a ten-point falloff curve.
@@ -1685,7 +1697,7 @@ roster in `ops/lanes.py` disagreed. What actually worked was a split - ingest
 built the artifact, safety owned the detectors and held the veto. Read the
 roster, not this file, for who owns a path.
 
-Item 4's watcher remains independent of everything else. Item 3 is closed.
+Item 4 is closed; item 4c, arming its watcher automatically, is not. Item 3 is closed.
 
 Each lane now carries its own queue in `lanes/<lane_id>.STATE.json`, so the
 right way to pick work is to read the state file of the lane that owns the

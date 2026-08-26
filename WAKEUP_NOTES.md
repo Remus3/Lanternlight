@@ -13,8 +13,10 @@ work exactly as the hand-off said it should be. **1225 tests at the start and
 purged. No code changed - this session was measurement and documentation, so
 the count is unchanged by design and a merge gate baseline of 1225 is correct.
 
-Ledger `LL-0049` through `LL-0052`. Fifteen commits from `9ac4b1b` to the
-wrap; `git log --oneline 9ac4b1b~1..HEAD` lists them.
+Ledger `LL-0049` through `LL-0052`. The session's commits run from `9ac4b1b`
+to the wrap - `git log --oneline 9ac4b1b~1..HEAD` lists them, and no count is
+filed here on purpose: the first draft of this line said "six", the second said
+"fifteen", and both were wrong. Count it if you need it.
 
 ## Check the world before anything else - it had moved three ways
 
@@ -123,8 +125,13 @@ was at 48 GB free when this session ended.
 
 ## The finished curve
 
-Ten distances, ten body hits each, distance recorded in the capture rather than
-recalled. Ledger `LL-0051`.
+Ten distances, ten body hits each. Ledger `LL-0051`, **corrected by `LL-0052`
+- read them together.** Six of the ten distances were recorded by the wide-shot
+poller at capture time; the 9, 7, 3 and 1-pace labels were assigned in clock
+order from the order the operator named them, which is an inference. It is
+forced by monotonicity and the check is written out in `docs/FINDINGS.md` 11.6,
+but it is not the same thing as a recorded label and must not be described as
+one.
 
 | paces | 10 | 9 | 8 | 7 | 6 | 4 | 3 | 2 | 1 | 0 |
 |---|---|---|---|---|---|---|---|---|---|---|
