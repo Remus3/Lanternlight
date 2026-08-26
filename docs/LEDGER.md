@@ -84,6 +84,21 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0050 - 2026-08-25 - The distance curve is clamped at both ends, the far body value is exactly 10.35, and a label that was inferred rather than recorded nearly published a wrong floor
+
+**Evidence:**
+- Body sweep, ten hits per run at 10, 8, 6, 4, 2 and 0 paces: 104, 104, 309, 546, 687, 691. Head sweep at the same distances: 123, 123, 350, 651, 799, 817, 818.
+- 10 and 8 paces give the IDENTICAL ten-hit total - a damage floor. 2 and 0 are within 0.6% - a ceiling. Ceiling is 6.64x the floor.
+- The floor value is exactly 10.35: three runs give the same series, the only hit that ever disagreed (104 vs 103 on the tenth) is the ONLY cumulative landing on an exact .5 rounding tie, and searching every two- and three-decimal value that fits all three runs with ties free returns exactly one candidate.
+- Solving round(n*v) == total_n per run: a constant value fits both floor runs and NO run on the slope. A delta wobbling by one is NOT evidence of variance - the floor runs wobble 10, 11, 10, 10, 11 at a constant 10.35.
+- No head run admits a constant value, including the two on the floor where body is perfectly constant. Head totals reproduce (123 twice, 817 vs 818, 122/123/123 earlier) while individual hits do not.
+- Full suite on a clean tree, __pycache__ purged: 1225 passed, 1225 collected, ruff clean. No code changed - measurement and docs only.
+
+THE FAILURE WORTH KEEPING: both sweeps produced SEVEN runs, not six. Distances were assigned by clock order and committed. The operator then labelled the head runs and listed six, implying an uncounted first run - which would have shifted every body run and deleted the floor. Every total was measured exactly; the LABEL broke, silently, because clock order looked like an obvious ordering and nobody had said it was.
+RESOLVED BY RE-RUNNING, not by argument or by asking the operator to remember harder. A wide-shot poller was armed (half-scale JPEG, 1 fps, ~140 KB a frame) and the ambiguous pair was redone: 10 paces and 8 paces, both 104. Record the independent variable in the same stream as the dependent one.
+A MEASUREMENT THAT FAILED, written up as failed: turning apparent bot size into a distance number saturated twice, returning exactly the band height both times. A ratio of 1.000 from a saturated read is indistinguishable from a real null.
+NO COEFFICIENT PUBLISHED. 10.35 is a floor value with its conditions attached - Blackarrow, right-click, standard arrow, this bot, buildid 24813185. A falloff formula from three interior points would be a story.
+
 ### LL-0049 - 2026-08-25 - ROADMAP 7b answered - the training ground is a PIXEL rig not a file rig, and the first outgoing damage measured is fractional and reproduced
 
 **Evidence:**
