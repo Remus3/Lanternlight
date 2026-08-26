@@ -1810,6 +1810,49 @@ must not manufacture a completion. Check `tests/test_loop_state.py` for the
 current pins before touching the semantics, and verify the guard is not vacuous
 by reverting the fix and watching the new test go red.
 
+## 10. The stack buff - measure it AT THE CEILING - READY, needs the client
+
+Opened 2026-08-26. **The highest-value open question this project has**, because
+it may mean an existing headline finding is an artifact.
+
+The operator spotted a buff icon that climbs to **5** while he keeps hitting the
+same target inside a time limit, centre screen above the energy bar. It is
+readable in the wide shots at `x 600-690, y 600-665` of a 1280x720 frame, and
+joining that crop to the meter crop by wall clock gives stack count and
+cumulative damage on one row. Nine ten-hit runs at one fixed floor distance came
+out monotone non-decreasing in stack count: 1 -> 135, 135; 2 -> 135; 3 -> 136;
+4 -> 136; 5 -> 137, 139, 139, 139. See `docs/FINDINGS.md` section 15.
+
+**Why it matters beyond itself.** `FINDINGS` 11.7 reports that a constant
+per-hit value fits every FLOOR run and no off-floor run, and reads that as
+constancy being a property of the clamp. **A buff of about 1% per stack
+reproduces that exact split with no distance term at all** - invisible at 10.35
+per hit where it rounds away, visible at 55 to 69 per hit where it does not. The
+ten-point curve is untouched; the INFERENCE is contested.
+
+**Measure it at the CEILING, not the floor.** At ~13.5 per hit a 1%-per-stack
+effect is ~0.135 and rounds away - which is why the floor runs above give a
+4-count spread and no more. At ~90 per hit it is ~0.9 per stack and ~3.6 at
+five, several display units clear of rounding.
+
+**Acceptance:**
+
+- Ten hits pinned at ONE stack against ten allowed to reach five, at the near
+  end of the curve, without moving between them. Report the solved interval for
+  each, not the eyeballed deltas.
+- A written statement of whether the buff survives switching targets: ten hits
+  alternating between two enemies. "With each hit on the same enemy" implies the
+  stack resets per enemy, so if it survives the switch it is not `Focus Fire`.
+- Either a per-stack figure with its interval, or a written negative saying the
+  effect cannot be separated from run-to-run variation at this precision.
+
+**Do not attribute it to `Focus Fire` without that target-switch test.** The
+talent was taken the same session, its tooltip scopes it to `Rapid Arrows`, and
+measured inter-hit intervals of 2.27 to 2.87 s prove drawn shots rather than
+Volley. Either its scope exceeds its tooltip or the buff is a base mechanic that
+was always there. **The logs that could settle it were destroyed before anything
+archived them.**
+
 ## OPS-8. The suite is not safe to run CONCURRENTLY - OPEN, and it breaks the gate
 
 Found 2026-08-26 by two independent refuters running the suite while other
