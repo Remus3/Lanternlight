@@ -804,6 +804,14 @@ the source's mtime and size untouched across repeated polls, and its
 **Do not build a second watcher.** What is genuinely left is item **4c** -
 arming it without a session having to remember to.
 
+**2026-08-25b, and it puts a question mark on the trigger.** 4c's armed watcher
+caught the file crossing 37 -> 157 bytes, the first time anything has watched
+it change rather than finding it already changed. It happened **2 s after a
+dungeon finished loading**, with the operator leaving camp - the opposite
+direction to the escape-then-camp switch this item measured. Neither
+observation is amended; the reading that fits both is a **level transition** in
+either direction, and it is n=1 on each side. `docs/FINDINGS.md` 12.2.
+
 ## 7c. Read the training ground meter without a human reading it - READY
 
 Opened 2026-08-25, straight out of the session that measured 10.35. The meter
@@ -839,6 +847,88 @@ a new state on every frame - a coarse column-occupancy signature is what
 actually dedupes. And a full-screen poller writes 4.8 MB a frame, 34 GB an
 hour; cropping the HUD rectangle at capture time costs about 150 KB a frame and
 loses nothing.
+
+### Groundwork MEASURED 2026-08-25b - the naive approach is refuted
+
+A reader was built far enough to find out what does not work, then **removed
+from the repository rather than left half-working**, because a reader that
+refuses every real frame is worse than no reader. The draft, its templates and
+the calibration scripts are kept at
+`C:/ll-captures/2026-08-25/meterread-wip/`. What follows is the part worth
+having: nobody should pay for these measurements twice.
+
+**The panel geometry, measured off the 6,439 captured crops** (500x310 RGB,
+`C:/ll-captures/2026-08-25/panel`):
+
+- Orange **Total Damage** digits occupy rows **y 98-118**; white **Progress
+  Record** digits occupy **y 255-273**.
+- The value is left-aligned near **x=51**; the hit count near **x=197**
+  (orange) or **x=200** (white). Splitting the two fields at **x=190** lands in
+  empty space in every frame examined.
+- Glyphs are **10-12 px wide and 17-21 px tall**, advancing about **12-13 px**.
+- **The colours separate the two rows for free:** Total Damage digits are
+  orange, Progress Record digits white. The word `Hit` is white in BOTH rows,
+  so it never pollutes the orange mask and always pollutes the white one.
+
+**A panel-down frame is not a dark frame.** The last frame of the capture has
+**zero** orange pixels while being *brighter* overall than a panel-up frame -
+bright fraction 0.0668 against 0.0153. So presence must be decided on the
+digits or the headers, never on brightness. The upside: zero orange pixels is
+itself a clean, correct refusal trigger.
+
+**Exact template matching is dead on arrival**, and now there is a number for
+it: ten digits produced **430 distinct exact bitmaps** across the capture,
+because the plate is semi-transparent and the scene behind it moves. Only a
+tolerant scorer has any chance.
+
+**The digit shapes ARE cleanly separable, and the templates exist.** Clustering
+normalised patches from the orange hit-count field gives **exactly 10**
+clusters, and they were labelled two independent ways that agreed on all ten:
+by reading the rendered ASCII art, and by the counter itself - seven clusters
+first appear at consecutive scan positions and read 1,2,3,4,5,6,7 under the
+shape labelling. Those templates are in the wip directory.
+
+**THE DEFECT THAT KILLED THE SIMPLE VERSION: one template set cannot serve
+four fields.** Scored against the orange-hit-field templates, the share of
+glyphs matching within distance 0.12 was:
+
+| field | n | matched |
+|---|---|---|
+| orange hit count (where the templates came from) | 367 | **100%** |
+| orange total | 599 | **40%** |
+| white progress total | 494 | **9%** |
+
+Two attempts to close that gap, both measured, both insufficient:
+
+- **Normalised cross-correlation made it worse** - orange total fell to 17%.
+  So the difference is not a linear intensity scaling.
+- **Fixed-row normalisation, a 3x3 blur and a +/-3 row shift search helped and
+  did not finish the job** - orange total reached 28% within 0.06, and the
+  white fields sat at a stubbornly *consistent* 0.11-0.12. A consistent
+  distance is the signature of a systematic rendering difference, not noise.
+
+**The root cause, seen by dumping the art side by side:** in the value field a
+glyph's top stroke is rendered fainter, so a hard colour threshold erodes it,
+and normalising to the glyph's own ink extent then rescales the whole glyph
+against a template built from an uneroded one. The same digit in two fields is
+the same shape at a different weight and offset.
+
+**So the next attempt should build one template set PER FIELD.** Each field
+sits at a fixed position over a fixed background, which is exactly why the
+orange hit field matches its own templates at distance 0.00-0.02. A first pass
+at per-field harvesting is also recorded, because it shows the remaining
+problem: at a fixed clustering distance of 0.05 the fields gave **11, 13 and 7**
+clusters rather than 10, 10 and 10, so **the clustering threshold cannot be a
+constant across fields either**. Labelling the extra sets is the tractable part
+- map each field's clusters onto the labelled orange set by nearest neighbour
+and **require the assignment to be a bijection onto 0-9**, which a wrong
+mapping would almost certainly fail.
+
+**None of this changes the acceptance**, and in particular the refusal
+requirement now has measured teeth: the two-threshold design (accept below,
+reject above, **refuse in between**) is what stops a damaged glyph from
+silently truncating a number into a shorter one that would look perfectly
+valid.
 
 ## 4c. Archive the log and the market cache on every session - CLOSED 2026-08-25b
 
@@ -980,6 +1070,16 @@ this project has ever held, and nobody published them - the game wrote them.
 **263 generations of that file are already captured** at `C:\ll-captures\saves\`,
 so a damage timeline for a whole 20-minute run exists right now without the
 operator doing anything.
+
+> **CONSTRAINT ADDED 2026-08-25b, and it changes what this item can promise.**
+> A full dungeon run was captured live and wrote **no**
+> `StandaloneSlot_<roleId>.sav` at all - the substring `StandaloneLevel` occurs
+> **zero** times in its log, against a `requestEnterStandaloneLevel` at the
+> start of the runs that did write one. **A dungeon run is therefore not a
+> guarantee of damage data.** Any reader must treat the file's absence as a
+> normal mode rather than a parse failure, and any plan of the form "play a
+> dungeon and collect damage" is underspecified until the mode is named. What
+> selects the two behaviours is **unmeasured**. `docs/FINDINGS.md` 12.1.
 
 Two properties of the field are measured and constrain any reader:
 

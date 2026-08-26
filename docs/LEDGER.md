@@ -84,6 +84,40 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0060 - 2026-08-25 - ROADMAP 7c groundwork measured and the naive reader REFUTED - a draft that refused every real frame was removed rather than shipped
+
+**Evidence:**
+- Panel geometry measured off 6,439 crops (500x310 RGB): orange Total Damage digits at rows y 98-118, white Progress Record digits at y 255-273, value left-aligned near x=51, hit count near x=197 (orange) / x=200 (white), split at x=190 lands in empty space in every frame examined. Glyphs 10-12 px wide, 17-21 px tall, advance 12-13 px.
+- Exact template matching is dead: ten digits produced 430 distinct exact bitmaps, because the plate is semi-transparent and the scene behind it moves.
+- The shapes ARE separable and the templates exist: clustering normalised patches from the orange hit field gives EXACTLY 10 clusters, labelled two independent ways that agreed on all ten - by reading the rendered ASCII art, and by the counter itself, seven clusters first appearing at consecutive scan positions and reading 1,2,3,4,5,6,7 under the shape labelling.
+- THE DEFECT: one template set cannot serve four fields. Matched within distance 0.12 - orange hit count (the source field) 367/367 = 100%; orange total 599 glyphs = 40%; white progress total 494 glyphs = 9%.
+- Two fixes measured and both insufficient: normalised cross-correlation made it WORSE (orange total fell to 17%), and fixed-row normalisation + 3x3 blur + a +/-3 row shift search reached only 28% within 0.06 while the white fields sat at a stubbornly CONSISTENT 0.11-0.12 - the signature of a systematic rendering difference, not noise.
+- ROOT CAUSE, found by dumping the glyph and the template as art side by side: in the value field the top stroke renders fainter, a hard colour threshold erodes it, and normalising to the glyph's own ink extent then rescales the whole glyph against a template built from an uneroded one.
+- A per-field harvest was tried and is recorded because it shows what is left: at a fixed clustering distance of 0.05 the three fields gave 11, 13 and 7 clusters rather than 10, 10, 10, so the clustering threshold cannot be a constant across fields either.
+- Also measured, and useful: a panel-DOWN frame has ZERO orange pixels while being BRIGHTER overall than a panel-up frame (bright fraction 0.0668 against 0.0153), so presence can never be decided on brightness - and zero orange pixels is itself a correct refusal trigger.
+
+WHY NOTHING SHIPPED: the draft refused every real frame, and a reader that refuses everything is worse than no reader - it looks like a capability. It was removed from the repository rather than left in place behind a caveat. The draft, its validated templates and the calibration scripts are kept OUTSIDE the repo at C:/ll-captures/2026-08-25/meterread-wip/ so the next attempt starts from them.
+The acceptance is unchanged and 7c stays READY. The refusal requirement now has measured teeth: a two-threshold design - accept below, reject above, REFUSE IN BETWEEN - is what stops a damaged glyph from silently truncating a number into a shorter one that would look perfectly valid.
+The next attempt's shape is specified: one template set per field, labelled by mapping each field's clusters onto the labelled orange set by nearest neighbour and REQUIRING the assignment to be a bijection onto 0-9, which a wrong mapping would almost certainly fail.
+
+### LL-0059 - 2026-08-25 - A full dungeon run wrote NO transient save - item 7's damage source is MODE-DEPENDENT, and it is not the patch that did it
+
+**Evidence:**
+- Captured live while the operator played, with 4c's watchers armed from session start. BP_Dungeon_GameMode on /Game/Project/Maps/Map_2/Whitewoods_Day, levelId=113, matchId=11114, solo - exactly one roleId anywhere in the log.
+- Timeline UTC: InMatch 02:54:56, MatchSuccessful 02:55:57, EnterBattle 02:56:01, 'Welcomed by server' + LoadMap 02:56:19.
+- NO StandaloneSlot_<roleId>.sav ever appeared. SaveGames/ was polled every 3 s for the whole run and StandaloneLevel/ stayed empty. A find across the entire Saved/ tree returned exactly three files touched in twenty minutes: CampData, the market cache, and the log.
+- THE DISCRIMINATOR: the substring 'StandaloneLevel' occurs ZERO times in this run's log, against 'TS.Dungeon: StandaloneLevel requestEnterStandaloneLevel: match id 11111' opening the 2026-08-09 runs that DID write the save. So the transient save follows a standalone-level REQUEST, not 'being in a dungeon'.
+- THE NEGATIVE WAS PATTERN-CHECKED BEFORE IT WAS BELIEVED, per this repo's own anti-pattern: the same grep returns 2 against tests/test_logparse.py, which contains the literal line. An empty grep is a claim about the pattern, so the pattern was shown to work first.
+- Observed difference, recorded not concluded: the runs that wrote the save carried a four-axis map URL (levelId=119, roomModeId=0, matchType=1, matchId=11112). This run carries two - levelId=113, matchId=11114 - with no roomModeId and no matchType anywhere in the log.
+- Also measured: AvgPrice_937566.ini went 37 -> 157 bytes at 02:56:21 UTC, two seconds after the dungeon finished loading. Both generations are archived. This is the first time anything has watched that file CHANGE rather than finding it already changed.
+- Also recorded, uninterpreted: 'TS.UI: onPartEscape' and 'TS.Dungeon: getPartEscape', a third escape noun beside GroveSprite and FixEscapeBell/WindChime.
+- Written up as docs/FINDINGS.md section 12; ROADMAP items 4 and 7 carry the consequence.
+
+THE LOAD-BEARING CONSEQUENCE for Emberforge: a dungeon run is NOT a guarantee of damage data. A reader must treat a missing StandaloneSlot file as a NORMAL MODE rather than a parse failure, and any plan of the form 'play a dungeon and collect damage' is underspecified until the mode is named.
+WHAT THIS DELIBERATELY DOES NOT CLAIM: not that the 2026-08-19 patch removed the surface. The simpler explanation - a second dungeon mode that never requests a standalone level - fits every observation, and blaming the patch would have been the exciting wrong answer. What selects the two behaviours is unmeasured, and the operator was not asked which mode he chose, so no mode name is filed.
+A TENSION WORTH NOT SMOOTHING: ROADMAP item 4 filed the market-cache write as triggered by RETURNING TO CAMP, measured 0.975 s after a camp level-switch following an escape. This observation is the opposite direction - leaving camp, 2 s after the dungeon loaded. Both are n=1. The reading that fits both is a level transition in either direction; item 4's measurement is not amended and the hypothesis is filed as a hypothesis.
+n = 1 run. Nothing here is a rule yet.
+
 ### LL-0058 - 2026-08-25 - Refutation pass on LL-0056 and LL-0057 while writing them - five defects, all mine, and the two worst were over-claims of continuity I never observed
 
 **Evidence:**
