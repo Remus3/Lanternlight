@@ -1381,6 +1381,22 @@ flat floor at 104, a slope that multiplies by about **1.3x per pace** for four
 consecutive paces, and a flat ceiling at 687-691. The ceiling plateau spans
 **four** distances - 3, 2, 1 and 0 paces - with a total spread of 0.6%.
 
+**A note on how the last four runs were labelled, since an inferred label
+already cost this document once (11.10).** The operator reported "9 and 7 done"
+and later "3 and 1 pace done", naming them in that order, and the runs were
+assigned in clock order accordingly. That is an inference - but unlike the
+earlier one it is **forced by monotonicity**, so it is checkable rather than
+assumed:
+
+- The 9/7 pair read 104 and 231. Damage rises as range closes, and 8 paces
+  reads 104. If the assignment were reversed, 7 paces would read 104 while 8
+  paces read 104 and 6 paces read 309 - putting the nearer shot at the floor
+  and making the curve non-monotone across a single pace. Only one assignment
+  survives.
+- The 3/1 pair read 687 and 689. Both sit on the ceiling, so the choice barely
+  moves anything, and the assignment taken is the one where the nearer shot is
+  the higher of the two.
+
 **The floor is a step, not a tangent.** If the 1.3x-per-pace slope simply
 continued outward from 7 paces, 8 paces would read about `231 / 1.33 = 174`,
 not 104. The measured floor is far below the extrapolation, so the game is not
