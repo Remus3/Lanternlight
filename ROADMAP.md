@@ -792,6 +792,67 @@ timestamp and never writes to it. Given the measured trigger, it should expect a
 burst at camp re-entry and silence otherwise, and a poll interval chosen against
 that rather than against a guess.
 
+## 7c. Read the training ground meter without a human reading it - READY
+
+Opened 2026-08-25, straight out of the session that measured 10.35. The meter
+is the only damage surface the training ground has, and every number in
+`docs/FINDINGS.md` section 11 was read by a human looking at tiled screenshots.
+That worked and it does not scale: a five-distance sweep cost more attention
+than the measurement did, and attention is the thing this project runs out of.
+
+**Tesseract is not installed and is not to be installed for this.** Downloading
+a binary to read eight glyphs off a fixed HUD is the wrong trade. The digits
+are a fixed font at fixed positions in a fixed rectangle, which is the easiest
+possible template-matching problem.
+
+**Acceptance:**
+
+- A reader that takes a captured panel image and returns the total, the hit
+  count, and the Progress Record pair, or **refuses**. Refusing is a required
+  behaviour, not a fallback - a misread digit is indistinguishable from a
+  measurement, which is exactly the failure mode this project's doctrine
+  exists to prevent.
+- Ground truth for the test comes from this session's capture: the frames under
+  `C:/ll-captures/2026-08-25/panel` include series already read by hand and
+  written into section 11, so a test can assert the reader reproduces
+  `10 21 31 41 52 62 72 83 93 103` and `55 109 164 219 275 330 386 441 496 552`
+  from the real frames rather than from synthesised ones.
+- **Prove the guard is not vacuous**: feed it a frame where the panel is down
+  and assert it refuses, and corrupt one glyph and assert it refuses rather
+  than guessing a neighbour.
+
+**Two traps already measured while doing this by hand.** The panel plate is
+semi-transparent, so hashing its pixels keys on the scene behind it and reports
+a new state on every frame - a coarse column-occupancy signature is what
+actually dedupes. And a full-screen poller writes 4.8 MB a frame, 34 GB an
+hour; cropping the HUD rectangle at capture time costs about 150 KB a frame and
+loses nothing.
+
+## 4c. Archive the log and the market cache on every session - READY, no new code
+
+Opened 2026-08-25 after measuring that the 6.1 MB log from 2026-08-09 no longer
+exists. The game **truncates its log on launch and keeps no backup** - one file
+in `Logs/`, nothing beside it (`docs/FINDINGS.md` 11.8). Every line not copied
+out before the next launch is gone, and this project's own findings now rest on
+prose whose raw evidence was destroyed.
+
+`lanternlight/savewatch.py` already solves it. It is a generic "copy every
+changed generation, never write to the source, refuse a destination inside a
+git working directory" watcher, and pointing it at `Logs/` and at `Saved/` was
+enough this session to archive the log every five minutes and to snapshot
+`AvgPrice_<id>.ini` on change - which is item 4's remaining acceptance, met by
+code that already shipped rather than by a second watcher.
+
+**Acceptance:** one entry point that arms the watchers for a session - log,
+`SaveGames/`, `Saved/` root and `StandaloneLevel/` - with the poll intervals
+chosen against measured triggers rather than guessed (the transient save needs
+seconds, the log does not, and a 3-second cadence on a growing log copies
+gigabytes). A test that the destination guard refuses a path inside a checkout,
+and a written note of what each interval is for.
+
+**Do not** re-implement the copying. The one thing this item adds is that
+arming it is not something a session has to remember.
+
 ## 4b. Ammo-family and talent measurement - READY, cheap, needs the client
 
 Opened 2026-08-09 after the talent and skills screens were captured. The class's
