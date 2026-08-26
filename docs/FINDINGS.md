@@ -1836,3 +1836,97 @@ unmeasured.** Do not write a rule from n=1 in either direction.
   `Logs/` wholesale, every future launch records whether a backup appeared
   beside the log. Nobody has to run an experiment; the question answers itself
   over enough launches.
+
+## 12. A real dungeon run that wrote NO transient save, 2026-08-25b
+
+Captured live while the operator played, with the watchers of ROADMAP 4c armed
+from the start of the session. **n = 1 run**, and every number below was read
+off the live log and the live save directory as it happened.
+
+**The run.** `BP_Dungeon_GameMode` on `/Game/Project/Maps/Map_2/Whitewoods_Day`
+- the same map as the 2026-08-09 runs - `levelId=113`, `matchId=11114`. Solo:
+exactly **one** roleId appears anywhere in the log.
+
+| event | UTC |
+|---|---|
+| `match state changed to InMatch` | 02:54:56 |
+| `match state changed to MatchSuccessful` | 02:55:57 |
+| `match state changed to EnterBattle` | 02:56:01 |
+| `LogNet: Welcomed by server` + `LoadMap` Whitewoods_Day | 02:56:19 |
+
+### 12.1 The transient save was never written, and that is NOT a patch regression
+
+`StandaloneSlot_<roleId>.sav` is the file that carries
+`DamageCollectonDataSet`, which is the entire basis of ROADMAP item 7. Section
+10 and item 1 measured it appearing **17 seconds** after `EnterBattle` on
+2026-08-09 and being deleted when the run ended.
+
+**On this run it never appeared at all.** `SaveGames/` was polled every 3
+seconds by an armed watcher for the whole run, and `StandaloneLevel/` stayed
+empty throughout. A `find` across the entire `Saved/` tree during the run
+returned exactly three files touched in twenty minutes: `CampData`, the market
+cache, and the log itself.
+
+**The explanation is not the 2026-08-19 patch.** The substring `StandaloneLevel`
+occurs **zero** times in this run's log, whereas the 2026-08-09 runs opened
+with `TS.Dungeon: StandaloneLevel requestEnterStandaloneLevel: match id 11111`.
+The pattern was checked against a file that does contain it before the negative
+was believed - `tests/test_logparse.py` returns 2 - so this is a measured
+absence and not a typo in a grep.
+
+**So the transient save is not a property of "being in a dungeon".** It follows
+a *standalone level request*, and this dungeon never made one. That is the
+load-bearing consequence and it is a constraint on Emberforge:
+
+> **A dungeon run is not a guarantee of damage data.** Item 7's source exists
+> in some modes and not others, so a reader must treat the file's absence as a
+> normal mode rather than as a failure, and any plan that says "play a dungeon
+> and collect damage" is underspecified until the mode is named.
+
+**What differs between the two, observed rather than concluded:** the map URL
+of the runs that DID write the save carried four axes -
+`?levelId=119&roomModeId=0&matchType=1&matchId=11112`. This run's URL carries
+two: `?levelId=113?matchId=11114`, with **no `roomModeId` and no `matchType`
+anywhere in the log**. Whether the discriminator is `levelId`, the absent
+`matchType`, or something not in the URL at all is **unmeasured**, and the
+operator has not been asked which mode he chose, so no mode name is recorded
+here rather than a guessed one.
+
+### 12.2 The market cache was finally watched changing
+
+`AvgPrice_937566.ini` had been seen only at 37 bytes (empty) and 343 bytes
+(filled), with ROADMAP item 4 recording that **nothing had ever watched it
+change**. It has now been watched.
+
+It went from **37 to 157 bytes at 02:56:21 UTC** - twenty seconds after
+`EnterBattle` and **two seconds after the map finished loading**. Both
+generations are archived, the 37-byte state at 21:29 and 21:46 local and the
+157-byte state at 21:56.
+
+**This sits in tension with what ROADMAP item 4 already filed, and the tension
+is the interesting part.** Item 4 measured the write happening **0.975 s after
+the camp level-switch that followed a successful escape** and concluded the
+trigger is **returning to camp**. This observation is the opposite direction:
+the operator was leaving camp, and the write landed 2 s after the DUNGEON
+finished loading.
+
+Both are single observations of a real event, and they are not in conflict
+unless "returning to camp" is read as exclusive. The reading that fits both is
+that the write follows a **level transition**, and the two measured occasions
+happen to be one in each direction. That is a hypothesis with n=1 on each side,
+so it is recorded as one and item 4's own measurement is not amended.
+
+What is genuinely new is that the file was **watched crossing between states**
+for the first time - the previous record had only the two endpoints, 37 bytes
+and 343, with nothing observing the change. Whether leaving the dungeon or a
+later launch is what empties it again is still unmeasured, and the watcher is
+armed and will now catch that too, which is the whole argument of item 4c.
+
+### 12.3 A third escape noun
+
+`TS.UI: onPartEscape` and `TS.Dungeon: getPartEscape` appear in this run.
+Section 9 recorded `GroveSprite` and `FixEscapeBell` / `WindChime` as the
+escape mechanics seen so far. `PartEscape` is recorded here as an observed
+token and is **not interpreted** - "part" may mean partial, or a party, and
+nothing in this capture separates those.
+
