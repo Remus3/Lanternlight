@@ -13,7 +13,7 @@ work exactly as the hand-off said it should be. **1225 tests at the start and
 purged. No code changed - this session was measurement and documentation, so
 the count is unchanged by design and a merge gate baseline of 1225 is correct.
 
-Ledger `LL-0049` through `LL-0052`. The session's commits run from `9ac4b1b`
+Ledger `LL-0049` through `LL-0054`. The session's commits run from `9ac4b1b`
 to the wrap - `git log --oneline 9ac4b1b~1..HEAD` lists them, and no count is
 filed here on purpose: the first draft of this line said "six", the second said
 "fifteen", and both were wrong. Count it if you need it.
@@ -126,12 +126,26 @@ was at 48 GB free when this session ended.
 ## The finished curve
 
 Ten distances, ten body hits each. Ledger `LL-0051`, **corrected by `LL-0052`
-- read them together.** Six of the ten distances were recorded by the wide-shot
-poller at capture time; the 9, 7, 3 and 1-pace labels were assigned in clock
-order from the order the operator named them, which is an inference. It is
-forced by monotonicity and the check is written out in `docs/FINDINGS.md` 11.6,
-but it is not the same thing as a recorded label and must not be described as
-one.
+and `LL-0054` - read them together.**
+
+**How each label was actually established, since two earlier drafts of this
+paragraph got it wrong:**
+
+- **Two** distances, the 10 and 8-pace pair, had their label fixed by protocol
+  **before** firing - that is the deliberate re-run in `docs/FINDINGS.md` 11.11.
+- **Eight** labels were assigned by clock order from the order the operator
+  named the runs. The 9, 7, 3 and 1-pace ones are forced by monotonicity and
+  that check is written out in 11.6; the 6, 4, 2 and 0-pace ones come from the
+  original sweep, whose mapping 11.11 settled.
+- **Six** runs - 10, 9, 8, 7, 3 and 1 paces - were fired while the wide-shot
+  poller was running, so the operator's position is on film for them. The other
+  four predate the poller, which started at 19:32:34; those runs were fired
+  between 19:14 and 19:16.
+- **No distance was ever read off the wide shot.** The attempt to turn apparent
+  size into a number saturated twice and is written up as failed in 11.11.
+  Having the position on film is not a recorded label; it is a re-checkable
+  record that a human can settle a dispute against, which is what it was used
+  for.
 
 | paces | 10 | 9 | 8 | 7 | 6 | 4 | 3 | 2 | 1 | 0 |
 |---|---|---|---|---|---|---|---|---|---|---|

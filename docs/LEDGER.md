@@ -84,6 +84,20 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0054 - 2026-08-25 - Third refutation pass - the correction from the second pass was applied in both places and its arithmetic was still wrong, which reads as fixed and is worse
+
+**Evidence:**
+- LL-0053 replaced a false sentence in WAKEUP_NOTES.md with 'six of the ten distances were recorded by the wide-shot poller at capture time'. The six was taken to be {10, 8, 6, 4, 2, 0}. Four of those were fired BEFORE the poller existed: the scene capture's own first frame is s00000_19.32.34.jpg and the 6, 4, 2 and 0-pace runs were fired at 19:14:01, 19:14:38, 19:15:15 and 19:15:53.
+- Re-derived from the poller window: SIX runs - 10, 9, 8, 7, 3, 1 paces - were fired while the wide shot was running, so 'six' was accidentally the right count attached to the wrong SET and to the wrong PROPERTY.
+- The honest breakdown, now in the hand-off: two labels fixed by protocol before firing (the 11.11 re-run at 10 and 8 paces), eight assigned by clock order, six runs with the operator's position on film, and NO distance ever read off the wide shot - that measurement saturated twice.
+- Also corrected: WAKEUP_NOTES.md filed the ledger range as LL-0049 through LL-0052, omitting LL-0053. Third wrong version of that one line - it previously said 'LL-0049' alone, then filed a commit count of fifteen against a command returning fourteen.
+- Corrects two overstatements in LL-0053 itself, which is append-only: it said ROADMAP asserted item 4's watcher was still to build in 'three others' when two of the three sites asserted it and the third was a stale framing; and it called deduped frames 'distinct states' when the distinct readings in those windows are 4, 8 and 8.
+- Suite after the corrections: 1225 passed, 1225 collected, ruff clean, zero .py changed all session.
+
+THE LESSON, and it is a sharper one than LL-0053's: the second pass's failure mode was 'fixed in one of the two places it lived'. The third pass's was 'fixed in BOTH places, with a number nobody re-derived'. That is worse, because it now READS as corrected. When you act on a refutation, re-derive the arithmetic of the correction - do not just confirm the correction is present.
+Three rounds found 13, then 5, then 2. Diminishing, and not yet empty. The pass is not a step you complete.
+Not audited by any pass: NEXT_SESSION_PROMPT.md, rewritten this session at 232 lines. The refuter said so explicitly rather than implying coverage it did not have. A cold session should treat it as unreviewed.
+
 ### LL-0053 - 2026-08-25 - The wrap refutation was run a SECOND time on its own fixes and found five more - including that the first fix had been applied in one of the two places the defect lived
 
 **Evidence:**
