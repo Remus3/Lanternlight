@@ -1333,12 +1333,10 @@ on wall clock the same way class ids were bound.
 
 ### 11.6 The distance curve, measured at six points in one controlled sweep
 
-> **CONTESTED AS OF 2026-08-25 - do not cite the floor from this section
-> without reading 11.10 first.** The run-to-distance mapping below is an
-> inference from clock order, not an operator statement, and the headshot sweep
-> gives a reason to doubt it. If the mapping is off by one the floor disappears
-> entirely. The totals themselves are measured and are not in question; what
-> each one's distance was, is.
+> **CONTESTED AND THEN RESOLVED, 2026-08-25 - see 11.10 for how.** The mapping
+> below was an inference from clock order and was challenged within the hour.
+> It was re-tested with a labelled pair of runs under wide-shot capture and it
+> held: two runs at two different distances both read 104. The floor is real.
 
 
 The operator ran a full sweep - 10, 8, 6, 4, 2 and 0 paces, ten body hits at
@@ -1574,3 +1572,37 @@ under that capture.
 depends on a variable the instrument does not record, the fix is to record the
 variable, not to ask someone to remember it. Two mappings from one honest
 operator is not a failure of the operator.
+
+### 11.11 How the mapping was resolved, including a measurement that failed
+
+**The test.** A wide-shot poller was started - half-scale JPEG at 1 fps, about
+140 KB a frame - and the operator was asked to redo just the ambiguous pair:
+ten body hits at 10 paces, reset, ten body hits at 8 paces. Nothing was asked
+of his memory.
+
+**The result: both runs read 104.** Identical ten-hit totals at two distances
+the operator walked between. That is the floor, measured under a label recorded
+at the time rather than reconstructed afterwards, and it is the mapping 11.6
+was committed on. The operator had also corrected himself independently -
+"the 10 pace and 8 pace were the same" - and the runs agree with the
+correction.
+
+**A measurement that did NOT work, recorded because a silent failure here would
+have been worse than no measurement.** The plan was to turn "the target looks
+closer in run 2" into a number by thresholding the bot's dark silhouette
+against the lit sandstone wall and comparing apparent heights. It was attempted
+twice and **saturated both times** - the first attempt returned exactly the
+band height for both frames, the second returned exactly the band height again
+after the region was tightened, because the chosen region is mostly dark cave
+rather than silhouette-against-wall. A ratio of 1.000 from a saturated read is
+indistinguishable from a real null.
+
+So the distance difference between the two runs rests on the operator having
+walked between them and on the frames looking different, **not** on a measured
+apparent size. Anyone wanting that number should put a fixed high-contrast
+marker in frame rather than trying to segment a character against a cave.
+
+**What actually made this resolvable** was not cleverness about pixels. It was
+recording the independent variable at capture time, in the same stream as the
+dependent one. That is the whole lesson of 11.10 and it cost about 140 KB a
+frame.
