@@ -40,9 +40,12 @@ A fresh clone runs zero git hooks until that first command runs. The tracked
 **2026-08-25. Suite 1225 passed / 1225 collected, ruff clean**, measured on a
 clean tree with `__pycache__` purged - that is your merge-gate baseline, and
 re-measure it yourself before dispatching work rather than trusting this line.
-Ledger `LL-0049` through `LL-0054`. **Read the corrections first** - `LL-0052`,
-`LL-0053` and `LL-0054` each correct the entries before them, and `LL-0054` is
-the one that explains why.
+The session's ledger entries start at `LL-0049` and run to the end of the file's
+newest block - `grep -n '^### LL-00' docs/LEDGER.md | head` lists them, and no
+end-point is filed here because that literal went stale three times in one
+session. **Read the corrections first.** Several entries correct the ones before
+them; the correcting entries are the ones that explain why the measurements are
+trustworthy, and they are more useful than the entries they correct.
 
 **No code changed all session.** It was measurement and documentation, so the
 test count is unchanged by design.
@@ -75,8 +78,9 @@ That is Bash, not PowerShell - this repo's shell is PowerShell by default and
 launch with no backup kept, and it took one deleted 6.1 MB log to learn that.
 Pointing `lanternlight.savewatch.SaveWatcher` at the `Logs/` directory with a
 long poll interval is the whole job - the 2026-08-25 session's final 5,080,313
-byte log was archived four minutes before the operator quit, byte-identical to
-the live file, and therefore still exists.
+byte log sits under `C:/ll-captures/2026-08-25/logs/`, verified byte-identical
+to the live file by sha256 (`1c44235c...`), and therefore survives the next
+launch's truncation.
 
 ## ROADMAP 7b is ANSWERED - what that bought
 
