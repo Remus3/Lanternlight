@@ -1015,6 +1015,26 @@ whole kit is gated on ammo families, and the following are **unmeasured**:
 `docs/OBSERVED_IDS.md` with its method, or written up as a measured negative
 naming what was tried. A guide site does not close any of these.
 
+**PARTLY ADVANCED 2026-08-25b, and one sub-question now has a clean experiment.**
+Captured at level 5; full write-up in `docs/OBSERVED_IDS.md`.
+
+- **The types-versus-charges question is still NOT separated, but it is now
+  separable.** At level 5 the operator holds **exactly one** Hunter's Arrow -
+  unlocked, not equipped, with four still locked. `Battle-fed` requires
+  "carrying at least 2 Hunter's Arrows". **So: equip that single Hunter's arrow,
+  take Battle-fed, and watch whether it fires.** One arrow type carrying
+  multiple charges is precisely the case that tells the two readings apart, and
+  it did not exist at level 2 when the operator had 2 types and 3 charges at
+  once. **Do not spend the point on this alone** - it costs a talent point to
+  answer, so fold it in only when Battle-fed is worth taking anyway.
+- **A slot-state reading rule was established** and it matters for every future
+  loadout count: gold border = equipped, dashed border = owned but not equipped,
+  padlock = locked. Counting the middle state as owned-and-active would
+  overstate a loadout, which is exactly how a talent gate gets mis-evaluated.
+- **Still unmeasured:** how arrows are acquired, and how `roll` differs from
+  `dodge`. The Dodge nodes remain the only source on the latter and still do not
+  say.
+
 ## 5. Sorcerer single-weapon question - OPEN
 
 Four classes surfaced two weapon config ids in character creation, two surfaced
