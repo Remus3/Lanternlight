@@ -5,6 +5,72 @@ fidelity and archive older ones rather than deleting them.
 
 ---
 
+# Session 2026-08-26b - OPS-8 closed, and the filed mechanism was wrong
+
+Client was **closed** all session, so this is the fallback item from the
+hand-off, worked end to end. No capture, no game data touched.
+
+**Suite 1252 passed / 1252 collected**, ruff clean, measured on a clean tree
+with `__pycache__` purged. Baseline was 1244; the +8 is the OPS-8 regression
+set. Ledger entry `LL-0066`.
+
+## What shipped - OPS-8 is CLOSED
+
+The suite is now safe to run concurrently: **24 consecutive green runs at 6-way
+concurrency of the full suite**, against a **measured 9-of-10-red baseline**.
+That matters because `ops/merge_gate.py` re-runs pytest and CLAUDE.md mandates
+a parallel multi-agent workflow, so the gate could redden for reasons unrelated
+to the work it gates.
+
+Guard probes are now `_guard_probe_<pid>_<stem>`, still planted at the real
+repository root. `.gitignore` ignores the prefix, which is **one lever for all
+three** git-based walkers in this repo, and `tests/_tracked.py` adds this
+process's own probes back so a probe is still scanned by the guard that planted
+it.
+
+## Read this before trusting the next filed mechanism
+
+**The mechanism OPS-8 recorded was wrong about the dominant case**, and
+re-measuring before fixing is the only reason that surfaced. Neither of the two
+tests it named as casualties failed even once in the baseline. The real failure
+is a **shared probe PATH** - two suites planting the same file, the first to
+reach its `finally` unlinking the other's evidence mid-scan.
+
+**The fix set the same trap for itself.** The first regression tests named their
+foreign probe `_guard_probe_0_...`, a fixed path, reasoning that pid 0 is never
+a live process. Six concurrent suites fought over that one file and it died on
+`WinError 32`: 17 of 18 green, red for exactly the bug under test, inside the
+test for it. Nothing sequential could have seen it.
+
+**A mutation that survived is the other thing worth carrying.**
+`_is_foreign_probe()` returning `False` left the whole suite green - the
+fallback filter was decoration, because every test ran on the git path where
+`.gitignore` had already removed the file. Green tests said nothing about it.
+Only mutating found it, and a test was written for it.
+
+**And the CRLF trap was re-paid.** Python `write_text` turned all five edited
+files fully CRLF against a `.gitattributes` that mandates LF. `git diff --stat`
+hid it, because `text=auto` normalises the blob. Only `grep -c` for CR showed
+it. CLAUDE.md names this trap and it still landed.
+
+## New open item - OPS-12, two ops ids each name two items
+
+`OPS-7` and `OPS-8` were **each allocated twice**. Both were spent on items
+closed 2026-08-12 (`LL-0039`, `LL-0040`) and both reallocated later. Numbering
+resumed from the highest OPEN id rather than the highest ever allocated.
+Renumbering is refused on `LL-0040`'s own reasoning, so all four references are
+signposted and `OPS-12` carries the acceptance: allocating a spent `OPS-` id
+must fail a test, with the spent set derived by walking the documents at run
+time rather than from a checked-in list.
+
+## Still open, unchanged
+
+**ROADMAP 10 - the stack buff, measured AT THE CEILING - is still the
+highest-value item and still needs the client.** Nothing this session touched
+it. Everything the previous hand-off says about it stands.
+
+---
+
 # Session 2026-08-25/26 - the operator played all session, and found the mechanic himself
 
 The first session where the operator was in the client the whole time, and the

@@ -36,14 +36,16 @@ A fresh clone runs zero git hooks until that first command runs. The tracked
 
 ## Where the last session left it
 
-**Suite 1244 passed / 1244 collected, ruff clean**, measured on a clean tree
+**Suite 1252 passed / 1252 collected, ruff clean**, measured on a clean tree
 with `__pycache__` purged - that is your merge-gate baseline, and re-measure it
 yourself before dispatching work rather than trusting this line.
 
-The session's ledger entries start at **`LL-0056`**. **Read `LL-0064` FIRST.**
-It is an independent four-agent refutation pass and it **overturns claims the
-earlier entries make**. Reading LL-0056 through LL-0063 without it will leave
-you believing things that were withdrawn.
+The ledger runs to **`LL-0066`**. Read **`LL-0064`** and **`LL-0066`** first.
+LL-0064 is an independent four-agent refutation pass that **overturns claims
+earlier entries make** - reading LL-0056 through LL-0063 without it leaves you
+believing things that were withdrawn. LL-0066 closes OPS-8 and, more usefully,
+records that **the mechanism OPS-8 itself had on file was wrong about the
+dominant case**, found only by re-measuring before fixing.
 
 ## Check the world before anything else
 
@@ -94,10 +96,16 @@ Acceptance is in ROADMAP 10, including the target-switch test that separates
 without it**: the tooltip scopes that talent to `Rapid Arrows`, and 2.27-2.87 s
 inter-hit intervals prove drawn shots, not Volley.
 
-**If the client is shut:** work **OPS-8** (the suite reddens under concurrent
-pytest runs, which breaks the merge gate this project depends on) or **7c**
-(the meter reader needs one template set PER FIELD; the groundwork and the
-failure modes are written up).
+**If the client is shut:** work **7c** (the meter reader needs one template set
+PER FIELD; the groundwork and the failure modes are written up) or **OPS-12**
+(two `OPS-` ids each name two different items; the acceptance is a test that
+refuses an already-spent id, deriving the spent set by walking the documents
+rather than from a checked-in list).
+
+**OPS-8 is CLOSED as of 2026-08-26b.** The suite now survives 6-way concurrent
+pytest - 24 consecutive green full-suite runs against a measured 9-of-10-red
+baseline - so the merge gate no longer reddens for reasons unrelated to the
+work it gates.
 
 ## Traps this session paid for
 
@@ -123,6 +131,19 @@ failure modes are written up).
 - **An over-constrained grep gives a false negative.** One here did, and was
   caught only by re-checking with a positive control. Always prove the pattern
   on a file that DOES contain the string.
+- **A FILED MECHANISM IS A HYPOTHESIS, exactly like a filed count.** OPS-8's
+  write-up named two casualty tests. Re-measured before any fix, **neither
+  failed even once** and the real mode was a different one. Re-run the
+  measurement; do not fix what the write-up says is broken.
+- **A green suite says nothing about a branch no test reaches.** Mutating
+  `_is_foreign_probe()` to `return False` left everything green - it was
+  decoration. Mutate the thing you just wrote, not only the thing you changed.
+- **The fix can set the bug's own trap.** The OPS-8 regression tests used a
+  fixed probe path and died on `WinError 32` under concurrency - the bug under
+  test, inside the test for it. Nothing sequential could see it.
+- **`write_text` on Windows turns a whole file CRLF**, against a
+  `.gitattributes` mandating LF. `git diff --stat` hides it because `text=auto`
+  normalises the blob. Check with `grep -c` for CR; write with `write_bytes`.
 
 ## Operator context worth having
 

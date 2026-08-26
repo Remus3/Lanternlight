@@ -375,6 +375,9 @@ away:**
   collision test goes red until the two are reconciled by hand. That is the
   over-tightening hazard this item named, arriving through editing rather than
   through re-running. Recorded as `OPS-8`, **now CLOSED** - ledger `LL-0040`.
+  **That is the FIRST `OPS-8`.** The id was later reallocated to an unrelated
+  item, the concurrent-suite failure closed 2026-08-26b. Two items, one id -
+  see `OPS-12`.
 
   **The decision it asked for, taken: POLICY STANDS.** An integrated entry is
   never edited; a correction is a **new** entry. Auto-reconciliation was
@@ -1789,6 +1792,9 @@ as a measured negative with its limit attached so nobody re-derives it.
 
 ## OPS-7. `advance_cycle` silently credits an item that was never started - OPEN
 
+**This is the SECOND `OPS-7`.** The id was already spent on a fragment-path
+defect closed 2026-08-12 (ledger `LL-0039`). Two items, one id - see `OPS-12`.
+
 Hit for real during the `LL-0048` wrap, and caught only because the return value
 was printed and read. `ops.loop.state.advance_cycle(directive, item="7b")`
 defaults to `complete_current=True`, which moves the **previous** cycle's
@@ -1853,7 +1859,11 @@ Volley. Either its scope exceeds its tooltip or the buff is a base mechanic that
 was always there. **The logs that could settle it were destroyed before anything
 archived them.**
 
-## OPS-8. The suite is not safe to run CONCURRENTLY - OPEN, and it breaks the gate
+## OPS-8. The suite is not safe to run CONCURRENTLY - CLOSED 2026-08-26b
+
+**This is the SECOND `OPS-8`.** The id was already spent on a ledger-collision
+diagnosis closed 2026-08-12 (ledger `LL-0040`). Two items, one id - see
+`OPS-12`. A grep for `OPS-8` returns both, so read the date.
 
 Found 2026-08-26 by two independent refuters running the suite while other
 agents ran it too. **Sequentially the suite is deterministic** - five clean runs
@@ -1882,6 +1892,103 @@ of the guard; isolate by making the probe name unique per process, or by
 teaching the tracked-file walker to ignore the probe pattern, or by serialising
 through a lock file. **Do not weaken either guard to make this pass.**
 
+### CLOSED 2026-08-26b - and the filed mechanism was wrong about the dominant case
+
+**Re-measured before any fix was written**, because a filed mechanism is a
+hypothesis: five concurrent FULL suites went red in **9 of 10 runs**, across
+five different tests - and **neither of the two tests named above as the
+casualties failed even once**. What actually breaks:
+
+- **Shared probe PATHS, not shared scanning.** Every guard probe was planted at
+  a FIXED name at the repository root, so two suites planted the same file and
+  the first to reach its `finally` unlinked the other's evidence mid-scan. The
+  two `tests/test_no_pii.py` pipeline probes were the most frequent casualties,
+  8 of 10 runs each.
+- **A suite that plants nothing was hit too.**
+  `test_the_scannable_view_is_a_superset_of_the_authored_view` walks the tree
+  twice and subtracts, so a foreign probe appearing between the two walks
+  breaks it. That is the direction this item originally described. It is real,
+  just far rarer than the collision.
+- **Windows adds a third face.** `finally: unlink()` raises
+  `PermissionError [WinError 32]` while another process holds the same path
+  open, because Python's `open()` does not share delete.
+
+**The fix**, with the probes still planted at the real repository root and
+neither guard weakened - only the NAME changed:
+
+- `tests/_tracked.py` gains `probe_path(stem)`, returning
+  `_guard_probe_<pid>_<stem>` at the root. Unique per process, so no two suites
+  can ever name the same file.
+- `.gitignore` ignores `_guard_probe_*`. That is **one lever for all three**
+  git-based walkers in this repo - `tests/_tracked.py`, `ops/lanes.py` and
+  `tests/test_lane_state.py` - because each takes its untracked pass with
+  `--exclude-standard`. Patching them one at a time would have rebuilt the
+  two-copies-of-a-rule trap that `tests/_tracked.py` exists to prevent.
+- `_published()` adds **this process's own** probes back, so a probe is still
+  scanned by the guard that planted it, and filters foreign probes on the
+  non-git fallback walk, which `.gitignore` cannot reach.
+
+**Acceptance evidence:** 24 consecutive green runs at 6-way concurrency of the
+full suite, against the measured 9-of-10-red baseline. Sequential suite 1252
+passed / 1252 collected, ruff clean, merge gate OK against a baseline of 1244
+measured with `--collect-only` before dispatching.
+
+**Three mutations, each watched going red on a different guard**, because a
+green guard proves nothing here until it has been seen failing:
+
+- `_own_probes()` returning `[]` kills 5 tests, including **both** original
+  `test_no_pii.py` pipeline probes - so the migrated probes are still genuinely
+  scanned and the guards did not become decoration.
+- `_is_foreign_probe()` returning `False` initially killed **nothing**. The
+  fallback filter was decoration, because every test ran on the git path where
+  the ignore rule had already removed the file.
+  `test_a_foreign_probe_is_filtered_on_the_non_git_fallback_path` was written
+  for it, and the same mutation now dies.
+- Deleting the `.gitignore` line kills only the `test_lanes.py` orphan test -
+  correctly, because `ops/lanes.py` carries no filter of its own and rests
+  entirely on that rule.
+
+**The trap this item set for its own fix**, recorded because it is the sharpest
+thing here. The first version of the regression tests named their foreign probe
+`_guard_probe_0_...` - a FIXED path, on the reasoning that pid 0 is never a
+live process and so can never be mistaken for a real suite's probe. Six
+concurrent suites then fought over that single file and it died on
+`WinError 32`: **17 of 18 green, red for exactly the bug under test,
+reproduced inside the test for it.** Only the concurrent run could see it. A
+foreign probe now carries `<prefix><pid>other_` - foreign to every walker
+because it does not match `<prefix><pid>_`, and unique on disk.
+
+## OPS-12. Two ops ids each name two different items - OPEN
+
+Found 2026-08-26b while closing the second `OPS-8`. The `OPS-` namespace was
+reallocated without checking what was already spent, so **`OPS-7` and `OPS-8`
+each name two unrelated items**:
+
+| id | first item | second item |
+|---|---|---|
+| `OPS-7` | fragment path that is not a fragment - closed 2026-08-12, `LL-0039` | `advance_cycle` credits an unstarted item - OPEN |
+| `OPS-8` | entry edited after integration misread as an id collision - closed 2026-08-12, `LL-0040` | suite unsafe under concurrent pytest - closed 2026-08-26b |
+
+`OPS-1` through `OPS-6`, `OPS-9`, `OPS-10` and `OPS-11` are each used once, so
+the reuse starts exactly where the 2026-08-12 batch ended - somebody resumed
+numbering from the highest id they could see in the OPEN items rather than from
+the highest ever allocated.
+
+**Renumbering is the wrong remedy and this repo has already reasoned it out.**
+`LL-0040`'s own conclusion is that renumbering an item records one piece of work
+under two ids, corrupting the record while appearing to repair it. The ledger is
+append-only, and `LL-0064` and the hand-off both already cite `OPS-8` meaning
+the concurrency item. So the live meaning stays, and the collision is signposted
+at each reference instead - done for all four references above.
+
+**What is NOT done, and is the acceptance:** nothing stops a third collision. An
+`OPS-` id is allocated by a human reading this file, with no equivalent of the
+ledger's `next free id` check. Acceptance: allocating an already-spent `OPS-`
+id fails a test. The id set must be derived by walking `ROADMAP.md` and
+`docs/LEDGER.md` at run time - **a checked-in list of spent ids is exactly the
+filed count this project has been burned by**, and it would go stale on the
+first item added without touching it.
+
 ## Ordering note
 
 **Items 2b, 2c, 2d, item 7's shipped-code half and item 3 are CLOSED as of
@@ -1904,9 +2011,9 @@ question, the headshot mechanism, and whether the ~1.3x per pace is real.
   deserves its own session. **Arm the wide-shot poller before the first run** -
   the first sweep of 2026-08-25 had to be re-run because its distances were
   inferred from clock order rather than recorded (`docs/FINDINGS.md` 11.10).
-- **Client closed:** item **4c** (arm the archiving watchers - no new code) or
-  item **7c** (read the meter without a human reading it). Both are fully
-  specified and need nothing but work.
+- **Client closed:** item **7c** (read the meter without a human reading it) or
+  **OPS-7**. Item 4c closed 2026-08-25b and **OPS-8 closed 2026-08-26b**, so
+  neither is the fallback any more.
 
 **Item 9 is CLOSED as of 2026-08-12** (ledger `LL-0046`). The `cdkey` hole is
 shut, the `/Game/` anchor is genuinely pinned, and two of that item's four

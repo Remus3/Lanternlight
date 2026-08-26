@@ -68,6 +68,26 @@ captures/*.mp4
 
 
 # ---------------------------------------------------------------------------
+# Guard probes - throwaway evidence a running test plants at the repo ROOT
+# ---------------------------------------------------------------------------
+#
+# tests/_tracked.py's probe_path() writes these to prove the hygiene guards
+# are not vacuous. They must be planted at the real root, because scanning the
+# real root is the point of the guards. Ignoring them here is what makes a
+# CONCURRENT suite safe: it removes them from every
+# `git ls-files --others --exclude-standard` in the repository at once, so
+# neither walker - tests/_tracked.py nor the separate one in ops/lanes.py -
+# can ever see another process's probe.
+#
+# Measured 2026-08-26: five concurrent full suites went red in 9 of 10 runs
+# without this. See ROADMAP OPS-8.
+#
+# tests/_tracked.py adds a process's OWN probes back by name, so a probe is
+# still visible to the guard that planted it. Never rely on this rule to hide
+# a probe from its owner.
+_guard_probe_*
+
+# ---------------------------------------------------------------------------
 # Logs
 # ---------------------------------------------------------------------------
 logs/

@@ -77,6 +77,27 @@ SKIP_DIRS = frozenset(
 #: satisfied by a walker that had collapsed to a single directory.
 MIN_EXPECTED_FILES = 40
 
+#: Prefix for the throwaway files a guard plants at the repository ROOT to
+#: prove it is not vacuous - see :func:`probe_path`.
+PROBE_PREFIX = "_guard_probe_"
+
+
+def probe_path(stem: str, root: Path = REPO_ROOT) -> Path:
+    """Path for a guard probe owned by THIS process, at the repository root.
+
+    Root placement is deliberate and must not be relaxed: scanning the real
+    root is the whole point of the guards these probes exercise. What the pid
+    changes is only the NAME.
+
+    Measured 2026-08-26, and the mechanism was not subtle. Every probe used a
+    FIXED name, so two suites running at once planted the same path and the
+    first to reach its ``finally`` unlinked the other's evidence mid-scan.
+    Five concurrent full suites went red in **9 of 10 runs** across five
+    different tests, and a suite that planted nothing was hit too - a foreign
+    probe appearing between two consecutive walks of one tree is enough.
+    """
+    return root / f"{PROBE_PREFIX}{os.getpid()}_{stem}"
+
 
 def _git_listing(root: Path, extra_args: list[str]) -> list[str] | None:
     """Run one ``git ls-files`` variant, returning names or None on failure."""
@@ -129,12 +150,53 @@ def _walked(root: Path) -> list[Path]:
     return found
 
 
+def _own_probe_prefix() -> str:
+    return f"{PROBE_PREFIX}{os.getpid()}_"
+
+
+def _is_foreign_probe(path: Path) -> bool:
+    """True for a guard probe belonging to some OTHER process.
+
+    ``.gitignore`` already keeps every probe out of the git listing, so on the
+    normal path this filter finds nothing. It is here for the FALLBACK walk,
+    which does not consult ``.gitignore`` at all - a source tarball or a tree
+    before ``git init`` would otherwise reintroduce the exact race the ignore
+    rule closes.
+    """
+    name = path.name
+    return name.startswith(PROBE_PREFIX) and not name.startswith(_own_probe_prefix())
+
+
+def _own_probes(root: Path) -> list[Path]:
+    """Guard probes THIS process planted, which git is ignoring on purpose.
+
+    Ignoring the prefix is what makes a concurrent suite safe, but it also
+    hides a probe from its own owner - and a probe its owner cannot see proves
+    nothing, which would quietly turn every guard it backs into decoration.
+
+    So the owner's probes, and only the owner's, are added back. The match is
+    on the exact ``<prefix><pid>_`` string, so no widening of the ignore rule
+    can drag a foreign probe in through here.
+    """
+    prefix = _own_probe_prefix()
+    try:
+        entries = list(root.iterdir())
+    except OSError:
+        return []
+    return [p for p in entries if p.name.startswith(prefix) and p.is_file()]
+
+
 def _published(root: Path) -> list[Path]:
-    """Every path that would be published from ``root``, in sorted order."""
+    """Every path that would be published from ``root``, in sorted order.
+
+    Plus this process's own guard probes, and minus anyone else's - see
+    :func:`probe_path` for why, and ROADMAP ``OPS-8`` for what it cost.
+    """
     candidates = _git_tracked(root)
     if candidates is None:
         candidates = _walked(root)
-    return sorted(candidates)
+    kept = [path for path in candidates if not _is_foreign_probe(path)]
+    return sorted(dict.fromkeys([*kept, *_own_probes(root)]))
 
 
 def iter_authored_files(root: Path = REPO_ROOT) -> Iterator[Path]:
