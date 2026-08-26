@@ -29,7 +29,10 @@ filed here on purpose: the first draft of this line said "six", the second said
    Every id in `docs/OBSERVED_IDS.md` was read on a build that no longer
    exists, and the file now says so at the top.
 2. **The 6.1 MB log from 2026-08-09 is gone.** The game truncates its log on
-   launch and keeps no backup. `docs/FINDINGS.md` 11.8, ROADMAP 4c.
+   launch. **"and keeps no backup" was refuted the next session** - a launch
+   watched directly left a byte-identical `MistfallHunter-backup-<UTC>.log`,
+   though no backup existed at any point during this one, so it is a windfall
+   and not a mechanism. `docs/FINDINGS.md` 11.8 and 11.12, ROADMAP 4c.
    `lanternlight/savewatch.py` already solves this - point it at `Logs/` and at
    `Saved/` and the log plus the market cache archive themselves. That is also
    item 4's remaining acceptance, met by shipped code.
