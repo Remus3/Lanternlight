@@ -1229,11 +1229,23 @@ third is not, and no single value fits them under either display model.
   damage; the uncontrolled variable is the operator's own position, which he
   reported himself. A delta wobbling by one is NOT evidence of variance - a
   constant value produces that wobble too, and the floor runs prove it.
+- **The floor is CONFIRMED under a recorded label.** After the mapping was
+  challenged, the ambiguous pair was re-run under wide-shot capture: ten body
+  hits at 10 paces and ten at 8, both reading **104**. See `docs/FINDINGS.md`
+  11.10 and 11.11.
 - **Where are the breakpoints?** The floor begins somewhere in (6, 10] paces
   and the ceiling somewhere in [0, 4). **Acceptance:** ten-hit runs at 7 and 9
   paces, and at 1 and 3, each solved for a constant per-hit value. The
   breakpoint lies between the last range that admits one and the first that
-  does not.
+  does not. **Record the distance in the capture, not in anyone's memory** -
+  the wide-shot poller exists for this and the first sweep had to be re-run
+  without it.
+- **Measure apparent size properly, or not at all.** Turning "the target looks
+  closer" into a number was attempted twice and saturated twice, because a dark
+  character against a dark cave is the wrong segmentation problem.
+  **Acceptance:** a fixed high-contrast marker placed in frame at a known
+  position, or a written negative saying apparent size is not recoverable from
+  this scene.
 - **Is the headshot bonus a constant multiplier? - SWEEP RUN, and it is not
   that simple.** Seven ten-hit head runs across the six distances gave 123,
   123, 350, 651, 799, 817, 818. **Not one admits a constant per-hit value** -
