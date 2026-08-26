@@ -102,10 +102,30 @@ one.
 - Tesseract is not installed. ROADMAP 7c is the template-matching reader, and
   its acceptance insists it REFUSE rather than guess.
 
+## The finished curve
+
+Ten distances, ten body hits each, distance recorded in the capture rather than
+recalled. Ledger `LL-0051`.
+
+| paces | 10 | 9 | 8 | 7 | 6 | 4 | 3 | 2 | 1 | 0 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| total | 104 | 104 | 104 | 231 | 309 | 546 | 687 | 687 | 689 | 691 |
+
+Three regimes: a clamped floor at 104 (per hit exactly **10.35**), a slope of
+about **1.3x per pace** across four consecutive paces, and a clamped ceiling
+spanning 3 through 0 paces at 0.6% spread. The floor boundary is between 8 and
+7 paces and it is a **step** - extrapolating the slope outward predicts ~174 at
+8 paces and it reads 104.
+
+**Constancy belongs to the clamp, not to flatness.** Every floor run admits a
+constant per-hit value; no other run does, including all four ceiling runs
+whose totals agree to 0.6% while their hits do not.
+
 ## Next
 
-Read ROADMAP 7b's open threads first - they carry the acceptance criteria for
-the breakpoints, the floor, and the headshot mechanism. If the client is open,
+Read ROADMAP 7b's open threads first - both breakpoints are now located, so
+what remains there is the step-versus-tangent question, the headshot mechanism,
+and whether the ~1.3x per pace is real. If the client is open,
 those are all cheap. If it is not, ROADMAP 4c and 7c are both unblocked and
 need nothing but work.
 
