@@ -1861,9 +1861,12 @@ exactly **one** roleId appears anywhere in the log.
 10 and item 1 measured it appearing **17 seconds** after `EnterBattle` on
 2026-08-09 and being deleted when the run ended.
 
-**On this run it never appeared at all.** `SaveGames/` was polled every 3
-seconds by an armed watcher for the whole run, and `StandaloneLevel/` stayed
-empty throughout. A `find` across the entire `Saved/` tree during the run
+**On this run it never appeared at all**, and the run is now known to have
+gone to completion: the match state returned to `NotMatch` after an escape, so
+this is a whole dungeon lifecycle from `EnterBattle` to exit rather than a
+snapshot of a run still in progress. `SaveGames/` was polled every 3 seconds by
+an armed watcher throughout, and `StandaloneLevel/` stayed empty from start to
+finish. A `find` across the entire `Saved/` tree during the run
 returned exactly three files touched in twenty minutes: `CampData`, the market
 cache, and the log itself.
 
