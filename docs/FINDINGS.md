@@ -1854,7 +1854,7 @@ exactly **one** roleId appears anywhere in the log.
 | `match state changed to EnterBattle` | 02:56:01 |
 | `LogNet: Welcomed by server` + `LoadMap` Whitewoods_Day | 02:56:19 |
 
-### 12.1 The transient save was never written, and that is NOT a patch regression
+### 12.1 The transient save was never written, and MODE vs PATCH is confounded
 
 `StandaloneSlot_<roleId>.sav` is the file that carries
 `DamageCollectonDataSet`, which is the entire basis of ROADMAP item 7. Section
@@ -1870,12 +1870,23 @@ finish. A `find` across the entire `Saved/` tree during the run
 returned exactly three files touched in twenty minutes: `CampData`, the market
 cache, and the log itself.
 
-**The explanation is not the 2026-08-19 patch.** The substring `StandaloneLevel`
-occurs **zero** times in this run's log, whereas the 2026-08-09 runs opened
-with `TS.Dungeon: StandaloneLevel requestEnterStandaloneLevel: match id 11111`.
-The pattern was checked against a file that does contain it before the negative
-was believed - `tests/test_logparse.py` returns 2 - so this is a measured
-absence and not a typo in a grep.
+**The substring `StandaloneLevel` occurs ZERO times in this run's log**,
+whereas the 2026-08-09 runs opened with `TS.Dungeon: StandaloneLevel
+requestEnterStandaloneLevel: match id 11111`. The pattern was checked against a
+file that does contain it before the negative was believed -
+`tests/test_logparse.py` returns 2 - so this is a measured absence and not a
+typo in a grep.
+
+> **An earlier draft read that as "not a patch regression". That was REFUTED by
+> an independent pass and the claim is withdrawn.** Every observation of
+> `requestEnterStandaloneLevel` and of the transient save was made on buildid
+> **24619162**; this run is on **24813185**. **Build and mode are perfectly
+> confounded**, and a log with no `StandaloneLevel` in it is exactly what a
+> patch removing that call would produce. Preferring the mode explanation was
+> reasoning from which answer felt less exciting, which is not evidence.
+> **Neither explanation is excluded.** What IS established is the absence
+> itself, and the consequence below survives either way: a dungeon run is not a
+> guarantee of damage data.
 
 **So the transient save is not a property of "being in a dungeon".** It follows
 a *standalone level request*, and this dungeon never made one. That is the
@@ -1900,11 +1911,17 @@ sublevel whose own name says `Solo01`. The 2026-08-09 runs that DID write the
 save were attested "Hallowgrove, Normal, Solo explore". **Both are solo, and
 only one wrote the file**, so being alone is not what selects the behaviour.
 
-**A named mode asset is now in evidence, and it is new.**
-`DA_DungeonSettings_Classic` appears in this run's log. The only settings asset
-this project had ever seen was `DA_DungeonSettings_Training`, so `Classic` is a
-first observation, recorded in `docs/OBSERVED_IDS.md`. That makes the settings
-asset the sharpest discriminator candidate available.
+**A named mode asset appeared to be in evidence. IT IS NOT, and the claim is
+withdrawn.** An earlier draft said `DA_DungeonSettings_Classic` "appears in this
+run's log" and called the settings asset the sharpest discriminator candidate
+available. An independent pass refuted it and direct checking confirms: the
+string occurs **exactly twice** in the whole log, at 02:29:05 and 02:29:31 UTC -
+**27 minutes before** this run's `EnterBattle` - and both occurrences sit inside
+`Puerts: Error: call TsConstruct of DA_DungeonSettings_Classic(...)`, which are
+construction-failure lines rather than evidence the run loaded that asset.
+
+**This run's settings asset is UNKNOWN.** The name is real and is recorded as a
+name in `docs/OBSERVED_IDS.md`, with the binding explicitly disowned.
 
 **And here is why it cannot be settled from the artifact.** Checking it needs
 the settings asset from the 2026-08-09 runs, and **that log no longer exists** -
@@ -1980,15 +1997,21 @@ equipment screen must ride in the same frame stream as the damage numbers.
 
 ### 13.2 The run, and the solve that refuses it
 
-Meter reset observed at 22:55:17 (`0`, `0 Hit`), ten body shots, panel captured
-throughout at 2 fps.
+Meter reset observed at 22:55:17 (`0`, `0 Hit`), ten body shots. The poller
+was configured for 2 fps and **actually delivered 1.19 fps** - 320 frames over
+269 s - because a full-screen grab costs more than the interval assumes. Quote
+the delivered rate, not the requested one.
 
 | hits | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
 |---|---|---|---|---|---|---|---|---|---|---|
-| total | 14 | - | 42 | 57 | 71 | 85 | 100 | 114 | 129 | 143 |
+| total | 14 | **28** | 42 | 57 | 71 | 85 | 100 | 114 | 129 | 143 |
 
-A dash is a sampling gap - two hits inside one 0.5 s interval - not a missing
-hit; the on-screen counter never skipped.
+**The hit-2 cell was filed as a dash and that was wrong.** An earlier draft
+recorded it as a sampling gap and explained it as "two hits inside one 0.5 s
+interval". Frames `f0159` and `f0160` both plainly read `28`, `2 Hit`. The
+reading was captured, missed in the read-out, and then given an explanation it
+never needed - a fabricated justification for absent data that was not absent.
+Recovered by an independent pass.
 
 **No constant per-hit value fits, under either display model.**
 
@@ -2000,10 +2023,20 @@ Both binding readings were re-read individually at 3x zoom, so the
 contradiction is not a misread. The solve was run again against only the
 individually-verified readings and the contradiction survives unchanged.
 
-**The deltas look constant and are not evidence.** They run 14, 14, 15, 14, 15,
-14, 15, 14 - exactly the one-wobble a constant value produces through a
+**The deltas look constant and are not evidence.** From hit 1 they run 14, 14,
+15, 14, 14, 15, 14, 15, 14 - the one-wobble a constant value produces through a
 rounding display, which is the trap 11.7 exists to name. Only the solve
 separates the two cases.
+
+**A transposition in an earlier draft is worth keeping visible**: hits 3-10 were
+filed as 14, 14, 15, 14, 15, 14, 15, 14 when the true sequence is 14, 15, 14,
+14, 15, 14, 15, 14. **Both sum to 115**, so any check against the total would
+have passed it. A sum is not a check on an ordering.
+
+**The recovered hit-2 reading strengthens the contradiction rather than
+softening it**: `28` at 2 hits forces `v < 14.25`, which conflicts with the
+`v >= 14.2778` that `129` at 9 hits forces, independently of the `42`-at-3
+bound that was already binding.
 
 ### 13.3 What that means, and what it deliberately does not
 
@@ -2030,8 +2063,13 @@ ratio is a gear effect.
   costs - a 20x saving that makes a long run affordable.
 - **The loadout is on disk for the first time**, captured as equipment-screen
   frames in the same stream as the meter.
-- The `Progress Record` independently read `42, 3 Hit`, corroborating the
-  mid-run 42-at-3 from a second on-screen source.
+- ~~The `Progress Record` independently read `42, 3 Hit`, corroborating the
+  mid-run 42-at-3 from a second on-screen source.~~ **WITHDRAWN.** It already
+  read `42  3 Hit` in the reset frame itself, at 22:55:17, beside `0, 0 Hit` -
+  before a single hit of this run had landed. It is the PREVIOUS run's record
+  row, exactly as 11.2 says, so citing it as a second reading of this run's
+  hit 3 was circular. A prior 3-hit run totalling 42 is a separate instance,
+  not corroboration of this one.
 
 **The next attempt is specified:** freeze the bot, stand clearly past the old
 breakpoint at 12-14 paces, fire ten body shots. Constant at ~10.35 means the
@@ -2167,9 +2205,14 @@ beside it. Joining that crop to the meter crop by wall clock gives a row per
 hit carrying **both** the cumulative damage and the stack count - the same
 frame-to-frame join that bound class ids, applied to two regions of one frame.
 
-Observed: the count runs **1 to 5** and holds at 5 while hits continue. At one
-stack **no digit is rendered at all** - the icon appears bare - which is a
-reading rule worth having, because "no number" means one, not zero.
+Observed: the count runs **1 to 5** and holds at 5 while hits continue.
+
+**A bare icon was filed as meaning "one stack". That is UNVERIFIABLE and the
+rule is withdrawn.** In the run-8 frames the icon renders bare at `0, 0 Hit`
+and already reads `2` at `14, 1 Hit`, so every bare observation available sits
+at zero hits - equally consistent with "no stacks yet" and with "one stack, no
+digit drawn". Separating them needs a frame showing a bare icon at a non-zero
+hit count, and no such frame was captured.
 
 ### 15.2 It explains the broken solves, and the magnitude is SMALL
 
@@ -2177,16 +2220,29 @@ The operator then ran the right experiment unprompted: **runs deliberately held
 to a maximum of 1, 2, 3, 4 and 5 stacks**, slower cadence, without moving,
 letting the buff reset between. Ten-hit totals, all at the same floor distance:
 
-| max stacks reached | 10-hit total |
+| max stacks reached | 10-hit totals |
 |---|---|
-| 1 (bare icon) | **135** |
-| 2 to 3 | **136** |
-| 5 | **137** and **139** |
+| 1 | **135**, **135** |
+| 2 | **135** |
+| 3 | **136** |
+| 4 | **136** |
+| 5 | **137**, **139**, **139**, **139** |
 
-**Monotone in stack count.** Under a model where stack `s` multiplies damage by
+**Nine runs, re-derived by an independent pass.** An earlier draft filed four
+runs as "1 -> 135, 2 to 3 -> 136, 5 -> 137 and 139". That was wrong in three
+ways: the 2-stack run reads **135** and not 136, a **4-stack run was missed
+entirely**, and 139 replicates **three times** rather than once. The error was
+under-reading the capture, not arithmetic.
+
+**Monotone non-decreasing in stack count, and the correction makes it cleaner
+rather than weaker** - the replication at 5 stacks is now n=4. Note the first
+increment is not visible until 3 stacks: 1 and 2 stacks both read 135. Under a model where stack `s` multiplies damage by
 `1 + (s-1)c`, a run that builds 1,2,3,4,5,5,5,5,5,5 totals `(10 + 30c)` against
 `10` for a run pinned at one stack, so the observed ratios imply
 **c ~ 0.5% to 1% per stack, about +2% to +4% at five stacks.**
+
+Taking the modal 5-stack total of **139** against the 1-stack **135** gives
+`c ~ 0.99%` per stack; the single 137 reading gives `c ~ 0.49%`.
 
 **No coefficient is published from that**, and the reason is precision: the
 spread is 135 to 139 on integer totals near 137, while run-to-run variation at

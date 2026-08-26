@@ -863,8 +863,12 @@ having: nobody should pay for these measurements twice.
 - Orange **Total Damage** digits occupy rows **y 98-118**; white **Progress
   Record** digits occupy **y 255-273**.
 - The value is left-aligned near **x=51**; the hit count near **x=197**
-  (orange) or **x=200** (white). Splitting the two fields at **x=190** lands in
-  empty space in every frame examined.
+  (orange) or **x=200** (white), so **x=190** separates the two fields.
+  **It is NOT empty space** - an earlier draft claimed it was "empty in every
+  frame examined" and an independent pass refuted that: **109 of 6,439 frames
+  carry ink at x=190**, and 45 orange plus 61 white column runs straddle the
+  split. A splitter must therefore tolerate a glyph crossing the boundary
+  rather than assume none does.
 - Glyphs are **10-12 px wide and 17-21 px tall**, advancing about **12-13 px**.
 - **The colours separate the two rows for free:** Total Damage digits are
   orange, Progress Record digits white. The word `Hit` is white in BOTH rows,
@@ -895,8 +899,12 @@ glyphs matching within distance 0.12 was:
 | field | n | matched |
 |---|---|---|
 | orange hit count (where the templates came from) | 367 | **100%** |
-| orange total | 599 | **40%** |
+| orange total | 599 | **40%** (39.2% unrounded) |
 | white progress total | 494 | **9%** |
+| white hit count | 432 | **0%** |
+
+The white hit-count row was omitted from an earlier draft of this table. It is
+the worst of the four and leaving it out flattered the result.
 
 Two attempts to close that gap, both measured, both insufficient:
 
@@ -1801,6 +1809,35 @@ completion. Then the minimum change that makes it pass. The existing
 must not manufacture a completion. Check `tests/test_loop_state.py` for the
 current pins before touching the semantics, and verify the guard is not vacuous
 by reverting the fix and watching the new test go red.
+
+## OPS-8. The suite is not safe to run CONCURRENTLY - OPEN, and it breaks the gate
+
+Found 2026-08-26 by two independent refuters running the suite while other
+agents ran it too. **Sequentially the suite is deterministic** - five clean runs
+in a row give `1244 passed`. Under **concurrent** runs it goes intermittently
+red: one refuter saw 3 failures in 12 runs, another 2 in 5.
+
+**Mechanism, proven not guessed:** `tests/test_no_pii.py` plants probe files at
+the **repository root** (`_pipeline_probe_binary.png`, `_pipeline_probe_utf16.bin`)
+to prove its scanner is not vacuous, while `tests/_tracked.py` walks untracked
+files at that same root. A second pytest process scanning the root mid-plant
+sees a file the first process is about to delete. The observed casualties are
+`test_no_pii.py::test_the_repository_carries_no_encoded_identifiers` and
+`test_lanes.py::TestNoFileIsOrphaned::test_every_tracked_file_is_owned_or_explicitly_cross_cutting`.
+
+**Why this matters more than a flake:** `ops/merge_gate.py` re-runs pytest, and
+CLAUDE.md mandates a **parallel multi-agent** workflow. So the gate that exists
+to catch a dropped test can itself go red for a reason that has nothing to do
+with the work being gated - and a gate that cries wolf is a gate people learn
+to override.
+
+**Acceptance:** the suite passes reliably when several pytest processes run at
+once - demonstrate it by running N concurrent suites and observing all green,
+having first watched the current code fail that same check. The probe files
+must stay at the repository root, because scanning the real root is the point
+of the guard; isolate by making the probe name unique per process, or by
+teaching the tracked-file walker to ignore the probe pattern, or by serialising
+through a lock file. **Do not weaken either guard to make this pass.**
 
 ## Ordering note
 
