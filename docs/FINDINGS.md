@@ -1121,10 +1121,14 @@ Question (b) is a **clean negative, and it matters**:
 
 | checked | result |
 |---|---|
-| `StandaloneSlot_<roleId>.sav` created | **NO** - absent 87s after map load and after 63 shots |
-| `Saved/StandaloneLevel/` populated | **NO** - still empty |
-| `EnterBattle` / `onRequestMatch` in log | **NO** - neither appears |
+| `StandaloneSlot_<roleId>.sav` created | **NO** - absent for the whole 36-minute session in the room, across roughly 200 shots |
+| `Saved/StandaloneLevel/` populated | **NO** - still empty, mtime unchanged since 2026-08-09 |
+| `EnterBattle` / `onRequestMatch` in log | **NO** - neither appears anywhere in the session |
 | per-hit `damageValue` anywhere on disk | **NO** |
+
+For scale on that first row: in the captured dungeon run the transient save
+appeared **17 seconds** after `EnterBattle`. Thirty-six minutes without it is
+not a slow write, it is a different code path.
 
 The training ground is **not a match**, so it does not create the transient
 save, so `DamageCollectonDataSet` is **not written there at all**. The entire
@@ -1399,3 +1403,32 @@ values, and the wider spread in the run the operator says was off.
 floor hypothesis holds it reads 10.35 again and is constant. If damage keeps
 dropping past 8 paces the hypothesis is dead, and the constancy at 8 paces
 needs a different explanation.
+
+### 11.8 The game log is PERISHABLE, and one was already lost
+
+Checked at the start of this session and worth more than it looks. The log at
+`%LOCALAPPDATA%\MistfallHunter\Saved\Logs\MistfallHunter.log` was **221 KB and
+opened 2026-08-25 18:34:46 local**. The log this project measured on
+2026-08-09 was **6.1 MB**. There is exactly one file in that directory and no
+`MistfallHunter-backup-*.log` beside it.
+
+**The game truncates its log on launch and keeps no backup.** Every line of
+that 6.1 MB session that was not copied out, quoted into a document, or turned
+into a committed fixture no longer exists anywhere. Sections 9 and 10 of this
+document survive because somebody wrote them down; the raw evidence behind them
+does not.
+
+The practical rule: **a log is evidence only until the next launch.**
+`lanternlight/savewatch.py` already does the copying - it is a generic
+"snapshot every changed generation" watcher and pointing it at `Logs/` gives
+timestamped, size-stamped archives for nothing. This session archived a copy
+every five minutes from 18:38 onward, so its log survives whatever happens to
+the live file.
+
+The same watcher pointed at `Saved/` also gives ROADMAP item 4's `AvgPrice`
+acceptance - "snapshots the file on change with a timestamp and never writes to
+it" - without new code. Worth knowing before anyone writes a second watcher.
+
+Related and also measured this session: `AvgPrice_937566.ini` is back to **37
+bytes**, its empty-with-headers state. It had filled to 343 bytes on
+2026-08-09. Nothing watched it empty, so what emptied it is unknown.
