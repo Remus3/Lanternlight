@@ -1333,6 +1333,14 @@ on wall clock the same way class ids were bound.
 
 ### 11.6 The distance curve, measured at six points in one controlled sweep
 
+> **CONTESTED AS OF 2026-08-25 - do not cite the floor from this section
+> without reading 11.10 first.** The run-to-distance mapping below is an
+> inference from clock order, not an operator statement, and the headshot sweep
+> gives a reason to doubt it. If the mapping is off by one the floor disappears
+> entirely. The totals themselves are measured and are not in question; what
+> each one's distance was, is.
+
+
 The operator ran a full sweep - 10, 8, 6, 4, 2 and 0 paces, ten body hits at
 each, meter reset between runs, same right-click standard arrow. Two controls
 were held that the earlier runs did not have: take the paces, **stop moving**,
@@ -1492,3 +1500,57 @@ it" - without new code. Worth knowing before anyone writes a second watcher.
 Related and also measured this session: `AvgPrice_937566.ini` is back to **37
 bytes**, its empty-with-headers state. It had filled to 343 bytes on
 2026-08-09. Nothing watched it empty, so what emptied it is unknown.
+
+### 11.10 The distance mapping is contested, and the floor depends on it
+
+Recorded the moment it was noticed, because a section of this document was
+already committed on the losing side of it.
+
+**What happened.** Both sweeps produced **seven** completed ten-hit runs, not
+six. Sections 11.6 and 11.7 assigned distances to the body runs by clock order,
+first run to 10 paces, and treated the seventh as a repeat. When the operator
+was asked to label the head runs he listed **six**, starting `123 = 10 paces`,
+which implies the run before it was not part of the sweep.
+
+If the same is true of the body sweep, every body run shifts by one:
+
+| clock | body total | mapping A (as committed) | mapping B (operator-parallel) |
+|---|---|---|---|
+| 19:12:50 | 104 | 10 paces | not counted |
+| 19:13:28 | 104 | 8 paces | 10 paces |
+| 19:14:01 | 309 | 6 paces | 8 paces |
+| 19:14:38 | 546 | 4 paces | 6 paces |
+| 19:15:15 | 687 | 2 paces | 4 paces |
+| 19:15:53 | 691 | 0 paces | 2 paces |
+| 19:16:44 | 690 | a repeat | 0 paces |
+
+**Under mapping A there is a damage floor** - 10 and 8 paces both read 104.
+**Under mapping B there is none** - 10 reads 104 and 8 reads 309, a 2.97x step.
+
+**The head sweep argues for B.** Under the operator's own labels the head runs
+step 123 -> 350 from 10 to 8 paces, a **2.85x** change. Body under B steps
+2.97x over the same interval; body under A steps **1.000x**. The two sweeps
+were run the same way minutes apart, so their curves should have the same
+shape, and only B gives them one.
+
+**The head/body ratios also argue for B.** Pairing by mapping B gives 1.183,
+1.133, 1.192, 1.163, 1.182, 1.185 - a tight cluster. Pairing by A puts a 3.37x
+against a 1.18x and makes nonsense of the rest.
+
+**What argues for A** is the operator's earlier standalone protocol, where "full
+distance is about 8 paces" produced **103**. If B is right, that 8 paces and
+the sweep's 8 paces are not the same distance - which is possible, since the
+two used different starting landmarks, and a pace is counted by animation loop
+rather than measured.
+
+**This is not resolved here, and it is not resolved by choosing the tidier
+answer.** The evidence for B is strong enough that 11.6's floor must not be
+cited until the operator confirms whether the first run of each sweep counted.
+The ceiling survives either way: the last three body runs are within 0.6% of
+each other under both mappings, as are the last two head runs.
+
+**The lesson, which is the reusable part.** Every total in both sweeps was
+measured exactly. The thing that broke was the **label**, and it broke silently
+because clock order looked like an obvious ordering and nobody had said it was.
+A measurement whose independent variable was inferred rather than recorded is
+not a measurement of that variable - and it reads exactly like one.
