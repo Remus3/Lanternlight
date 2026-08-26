@@ -1352,21 +1352,53 @@ unit this project can re-use, not a measurement of the world.
 | paces | ten-hit total | per hit | a constant per-hit value fits? |
 |---|---|---|---|
 | 10 | **104** | 10.40 | **YES** - `[10.3500, 10.3571]` |
+| 9 | **104** | 10.40 | **YES** - `[10.3500, 10.3571]` |
 | 8 | **104** | 10.40 | **YES** - `[10.3500, 10.3571]` |
+| 7 | 231 | 23.10 | no |
 | 6 | 309 | 30.90 | no |
 | 4 | 546 | 54.60 | no |
-| 2 | 687 | 68.70 | no |
-| 0 | 691 | 69.10 | no |
+| 3 | **687** | 68.70 | no |
+| 2 | **687** | 68.70 | no |
+| 1 | **689** | 68.90 | no |
+| 0 | **691** | 69.10 | no |
 
-Step factors, closing:
+Per-pace factor, closing (geometric mean where a pace was skipped):
 
-| step | factor |
+| step | per pace |
 |---|---|
-| 10 -> 8 | **1.000x** |
-| 8 -> 6 | 2.971x |
-| 6 -> 4 | 1.767x |
-| 4 -> 2 | 1.258x |
-| 2 -> 0 | **1.006x** |
+| 10 -> 9 | **1.000x** |
+| 9 -> 8 | **1.000x** |
+| 8 -> 7 | **2.221x** |
+| 7 -> 6 | 1.338x |
+| 6 -> 4 | 1.329x |
+| 4 -> 3 | 1.258x |
+| 3 -> 2 | **1.000x** |
+| 2 -> 1 | **1.003x** |
+| 1 -> 0 | **1.003x** |
+
+**The curve is three regimes, and the middle one is startlingly regular.** A
+flat floor at 104, a slope that multiplies by about **1.3x per pace** for four
+consecutive paces, and a flat ceiling at 687-691. The ceiling plateau spans
+**four** distances - 3, 2, 1 and 0 paces - with a total spread of 0.6%.
+
+**The floor is a step, not a tangent.** If the 1.3x-per-pace slope simply
+continued outward from 7 paces, 8 paces would read about `231 / 1.33 = 174`,
+not 104. The measured floor is far below the extrapolation, so the game is not
+running out of curve - something is **clamping** the value to 10.35 beyond a
+range that lies between 7 and 8 paces. The ceiling, by contrast, is reached
+gently: 4 -> 3 is 1.258x, slightly *less* than the slope's own rate, and then
+it stops.
+
+**The floor edge is between 8 and 7 paces, and it is abrupt.** Three
+consecutive distances - 10, 9 and 8 paces - produce the **identical** ten-hit
+total of 104 and all three solve to the same interval containing 10.35. One
+pace closer, at 7, the total is 231: **2.221x in a single pace**, against
+1.338x for the next pace after it. That is the signature of a clamp being left
+behind, not of a curve flattening out.
+
+So the far end is not "the curve gets shallow". It is a **hard minimum**: below
+some range the value stops responding to distance entirely and sits at exactly
+10.35.
 
 **The curve is clamped at both ends.** Ten paces and eight paces produce the
 identical ten-hit total, so damage stops falling somewhere at or before 8
@@ -1389,12 +1421,18 @@ the wobble is the rounding, not the damage. A wobbling delta is not evidence of
 variance, so reading one off the screen proves nothing either way. What IS
 evidence is a contradiction, and the contradictions line up with the curve:
 
-- **On the floor (10 and 8 paces): a constant value fits.** Same interval both
-  times, containing 10.35, which three earlier runs at that range had already
-  pinned exactly.
-- **On the slope (6, 4, 2 paces): no constant value fits any run.**
-- **At 0 paces: still none**, though 0 and 2 are on the ceiling by total - the
-  ten-hit sums agree while the individual hits do not.
+- **On the floor - 10, 9 and 8 paces - a constant value fits every run**, and
+  it is the same interval `[10.3500, 10.3571]` all three times.
+- **Off the floor - 7, 6, 4, 3, 2, 1 and 0 paces - no constant value fits any
+  run.** Not one.
+- **That includes the ceiling.** Three, 2, 1 and 0 paces agree on the ten-hit
+  total to within 0.6%, and none of them admits a constant per-hit value: the
+  sums agree while the individual hits do not.
+
+So constancy is **not** a property of the plateaus. It is a property of the
+**floor specifically**, and the boundary of the constant set is exactly the
+step between 8 and 7 paces. A flat total is not enough to make the hits
+identical - only the clamp does that.
 
 **The same-distance runs disagree only on the slope.** Comparing nominally
 identical distances across the session:
@@ -1412,18 +1450,24 @@ on the 4 pace run" without being asked. **A pace counted by animation loop is
 good to a fraction of a pace, and on a slope this steep a fraction of a pace is
 several damage.**
 
-**What is established:** damage depends on range, is clamped at both ends, and
-is exactly 10.35 per hit on the floor for this attack, this bot and this build.
+**What is established:** damage depends on range across ten measured
+distances, is clamped at both ends, is exactly 10.35 per hit on the floor for
+this attack, this bot and this build, and the floor boundary sits between 7 and
+8 paces while the ceiling is reached by 3.
 
 **What is NOT established, and must not be written down as though it were:**
 
 - That the game rolls damage at all. Every non-constant run is on the slope,
   where the operator's own position is the uncontrolled variable. There is no
   observation here that requires randomness to explain it.
-- Where the floor and ceiling breakpoints are. They are somewhere in (6, 10]
-  and somewhere in [0, 4) paces, and no reading narrows them further.
-- The shape between them. Three interior points on a monotone curve fit many
-  functions and this project has no business naming one.
+- Why the floor is a step rather than a tangent. The extrapolated slope says 8
+  paces should read about 174 and it reads 104. That gap is measured; its cause
+  is not.
+- Whether the ~1.3x per pace on the slope is a real rate or a coincidence of
+  four points. It is regular enough to be worth testing and not enough to name.
+- The shape between them as a formula. Four interior points that happen to sit
+  near a constant ratio fit many functions, and this project has no business
+  naming one from them.
 - Anything about another class, weapon, arrow, target or build.
 
 **No coefficient enters Emberforge from this.** A measured floor value with its

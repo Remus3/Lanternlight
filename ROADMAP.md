@@ -1233,13 +1233,28 @@ third is not, and no single value fits them under either display model.
   challenged, the ambiguous pair was re-run under wide-shot capture: ten body
   hits at 10 paces and ten at 8, both reading **104**. See `docs/FINDINGS.md`
   11.10 and 11.11.
-- **Where are the breakpoints?** The floor begins somewhere in (6, 10] paces
-  and the ceiling somewhere in [0, 4). **Acceptance:** ten-hit runs at 7 and 9
-  paces, and at 1 and 3, each solved for a constant per-hit value. The
-  breakpoint lies between the last range that admits one and the first that
-  does not. **Record the distance in the capture, not in anyone's memory** -
-  the wide-shot poller exists for this and the first sweep had to be re-run
-  without it.
+- **The FLOOR breakpoint is LOCATED: between 8 and 7 paces.** Ten-hit runs at
+  10, 9 and 8 paces all read **104** and all solve to `[10.3500, 10.3571]`; at
+  7 paces the total is **231**, a 2.221x step in one pace against 1.338x for
+  the next. An abrupt clamp, not a flattening curve. Constancy changes at the
+  same step - every floor run admits a constant per-hit value and no run off
+  the floor does.
+- **The CEILING breakpoint is LOCATED too: reached by 3 paces.** Runs at 3, 2,
+  1 and 0 paces read 687, 687, 689 and 691 - a four-distance plateau spanning
+  0.6% - while 4 paces reads 546. Unlike the floor, the ceiling is approached
+  gently: 4 -> 3 is 1.258x, slightly less than the slope's own ~1.3x per pace.
+- **The curve is now ten measured points** at 10, 9, 8, 7, 6, 4, 3, 2, 1 and 0
+  paces: 104, 104, 104, 231, 309, 546, 687, 687, 689, 691. Three regimes - a
+  clamped floor, about 1.3x per pace for four consecutive paces, a clamped
+  ceiling.
+- **Why is the floor a STEP and not a tangent?** Extrapolating the slope
+  outward from 7 paces predicts about 174 at 8 paces; it reads 104. The game is
+  not running out of curve, something is clamping. **Acceptance:** a mechanism,
+  or a written negative saying the gap is real and unexplained. Do not publish
+  a falloff formula from four interior points either way.
+  **Record the distance in the capture, not in anyone's memory** - the
+  wide-shot poller exists for this and the first sweep had to be re-run without
+  it.
 - **Measure apparent size properly, or not at all.** Turning "the target looks
   closer" into a number was attempted twice and saturated twice, because a dark
   character against a dark cave is the wrong segmentation problem.
