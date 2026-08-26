@@ -84,6 +84,21 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0051 - 2026-08-25 - Both falloff breakpoints located - the curve is a clamped floor, about 1.3x per pace, and a clamped ceiling, and the floor is a step not a tangent
+
+**Evidence:**
+- Ten measured distances, ten body hits each, distance recorded in the capture at the time rather than recalled: 10, 9, 8, 7, 6, 4, 3, 2, 1, 0 paces read 104, 104, 104, 231, 309, 546, 687, 687, 689, 691.
+- FLOOR breakpoint between 8 and 7 paces. Runs at 10, 9 and 8 all read exactly 104 and all solve to [10.3500, 10.3571]; 7 paces reads 231, a 2.221x step in one pace against 1.338x for the next.
+- CEILING reached by 3 paces. Runs at 3, 2, 1 and 0 read 687, 687, 689, 691 - a four-distance plateau spanning 0.6% - while 4 paces reads 546.
+- The slope is regular: per-pace factors 1.338 (7->6), 1.329 (6->4 as a geometric mean) and 1.258 (4->3).
+- The floor is a STEP: extrapolating the slope outward from 7 paces predicts about 174 at 8 paces and it reads 104. Measured gap, unexplained cause.
+- Constancy: every floor run admits a constant per-hit value and NO other run does, including all four ceiling runs whose totals agree to 0.6% while their individual hits do not.
+- Full suite on a clean tree: 1225 passed, 1225 collected, ruff clean. Docs and measurement only.
+
+Constancy is NOT a property of flat totals - the ceiling is flat and not constant. It is a property of the clamp, and the boundary of the constant set is exactly the 8-to-7 step.
+NO FALLOFF FORMULA PUBLISHED. Four interior points sitting near a constant ratio fit many functions. The per-pace factor is recorded as a measurement, not named as a law.
+Every distance in this entry was recorded by the wide-shot poller at capture time. The sweep that preceded it had to be re-run because its distances were inferred from clock order - see LL-0050.
+
 ### LL-0050 - 2026-08-25 - The distance curve is clamped at both ends, the far body value is exactly 10.35, and a label that was inferred rather than recorded nearly published a wrong floor
 
 **Evidence:**
