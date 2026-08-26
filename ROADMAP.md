@@ -1154,12 +1154,24 @@ third is not, and no single value fits them under either display model.
 
 **What this opens, and it is now the highest-value thread on this list:**
 
-- **The distance term.** The operator attested mid-session that damage differs
-  with range, having halved the distance. That is first-party and unmeasured.
-  **Acceptance:** two ten-hit runs at two named distances, same attack, same
-  target point, each solving to a non-overlapping interval - plus a written
-  statement of how distance was held constant WITHIN each run, because
-  "same spot" was assumed rather than controlled in the runs above.
+- **The distance term - MEASURED at five points, and it is a gradient.**
+  Ten body hits at 8, 6, 4 and 0 paces gave **10.35**, **~26.5**, **~55.2** and
+  **~68.4** per hit, with a 4-pace repeat at ~54.8. Factors 2.56x, 2.08x, then
+  1.24x, so the curve saturates near the target. A pace is defined - a full
+  stride, counted off the run-cycle animation loop reset, no crouch, sprint or
+  roll.
+- **Is there a damage FLOOR at long range?** Only the 8-pace runs admit a
+  constant per-hit value; every closer run refuses one, and the operator
+  attributed the widest spread to being "a little off the mark" rather than to
+  anything the game did. The hypothesis is that 8 paces is already on a clamped
+  floor, so jitter is absorbed there and shows everywhere closer.
+  **Acceptance:** a ten-hit run at 10 or 12 paces. Reading 10.35 again, and
+  constant, supports the floor; a lower value kills it and leaves the constancy
+  at 8 paces needing another explanation.
+  **Controls the next sweep must hold:** take the paces, stop, then fire all ten
+  without repositioning, aiming at one named point on the bot.
+  Note that a delta wobbling by one is NOT evidence of variance - a constant
+  value produces that wobble too, and the 8-pace run proves it.
 - **What separates a headshot from a crit.** The client renders headshots in
   red crit text (operator), so the two cannot be told apart by eye and were not
   separated by this data. **Acceptance:** a run where the two are forced apart,

@@ -1207,10 +1207,37 @@ damage of a Blackarrow right-click standard arrow, on this bot, at this
 distance, on buildid `24813185`, is a **fractional** quantity in that interval,
 and the meter displays a rounded running sum of it.
 
-The interval is what is measured. `10.35` sits exactly on its lower bound and
-is the obvious candidate, and **the measurement does not distinguish it** from
-anything else up to 10.3571. Writing `10.35` down as the value would be
-choosing a pretty number over the evidence.
+### A third run disagreed on one hit, and that is what pinned the value
+
+A later body run at the same distance produced `10 21 31 41 52 62 72 83 93
+103` - identical to the other two for nine hits and one lower on the tenth,
+104 against 103. Taken alone it solves to `[10.3125, 10.3500)`, which is
+**disjoint** from the earlier `[10.3500, 10.3571)`. Two runs said the value is
+at least 10.35 and the third said it is less. Something had to give.
+
+What gives is the assumption that the tenth display is determined. At
+`v = 10.35` the cumulative after ten hits is `103.5` **exactly** - a rounding
+tie - and it is the ONLY tie in the series:
+
+| n | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| n * 10.35 | 10.35 | 20.7 | 31.05 | 41.4 | 51.75 | 62.1 | 72.45 | 82.8 | 93.15 | **103.5** |
+
+The one hit that ever disagreed between runs is the one hit whose display is a
+tie. Nothing else in ten hits, across three runs, moved at all.
+
+Searching every two-decimal value that reproduces all three runs with ties free
+to fall either way returns **exactly one candidate: 10.35**. At three decimals
+it is still the only value consistent with all three. So:
+
+> **The per-hit body damage is 10.35** - measured, not fitted to a pretty
+> number, and reproduced across three independent runs whose only disagreement
+> is a rounding tie that 10.35 itself predicts.
+
+This is the first value in this project to clear the independent-run bar. It is
+bound to everything around it and to nothing beyond: Blackarrow, right-click,
+standard arrow, this bot, **8 paces**, buildid `24813185`. It is not a
+coefficient, a formula, or a claim about any other class or range.
 
 ### The head series reproduces too, but NOT to a single value
 
@@ -1267,41 +1294,6 @@ wrong by construction, not merely imprecise.
 body interval `[10.3500, 10.3571)` and those two floats belong to the same
 formula - they are different attacks, different targets, different directions
 (dealt against taken) and different builds.
-
-### 11.6 Distance changes the number, and by far more than expected
-
-Late in the same session the operator halved the range to the bot and, asked
-directly whether anything else had changed, answered **"changed nothing"** -
-same right-click, same standard arrow, same bot.
-
-| run | target | range | series | per hit |
-|---|---|---|---|---|
-| 10, 18:56:09 | body | close | 55 110 166 221 277 333 388 444 500 556 | ~55.6 |
-| 9, 18:55:xx | head | close | ... 456 521 585 651 705 (hits 7-11) | ~64.1 over 11 |
-| 1 and 6 | body | far | 10 21 31 41 52 62 72 83 93 104 | in [10.3500, 10.3571) |
-
-The close body run is **5.4 times** the far body run. That is not a small
-correction, and it is the single largest unexplained factor this project has
-measured.
-
-**It is recorded as an observation and it is NOT established as a distance
-law.** Reasons to distrust the obvious reading, all of them concrete:
-
-- Two points cannot show the shape of a falloff. A 5.4x step is equally
-  consistent with a threshold, with a minimum-range cutoff, and with the far
-  shots simply being weak in some way nobody controlled.
-- Two bots were present in this room (`BP_Adventure_Bot_C` instances). Nothing
-  in the far runs pinned WHICH one was hit.
-- Neither close run fits a single per-hit value under either display model, so
-  even within one distance something varies.
-- "Changed nothing" is an honest report of intent, not an instrumented control.
-  The far runs were fired from an unrecorded spot.
-
-**Acceptance for turning this into a finding** is in ROADMAP 7b: three runs of
-ten body hits at three named distances, distance recorded in paces from a fixed
-landmark, one named bot, plus a statement of what was held constant. Two points
-and an attestation is a hypothesis.
-
 ### 11.4 Two other runs provably were NOT uniform
 
 Same solve, same session, applied to the two runs between them:
@@ -1326,3 +1318,84 @@ carry `id=0` only; no family id has been observed taking any other value.
 
 So shot cadence is measurable from the log and damage is not, and the two join
 on wall clock the same way class ids were bound.
+
+### 11.6 Distance changes the number enormously, and it is a gradient
+
+The operator ran a distance protocol, ten body hits per run, same right-click
+standard arrow, meter reset between runs.
+
+**The distance unit is the operator's, and it is defined:** one pace is a full
+stride, counted by watching the run-cycle animation loop reset while moving
+straight forward, with no crouch, sprint or roll. That is reproducible by the
+same operator on the same character. It is not metres - it is a unit this
+project can re-use, not a measurement of the world.
+
+| run | distance | ten-hit total | per hit |
+|---|---|---|---|
+| 19:01:47 | 8 paces | 103 | **10.35**, constant |
+| 19:07:51 | 6 paces | 265 | ~26.5 |
+| 19:02:33 | 4 paces | 552 | ~55.2 |
+| 19:08:28 | 4 paces, repeat | 548 | ~54.8 |
+| 19:03:13 | 0 paces | 684 | ~68.4 |
+
+**It is a gradient, not a cliff.** The 6-pace reading was taken precisely to
+separate those, and it lands between its neighbours rather than beside one of
+them:
+
+| step | factor |
+|---|---|
+| 8 -> 6 paces | 2.56x |
+| 6 -> 4 paces | 2.08x |
+| 4 -> 0 paces | 1.24x |
+
+Four paces of closing buys 5.3x; the last four buy 1.24x. The curve saturates
+near the target, and the far end is where the interesting behaviour is.
+
+An earlier draft of this section recorded a 5.4x step from two points and an
+operator attestation of "changed nothing". The five-point profile supersedes
+it. The attestation was accurate - two points were simply never enough to say
+what the shape was.
+
+### 11.7 Only the far value is constant, and the operator named the reason
+
+**A constant per-hit value always makes the displayed deltas wobble by one.**
+The 8-pace run wobbles 10, 11, 10, 10, 11 and is nonetheless a perfectly
+constant 10.35 - the wobble is the rounding, not the damage. A wobbling delta
+is not evidence of variance, so reading one off the screen proves nothing
+either way.
+
+What IS evidence is a contradiction. Solving `round(n*v) == total_n` over each
+run exactly:
+
+| run | feasible constant v | verdict |
+|---|---|---|
+| 8 paces | `[10.3125, 10.3500]`, and exactly 10.35 across all three runs at that range | **constant** |
+| 6 paces | EMPTY | not constant |
+| 4 paces | EMPTY - contradiction first at hit 5 | not constant |
+| 4 paces, repeat | EMPTY | not constant |
+| 0 paces | EMPTY - contradiction first at hit 9 | not constant |
+
+**Only the 8-pace runs admit a constant value. Every closer run refuses one.**
+
+The two 4-pace runs are also not identical to each other - 552 against 548,
+with the first hit reading 55 in one and 49 in the other, a 12% spread on one
+hit.
+
+**The operator then named the cause, unprompted: "I was a little off the mark
+on the 4 pace run."** That is a control failure being reported honestly, and it
+is the difference between two conclusions. The wider spread in the repeat is
+attributable to aim and stance, not to a damage roll in the game. **Nothing
+here establishes that the game rolls damage at all.**
+
+**A hypothesis that fits all of it, and is not established:** damage falls off
+with range down to a **floor**, and 8 paces is already on that floor. On the
+floor the value is clamped, so it is exactly 10.35 every time and positional
+jitter is absorbed. Off the floor the value sits on a steep slope, so the same
+jitter - a step, a shifted aim point, being a little off the mark - moves it by
+several points. One mechanic explains the constant far value, the varying close
+values, and the wider spread in the run the operator says was off.
+
+**Acceptance for turning that into a finding:** a run at 10 or 12 paces. If the
+floor hypothesis holds it reads 10.35 again and is constant. If damage keeps
+dropping past 8 paces the hypothesis is dead, and the constancy at 8 paces
+needs a different explanation.
