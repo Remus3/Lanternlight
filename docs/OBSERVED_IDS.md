@@ -6,7 +6,14 @@ established, because the log emits NUMBERS and never a class name string - every
 id-to-name binding therefore rests on an operator observation made at the same
 moment, not on the log alone.
 
-Game build: Steam buildid `24619162`. Observed 2026-08-09.
+Game build: Steam buildid `24813185`, observed 2026-08-25.
+
+**The game was patched between observations.** Every id below was read on
+buildid `24619162` (2026-08-09) unless its row says otherwise, and the patch
+landed 2026-08-19T08:06:36Z. None of them has been re-confirmed on the current
+build. Treat an id whose row predates 2026-08-19 as a measurement on a build
+that no longer exists - it is probably still true, and nothing here has
+checked.
 
 ## Class ids
 
@@ -732,6 +739,37 @@ pair, different trailing group. That is **suggestive of an armour-set encoding
 where the middle digits select the slot**, and it is written down as suggestive.
 Two sets is not an encoding, and the last time this document inferred a scheme
 from an id range it had to be retracted.
+
+## Training ground - 2026-08-25, on buildid 24813185
+
+The first ids in this file read on the CURRENT build. Method: operator entered
+the training ground while the log was read directly and a 2 fps frame poller
+ran; log timestamps are UTC, frame filenames local (UTC-5), joined on wall
+clock. See `docs/FINDINGS.md` section 11.
+
+| id or name | What it is | How established |
+|---|---|---|
+| `/Game/Project/Maps/TrainingGround/Training` | the training ground map | `LoadMap(...)`, 23:38:16 UTC |
+| `DA_DungeonSettings_Training` | its settings data asset | `TS.Dungeon: [WeaponComponent]` line, same second |
+| `13003` | `capabilityId` carried on that line | log, 23:38:17 UTC - meaning UNKNOWN, recorded because it was emitted |
+| `WBP_Level_Room_Setting` | the room configuration panel | `TS.UI` window open, 23:38:24 UTC |
+| `PracticeRoomSettingView_C` | its view class | `TS.UI` createWidget, same second |
+| `BP_Adventure_Bot_C` | the spawned practice dummy | log instance names, plus rendered on frame |
+| `WBP_HUD_Predicator_AssistAim` | aim predictor widget, one per shot | `TS.UI` open/createWidget, repeated |
+| `GC_Damage_BeDamaged_C` | gameplay cue notify, damage taken | `LogAbilitySystem` async load |
+| `GC_NumberPops_DamageCrits_C` | gameplay cue notify, crit number pop | `LogAbilitySystem` async load |
+| `/Game/Project/Maps/CampMap/CampMap` | camp | `LoadMap(...)`, 23:37:03 UTC |
+| `/Game/Project/Startup` | startup map | `LoadMap(...)`, 23:34:56 UTC |
+
+**Two cue classes above are NOT hit counters.** `LogAbilitySystem` logs them
+when the class is first async-loaded, once per session, not once per
+occurrence. Counting those lines as crits would produce a wrong number.
+
+**`AmmunitionComponent` id is always 0 so far.** `SpawnDefaultAmmunition spawn
+id=0` appears once per arrow (63 times), and
+`[AmmunitionComponent]: UsingCustomizedAmmunition: id=0` appears once. No other
+value of that id has been observed, so nothing here binds an ammo family - it
+is the first sight of the distinction ROADMAP 4b is about, and no more.
 
 ## Rule
 
