@@ -1488,8 +1488,9 @@ challenged.** Two runs sharing not just their totals but the exact hits the
 sampler missed is the same shape as data copied from a neighbour, which is
 precisely what the confession below describes. So it was re-sourced from the
 capture rather than defended: tiling the three floor windows out of
-`panel2/` gives 8 distinct states for the 10-pace run, 9 for the 8-pace and 12
-for the 9-pace, and reading them off yields observed hits `{6,7,8,10}`,
+`panel2/` gives 8 deduped frames for the 10-pace run, 9 for the 8-pace and 12
+for the 9-pace - deduped frames, not distinct readings, which are 4, 8 and 8 -
+and reading them off yields observed hits `{6,7,8,10}`,
 `{1,2,4,5,7,8,10}` and `{1,2,4,5,7,8,10}` respectively - matching the table.
 The shared gap pattern is real and has a dull cause: the operator fired both
 runs at a steady cadence, and at 2 fps a steady cadence misses the same
