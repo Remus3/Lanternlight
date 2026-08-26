@@ -157,11 +157,11 @@ def _own_probe_prefix() -> str:
 def _is_foreign_probe(path: Path) -> bool:
     """True for a guard probe belonging to some OTHER process.
 
-    ``.gitignore`` already keeps every probe out of the git listing, so on the
-    normal path this filter finds nothing. It is here for the FALLBACK walk,
-    which does not consult ``.gitignore`` at all - a source tarball or a tree
-    before ``git init`` would otherwise reintroduce the exact race the ignore
-    rule closes.
+    **Only ever applied to the FALLBACK walk** - see :func:`_published`. This
+    is a name test, and a name test cannot tell a concurrent suite's scratch
+    file from a tracked file somebody committed under the same name. On the
+    git path that distinction is already made correctly by ``.gitignore``,
+    which removes untracked probes and leaves tracked files alone.
     """
     name = path.name
     return name.startswith(PROBE_PREFIX) and not name.startswith(_own_probe_prefix())
@@ -189,14 +189,24 @@ def _own_probes(root: Path) -> list[Path]:
 def _published(root: Path) -> list[Path]:
     """Every path that would be published from ``root``, in sorted order.
 
-    Plus this process's own guard probes, and minus anyone else's - see
-    :func:`probe_path` for why, and ROADMAP ``OPS-8`` for what it cost.
+    Plus this process's own guard probes. Another process's probes are already
+    absent on the git path, because ``.gitignore`` removes them; on the
+    fallback path, which cannot read ``.gitignore``, they are filtered by name
+    instead. See :func:`probe_path` for why, and ROADMAP ``OPS-8`` for what it
+    cost.
+
+    The name filter is deliberately NOT applied to the git listing. A file git
+    is tracking is a published file whatever it is called, and hiding one from
+    the PII guard is the opposite of this module's job.
     """
     candidates = _git_tracked(root)
     if candidates is None:
-        candidates = _walked(root)
-    kept = [path for path in candidates if not _is_foreign_probe(path)]
-    return sorted(dict.fromkeys([*kept, *_own_probes(root)]))
+        # The fallback walk never reads `.gitignore`, so it is the only path
+        # that needs the name filter - and the only path where the filter is
+        # safe. Applying it to the git listing hid a TRACKED file from the PII
+        # guard; see TestTheProbeFilterCannotHideATrackedFile.
+        candidates = [p for p in _walked(root) if not _is_foreign_probe(p)]
+    return sorted(dict.fromkeys([*candidates, *_own_probes(root)]))
 
 
 def iter_authored_files(root: Path = REPO_ROOT) -> Iterator[Path]:

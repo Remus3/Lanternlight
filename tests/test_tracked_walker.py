@@ -174,6 +174,59 @@ class TestWalkerStillSane:
         assert len(paths) == len(set(paths))
 
 
+class TestTheProbeFilterCannotHideATrackedFile:
+    """The isolation must never blind a guard to something git TRACKS.
+
+    Found by an independent refutation pass on 2026-08-26b, against the first
+    version of the OPS-8 fix. ``_is_foreign_probe`` filtered by NAME over the
+    whole candidate list - tracked files included - so a file committed as
+    ``docs/_guard_probe_notes.md`` became invisible to the PII guard.
+    Demonstrated with a real-shaped SteamID64 in a force-added file: the
+    repository-wide guard went GREEN, and ``.githooks/pre-commit`` does no
+    content scan to catch it either.
+
+    A tracked file that happens to carry a probe name is not a concurrent
+    suite's scratch file. It is a PUBLISHED file, which is the entire category
+    these guards exist to read. The filter therefore applies only on the
+    non-git fallback walk, which is the only path that needs it - on the git
+    path ``.gitignore`` has already removed every untracked probe, and
+    anything still listed is tracked and must be scanned.
+    """
+
+    def test_a_tracked_file_with_a_probe_name_is_still_scanned(self, tmp_path):
+        import pytest
+
+        repo = tmp_path / "repo"
+        repo.mkdir()
+
+        def git(*args):
+            return subprocess.run(
+                ["git", *args], cwd=repo, capture_output=True, text=True, check=False
+            )
+
+        if git("init", "-q", ".").returncode != 0:
+            pytest.skip("git unavailable")
+        git("config", "user.email", "probe@example.invalid")
+        git("config", "user.name", "probe")
+
+        planted = repo / f"{_tracked.PROBE_PREFIX}notes.md"
+        planted.write_text("a note somebody committed", encoding="ascii")
+        assert git("add", "-f", planted.name).returncode == 0
+        git("commit", "-q", "-m", "probe: track a probe-named file")
+
+        # Prove the premise before believing the conclusion: git really is
+        # tracking it. Otherwise this passes for the wrong reason.
+        tracked = git("ls-files").stdout.split()
+        assert planted.name in tracked, tracked
+
+        names = {p.name for p in _tracked.iter_scannable_files(repo)}
+        assert planted.name in names, (
+            "a TRACKED file was hidden from the PII guard by the probe-name "
+            "filter - the filter is for a concurrent suite's scratch files, "
+            "never for anything that would be published"
+        )
+
+
 class TestConcurrentSuitesDoNotCollide:
     """Two pytest processes at once must not destroy each other's evidence.
 
