@@ -65,7 +65,8 @@ with guard.released() as lock:
    one-line summary, acceptance evidence. Into `docs/LEDGER.md`, never
    `CLAUDE.md`.
 7. **Commit and push.**
-8. **Advance** - `state.advance_cycle(next_directive, next_item)`.
+8. **Advance** - `state.advance_cycle(next_directive, next_item)`. Carrying the
+   same item forward credits nothing, because that is a retry (`OPS-7`).
 
 Then start the next cycle by reading disk again. Inherit nothing from the last
 cycle except what it wrote down. If context is running short, that is not a

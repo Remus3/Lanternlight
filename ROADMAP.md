@@ -1801,7 +1801,7 @@ as a measured negative with its limit attached so nobody re-derives it.
 
 ---
 
-## OPS-7. `advance_cycle` silently credits an item that was never started - OPEN
+## OPS-7. `advance_cycle` silently credits an item that was never started - CLOSED 2026-08-27
 
 **This is the SECOND `OPS-7`.** The id was already spent on a fragment-path
 defect closed 2026-08-12 (ledger `LL-0039`). Two items, one id - see `OPS-12`.
@@ -1826,6 +1826,44 @@ completion. Then the minimum change that makes it pass. The existing
 must not manufacture a completion. Check `tests/test_loop_state.py` for the
 current pins before touching the semantics, and verify the guard is not vacuous
 by reverting the fix and watching the new test go red.
+
+### CLOSED 2026-08-27
+
+**The rule, one line:** carrying an item forward is a retry, so `X -> X` credits
+nothing whatever `complete_current` says. Only `X -> Y` or `X -> None` says `X`
+is finished.
+
+All four transitions were run against the real function rather than reasoned
+about: `None -> None` credits nothing and still advances the cycle,
+`X -> None` credits `X`, `X -> X` credits nothing, `X -> Y` credits `X`.
+
+**Five tests, two of them red first** - `test_carrying_the_same_item_forward_is_a_retry_not_a_completion`
+and `test_carrying_forward_twice_never_credits_the_item`. The other three are
+negative controls, and they are the ones that stop the cheap wrong fix: a change
+that simply stopped crediting anything would satisfy the acceptance and quietly
+destroy the record. The multi-hop test exists because an item needing the game
+client gets carried across several sessions, and one bad hop loses it for good -
+there is no operation that un-completes anything.
+
+**Vacuity proved as the acceptance demanded:** deleting `and not carried_forward`
+reddens exactly the two acceptance tests and nothing else. Deleting
+`complete_current` from the same condition reddens exactly the escape-hatch test.
+
+**And a clause of the fix turned out to be inert.** The first version read
+`item is not None and item == current.item`; mutating the guard away killed **no
+test**, because `None -> None` is already blocked by `current.item` being falsy.
+It was deleted rather than kept with a confident comment on it. Verifying your
+own defensive code with the same mutation discipline as the thing it guards is
+the cheap habit here.
+
+**Why this mattered more than its size.** It was hit for real three times -
+`LL-0048`, and twice more on 2026-08-26b and 2026-08-27, both worked around by
+hand with `complete_current=False`. A workaround that only works because the
+operator happens to know about it is how a defect becomes permanent, and this
+one silently tells a cold session to skip an item. `docs/HEADLESS.md` and
+`.claude/commands/loop.md` now state the retry rule at the step that calls it.
+
+Suite 1282 passed / 1282 collected, ruff clean. Baseline 1277.
 
 ## 10. The stack buff - measure it AT THE CEILING - READY, needs the client
 
@@ -2127,11 +2165,11 @@ question, the headshot mechanism, and whether the ~1.3x per pace is real.
   deserves its own session. **Arm the wide-shot poller before the first run** -
   the first sweep of 2026-08-25 had to be re-run because its distances were
   inferred from clock order rather than recorded (`docs/FINDINGS.md` 11.10).
-- **Client closed:** item **7c** (read the meter without a human reading it) or
-  **OPS-7** (`advance_cycle` credits an item that was never started - hit twice
-  now, both times worked around by hand with `complete_current=False`). Item 4c
-  closed 2026-08-25b, **OPS-8 closed 2026-08-26b** and **OPS-12 closed
-  2026-08-27**, so none of them is the fallback any more.
+- **Client closed:** item **7c** (read the meter without a human reading it) is
+  now the only specified fallback. Item 4c closed 2026-08-25b, **OPS-8** closed
+  2026-08-26b, and **OPS-12** and **OPS-7** both closed 2026-08-27, so none of
+  them is the fallback any more. `OPS-6`, `OPS-10` and `OPS-11` remain open but
+  `OPS-6` is an operator decision, not a task.
 
 **Item 9 is CLOSED as of 2026-08-12** (ledger `LL-0046`). The `cdkey` hole is
 shut, the `/Game/` anchor is genuinely pinned, and two of that item's four

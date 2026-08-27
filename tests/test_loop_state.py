@@ -214,6 +214,106 @@ def test_advance_cycle_does_not_duplicate_a_completed_item(state_path: Path) -> 
     assert advanced.completed == ["LL-0009"]
 
 
+def test_carrying_the_same_item_forward_is_a_retry_not_a_completion(
+    state_path: Path,
+) -> None:
+    """`OPS-7`. The default must not manufacture a completion.
+
+    Hit for real during the `LL-0048` wrap, and caught only because the return
+    value happened to be printed and read. `advance_cycle(directive, item="7b")`
+    defaults to `complete_current=True`, which credits the PREVIOUS cycle's
+    in-flight item. When the previous item was also `7b` - the ordinary shape of
+    "I did not get to this, carry it forward" - `7b` was recorded as finished
+    with nothing done to it.
+
+    `completed` is meant to be, in the docstring's own words, the honest answer
+    to what the loop finished. A cold session reading `7b` there would skip the
+    highest-value item on the roadmap and never learn why. That is a direct hit
+    on the continuity design the whole project rests on, because continuity here
+    lives on disk and nothing else remembers.
+
+    Carrying an item forward is a retry. Only moving to a DIFFERENT item, or to
+    none, says the previous one is done.
+    """
+    state_mod.save(LoopState(cycle=11, directive="old", item="7b"), state_path)
+
+    advanced = state_mod.advance_cycle("carry it forward", "7b", path=state_path)
+
+    assert advanced.completed == [], (
+        "the item was carried forward, not finished - crediting it tells the "
+        "next cold session to skip it"
+    )
+    assert advanced.cycle == 12, "a retry is still a cycle"
+    assert advanced.item == "7b"
+    assert advanced.directive == "carry it forward"
+
+    # It has to be true on disk, because that is the only thing that survives.
+    reloaded = state_mod.load(state_path)
+    assert reloaded.completed == []
+    assert reloaded.item == "7b"
+
+
+def test_moving_to_a_different_item_still_credits_the_finished_one(
+    state_path: Path,
+) -> None:
+    """The negative control for `OPS-7`.
+
+    A fix that simply stopped crediting anything would pass the test above and
+    destroy the record, so the ordinary case is pinned right beside it.
+    """
+    state_mod.save(LoopState(cycle=11, item="7b"), state_path)
+
+    advanced = state_mod.advance_cycle("on to the next", "10", path=state_path)
+
+    assert advanced.completed == ["7b"]
+    assert advanced.item == "10"
+
+
+def test_moving_to_no_item_still_credits_the_finished_one(state_path: Path) -> None:
+    """Finishing an item and starting nothing is still finishing it."""
+    state_mod.save(LoopState(cycle=3, item="4c"), state_path)
+
+    advanced = state_mod.advance_cycle("nothing queued", None, path=state_path)
+
+    assert advanced.completed == ["4c"]
+    assert advanced.item is None
+
+
+def test_carrying_forward_twice_never_credits_the_item(state_path: Path) -> None:
+    """The real shape of the bug: an item carried across several cycles.
+
+    One session carrying an item forward is the common case; three in a row is
+    what actually happens when an item needs the game client and the client
+    stays shut. If any single hop credits it, the item is lost for good - and
+    the loop has no way to un-complete something.
+    """
+    state_mod.save(LoopState(cycle=1, item="10"), state_path)
+
+    for cycle in (2, 3, 4):
+        advanced = state_mod.advance_cycle(f"cycle {cycle}", "10", path=state_path)
+        assert advanced.cycle == cycle
+        assert advanced.completed == [], f"credited at cycle {cycle}"
+
+
+def test_declining_to_credit_still_works_when_the_item_changes(
+    state_path: Path,
+) -> None:
+    """`complete_current=False` stays the explicit escape hatch.
+
+    `OPS-7` narrows the DEFAULT. It must not remove the caller's ability to say
+    "this was abandoned" about an item they are also moving away from, which is
+    the one case the new default cannot infer.
+    """
+    state_mod.save(LoopState(cycle=1, item="7b"), state_path)
+
+    advanced = state_mod.advance_cycle(
+        "abandoned, moving on", "10", complete_current=False, path=state_path
+    )
+
+    assert advanced.completed == []
+    assert advanced.item == "10"
+
+
 def test_advance_cycle_from_no_file_starts_at_one(state_path: Path) -> None:
     advanced = state_mod.advance_cycle("first directive", "LL-0001", path=state_path)
     assert advanced.cycle == 1
