@@ -1077,14 +1077,63 @@ worst confusions are `1`->`9` (89), `5`->`4` (50) and `6`->`7` (30).
 **Nothing shipped from this pass**, deliberately: 65.5% is not a reader, it is a
 guesser, and this project would rather have no white row than a wrong one.
 
-**The next thing to try, and why:** grid size not mattering while blur hurts
-points at ALIGNMENT rather than resolution - a glyph sitting a pixel or two
-differently inside its fixed slot smears the average that the templates are
-built from. Align each patch within its slot before averaging (search a small
-dx/dy as the orange labelling already does), and mask the plate's scene bleed
-before normalising. If held-out accuracy does not clear roughly 99% with a
-margin comfortably above `AMBIGUITY_MARGIN`, the row stays unread - the two
-thresholds are not a place to negotiate.
+### Alignment search done 2026-08-27e - REFUTED, and the real cause is the LABEL
+
+**The alignment hypothesis above is refuted.** Six variants were measured on one
+cached mask set and one train/held-out split, so only the alignment varied:
+
+| variant | held-out glyph |
+|---|---|
+| fixed slot crop (baseline) | 65.5% |
+| crop to ink bounding box | 65.4% |
+| crop x to ink, fixed rows | 65.5% |
+| fixed + dx/dy search when scoring | 63.9% |
+| bbox + dx/dy search | 64.2% |
+| bbox-x + dx/dy search | 63.9% |
+
+Nothing moves. Neither does the white threshold (61.1% to 63.9% across five
+settings from `>165` to `>105`), nor grid size, nor dropping outliers from each
+class before averaging.
+
+**The cause is the LABEL, not the pixels, and there are two independent proofs.**
+
+First, two classes are identical: the mean grids for `(slot 0, '1')` and
+`(slot 0, '9')` differ by **0.0000**, with 149 and 15 members. Fifteen patches
+labelled `9` are averaging to the same thing as 149 labelled `1`, which can only
+mean those fifteen frames display a `1`.
+
+Second, excluding frames near a label change fixes it, monotonically:
+
+| frames excluded within N of a label change | glyph | frame-exact | digits covered |
+|---|---|---|---|
+| 0 | 65.5% | 39.4% | 10 |
+| 8 | 76.1% | 51.0% | 10 |
+| 12 | 89.2% | 78.3% | 9 |
+| 16 | 93.7% | 86.5% | 9 |
+| 20 | 94.4% | 89.2% | 9 |
+| **25** | **96.8%** | **92.3%** | 9 |
+| 30 | 96.5% | 91.7% | 9 |
+
+So the templates and the labelling METHOD are sound. **The measured ceiling is
+96.8% per glyph and 92.3% per frame, at a median margin of 0.052** - comfortably
+above `AMBIGUITY_MARGIN`. Only the timing of the label is wrong.
+
+**And the timing error is JITTER, not a constant lag.** Shifting the whole label
+sequence to model a fixed display lag makes it monotonically worse - 65.5% at
+shift 0 down to 46.2% at shift 12 - so the record does not simply appear N
+frames late. Detecting the change from the white pixels directly is worse again
+(68.2%): it finds **51 segments where there are about 26 records**, because
+scene bleed through the semi-transparent plate creates spurious change points.
+
+**Nothing shipped from this pass either.** 92.3% per frame is not a reader.
+
+**The next thing to try, and it is now well-founded:** the jitter is in the
+ORANGE run-boundary detection, not in the white row. Boundaries are declared
+when the hit counter goes backwards, but the orange reader refuses a large
+fraction of frames, so a boundary is noticed at an irregular moment after it
+happened. Make that detection robust - carry the counter across refused frames,
+and require the count to plateau before declaring a run over - then re-label. The
+guard table above says the ceiling is at least 96.8%, so it is worth doing.
 - A fresh clone cannot verify a successful read at all: the capture is 1.1 GB of
   the operator's own screen and is never committed, so those tests skip. The
   clone-safe tests cover segmentation, every refusal path, and that every

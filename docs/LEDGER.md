@@ -84,6 +84,22 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0073 - 2026-08-27 - The alignment search LL-0072 specified is refuted - the white row's blocker is the LABEL's timing, and the measured ceiling is 96.8% per glyph
+
+**Evidence:**
+- ALIGNMENT REFUTED. Six variants on one cached mask set and one train/held-out split, so only alignment varied: fixed slot crop 65.5% (baseline), ink bounding box 65.4%, x-only bbox 65.5%, fixed plus a dx/dy scoring search 63.9%, bbox plus shift 64.2%, bbox-x plus shift 63.9%. Nothing moves. LL-0072 predicted this would be the fix; it is not.
+- NEITHER IS ANYTHING ELSE ABOUT THE PIXELS. White threshold from >165 down to >105 gives 61.1% to 63.9%. Grid size makes no difference. Dropping outliers from each class before averaging makes no difference (62.3% to 63.3% across four cut-offs).
+- PROOF 1 THAT THE LABELS ARE THE PROBLEM: the class means for (slot 0, '1') and (slot 0, '9') differ by 0.0000, with 149 and 15 members. Fifteen patches labelled 9 average to the same grid as 149 labelled 1, which can only mean those fifteen frames display a 1.
+- PROOF 2, and it also measures the ceiling: excluding frames near a label change fixes it monotonically. Guard 0 -> 65.5% glyph / 39.4% frame; guard 8 -> 76.1/51.0; guard 12 -> 89.2/78.3; guard 16 -> 93.7/86.5; guard 20 -> 94.4/89.2; guard 25 -> 96.8/92.3 at median margin 0.052; guard 30 -> 96.5/91.7. So the templates and the labelling METHOD are sound and only the label's timing is wrong.
+- THE TIMING ERROR IS JITTER, NOT A CONSTANT LAG. Shifting the whole label sequence to model a fixed display lag makes it monotonically WORSE - 65.5% at shift 0, 56.2% at 2, 50.1% at 6, 46.2% at 12. The record does not simply appear N frames late.
+- DETECTING THE CHANGE FROM WHITE PIXELS DIRECTLY IS WORSE AGAIN, 68.2%. It finds 51 segments where there are about 26 records, because scene bleed through the semi-transparent plate creates spurious change points. Full digit coverage is recovered (10 per slot) but accuracy is not.
+- LABELS SPOT-CHECKED BY EYE before any of this was concluded: the white row was rendered for frames in two epochs and read manually. The frame labelled 556 shows two top-bar glyphs then a 6-shape; the frame labelled 705 shows a 7, a two-stroke 0, and a third glyph. The previous-completed-run model from LL-0072 holds - it is only its timing that drifts.
+- NOTHING SHIPPED. 92.3% per frame is not a reader, lanternlight/vision_meter.py is untouched, and the suite is unchanged at 1295 passed / 1295 collected on a clean tree.
+
+THE NEXT STEP, now well-founded rather than guessed: the jitter is in the ORANGE run-boundary detection, not in the white row. A boundary is declared when the hit counter goes backwards, but the orange reader refuses a large fraction of frames, so a boundary is noticed at an irregular moment after it happened. Carry the counter across refused frames and require the count to plateau before declaring a run over, then re-label. The guard table puts the ceiling at 96.8% per glyph, so it is worth doing.
+TWO SPECIFIED NEXT STEPS IN A ROW HAVE BEEN WRONG - LL-0071 said the white row was blocked on data, LL-0072 said the blocker was alignment. Both were inferences from the shape of a symptom rather than measurements of a cause. What actually located it was a class-mean collision nobody was looking for and a guard sweep that was cheap to run. Prefer the cheap sweep that isolates a variable over the plausible story about a mechanism.
+A METHOD NOTE WORTH KEEPING: every experiment here reused one cached mask set and one fixed train/held-out split, so the numbers are comparable across variants. Re-deriving the cache per variant would have made six incomparable measurements and none of the tables above would mean anything.
+
 ### LL-0072 - 2026-08-27 - White-row groundwork - LL-0071's 'the capture cannot supply white templates' is REFUTED by me; the data covers all ten digits and the blocker is representation
 
 **Evidence:**
