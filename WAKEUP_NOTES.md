@@ -10,8 +10,8 @@ fidelity and archive older ones rather than deleting them.
 Client **closed** again, so this is the fallback item worked end to end. No
 capture, no game data touched.
 
-**Suite 1271 passed / 1271 collected**, ruff clean, clean tree with
-`__pycache__` purged. Baseline was 1253. Ledger `LL-0068`.
+**Suite 1277 passed / 1277 collected**, ruff clean, clean tree with
+`__pycache__` purged. Baseline was 1253. Ledger `LL-0068` and `LL-0069`.
 
 ## What shipped
 
@@ -47,6 +47,28 @@ closed by an entry whose heading avoids the word "closed", so it scores 0 and a
 second `OPS-4` would slip through. That is the chosen trade: over-reporting
 makes the guard red on correct items, and a guard that cries wolf gets
 overridden - the same argument OPS-8 made about the merge gate.
+
+## The refutation found a repeat offence
+
+`ops/ops_ids.py` shipped fence-blind: it did its own line matching, so a worked
+example inside a code block reads as a live heading. **This repository had
+already closed that exact bug** - `OPS-9` / `LL-0038`, whose conclusion was that
+there must be one fence scan every reader shares. The new module was a third
+private reader, written the day after that ledger entry was read.
+
+Fixed by extracting `ops/mdscan.py` and pointing both `lane_state` and
+`ops_ids` at it, deleting `lane_state`'s duplicate copy rather than leaving it.
+`test_lane_state.py`'s 29 existing fence assertions pass unchanged, which is
+what makes it a refactor rather than a rewrite.
+
+**Then dogfooding found two more that no refuter did.** This session's own
+ledger heading says "the same bug OPS-9 closed, rebuilt" - a sentence, not a
+closure - and the guard counted it, reporting `[7, 8, 9]`. The closure pattern
+is now anchored to the convention every real closure follows. And writing a
+worked example with a real number in it **spends that number**: documenting the
+fence fix burned an id and pushed `next_free_id` past it. Write examples with a
+placeholder. That correction had to be made twice, because the first draft
+documented the problem by quoting the offending number.
 
 ## Two things that cost time
 
