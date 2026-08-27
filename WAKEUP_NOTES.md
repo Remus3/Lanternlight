@@ -5,6 +5,56 @@ fidelity and archive older ones rather than deleting them.
 
 ---
 
+# Session 2026-08-27e - the alignment search, refuted; the label was the problem
+
+Client **closed**. Suite **1295 passed / 1295 collected**, unchanged - **nothing
+shipped again, on purpose**. Ledger `LL-0073`.
+
+## The specified next step was wrong
+
+`LL-0072` said the white row's blocker was alignment. It is not. Six variants -
+fixed crop, ink bounding box, x-only bbox, and each with a dx/dy scoring search -
+all land between **63.9% and 65.5%**. Neither does the white threshold move it
+(61.1% to 63.9% from `>165` down to `>105`), nor grid size, nor dropping
+outliers before averaging.
+
+## The cause is the label's TIMING, proven twice
+
+**A class-mean collision nobody was looking for.** `(slot 0, '1')` and
+`(slot 0, '9')` have means differing by **0.0000**, with 149 and 15 members.
+Fifteen frames labelled `9` display a `1`.
+
+**A guard sweep that is cheap to run.** Excluding frames near a label change
+lifts accuracy monotonically to **96.8% per glyph and 92.3% per frame** at a
+median margin of 0.052 - clear of `AMBIGUITY_MARGIN`. So the templates and the
+labelling method are sound; only the timing is wrong.
+
+## And the timing error is jitter, not a lag
+
+Shifting the whole label sequence to model a constant display lag makes it
+monotonically **worse** (65.5% at shift 0 down to 46.2% at shift 12). Detecting
+the change from white pixels directly is worse again (68.2%) - it finds **51
+segments where there are about 26 records**, because scene bleed creates
+spurious change points.
+
+## Next, and this one is measured rather than guessed
+
+The jitter is in the **orange run-boundary detection**, not the white row. A
+boundary is declared when the hit counter goes backwards, but the orange reader
+refuses a large fraction of frames, so the boundary is noticed at an irregular
+moment after it happened. Carry the counter across refused frames, require the
+count to plateau before declaring a run over, then re-label. The ceiling is at
+least 96.8%.
+
+## Two wrong next-steps in a row
+
+`LL-0071` said blocked on data; `LL-0072` said blocked on alignment. Both were
+inferences from the shape of a symptom rather than measurements of a cause. What
+actually located it was a collision I was not looking for and a cheap sweep that
+isolated one variable. **Prefer the cheap sweep to the plausible story.**
+
+---
+
 # Session 2026-08-27d - white-row groundwork, and I refuted my own blocker
 
 Client **closed**. Suite **1295 passed / 1295 collected**, unchanged - **nothing
