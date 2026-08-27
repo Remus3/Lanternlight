@@ -36,11 +36,11 @@ A fresh clone runs zero git hooks until that first command runs. The tracked
 
 ## Where the last session left it
 
-**Suite 1253 passed / 1253 collected, ruff clean**, measured on a clean tree
+**Suite 1271 passed / 1271 collected, ruff clean**, measured on a clean tree
 with `__pycache__` purged - that is your merge-gate baseline, and re-measure it
 yourself before dispatching work rather than trusting this line.
 
-The ledger runs to **`LL-0067`**. Read **`LL-0064`**, **`LL-0066`** and
+The ledger runs to **`LL-0068`**. Read **`LL-0064`**, **`LL-0066`** and
 **`LL-0067`** first.
 LL-0064 is an independent four-agent refutation pass that **overturns claims
 earlier entries make** - reading LL-0056 through LL-0063 without it leaves you
@@ -100,10 +100,18 @@ without it**: the tooltip scopes that talent to `Rapid Arrows`, and 2.27-2.87 s
 inter-hit intervals prove drawn shots, not Volley.
 
 **If the client is shut:** work **7c** (the meter reader needs one template set
-PER FIELD; the groundwork and the failure modes are written up) or **OPS-12**
-(two `OPS-` ids each name two different items; the acceptance is a test that
-refuses an already-spent id, deriving the spent set by walking the documents
-rather than from a checked-in list).
+PER FIELD; the groundwork and the failure modes are written up) or **OPS-7**
+(`advance_cycle` credits an item that was never started - hit twice now, and
+worked around by hand with `complete_current=False` both times, which is exactly
+how a defect becomes permanent).
+
+**OPS-12 is CLOSED as of 2026-08-27.** Before you add a roadmap item, ask for
+its id rather than counting by eye - counting from the OPEN items is what
+produced two collisions:
+
+```
+python -c "from ops import ops_ids; print(ops_ids.next_free_id())"
+```
 
 **OPS-8 is CLOSED as of 2026-08-26b.** The suite now survives 6-way concurrent
 pytest - 24 consecutive green full-suite runs against a measured 9-of-10-red
@@ -142,6 +150,11 @@ work it gates.
   still catches what it caught.** Three mutations of the OPS-8 fix all asked
   the first question. The hole was in the second: a name filter that hid
   tracked files from the PII guard, green all the way through.
+- **The lane roster is not the only copy of itself.** Editing `ops/lanes.py`
+  makes `.claude/commands/lane-*.md` stale and reddens
+  `tests/test_lane_contract.py`. Run `python scripts/write_lane_contracts.py`.
+- **A document that describes a pattern can match it.** Check a scanner against
+  the document after writing prose about the scanner, do not assume.
 - **Verify a scripted edit by READING the file.** A reused `new` variable wrote
   a ROADMAP paragraph into `.gitignore`, where unprefixed lines are ignore
   PATTERNS. Valid ASCII, no identifier, suite green - uncatchable by any test.

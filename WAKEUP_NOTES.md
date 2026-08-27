@@ -5,6 +5,63 @@ fidelity and archive older ones rather than deleting them.
 
 ---
 
+# Session 2026-08-27 - OPS-12 closed, the OPS- namespace has an allocator
+
+Client **closed** again, so this is the fallback item worked end to end. No
+capture, no game data touched.
+
+**Suite 1271 passed / 1271 collected**, ruff clean, clean tree with
+`__pycache__` purged. Baseline was 1253. Ledger `LL-0068`.
+
+## What shipped
+
+`ops/ops_ids.py`. The `OPS-` namespace had no allocator - unlike `LL-` ids,
+which `ops/loop/ledger.py` hands out and collision-checks. Now:
+
+```
+python -c "from ops import ops_ids; print(ops_ids.next_free_id())"
+```
+
+It walks `ROADMAP.md` and `docs/LEDGER.md` at run time and **nothing is checked
+in** - a stored list of spent ids was explicitly ruled out by the acceptance,
+because it goes stale the first time an item is added without touching it.
+
+**Allocation is counted at two sites only**, since an id appears in prose
+constantly and prose is not allocation: a `## OPS-<n>.` roadmap heading, and a
+ledger entry heading announcing a closure. A CLOSED heading is read as the same
+item as its closure, so the normal lifecycle does not read as a collision:
+
+```
+allocations = closures + open_headings + max(0, closed_headings - closures)
+```
+
+## The half that matters most
+
+The known-collision set fails **in both directions**. Planting a reuse of
+`OPS-9` in the real roadmap went red (`found: [7, 8, 9]`); renumbering the open
+`OPS-7` to simulate a repair went red too (`found: [8]`). An exemption that
+silently outlives the defect it excuses is how a guard rots.
+
+**The count deliberately under-reports rather than over-reports.** `OPS-4` was
+closed by an entry whose heading avoids the word "closed", so it scores 0 and a
+second `OPS-4` would slip through. That is the chosen trade: over-reporting
+makes the guard red on correct items, and a guard that cries wolf gets
+overridden - the same argument OPS-8 made about the merge gate.
+
+## Two things that cost time
+
+- **The roster is not the only copy of itself.** Adding `tests/test_ops_ids.py`
+  to `ops/lanes.py` made `.claude/commands/lane-ops.md` stale and
+  `tests/test_lane_contract.py` went red. Fix is
+  `python scripts/write_lane_contracts.py`.
+- **A document that describes a pattern can match it.** The OPS-12 closure text
+  quotes the `## OPS-<n>.` heading form the scanner looks for. Re-derived after
+  writing it - still exactly `{7, 8}`, because the mentions sit mid-line. Check
+  this, do not assume it; `LL-0038` is the entry about a parser that ignored its
+  own document's structure.
+
+---
+
 # Session 2026-08-26b - OPS-8 closed, and the filed mechanism was wrong
 
 Client was **closed** all session, so this is the fallback item from the
