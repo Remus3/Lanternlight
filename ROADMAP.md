@@ -1016,10 +1016,75 @@ test that erodes a prototype until it lands inside the band.
 **What is left**, and it is the white pair only:
 
 - **Acceptance:** a labelled template set for the white Progress Record digits,
-  and `read_panel` returning the pair instead of None. Blocked on a capture in
-  which the Progress Record CHANGES - the current one is constant, so no amount
-  of re-clustering will produce ten shapes. Label it from behaviour as above,
-  never by eye, and require the bijection.
+  and `read_panel` returning the pair instead of None. **NOT blocked on a new
+  capture** - see the groundwork below, which overturns that.
+
+### White-row groundwork MEASURED 2026-08-27d - not blocked on data after all
+
+**The "blocked on a capture where the record changes" claim above is REFUTED,
+and it was mine.** It generalised from the white HIT COUNT, which really does
+read a constant `11` throughout, to the whole row. The white VALUE field varies
+freely: **26 distinct values** appear in the reference capture - 104, 123, 158,
+231, 264, 265, 309, 350, 438, 531, 546, 552, 556, 559, 651, 684, 687, 689, 690,
+692, 705, 799, 817, 818, 896, 980 - and a labelled harvest covers **all ten
+digits**. The data was there the whole time.
+
+**Segmentation must be FIXED-PITCH SLOTS, not column runs.** The white glyphs
+are 1px-stroke outlines, so a `1` splits into two column runs and the run-based
+segmentation that works for the thicker orange digits returns 0, 1, 2, 3, 4, 5
+or 7 glyphs for a 3-digit number. Measured slot geometry, from a column
+occupancy histogram over the capture:
+
+| field | slots | pitch |
+|---|---|---|
+| white value | x52, x65, x78 | 13 |
+| white hit count | x200, x213 | 13 |
+
+The white `Hit` label starts at **x233** and must never be read as a digit.
+
+**The Progress Record shows the PREVIOUS COMPLETED RUN**, not the best ever, and
+that is what makes labelling possible: the orange reader already knows what that
+run totalled, so every white patch has a known label and **no clustering is
+needed**. Measured - grouping frames by the previous completed run's total gives
+a single dominant white pattern in **22 of 26 epochs**, most at 100%. The
+best-so-far model was tried first and is refuted by its own output: it makes the
+"record" DECREASE, and within one supposed epoch the first slot goes empty, then
+a 7-shape, then a 1-shape.
+
+That independently corroborates `LL-0064`, which reached the same conclusion
+from a single frame reading `42, 3 Hit` beside `0, 0 Hit`. This is the pixel
+evidence for it, and it was in the ledger before this work started.
+
+**Clustering was the wrong tool and is abandoned.** Pooled and per-slot, one
+cluster absorbs several digits - cluster 0 alone took 1, 0, 6, 5, 4 and 9 - and
+44 clusters emerged for what should be 10 shapes. The strokes are 1px and the
+plate is semi-transparent, so the scene behind moves under them.
+
+**What is left is a REPRESENTATION problem, and it is measured.** With templates
+averaged per (slot, digit) from the record labels, held-out accuracy is:
+
+| representation | held-out | median margin |
+|---|---|---|
+| 20x12, 3x3 blur | 58.8% | 0.022 |
+| 20x12, no blur | **65.5%** | 0.040 |
+| 25x10, no blur | 65.5% | 0.040 |
+| 25x10, blur | 59.2% | 0.030 |
+
+Blur HURTS here, the opposite of the orange row, because it destroys 1px
+strokes. Grid size is irrelevant, which says the loss is not resolution. The
+worst confusions are `1`->`9` (89), `5`->`4` (50) and `6`->`7` (30).
+
+**Nothing shipped from this pass**, deliberately: 65.5% is not a reader, it is a
+guesser, and this project would rather have no white row than a wrong one.
+
+**The next thing to try, and why:** grid size not mattering while blur hurts
+points at ALIGNMENT rather than resolution - a glyph sitting a pixel or two
+differently inside its fixed slot smears the average that the templates are
+built from. Align each patch within its slot before averaging (search a small
+dx/dy as the orange labelling already does), and mask the plate's scene bleed
+before normalising. If held-out accuracy does not clear roughly 99% with a
+margin comfortably above `AMBIGUITY_MARGIN`, the row stays unread - the two
+thresholds are not a place to negotiate.
 - A fresh clone cannot verify a successful read at all: the capture is 1.1 GB of
   the operator's own screen and is never committed, so those tests skip. The
   clone-safe tests cover segmentation, every refusal path, and that every

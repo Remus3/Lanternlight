@@ -5,6 +5,53 @@ fidelity and archive older ones rather than deleting them.
 
 ---
 
+# Session 2026-08-27d - white-row groundwork, and I refuted my own blocker
+
+Client **closed**. Suite **1295 passed / 1295 collected**, unchanged - **nothing
+shipped from this pass on purpose**. Ledger `LL-0072`.
+
+## The headline is a self-refutation
+
+Last session I wrote that the white Progress Record was **blocked on a new
+capture** because its digits never vary. That is wrong, and it was inferred from
+the neighbouring field: the white HIT COUNT really is a constant `11`, but the
+white VALUE field takes **26 distinct values** in the existing capture, and a
+labelled harvest covers **all ten digits**. The data was there before the claim
+was written.
+
+A negative like "the capture cannot supply this" closes an avenue for every
+future session. It needs the same evidence as a positive. That one had none.
+
+## What is now measured
+
+- **Fixed-pitch slots, not column runs.** The white glyphs are 1px outlines, so
+  a `1` splits into two runs and run-based segmentation returns anywhere from 0
+  to 7 glyphs for a 3-digit number. Value slots x52/x65/x78, hits x200/x213,
+  pitch 13, and the `Hit` label starts at x233.
+- **The record is the PREVIOUS COMPLETED RUN.** 22 of 26 epochs give a single
+  dominant white pattern under that model. The best-so-far model is refuted by
+  its own output - it makes the record decrease.
+- **No clustering needed.** The record gives every patch a known label from the
+  orange reader, so templates average per (slot, digit) directly. Clustering had
+  one cluster absorbing 1, 0, 6, 5, 4 and 9.
+
+## Where it stops, and why nothing shipped
+
+Held-out accuracy is **65.5%** at best (no blur; blur costs 7 points because it
+destroys 1px strokes), median margin 0.040. That is a guesser, not a reader.
+Grid size making no difference while blur hurts points at **alignment**, not
+resolution - the next thing to try is a small dx/dy search per patch before
+averaging, plus masking the plate's scene bleed. The bar is ~99% with a margin
+clear of `AMBIGUITY_MARGIN`.
+
+## The detour worth not repeating
+
+`LL-0064` already said this row is "the previous run's record row". I built and
+discarded a best-so-far model before using it. Reading the ledger for the ENTRY
+rather than for the id would have saved the trip.
+
+---
+
 # Session 2026-08-27c - the meter reads itself, for the orange row
 
 Client **closed**. Suite **1295 passed / 1295 collected**, ruff clean, clean
