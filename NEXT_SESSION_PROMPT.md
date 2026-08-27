@@ -40,7 +40,7 @@ A fresh clone runs zero git hooks until that first command runs. The tracked
 with `__pycache__` purged - that is your merge-gate baseline, and re-measure it
 yourself before dispatching work rather than trusting this line.
 
-The ledger runs to **`LL-0071`**. Read **`LL-0064`**, **`LL-0066`** and
+The ledger runs to **`LL-0072`**. Read **`LL-0064`**, **`LL-0066`** and
 **`LL-0067`** first.
 LL-0064 is an independent four-agent refutation pass that **overturns claims
 earlier entries make** - reading LL-0056 through LL-0063 without it leaves you
@@ -100,10 +100,12 @@ without it**: the tooltip scopes that talent to `Rapid Arrows`, and 2.27-2.87 s
 inter-hit intervals prove drawn shots, not Volley.
 
 **If the client is shut:** **7c is PARTLY DONE** - the orange pair reads and
-reproduces the hand-read series exactly. What is left is the white Progress
-Record pair, and it is **BLOCKED**: those digits are a different, serifed
-typeface, and the reference capture shows a constant `11` so it cannot supply
-templates for them. It needs a capture in which the Progress Record CHANGES.
+reproduces the hand-read series exactly. The white Progress Record pair is
+**NOT blocked on data** (that claim was mine and is refuted in `LL-0072`): the
+existing capture covers all ten white digits. Segmentation, slot geometry and
+the labelling method are all measured and written up under 7c. What is left is
+an ALIGNMENT problem - held-out accuracy sits at 65.5%, and the specified next
+step is a small dx/dy search per patch before averaging.
 Everything else specified is closed - OPS-7 and OPS-12 on 2026-08-27, OPS-8 on
 2026-08-26b, 4c on 2026-08-25b.
 
@@ -156,6 +158,9 @@ work it gates.
   still catches what it caught.** Three mutations of the OPS-8 fix all asked
   the first question. The hole was in the second: a name filter that hid
   tracked files from the PII guard, green all the way through.
+- **A measured null needs the same evidence as a positive.** "The capture
+  cannot supply this" closes an avenue for every later session; one such claim
+  was inferred from a neighbouring field and was wrong.
 - **Derive an id or a label from BEHAVIOUR, never from shape or from a stored
   order.** Two wrong meter label sets came from a creation-order list that is
   not portable and from reading glyphs by eye. The hit counter settled it.
