@@ -826,7 +826,7 @@ direction to the escape-then-camp switch this item measured. Neither
 observation is amended; the reading that fits both is a **level transition** in
 either direction, and it is n=1 on each side. `docs/FINDINGS.md` 12.2.
 
-## 7c. Read the training ground meter without a human reading it - READY
+## 7c. Read the training ground meter without a human reading it - PARTLY DONE 2026-08-27b
 
 Opened 2026-08-25, straight out of the session that measured 10.35. The meter
 is the only damage surface the training ground has, and every number in
@@ -951,6 +951,81 @@ requirement now has measured teeth: the two-threshold design (accept below,
 reject above, **refuse in between**) is what stops a damaged glyph from
 silently truncating a number into a shorter one that would look perfectly
 valid.
+
+### PARTLY DONE 2026-08-27b - the ORANGE pair is read; the white pair is refused
+
+`lanternlight/vision_meter.py` reads the Total Damage value and its hit count
+off a captured panel crop, and **reproduces the hand-read series exactly**:
+`10 21 31 41 52 62 72 83 93 103`, from ten named frames in
+`C:/ll-captures/2026-08-25/panel`. Five other floor runs in the same capture
+read the same series ending `104` rather than `103` - the rounding tie 10.35
+predicts, so that is corroboration rather than disagreement.
+
+**The per-field plan works, and the labelling method in this item did not.**
+Clustering per field reproduced the counts recorded above (orange hits exactly
+10, orange value 13, white value 7). Labelling those clusters is where two
+attempts went wrong:
+
+- The wip's label list is by cluster CREATION ORDER, which is **not portable**
+  across harvest runs. Reusing it produced a confident, entirely wrong reading.
+- Reading the shapes off rendered ASCII art by eye produced a second wrong set.
+
+What worked is the counter itself. Walking the capture in time order and
+recording which cluster follows which gives an unambiguous successor chain, and
+the cluster preceding every two-glyph reading is `9`. Walking that chain back
+labels all ten, and the assignment is checked as a bijection. A lone cluster
+whose successor is `1` turns out to be the meter's `0 Hit` reset state, which
+independently confirms the zero. **Derive labels from behaviour, never from
+shape.**
+
+**REFUTED - the white row is not the same glyphs at a different weight.** This
+item's stated root cause says "the same digit in two fields is the same shape at
+a different weight and offset". That holds WITHIN the orange row, where value
+clusters label onto the hit-count set with margins of 0.032 to 0.101. It is
+false across the colours: the white Progress Record digits carry **wide
+bracketed base serifs the orange digits do not have**. Nearest-neighbour
+labelling of white clusters onto the orange set returns margins as low as
+**0.002**, and the bijection check correctly refuses the mapping.
+
+**The reference capture also cannot supply white templates.** Its white hit
+count reads a constant `11` for almost the whole 6,439 frames, so only one digit
+shape is available to harvest there - 3 clusters, one of them the letter `t`
+from the `Hit` label.
+
+So `read_panel` returns the orange pair and reports `progress=None`. That is the
+refusal requirement applied to a whole field rather than a glyph.
+
+**One acceptance detail is wrong in this item and should not be re-attempted as
+written.** The second cited series, `55 109 164 219 275 330 386 441 496 552`, is
+**not in `panel/`**. The run beginning at 55 there reads
+`55 110 166 221 277 333 388 - 500 556`, about 55.6 per hit against the cited
+55.2. Frame `p00504` was checked by eye at hit 3 and reads `166`, agreeing with
+the reader. Either that series came from a different capture or it was
+mis-transcribed; it is not evidence against this reader.
+
+**Guards proven non-vacuous - five mutations, each red in a different place:**
+closing the accept/reject gap kills 2 tests; disabling the bleed ceiling kills
+the bleed test; accepting any glyph width kills the fragment test; swapping two
+VALUE template labels kills BOTH ground-truth tests.
+
+And one test here was found vacuous while checking: the corrupted-glyph test
+refuses with "matched no digit", i.e. it scores ABOVE the reject threshold, so
+it would still pass if the two thresholds were equal. The gap now has its own
+test that erodes a prototype until it lands inside the band.
+
+**What is left**, and it is the white pair only:
+
+- **Acceptance:** a labelled template set for the white Progress Record digits,
+  and `read_panel` returning the pair instead of None. Blocked on a capture in
+  which the Progress Record CHANGES - the current one is constant, so no amount
+  of re-clustering will produce ten shapes. Label it from behaviour as above,
+  never by eye, and require the bijection.
+- A fresh clone cannot verify a successful read at all: the capture is 1.1 GB of
+  the operator's own screen and is never committed, so those tests skip. The
+  clone-safe tests cover segmentation, every refusal path, and that every
+  prototype classifies as its own digit. Closing that gap needs a reviewed,
+  redacted single-frame fixture, which is a safety-lane call and is not taken
+  here.
 
 ## 4c. Archive the log and the market cache on every session - CLOSED 2026-08-25b
 
