@@ -5,6 +5,61 @@ fidelity and archive older ones rather than deleting them.
 
 ---
 
+# Session 2026-08-27c - the meter reads itself, for the orange row
+
+Client **closed**. Suite **1295 passed / 1295 collected**, ruff clean, clean
+tree. Baseline 1282. Ledger `LL-0071`.
+
+## What shipped
+
+`lanternlight/vision_meter.py` reads the Total Damage value and hit count off a
+captured panel crop and **reproduces the hand-read series exactly** -
+`10 21 31 41 52 62 72 83 93 103` from ten named frames. No Tesseract, as 7c
+required. Templates are generated into `vision_meter_templates.py`.
+
+## The lesson is about labelling, and it cost two wrong readings
+
+Clustering per field worked first time and reproduced 7c's recorded counts.
+**Labelling the clusters is what failed, twice.** The wip's label list is by
+cluster CREATION ORDER and is not portable across harvest runs; reusing it made
+a frame showing 103 read as 16. Reading the shapes off ASCII art by eye gave a
+second wrong set.
+
+What worked: the **counter**. Which cluster follows which, in time order, gives
+an unambiguous successor chain, the cluster before every two-glyph reading is
+`9`, and walking back labels all ten - checked as a bijection. A lone cluster
+whose successor is `1` is the `0 Hit` reset state, independently confirming the
+zero. **Derive labels from behaviour, never from shape.**
+
+## Two things in 7c itself are wrong
+
+**Its stated root cause is refuted.** "The same digit in two fields is the same
+shape at a different weight" holds within the orange row (margins 0.032-0.101)
+and is false across colours: the white Progress Record digits carry **wide
+bracketed base serifs** the orange ones do not. Cross-colour labelling gives
+margins of 0.002 and the bijection check refuses it. The white row is also
+unharvestable from this capture - its hit count is a constant `11` throughout.
+So the reader returns `progress=None` rather than guessing.
+
+**Its second cited series is not in the directory it names.** `55 109 164 ...`
+does not appear in `panel/`; the run starting at 55 reads `55 110 166 221 ...`,
+and frame `p00504` checked by eye at hit 3 reads `166`, agreeing with the reader.
+
+## A test of mine was vacuous, found by mutating
+
+The corrupted-glyph test refuses with "matched no digit" - it scores ABOVE the
+reject threshold, so it would pass even with the two thresholds equal, and
+proved nothing about the refusal GAP that is the design's whole point. The gap
+now has its own test that erodes a prototype until it lands inside the band.
+
+**A fresh clone cannot verify a successful read.** The capture is 1.1 GB of the
+operator's screen and is never committed, so real-frame tests skip. Synthesising
+a frame from templates does not fill the hole - a grid cell is about one pixel,
+so painting a soft prototype back binarises it. Closing it needs a reviewed,
+redacted fixture, which is a safety-lane call and was not taken.
+
+---
+
 # Session 2026-08-27b - OPS-7 closed, the loop stops crediting work nobody did
 
 Client **closed**. Suite **1282 passed / 1282 collected**, ruff clean, clean

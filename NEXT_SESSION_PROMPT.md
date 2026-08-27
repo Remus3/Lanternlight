@@ -36,11 +36,11 @@ A fresh clone runs zero git hooks until that first command runs. The tracked
 
 ## Where the last session left it
 
-**Suite 1282 passed / 1282 collected, ruff clean**, measured on a clean tree
+**Suite 1295 passed / 1295 collected, ruff clean**, measured on a clean tree
 with `__pycache__` purged - that is your merge-gate baseline, and re-measure it
 yourself before dispatching work rather than trusting this line.
 
-The ledger runs to **`LL-0070`**. Read **`LL-0064`**, **`LL-0066`** and
+The ledger runs to **`LL-0071`**. Read **`LL-0064`**, **`LL-0066`** and
 **`LL-0067`** first.
 LL-0064 is an independent four-agent refutation pass that **overturns claims
 earlier entries make** - reading LL-0056 through LL-0063 without it leaves you
@@ -99,10 +99,13 @@ Acceptance is in ROADMAP 10, including the target-switch test that separates
 without it**: the tooltip scopes that talent to `Rapid Arrows`, and 2.27-2.87 s
 inter-hit intervals prove drawn shots, not Volley.
 
-**If the client is shut:** work **7c** (the meter reader needs one template set
-PER FIELD; the groundwork and the failure modes are written up). It is now the
-only fully-specified fallback left - **OPS-7 and OPS-12 both closed
-2026-08-27**, OPS-8 closed 2026-08-26b, 4c closed 2026-08-25b.
+**If the client is shut:** **7c is PARTLY DONE** - the orange pair reads and
+reproduces the hand-read series exactly. What is left is the white Progress
+Record pair, and it is **BLOCKED**: those digits are a different, serifed
+typeface, and the reference capture shows a constant `11` so it cannot supply
+templates for them. It needs a capture in which the Progress Record CHANGES.
+Everything else specified is closed - OPS-7 and OPS-12 on 2026-08-27, OPS-8 on
+2026-08-26b, 4c on 2026-08-25b.
 
 **`advance_cycle` is safe to call normally again.** Carrying an item forward is
 a retry and credits nothing, so you no longer need `complete_current=False` by
@@ -153,6 +156,9 @@ work it gates.
   still catches what it caught.** Three mutations of the OPS-8 fix all asked
   the first question. The hole was in the second: a name filter that hid
   tracked files from the PII guard, green all the way through.
+- **Derive an id or a label from BEHAVIOUR, never from shape or from a stored
+  order.** Two wrong meter label sets came from a creation-order list that is
+  not portable and from reading glyphs by eye. The hit counter settled it.
 - **The lane roster is not the only copy of itself.** Editing `ops/lanes.py`
   makes `.claude/commands/lane-*.md` stale and reddens
   `tests/test_lane_contract.py`. Run `python scripts/write_lane_contracts.py`.
