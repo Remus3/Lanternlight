@@ -40,6 +40,7 @@ Touch these paths and nothing else. Every other path in the repository belongs t
 - `tests/test_loop_*.py`
 - `tests/test_merge_gate.py`
 - `tests/test_lanes.py`
+- `tests/test_ops_ids.py`
 - `ROADMAP.md`
 - `docs/LEDGER.md`
 - `docs/HEADLESS.md`

@@ -9,6 +9,17 @@ Nothing is moved from there to here without an acceptance criterion attached.
 Status vocabulary: **NEXT** (the current item), **READY** (specified, unblocked),
 **BLOCKED** (waiting on something named), **OPEN** (a question, not a task).
 
+**Allocating an `OPS-` id: ask, do not count.** Numbering by eye from the OPEN
+items is what produced `OPS-12`, because a spent id may have been closed long
+ago and be invisible among them.
+
+```
+python -c "from ops import ops_ids; print(ops_ids.next_free_id())"
+```
+
+It walks this file and `docs/LEDGER.md` at run time, so it cannot go stale.
+`tests/test_ops_ids.py` fails if an already-spent id is allocated anyway.
+
 ---
 
 ## 0. Redactor persona leak - CLOSED 2026-08-09
@@ -1974,7 +1985,7 @@ reproduced inside the test for it.** Only the concurrent run could see it. A
 foreign probe now carries `<prefix><pid>other_` - foreign to every walker
 because it does not match `<prefix><pid>_`, and unique on disk.
 
-## OPS-12. Two ops ids each name two different items - OPEN
+## OPS-12. Two ops ids each name two different items - CLOSED 2026-08-27
 
 Found 2026-08-26b while closing the second `OPS-8`. The `OPS-` namespace was
 reallocated without checking what was already spent, so **`OPS-7` and `OPS-8`
@@ -2005,6 +2016,60 @@ id fails a test. The id set must be derived by walking `ROADMAP.md` and
 filed count this project has been burned by**, and it would go stale on the
 first item added without touching it.
 
+### CLOSED 2026-08-27 - `ops/ops_ids.py` and `tests/test_ops_ids.py`
+
+**Nothing is checked in.** `spent_ids()` recomputes from both documents on every
+call, and `next_free_id()` returns `max(spent) + 1` - above the maximum, never
+into a gap, because a gap means an id was retired and reissuing it re-creates
+the confusion.
+
+**What counts as ALLOCATING an id**, since an id appears in prose constantly and
+that is not allocation. Exactly two sites are counted: a top-level
+`## OPS-<n>.` heading here, and a ledger ENTRY HEADING announcing a closure.
+One item normally produces both over its life, so a heading marked CLOSED is
+read as the same item as its closure:
+
+```
+allocations = closures + open_headings + max(0, closed_headings - closures)
+```
+
+Derived from the real documents, and it matches the table above exactly:
+`OPS-9` scores 1 (one closure, no heading), `OPS-12` scores 1 (heading, no
+closure), `OPS-7` scores 2 (`LL-0039` plus an OPEN heading), `OPS-8` scores 2
+(`LL-0040` and `LL-0066` plus a CLOSED heading). Both real collisions caught,
+no correct item flagged.
+
+The count may **under**-report and never over-report. `OPS-4` was closed by an
+entry whose heading avoids the word "closed", so it scores 0. Under-reporting
+costs a missed warning; over-reporting makes the guard red on correct items,
+and a guard that cries wolf gets switched off.
+
+**The two known collisions are asserted as an exact set**, which is a record of
+a measured state rather than a list of spent ids. It fails on a third collision
+**and on a resolution**, so the exemption cannot outlive the defect it excuses -
+the `lane_state.stale_claims()` shape.
+
+**Acceptance evidence, both directions demonstrated against the REAL documents,
+not only fixtures:**
+
+- Planting `## OPS-9.` - an id `LL-0038` closed on 2026-08-12 - into this file
+  turned the guard red: `expected: [7, 8]` / `found: [7, 8, 9]`, with a message
+  naming `ops_ids.next_free_id()`. Reverted, green.
+- Renumbering the OPEN `OPS-7` item to 13, simulating a resolution, ALSO turned
+  it red: `expected: [7, 8]` / `found: [8]`. Reverted, green.
+- Four mutations, each watched killing a different set: `over_allocated` -> `{}`
+  kills 6; `ledger_closures` -> `{}` kills 7; dropping `open_headings` from the
+  formula kills 4; breaking the heading regex kills 6. The regex mutation's
+  first attempt did not apply and its anchor assert caught it rather than
+  letting a non-mutation read as a survivor.
+- Suite 1271 passed / 1271 collected, ruff clean. Baseline 1253.
+
+**One consequence worth knowing:** adding `tests/test_ops_ids.py` to the ops
+lane's roster made `.claude/commands/lane-ops.md` stale and
+`tests/test_lane_contract.py` went red until
+`python scripts/write_lane_contracts.py` regenerated it. The roster is not the
+only copy of itself.
+
 ## Ordering note
 
 **Items 2b, 2c, 2d, item 7's shipped-code half and item 3 are CLOSED as of
@@ -2028,8 +2093,10 @@ question, the headshot mechanism, and whether the ~1.3x per pace is real.
   the first sweep of 2026-08-25 had to be re-run because its distances were
   inferred from clock order rather than recorded (`docs/FINDINGS.md` 11.10).
 - **Client closed:** item **7c** (read the meter without a human reading it) or
-  **OPS-7**. Item 4c closed 2026-08-25b and **OPS-8 closed 2026-08-26b**, so
-  neither is the fallback any more.
+  **OPS-7** (`advance_cycle` credits an item that was never started - hit twice
+  now, both times worked around by hand with `complete_current=False`). Item 4c
+  closed 2026-08-25b, **OPS-8 closed 2026-08-26b** and **OPS-12 closed
+  2026-08-27**, so none of them is the fallback any more.
 
 **Item 9 is CLOSED as of 2026-08-12** (ledger `LL-0046`). The `cdkey` hole is
 shut, the `/Game/` anchor is genuinely pinned, and two of that item's four
