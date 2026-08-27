@@ -70,13 +70,27 @@ class TestTheScanActuallyReadsTheDocuments:
         assert by_id[1].closed is True
         assert by_id[2].closed is False
 
-    def test_both_states_actually_occur_in_the_real_roadmap(self):
-        # Keeps the real-document path exercised without pinning any single
-        # item's status. If every heading ever reads the same way, the
-        # discrimination above is not being used on real input.
+    def test_real_headings_are_found_and_a_closed_one_is_recognised(self):
+        """Keeps the real-document path exercised, without asserting workload.
+
+        This is the SECOND time a test here encoded a transient project state.
+        The first named OPS-12's status and went red when OPS-12 was closed.
+        Its replacement then demanded that both an OPEN and a CLOSED heading
+        exist in the real roadmap - and went red the moment OPS-7 was closed,
+        because that left no open `OPS-` item at all. Whether any ops item
+        happens to be open is a fact about the workload, not about the scanner.
+
+        What is worth pinning on real input is narrower: real headings are
+        found at all, and CLOSED is recognised in the wild, where headings carry
+        trailing dates and backticks that a fixture does not. A closed item does
+        not reopen, so this cannot rot the same way. The OPEN half is covered on
+        a fixture, which is where a statement about parsing belongs.
+        """
         items = ops_ids.roadmap_items()
-        assert any(item.closed for item in items), "no CLOSED heading was recognised"
-        assert any(not item.closed for item in items), "no OPEN heading was recognised"
+        assert items, "no OPS- item headings found in the real roadmap at all"
+        assert any(item.closed for item in items), (
+            "no CLOSED heading was recognised in the real roadmap"
+        )
 
     def test_the_ledger_closure_scan_finds_the_real_closures(self):
         closures = ops_ids.ledger_closures()

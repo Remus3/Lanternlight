@@ -66,6 +66,10 @@ One cycle, start to finish:
 8. **Advance.** `state.advance_cycle(...)` records the finished item, writes the
    next directive, and increments the cycle counter - atomically, so a reader
    polling the file mid-write sees the old state or the new one, never a splice.
+   **Passing the SAME item forward records nothing** - that is a retry, not a
+   completion (`OPS-7`). Only moving to a different item, or to none, says the
+   previous one is done. Use `complete_current=False` to mark an item abandoned
+   while moving away from it.
 
 Then the next cycle starts from step 1, reading disk. It does not inherit
 anything from the cycle before it except what that cycle wrote down.

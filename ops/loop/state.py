@@ -275,12 +275,27 @@ def advance_cycle(
     the counter moves, so ``completed`` is the honest answer to "what did this
     loop finish" even if the session that finished it is long gone.
 
+    **Carrying an item forward is a retry, not a completion** - ``OPS-7``. When
+    ``item`` equals the item already in flight, nothing is credited, whatever
+    ``complete_current`` says. Passing the same item forward is the ordinary
+    shape of "I did not get to this", and the old default recorded it as
+    finished: measured during the ``LL-0048`` wrap, where ``7b`` was credited
+    with nothing done to it and was caught only because the return value
+    happened to be printed and read.
+
+    That failure is quiet and it is permanent. A cold session reads ``completed``
+    to learn what is already done, skips the item, and there is no operation
+    that un-completes anything. Only moving to a DIFFERENT item, or to none,
+    says the previous one is finished.
+
     Args:
         directive: Instruction text for the new cycle.
         item: The roadmap item the new cycle will work, or ``None``.
         complete_current: Whether the previous cycle's in-flight item counts as
-            finished. Pass False when a cycle is being retried or abandoned, so
-            the item is not falsely credited.
+            finished. Pass False to say an item was abandoned even though the
+            loop is moving away from it - the one case the rule above cannot
+            infer. It cannot force a carried-forward item to be credited,
+            because there is no honest reason to want that.
         path: State file to read and write. Defaults to the standard location.
         state: Starting state. Defaults to whatever :func:`load` returns, which
             is the normal case - a fresh session knows nothing and reads disk.
@@ -291,7 +306,20 @@ def advance_cycle(
     current = state if state is not None else load(path)
 
     completed = list(current.completed)
-    if complete_current and current.item and current.item not in completed:
+    # Advancing to no item at all still finishes the previous one, so only
+    # `X -> X` is a retry. `None -> None` compares equal here and needs no
+    # special case, because `current.item` is falsy and blocks the credit
+    # anyway - an explicit `item is not None` guard was written first and then
+    # deleted, because mutating it away killed no test. An inert clause with a
+    # confident comment on it is worse than no clause.
+    carried_forward = item == current.item
+    credit_the_previous_item = (
+        complete_current
+        and not carried_forward
+        and current.item
+        and current.item not in completed
+    )
+    if credit_the_previous_item:
         completed.append(current.item)
 
     advanced = dc_replace(

@@ -5,6 +5,51 @@ fidelity and archive older ones rather than deleting them.
 
 ---
 
+# Session 2026-08-27b - OPS-7 closed, the loop stops crediting work nobody did
+
+Client **closed**. Suite **1282 passed / 1282 collected**, ruff clean, clean
+tree with `__pycache__` purged. Baseline 1277. Ledger `LL-0070`.
+
+## What shipped
+
+`advance_cycle` no longer credits an item that was merely carried forward.
+**Carrying an item forward is a retry**: `X -> X` credits nothing, whatever
+`complete_current` says. Only `X -> Y` or `X -> None` says `X` is finished, and
+`complete_current=False` stays as the hatch for "abandoned while moving away".
+
+It had been hit three times - `LL-0048`, then twice more while wrapping the two
+sessions before this one, both worked around by hand. A workaround that only
+works because the operator knows about it is how a defect becomes permanent,
+and this one silently tells a cold session to skip an item. There is no
+operation that un-completes anything.
+
+`docs/HEADLESS.md` step 8 and `.claude/commands/loop.md` step 8 now state the
+rule at the point a session actually calls the function.
+
+## Two habits worth keeping
+
+**The negative controls did the real work.** Three of the five new tests pin the
+ordinary cases, and they are what stops the cheap wrong fix - a change that
+simply stopped crediting anything satisfies the acceptance and destroys the
+record instead.
+
+**A clause of my own fix was inert.** The first version read
+`item is not None and item == current.item`; mutating that guard away killed no
+test, because `None -> None` is already blocked by `current.item` being falsy.
+Deleted rather than kept with a confident comment on it. Verify your own
+defensive code with the same mutation discipline as the thing it guards.
+
+## A limit of the OPS-12 guard, observed live
+
+Flipping OPS-7's heading from OPEN to CLOSED briefly made `over_allocated()`
+read `[8]` alone, because a CLOSED heading nets against its single closure. The
+collision is not resolved - OPS-7 still names two items - and the count is right
+again now `LL-0070` announces the second closure. **The reading is transiently
+wrong DURING an edit**, between closing a heading and writing the entry that
+closes it. Harmless at commit time; do not be alarmed mid-edit.
+
+---
+
 # Session 2026-08-27 - OPS-12 closed, the OPS- namespace has an allocator
 
 Client **closed** again, so this is the fallback item worked end to end. No
