@@ -81,7 +81,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
-from ops import lanes
+from ops import lanes, mdscan
 from ops.loop import ledger
 
 __all__ = [
@@ -178,13 +178,6 @@ _HEADING_RE = re.compile(r"^### (?P<item_id>\S+) - ", re.MULTILINE)
 #: least two (``LL0044``). One un-hyphenated digit is left out on purpose so an
 #: ordinary sub-heading like ``#### Section2 overview`` is not called a broken
 #: entry - the guard must fire on an entry ATTEMPT, not on prose.
-#: The two Markdown fence characters. A fence is a run of at least three, and
-#: it closes only on the SAME character, at a run at least as long, with no
-#: info string - see :func:`_fence_marker`. Tracking the character alone was
-#: not enough: a longer or shorter inner run then looked like a close, and the
-#: mess surfaced as a false refusal on perfectly legal Markdown.
-_FENCE_MARKS = ("`", "~")
-
 _ID_TOKEN_RE = re.compile(r"[A-Za-z]{1,8}(?:-\d+|\d{2,})\Z")
 
 
@@ -274,61 +267,24 @@ def _scan_entry_region(body: str) -> _RegionScan:
     - caught by :attr:`_RegionScan.open_fence_at` rather than silently ending
     the fenced span early.
     """
-    fence: tuple[str, int] | None = None
-    fence_opened_at = 0
-    offset = 0
     headings: list[tuple[int, str]] = []
     suspect: tuple[int, str] | None = None
 
-    for number, raw in enumerate(body.splitlines(keepends=True), 1):
-        line = raw.rstrip("\n").rstrip("\r")
-        stripped = line.lstrip()
-        marker = _fence_marker(stripped)
-        if marker is not None:
-            char, width, info = marker
-            if fence is None:
-                # An opening fence may carry an info string (```python).
-                fence, fence_opened_at = (char, width), number
-            elif char == fence[0] and width >= fence[1] and not info:
-                # CommonMark: a fence closes only on the SAME character, at
-                # least as long, and with no info string. Tracking only the
-                # character - which this did at first - makes a longer inner
-                # run look like a close, and a shorter one look like a close
-                # too. Neither minted a phantom entry, because the unbalanced
-                # check caught the mess; both produced a FALSE REFUSAL on legal
-                # Markdown, which is the failure mode that gets a guard
-                # switched off.
-                fence = None
-            offset += len(raw)
+    scan = mdscan.scan_unfenced(body)
+    for number, offset, line in scan.lines:
+        if not line.lstrip().startswith("#"):
             continue
-        if fence is None and stripped.startswith("#"):
-            match = _HEADING_RE.match(line)
-            if match:
-                headings.append((offset, match["item_id"]))
-            elif suspect is None and _looks_like_an_entry_attempt(line):
-                suspect = (number, line)
-        offset += len(raw)
+        match = _HEADING_RE.match(line)
+        if match:
+            headings.append((offset, match["item_id"]))
+        elif suspect is None and _looks_like_an_entry_attempt(line):
+            suspect = (number, line)
 
     return _RegionScan(
         headings=tuple(headings),
         suspect=suspect,
-        open_fence_at=fence_opened_at if fence is not None else 0,
+        open_fence_at=scan.open_fence_at,
     )
-
-
-def _fence_marker(stripped: str) -> tuple[str, int, str] | None:
-    """Return ``(char, width, info)`` when ``stripped`` is a fence line.
-
-    ``width`` is the run length, which decides what can close it, and ``info``
-    is whatever follows - an opening fence may carry ``python``; a closing one
-    may not.
-    """
-    for char in _FENCE_MARKS:
-        if not stripped.startswith(char * 3):
-            continue
-        width = len(stripped) - len(stripped.lstrip(char))
-        return char, width, stripped[width:].strip()
-    return None
 
 
 def _looks_like_an_entry_attempt(line: str) -> bool:

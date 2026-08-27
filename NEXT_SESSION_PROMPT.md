@@ -36,11 +36,11 @@ A fresh clone runs zero git hooks until that first command runs. The tracked
 
 ## Where the last session left it
 
-**Suite 1271 passed / 1271 collected, ruff clean**, measured on a clean tree
+**Suite 1277 passed / 1277 collected, ruff clean**, measured on a clean tree
 with `__pycache__` purged - that is your merge-gate baseline, and re-measure it
 yourself before dispatching work rather than trusting this line.
 
-The ledger runs to **`LL-0068`**. Read **`LL-0064`**, **`LL-0066`** and
+The ledger runs to **`LL-0069`**. Read **`LL-0064`**, **`LL-0066`** and
 **`LL-0067`** first.
 LL-0064 is an independent four-agent refutation pass that **overturns claims
 earlier entries make** - reading LL-0056 through LL-0063 without it leaves you
@@ -153,8 +153,14 @@ work it gates.
 - **The lane roster is not the only copy of itself.** Editing `ops/lanes.py`
   makes `.claude/commands/lane-*.md` stale and reddens
   `tests/test_lane_contract.py`. Run `python scripts/write_lane_contracts.py`.
-- **A document that describes a pattern can match it.** Check a scanner against
-  the document after writing prose about the scanner, do not assume.
+- **A document that describes a pattern can match it**, and prose about an id
+  ALLOCATES it. Both bit within a minute of each other: a ledger heading saying
+  "the bug OPS-9 closed" was counted as a closure, and a worked example with a
+  real number in it spent that number. Run the scanner after writing prose
+  about the scanner.
+- **A new module can violate a rule the repo already closed.** `ops/ops_ids.py`
+  was written fence-blind the day after `LL-0038` - the entry about exactly
+  that - was read. Grepping the ledger for an id is not reading what it says.
 - **Verify a scripted edit by READING the file.** A reused `new` variable wrote
   a ROADMAP paragraph into `.gitignore`, where unprefixed lines are ignore
   PATTERNS. Valid ASCII, no identifier, suite green - uncatchable by any test.

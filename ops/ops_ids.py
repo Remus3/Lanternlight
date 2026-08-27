@@ -33,24 +33,38 @@ the same item as its closure rather than a second one::
                 + max(0, closed_headings - closures)
 
 That formula is what separates the normal lifecycle from a real collision.
-Checked against the repository as it stood on 2026-08-27:
+Re-derive it rather than trusting a table here; this docstring carried one that
+its own commit invalidated, because closing ``OPS-12`` moved that row the
+moment ``LL-0068`` was written. What holds is the shape:
 
-===========  ========  =============  ===============  ===========
-id           closures  open headings  closed headings  allocations
-===========  ========  =============  ===============  ===========
-``OPS-9``    1         0              0                1
-``OPS-12``   0         1              0                1
-``OPS-7``    1         1              0                **2**
-``OPS-8``    2         0              1                **2**
-===========  ========  =============  ===============  ===========
+- an id closed once, with no roadmap heading, scores 1
+- an id with an open heading and no closure scores 1
+- an id with a CLOSED heading and its one closure scores 1
+- a closure PLUS an open heading scores 2 - a second item took a spent id
+- two closures score 2 - an item is closed once
 
-Both real collisions are caught and no correctly-numbered item is flagged.
+How far this guard can see
+--------------------------
 
-The count is deliberately allowed to UNDER-report. ``OPS-4`` was closed by a
-ledger entry whose heading does not use the word "closed", so it scores 0 here.
-Under-reporting costs a missed warning; over-reporting would make the guard red
-on correct items, and a guard that cries wolf gets switched off. Given the
-choice, this one stays quiet.
+**It is blind to 4 of the 12 ids in use, and that number is measured, not
+estimated.** ``OPS-4``, ``OPS-6``, ``OPS-10`` and ``OPS-11`` all score 0,
+because each was opened or closed only in ledger BODY prose - never in an entry
+heading and never as a roadmap item heading. ``OPS-6`` is called "THE ONLY OPEN
+OPS ITEM" in ``docs/LEDGER.md`` and this module cannot see it at all. A second
+``OPS-6`` would not be flagged.
+
+That is the deliberate direction of the error. Reading entry bodies would catch
+those four and flag a great many correct items besides, because a body mentions
+ids for every reason there is - a cross-reference, a lesson, an open item filed
+in passing. Over-reporting makes the guard red on correct work, and a guard
+that cries wolf is one people learn to override; that is the argument ``OPS-8``
+made about the merge gate, and it applies here.
+
+The blind spot is narrower than it sounds, for one reason worth stating.
+:func:`next_free_id` uses :func:`spent_ids`, which counts **any mention
+anywhere**, so all four invisible ids are still disqualified from being handed
+out. The allocator is what prevents a collision; this detector only catches one
+that has already happened because somebody did not use the allocator.
 """
 
 from __future__ import annotations
@@ -58,6 +72,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from ops import mdscan
 
 __all__ = [
     "Collision",
@@ -78,11 +94,28 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 _ANY_ID = re.compile(r"\bOPS-(\d+)\b")
 
 #: A top-level roadmap item heading. The trailing dot is what distinguishes an
-#: item heading from a sub-heading that merely cites an id in passing.
-_ROADMAP_HEADING = re.compile(r"^## OPS-(\d+)\.[ \t]*(.*)$", re.MULTILINE)
+#: item heading from a sub-heading that merely cites an id in passing. Matched
+#: against ONE line at a time, out of :mod:`ops.mdscan`, so a fenced example is
+#: never seen - see :func:`roadmap_items`.
+_ROADMAP_HEADING = re.compile(r"^## OPS-(\d+)\.[ \t]*(.*)$")
 
-#: A ledger entry heading: `### LL-0040 - 2026-08-12 - summary`.
-_LEDGER_HEADING = re.compile(r"^### (LL-\d+)[ \t]*-[ \t]*\S+[ \t]*-[ \t]*(.*)$", re.MULTILINE)
+#: A ledger entry heading: `### LL-0040 - 2026-08-12 - summary`. Also matched
+#: one unfenced line at a time; `docs/LEDGER.md` carries a fenced entry
+#: TEMPLATE in its preamble that this pattern matches perfectly.
+_LEDGER_HEADING = re.compile(r"^### (LL-\d+)[ \t]*-[ \t]*\S+[ \t]*-[ \t]*(.*)$")
+
+#: A closure ANNOUNCEMENT: the summary opens with the id, or a list of them,
+#: and then the word "closed". Every real closure in `docs/LEDGER.md` follows
+#: that convention, including `LL-0042`'s three-id heading.
+#:
+#: Anchored at the start on purpose. Accepting an id anywhere in a heading that
+#: contained "closed" anywhere read `LL-0069`'s summary - "the same bug OPS-9
+#: closed, rebuilt in a module written the day after" - as a second closure of
+#: `OPS-9`, and reported a collision that does not exist. A heading that TALKS
+#: about an id has not allocated it.
+_CLOSURE_ANNOUNCEMENT = re.compile(
+    r"^((?:OPS-\d+[,\s]*(?:and[ \t]+)?)+)closed\b", re.IGNORECASE
+)
 
 #: The status word that marks a roadmap heading as finished. The status
 #: vocabulary is uppercase by convention (`NEXT`, `READY`, `BLOCKED`, `OPEN`),
@@ -146,10 +179,17 @@ def spent_ids(
 ) -> set[int]:
     """Return every ``OPS-`` id mentioned anywhere in the two documents.
 
-    Deliberately wider than :func:`over_allocated`'s notion of allocation. For
-    deciding whether an id is FREE, any mention at all is disqualifying - an id
-    discussed in a ledger entry but never given a heading is still an id a
-    reader will associate with that discussion.
+    Deliberately wider than :func:`over_allocated`'s notion of allocation, and
+    it does not skip fenced lines either. For deciding whether an id is FREE,
+    any mention at all is disqualifying - an id discussed in a ledger entry but
+    never given a heading is still an id a reader will associate with that
+    discussion, and erring this way can only ever SKIP an id, never reissue one.
+
+    The practical consequence, met immediately: **writing a worked example with
+    a real number in it spends that number.** Documenting the fence fix with a
+    concrete ``OPS-13`` in ``ROADMAP.md`` pushed this function's answer to 14
+    and would have left a future reader hunting for an item that never existed.
+    Write examples with a placeholder, not a digit.
     """
     roadmap = roadmap or default_roadmap_path()
     ledger = ledger or default_ledger_path()
@@ -169,16 +209,28 @@ def next_free_id(*, roadmap: Path | None = None, ledger: Path | None = None) -> 
 
 
 def roadmap_items(*, roadmap: Path | None = None) -> list[RoadmapItem]:
-    """Return every ``## OPS-<n>.`` item heading in the roadmap, in file order."""
+    """Return every ``## OPS-<n>.`` item heading in the roadmap, in file order.
+
+    Fenced lines are skipped, via the one shared scan in :mod:`ops.mdscan`. The
+    roadmap documents its own id format - the preamble shows how to allocate one
+    and the ``OPS-12`` closure quotes the heading form - so a worked example
+    inside a code block is a real hazard here, not a hypothetical. Counting one
+    would report a live item as over-allocated against itself.
+    """
     text = _read(roadmap or default_roadmap_path())
-    return [
-        RoadmapItem(
-            item_id=int(match.group(1)),
-            title=match.group(2).strip(),
-            closed=bool(_CLOSED_WORD.search(match.group(2))),
+    items = []
+    for line in mdscan.scan_unfenced(text).lines:
+        match = _ROADMAP_HEADING.match(line.text)
+        if match is None:
+            continue
+        items.append(
+            RoadmapItem(
+                item_id=int(match.group(1)),
+                title=match.group(2).strip(),
+                closed=bool(_CLOSED_WORD.search(match.group(2))),
+            )
         )
-        for match in _ROADMAP_HEADING.finditer(text)
-    ]
+    return items
 
 
 def ledger_closures(*, ledger: Path | None = None) -> dict[int, list[str]]:
@@ -193,11 +245,15 @@ def ledger_closures(*, ledger: Path | None = None) -> dict[int, list[str]]:
     """
     text = _read(ledger or default_ledger_path())
     closures: dict[int, list[str]] = {}
-    for match in _LEDGER_HEADING.finditer(text):
-        entry_id, summary = match.group(1), match.group(2)
-        if "closed" not in summary.lower():
+    for line in mdscan.scan_unfenced(text).lines:
+        match = _LEDGER_HEADING.match(line.text)
+        if match is None:
             continue
-        for found in _ANY_ID.finditer(summary):
+        entry_id, summary = match.group(1), match.group(2)
+        announcement = _CLOSURE_ANNOUNCEMENT.match(summary.strip())
+        if announcement is None:
+            continue
+        for found in _ANY_ID.finditer(announcement.group(1)):
             closures.setdefault(int(found.group(1)), []).append(entry_id)
     return closures
 

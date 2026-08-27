@@ -2033,16 +2033,30 @@ read as the same item as its closure:
 allocations = closures + open_headings + max(0, closed_headings - closures)
 ```
 
-Derived from the real documents, and it matches the table above exactly:
-`OPS-9` scores 1 (one closure, no heading), `OPS-12` scores 1 (heading, no
-closure), `OPS-7` scores 2 (`LL-0039` plus an OPEN heading), `OPS-8` scores 2
-(`LL-0040` and `LL-0066` plus a CLOSED heading). Both real collisions caught,
-no correct item flagged.
+Derived from the real documents: `OPS-9` scores 1 (one closure, no heading),
+`OPS-7` scores 2 (`LL-0039` plus an OPEN heading), `OPS-8` scores 2 (`LL-0040`
+and `LL-0066` plus a CLOSED heading), and `OPS-12` scores 1 - as a CLOSED
+heading plus its one closure `LL-0068`, which is **not** the "heading, no
+closure" this document first claimed. Closing the item moved its own row, and
+an independent refuter caught the stale derivation in the same commit that
+created it. Re-derive, do not cite.
 
-The count may **under**-report and never over-report. `OPS-4` was closed by an
-entry whose heading avoids the word "closed", so it scores 0. Under-reporting
-costs a missed warning; over-reporting makes the guard red on correct items,
-and a guard that cries wolf gets switched off.
+**The guard is blind to 4 of the 12 ids in use, and that is measured.** `OPS-4`,
+`OPS-6`, `OPS-10` and `OPS-11` all score 0, because each was opened or closed
+only in ledger BODY prose - never in an entry heading and never as a roadmap
+item heading. `OPS-6` is called "THE ONLY OPEN OPS ITEM" in `docs/LEDGER.md`
+and is invisible here. The first draft of this item admitted only `OPS-4`,
+which understated its own blind spot by a factor of four.
+
+That is the deliberate direction of the error: reading entry bodies would catch
+those four and flag many correct items besides, because a body mentions ids for
+every reason there is. Over-reporting makes the guard red on correct work, and
+a guard that cries wolf gets overridden - the argument `OPS-8` made about the
+merge gate. The blind spot is also narrower than it sounds, because
+`next_free_id()` uses `spent_ids()`, which counts **any mention anywhere**, so
+all four invisible ids are still disqualified from being handed out. The
+allocator prevents a collision; this detector only catches one that happened
+because somebody did not use the allocator.
 
 **The two known collisions are asserted as an exact set**, which is a record of
 a measured state rather than a list of spent ids. It fails on a third collision
@@ -2057,12 +2071,33 @@ not only fixtures:**
   naming `ops_ids.next_free_id()`. Reverted, green.
 - Renumbering the OPEN `OPS-7` item to 13, simulating a resolution, ALSO turned
   it red: `expected: [7, 8]` / `found: [8]`. Reverted, green.
-- Four mutations, each watched killing a different set: `over_allocated` -> `{}`
-  kills 6; `ledger_closures` -> `{}` kills 7; dropping `open_headings` from the
-  formula kills 4; breaking the heading regex kills 6. The regex mutation's
-  first attempt did not apply and its anchor assert caught it rather than
-  letting a non-mutation read as a survivor.
-- Suite 1271 passed / 1271 collected, ruff clean. Baseline 1253.
+- Five mutations, each watched killing a different set, all re-measured against
+  the FINAL code rather than an earlier draft of the tests: `over_allocated` ->
+  `{}` kills 6; `ledger_closures` -> `{}` kills 7; dropping `open_headings` from
+  the formula kills 4; a never-matching heading regex kills 8; making
+  `roadmap_items` ignore fences kills 2. No survivors. Two of the mutation
+  scripts failed to apply on their first attempt and their anchor asserts caught
+  it, rather than letting a non-mutation read as a survivor.
+- Suite 1277 passed / 1277 collected, ruff clean. Baseline 1253.
+
+**A refutation pass then found the scanner was fence-blind**, one edit away from
+a live false positive: a fenced worked example of an item heading, beside a
+genuine heading for the same id, reports that id as over-allocated.
+`docs/LEDGER.md` line 16
+already carries a fenced entry template that matches the ledger-heading pattern,
+inert only because it happens to carry no id and no closure word.
+
+This repository had closed that exact bug before. `OPS-9` / `LL-0038` was the
+heading GUARD and the heading PARSER disagreeing because only one tracked
+fences, and its conclusion was that there must be **one** fence scan every
+reader shares. This module was written as a third private reader in a
+repository whose own ledger says why not to.
+
+Fixed by extracting that scan into `ops/mdscan.py` - CommonMark rules, an
+unclosed fence reported rather than silently swallowing the file - and pointing
+both `ops/lane_state.py` and `ops/ops_ids.py` at it. The duplicate
+`_fence_marker` and `_FENCE_MARKS` in `lane_state` were deleted rather than left
+beside it, because two copies of a rule is two chances to drift.
 
 **One consequence worth knowing:** adding `tests/test_ops_ids.py` to the ops
 lane's roster made `.claude/commands/lane-ops.md` stale and

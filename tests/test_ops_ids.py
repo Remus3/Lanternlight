@@ -175,6 +175,128 @@ class TestCollisionDetection:
         assert 7 in ops_ids.over_allocated(roadmap=roadmap, ledger=ledger)
 
 
+class TestFencedExamplesAreNotAllocations:
+    """A document that DOCUMENTS the id format must not allocate ids.
+
+    Found by an independent refuter on 2026-08-27, one edit away from being
+    real: this scanner did its own line matching with no fence tracking, so a
+    worked example inside a code block reads as a live heading. The refuter
+    built the false positive - a fenced `## OPS-13.` example beside a genuine
+    `## OPS-13.` heading reports OPS-13 as over-allocated.
+
+    This repository has closed this exact bug before. `OPS-9` / `LL-0038` was
+    the heading GUARD and the heading PARSER disagreeing because only one of
+    them tracked fences, and its conclusion was that there must be exactly one
+    fence scan that every reader shares. This module was a third private
+    reader. It now uses `ops.mdscan`, and so does `ops/lane_state.py`.
+
+    The risk is not hypothetical here. `ROADMAP.md` gained prose quoting the
+    heading form when OPS-12 was closed, and `docs/LEDGER.md` line 16 carries a
+    fenced entry template that already matches the ledger-heading pattern - it
+    is inert only because it happens to carry no id and no closure word.
+    """
+
+    def test_a_fenced_roadmap_heading_is_not_an_allocation(self, tmp_path):
+        roadmap = tmp_path / "ROADMAP.md"
+        ledger = tmp_path / "LEDGER.md"
+        roadmap.write_text(
+            "## OPS-13. the real item - OPEN\n"
+            "\n"
+            "Allocate an id like this:\n"
+            "\n"
+            "```\n"
+            "## OPS-13. <title> - OPEN\n"
+            "```\n",
+            encoding="ascii",
+        )
+        ledger.write_text("nothing", encoding="ascii")
+        assert ops_ids.over_allocated(roadmap=roadmap, ledger=ledger) == {}, (
+            "a worked example inside a code fence was counted as a second "
+            "allocation - the scanner is not fence-aware"
+        )
+
+    def test_a_fenced_ledger_heading_is_not_a_closure(self, tmp_path):
+        roadmap = tmp_path / "ROADMAP.md"
+        ledger = tmp_path / "LEDGER.md"
+        roadmap.write_text("## OPS-14. the real item - OPEN", encoding="ascii")
+        ledger.write_text(
+            "The format is:\n"
+            "\n"
+            "```\n"
+            "### LL-0000 - 2026-01-01 - OPS-14 closed - a worked example\n"
+            "```\n",
+            encoding="ascii",
+        )
+        assert ops_ids.ledger_closures(ledger=ledger) == {}, (
+            "a fenced template was read as a real closure"
+        )
+        assert ops_ids.over_allocated(roadmap=roadmap, ledger=ledger) == {}
+
+    def test_a_real_heading_after_a_closed_fence_is_still_found(self, tmp_path):
+        # The other direction. A fence-aware reader that swallows the rest of
+        # the document is worse than one that ignores fences, and it would pass
+        # both tests above.
+        roadmap = tmp_path / "ROADMAP.md"
+        roadmap.write_text(
+            "```\n"
+            "## OPS-98. an example - OPEN\n"
+            "```\n"
+            "\n"
+            "## OPS-99. a genuine item - OPEN\n",
+            encoding="ascii",
+        )
+        ids = {item.item_id for item in ops_ids.roadmap_items(roadmap=roadmap)}
+        assert ids == {99}, ids
+
+
+class TestAClosureIsAnnouncedNotMentioned:
+    """An entry heading that TALKS about an id has not closed it.
+
+    Found by dogfooding, within a minute of the fence fix landing. LL-0069's
+    heading reads "... the same bug OPS-9 closed, rebuilt in a module written
+    the day after" - a sentence about history, in which "OPS-9 closed" is
+    subject and verb. The first pattern accepted any id anywhere in a heading
+    that contained the word "closed" anywhere, so it credited that as a second
+    closure of OPS-9 and reported a collision that does not exist.
+
+    The real convention is narrower and every genuine closure follows it: the
+    summary BEGINS with the id (or a list of them) and then "closed". Requiring
+    that keeps `LL-0042`'s three-id heading working and rejects a mention.
+
+    A false positive matters more than a missed one here. This guard's whole
+    value is that a red means "you reused an id"; the first time it means "you
+    wrote a sentence", somebody adds an exemption and it stops being read.
+    """
+
+    def test_an_id_mentioned_in_a_heading_is_not_a_closure(self, tmp_path):
+        ledger = tmp_path / "LEDGER.md"
+        ledger.write_text(
+            "### LL-0069 - 2026-08-27 - a refuter found the bug OPS-9 closed, rebuilt",
+            encoding="ascii",
+        )
+        assert ops_ids.ledger_closures(ledger=ledger) == {}, (
+            "a heading discussing an id was read as closing it"
+        )
+
+    def test_a_heading_that_announces_a_closure_still_counts(self, tmp_path):
+        ledger = tmp_path / "LEDGER.md"
+        ledger.write_text(
+            "### LL-0038 - 2026-08-12 - OPS-9 closed - the heading guard and parser share a scan",
+            encoding="ascii",
+        )
+        assert ops_ids.ledger_closures(ledger=ledger) == {9: ["LL-0038"]}
+
+    def test_a_heading_announcing_several_closures_still_counts_them_all(self, tmp_path):
+        # LL-0042's real shape. The narrowing must not cost this.
+        ledger = tmp_path / "LEDGER.md"
+        ledger.write_text(
+            "### LL-0042 - 2026-08-12 - OPS-1, OPS-3 and OPS-5 closed - the ledger writer",
+            encoding="ascii",
+        )
+        closures = ops_ids.ledger_closures(ledger=ledger)
+        assert closures == {1: ["LL-0042"], 3: ["LL-0042"], 5: ["LL-0042"]}
+
+
 class TestTheRealRepository:
     def test_the_detector_is_not_vacuous_against_the_real_documents(self):
         # The real-document path must be exercised, not just the fixtures.
