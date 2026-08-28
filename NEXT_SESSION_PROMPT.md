@@ -40,7 +40,7 @@ A fresh clone runs zero git hooks until that first command runs. The tracked
 with `__pycache__` purged - that is your merge-gate baseline, and re-measure it
 yourself before dispatching work rather than trusting this line.
 
-The ledger runs to **`LL-0073`**. Read **`LL-0064`**, **`LL-0066`** and
+The ledger runs to **`LL-0074`**. Read **`LL-0064`**, **`LL-0066`** and
 **`LL-0067`** first.
 LL-0064 is an independent four-agent refutation pass that **overturns claims
 earlier entries make** - reading LL-0056 through LL-0063 without it leaves you
@@ -103,12 +103,14 @@ inter-hit intervals prove drawn shots, not Volley.
 reproduces the hand-read series exactly. The white Progress Record pair is
 **NOT blocked on data** (that claim was mine and is refuted in `LL-0072`): the
 existing capture covers all ten white digits. Segmentation, slot geometry and
-the labelling method are all measured and written up under 7c, and the ceiling
-is measured at **96.8% per glyph / 92.3% per frame**. The blocker is the LABEL's
-timing, not the pixels - alignment, thresholds and grid size were all tried and
-refuted. The specified next step is to make the ORANGE run-boundary detection
-robust (carry the hit counter across refused frames; require a plateau before
-declaring a run over), then re-label.
+the labelling method are all measured and written up under 7c. The white row is
+**BLOCKED ON A NEW CAPTURE** - not for the reason first filed. Alignment,
+thresholds, grid size and three run-boundary rules were all tried and refuted;
+clean frames classify near-perfectly (p90 distance 0.012) and near-transition
+frames are mid-render and unlabellable. The real limit is a tradeoff: ten digits
+costs accuracy (72.4% on accepted), accuracy costs coverage (89.7% on five
+digits). **Capture request: longer stable stretches per record value - the
+operator pausing between runs - across at least ten distinct records.**
 Everything else specified is closed - OPS-7 and OPS-12 on 2026-08-27, OPS-8 on
 2026-08-26b, 4c on 2026-08-25b.
 
@@ -161,6 +163,10 @@ work it gates.
   still catches what it caught.** Three mutations of the OPS-8 fix all asked
   the first question. The hole was in the second: a name filter that hid
   tracked files from the PII guard, green all the way through.
+- **Measure the metric the DESIGN promises, not the one that is easy.** Three
+  sessions optimised the white reader's accuracy over every frame; the design
+  promises accuracy over frames it ACCEPTS. Scoring it correctly located the
+  real limit immediately.
 - **Prefer the cheap sweep that isolates a variable to the plausible story
   about a mechanism.** Two specified next-steps in a row were wrong because both
   were inferred from the shape of a symptom. A guard sweep and a class-mean

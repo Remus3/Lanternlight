@@ -5,6 +5,67 @@ fidelity and archive older ones rather than deleting them.
 
 ---
 
+# Session 2026-08-27f - the boundary fix is refuted too, and the limit is the capture
+
+Client **closed**. Suite **1295 passed / 1295 collected**, unchanged - **nothing
+shipped**. Ledger `LL-0074`.
+
+## The specified next step was wrong for the third time
+
+`LL-0073` said the jitter was in the orange run-boundary detection. Three rules,
+all derived offline from one cache of raw readings so they saw identical pixels:
+hit-count-decreases 65.5%, **meter reads 0 hits 55.7%**, reset-or-restart 64.9%.
+The unambiguous reset signal makes it *worse*. And shifting the labels in BOTH
+directions this time - the previous pass only tried one - puts the peak at shift
+0, so the boundary is neither early nor late.
+
+## What is actually true
+
+**Clean frames are near-perfect.** Distance to own class mean, by distance from
+a label change: beyond 12, median **0.0045**, p90 **0.0123**. Those frames also
+carry 14% more ink. The pixels and the method are fine; near-transition frames
+are mid-render and no labelling rule can rescue them.
+
+**Which is what refusal is for** - so I finally scored the reader the way it
+would actually run: train on clean frames, then refuse anything over an accept
+distance or under a margin. That is the metric the design promises, and every
+number in the last three sessions was measured on frames the reader would have
+rejected.
+
+## The tradeoff, and why nothing shipped
+
+A long epoch gives clean frames that all spell the **same number**:
+
+| train guard | digits covered | accepted | accuracy on accepted |
+|---|---|---|---|
+| 8 | 10 | 43.9% | 72.4% |
+| 12 | 9 | 59.8% | 74.3% |
+| 20 | **5** | 39.4% | **89.7%** |
+
+Ten digits costs accuracy; accuracy costs coverage. No point on that curve is
+shippable.
+
+## So it IS a capture limit - but not the one first filed
+
+`LL-0071` said the field never changes. False. The real constraint is the
+opposite: it changes **often**, so only ~5 epochs last long enough to give clean
+frames, and those repeat the same digits. Same conclusion, different cause - and
+only the second version tells you what capture to ask for.
+
+**The capture request:** longer stable stretches per record value - the operator
+pausing between runs rather than starting the next immediately - across at least
+ten distinct records. Everything else is measured and working.
+
+## Three wrong next-steps in a row
+
+Data, then alignment, then boundary detection. Each was an inference from the
+shape of a symptom. What finally located the limit was measuring **the metric the
+design promises** - accuracy on frames the reader accepts - instead of the one
+that was easy to compute. Three passes were spent optimising a number the reader
+would never have been judged on.
+
+---
+
 # Session 2026-08-27e - the alignment search, refuted; the label was the problem
 
 Client **closed**. Suite **1295 passed / 1295 collected**, unchanged - **nothing
