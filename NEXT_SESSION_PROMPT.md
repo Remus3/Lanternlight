@@ -40,15 +40,21 @@ A fresh clone runs zero git hooks until that first command runs. The tracked
 with `__pycache__` purged - that is your merge-gate baseline, and re-measure it
 yourself before dispatching work rather than trusting this line.
 
-The ledger runs to **`LL-0074`**. Read **`LL-0064`**, **`LL-0066`** and
-**`LL-0067`** first.
-LL-0064 is an independent four-agent refutation pass that **overturns claims
-earlier entries make** - reading LL-0056 through LL-0063 without it leaves you
-believing things that were withdrawn. LL-0066 closes OPS-8 and, more usefully,
-records that **the mechanism OPS-8 itself had on file was wrong about the
-dominant case**, found only by re-measuring before fixing. LL-0067 is the
-refutation of LL-0066: it could not overturn the claim, but it found that the
-fix had **opened a PII hole**, hiding git-TRACKED files from the guard.
+The ledger runs to **`LL-0074`**. Read **`LL-0064`** and **`LL-0074`** first,
+then `LL-0066` and `LL-0067`.
+
+- **`LL-0064`** is an independent four-agent refutation pass that **overturns
+  claims earlier entries make** - reading LL-0056 through LL-0063 without it
+  leaves you believing things that were withdrawn.
+- **`LL-0074`** is the end of the 7c white-row chain and supersedes the
+  intermediate conclusions in `LL-0071`, `LL-0072` and `LL-0073`. Those three
+  contradict each other on purpose, each correcting the last; only the last one
+  is current.
+- **`LL-0066`** closes OPS-8 and records that **the mechanism OPS-8 itself had
+  on file was wrong about the dominant case**, found only by re-measuring before
+  fixing. **`LL-0067`** is its refutation: it could not overturn the claim, but
+  found the fix had **opened a PII hole**, hiding git-TRACKED files from the
+  guard.
 
 ## Check the world before anything else
 
@@ -99,20 +105,32 @@ Acceptance is in ROADMAP 10, including the target-switch test that separates
 without it**: the tooltip scopes that talent to `Rapid Arrows`, and 2.27-2.87 s
 inter-hit intervals prove drawn shots, not Volley.
 
-**If the client is shut:** **7c is PARTLY DONE** - the orange pair reads and
-reproduces the hand-read series exactly. The white Progress Record pair is
-**NOT blocked on data** (that claim was mine and is refuted in `LL-0072`): the
-existing capture covers all ten white digits. Segmentation, slot geometry and
-the labelling method are all measured and written up under 7c. The white row is
-**BLOCKED ON A NEW CAPTURE** - not for the reason first filed. Alignment,
-thresholds, grid size and three run-boundary rules were all tried and refuted;
-clean frames classify near-perfectly (p90 distance 0.012) and near-transition
-frames are mid-render and unlabellable. The real limit is a tradeoff: ten digits
-costs accuracy (72.4% on accepted), accuracy costs coverage (89.7% on five
-digits). **Capture request: longer stable stretches per record value - the
-operator pausing between runs - across at least ten distinct records.**
-Everything else specified is closed - OPS-7 and OPS-12 on 2026-08-27, OPS-8 on
-2026-08-26b, 4c on 2026-08-25b.
+**If the client is shut, there is no code item ready to start.** Everything
+specified is closed: OPS-7 and OPS-12 on 2026-08-27, OPS-8 on 2026-08-26b, 4c on
+2026-08-25b, and 7c is as far as its data allows.
+
+**7c is PARTLY DONE.** The orange pair reads and reproduces the hand-read series
+exactly. The white Progress Record pair is **blocked on a new capture** - and the
+reason changed twice, so read it carefully rather than skimming:
+
+- `LL-0071` said the white field never changes. **That was wrong** and `LL-0072`
+  refuted it: the field varies plenty and the existing capture does cover all ten
+  digits.
+- `LL-0074` re-blocks it on data for the OPPOSITE reason. The field changes
+  *often*, so only about five record epochs last long enough to give clean
+  training frames, and those few repeat the same digits.
+
+Slot geometry, the previous-run labelling method and the refusal gate are all
+measured and working; alignment, thresholds, grid size and three run-boundary
+rules were tried and refuted. Clean frames classify near-perfectly (p90 distance
+0.012); near-transition frames are mid-render and unlabellable by any rule. The
+live limit is a tradeoff with no good point on it: ten digits costs accuracy
+(72.4% on accepted frames), accuracy costs coverage (89.7% on five digits).
+
+**Capture request, and it costs the operator almost nothing:** longer stable
+stretches per record value - pausing between runs rather than starting the next
+immediately - across at least ten distinct records. The same session can serve
+ROADMAP 10.
 
 **`advance_cycle` is safe to call normally again.** Carrying an item forward is
 a retry and credits nothing, so you no longer need `complete_current=False` by
@@ -199,7 +217,12 @@ work it gates.
   test, inside the test for it. Nothing sequential could see it.
 - **`write_text` on Windows turns a whole file CRLF**, against a
   `.gitattributes` mandating LF. `git diff --stat` hides it because `text=auto`
-  normalises the blob. Check with `grep -c` for CR; write with `write_bytes`.
+  normalises the blob. Write with `write_bytes`, and check by counting BYTES:
+  `python -c "import pathlib;print(pathlib.Path(F).read_bytes().count(b'
+'))"`.
+  **Do NOT use `grep -c $''`** - that pattern is empty in this shell and
+  matches every line, so it reports the file's line count and measures nothing.
+  An earlier version of this very trap recommended it.
 
 ## Operator context worth having
 
