@@ -87,7 +87,7 @@ HITS_WINDOW = (193, 224)
 
 #: Above this many lit pixels in a window, the scene is bleeding through the
 #: semi-transparent plate and nothing in the window can be trusted.
-BLEED_CEILING = 10**9
+BLEED_CEILING = 800
 
 #: Scoring thresholds. Accept below the first, treat as "not a digit" above the
 #: second, and REFUSE in between - that gap is the whole point.
