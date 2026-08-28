@@ -34,11 +34,17 @@ base serifs the orange digits do not have. Nearest-neighbour labelling of white
 clusters onto the orange set returns margins as low as 0.002, i.e. noise, and
 the bijection check correctly refuses the mapping.
 
-The reference capture also cannot supply white templates on its own: the white
-hit count reads a constant ``11`` through almost the entire 6,439 frames, so
-only one digit shape is available to harvest. :func:`read_panel` therefore
-returns the orange pair and reports the Progress Record as unread, rather than
-guessing at it. See ledger ``LL-0071``.
+The white row is also capture-limited, though the reason stated here first was
+wrong and is worth not repeating. It is NOT that the field never changes: the
+white *hit count* reads a constant ``11``, but the white *value* takes 26
+distinct values and covers all ten digits (``LL-0072``). The real limit is that
+the value changes so OFTEN that only about five record epochs last long enough
+to yield clean training frames, and those few repeat the same digits - so ten
+digits costs accuracy and accuracy costs coverage, with no usable point on that
+curve (``LL-0074``).
+
+:func:`read_panel` therefore returns the orange pair and reports the Progress
+Record as unread, rather than guessing at it.
 
 Geometry
 --------
@@ -94,9 +100,18 @@ BLEED_CEILING = 800
 ACCEPT_DISTANCE = 0.115
 REJECT_DISTANCE = 0.200
 
-#: A glyph must beat its runner-up by at least this much. Measured margins on
-#: real frames are 0.032 to 0.101, so this sits below the worst real case and
-#: far above the 0.002 that cross-typeface matching produces.
+#: A glyph must beat its runner-up by at least this much.
+#:
+#: **The headroom is thin and the number first filed here was the wrong one.**
+#: "0.032 to 0.101" described the margins when CLUSTERS were labelled against
+#: the reference set, not the margins this reader sees at read time. Measured
+#: over the reference capture at read time, the tightest margin is **0.0311**
+#: against this 0.030 threshold - about a thousandth of headroom - and the worst
+#: accepted distance is 0.105 to 0.115 against an accept threshold of 0.115.
+#:
+#: That is uncomfortable but it fails SAFE: a glyph that drifts past either
+#: bound is refused, not guessed. Do not widen either constant to make a frame
+#: read; re-harvest the templates instead.
 AMBIGUITY_MARGIN = 0.030
 
 #: Narrower than this and a column run is a fragment, not a digit.
