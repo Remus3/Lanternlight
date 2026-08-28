@@ -217,12 +217,13 @@ work it gates.
   test, inside the test for it. Nothing sequential could see it.
 - **`write_text` on Windows turns a whole file CRLF**, against a
   `.gitattributes` mandating LF. `git diff --stat` hides it because `text=auto`
-  normalises the blob. Write with `write_bytes`, and check by counting BYTES:
-  `python -c "import pathlib;print(pathlib.Path(F).read_bytes().count(b'
-'))"`.
-  **Do NOT use `grep -c $''`** - that pattern is empty in this shell and
-  matches every line, so it reports the file's line count and measures nothing.
-  An earlier version of this very trap recommended it.
+  normalises the blob. Write with `write_bytes`, and check by counting BYTES -
+  read the file and count occurrences of the two-byte sequence \r\n.
+  **Do NOT use grep with a \r escape as the pattern** - that pattern is
+  empty in this shell, matches every line, and reports the file's line count
+  while measuring nothing. An earlier version of this very trap recommended it,
+  and the edit that fixed it mangled its own escapes and left a stray CR byte in
+  this file. Write escape-heavy text with an editor, not a shell heredoc.
 
 ## Operator context worth having
 
