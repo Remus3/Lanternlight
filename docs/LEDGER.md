@@ -84,6 +84,20 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0074 - 2026-08-27 - The run-boundary fix is refuted too - clean frames are near-perfect and the real limit is a cleanliness-versus-coverage tradeoff in the capture
+
+**Evidence:**
+- BOUNDARY RULES REFUTED. Three rules derived offline from ONE cache of raw orange readings, so all three saw identical pixels: hit count decreases (the old rule) 65.5%, meter reads 0 hits 55.7%, reset-or-restart 64.9%. The reset signal is unambiguous - 313 frames read 0 hits - and it makes things WORSE. LL-0073 predicted this rule was the fix; it is not.
+- AND THERE IS NO TIMING OFFSET AT ALL. Shifting the label sequence was tested in BOTH directions this time, which the previous pass did not do: -4 gives 53.2%, -2 gives 56.2%, 0 gives 65.5%, +2 gives 65.0%, +4 gives 57.3%, +12 gives 61.0%. Shift 0 is the peak, so the boundary is neither systematically early nor late.
+- WHAT IS TRUE: CLEAN FRAMES ARE NEAR-PERFECT. Distance of each patch to its own class mean, bucketed by distance from a label change - within 2: median 0.0123, p90 0.189; 3 to 6: median 0.0712; 7 to 12: median 0.0068; beyond 12: median 0.0045, p90 0.0123. Frames far from a transition also carry 14% more white ink (89.5 against 77.0). The pixels and the method are fine; near-transition frames are mid-render and no labelling rule can fix them.
+- SO THE READER WAS RE-SCORED THE WAY IT WOULD ACTUALLY RUN - train on clean frames, then REFUSE any glyph over an accept distance or under a margin. That is the metric the design promises, and every earlier number in LL-0072 and LL-0073 was measured on all frames including ones the reader would reject.
+- THE TRADEOFF HAS NO GOOD POINT ON IT, because a long epoch yields clean frames that all spell the SAME number. train guard 0: 10 digits, 0% accepted. guard 8: 10 digits, 43.9% accepted, 72.4% correct. guard 12: 9 digits, 59.8%, 74.3%. guard 16: 6 digits, 50.9%, 76.2%. guard 20: 5 digits, 39.4%, 89.7%. Ten digits costs accuracy; accuracy costs coverage.
+- NOTHING SHIPPED. lanternlight/vision_meter.py is untouched and the suite is unchanged at 1295 passed / 1295 collected on a clean tree.
+
+IT IS A CAPTURE LIMITATION AFTER ALL, BUT NOT THE ONE FIRST FILED, and the difference matters. LL-0071 said the white field never changes - that is false and LL-0072 was right to refute it. The real constraint is the opposite: the field changes OFTEN, so only about five record epochs last long enough to yield clean training frames, and those few repeat the same digits. Same conclusion, entirely different cause, and only the second version tells a future session what capture to ask for.
+THE CAPTURE REQUEST, stated concretely so it can be actioned rather than re-derived: longer stable stretches per record value - the operator pausing between runs rather than starting the next immediately - across at least ten distinct records. The existing capture has about 26 records but only about five long epochs. Nothing else needs to change: slot geometry, the previous-run labelling method and the refusal gate are all measured and working.
+THREE SPECIFIED NEXT-STEPS IN A ROW HAVE NOW BEEN WRONG - data, then alignment, then boundary detection. Each was an inference from the shape of a symptom. The thing that finally located the limit was measuring the metric the DESIGN promises (accuracy on frames the reader accepts) rather than the one that was easy to compute (accuracy on every frame). Three passes were spent optimising a number the reader would never have been judged on.
+
 ### LL-0073 - 2026-08-27 - The alignment search LL-0072 specified is refuted - the white row's blocker is the LABEL's timing, and the measured ceiling is 96.8% per glyph
 
 **Evidence:**

@@ -1127,13 +1127,65 @@ scene bleed through the semi-transparent plate creates spurious change points.
 
 **Nothing shipped from this pass either.** 92.3% per frame is not a reader.
 
-**The next thing to try, and it is now well-founded:** the jitter is in the
-ORANGE run-boundary detection, not in the white row. Boundaries are declared
-when the hit counter goes backwards, but the orange reader refuses a large
-fraction of frames, so a boundary is noticed at an irregular moment after it
-happened. Make that detection robust - carry the counter across refused frames,
-and require the count to plateau before declaring a run over - then re-label. The
-guard table above says the ceiling is at least 96.8%, so it is worth doing.
+### Boundary fix done 2026-08-27f - also refuted, and the real limit is the CAPTURE
+
+**The run-boundary hypothesis is refuted too.** Three rules were derived offline
+from one cache of raw orange readings, so they were compared on identical
+pixels:
+
+| boundary rule | held-out glyph, no guard |
+|---|---|
+| hit count decreases (the old rule) | 65.5% |
+| meter reads 0 hits - an actual reset, seen in 313 frames | 55.7% |
+| reset OR a new run starting at 1 hit | 64.9% |
+
+The reset signal is unambiguous and makes things **worse**. Shifting the label
+sequence in BOTH directions was then tested - the earlier pass only tried one -
+and shift 0 is the peak: -4 gives 53.2%, +4 gives 57.3%. There is no timing
+offset, in either direction, that recovers the accuracy.
+
+**What IS true: clean frames are essentially perfect.** Measuring each patch
+against its own class mean by distance from a label change:
+
+| distance from a label change | median | p90 | white ink |
+|---|---|---|---|
+| <= 2 | 0.0123 | 0.189 | 77.0 |
+| 3 to 6 | 0.0712 | 0.189 | 77.0 |
+| 7 to 12 | 0.0068 | 0.186 | 77.5 |
+| **> 12** | **0.0045** | **0.0123** | 89.5 |
+
+Far from a transition the classification is near-perfect and the row carries
+**14% more ink**. So the pixels and the method are both fine; frames near a
+transition are genuinely mid-render and are not labellable by any rule.
+
+**And that is exactly what a refusal is for**, so the reader was re-scored the
+way it would actually run - train on clean frames, then REFUSE any glyph over an
+accept distance or under a margin. The result is a tradeoff with no good point on
+it, because a long epoch gives clean frames but they all spell the SAME number:
+
+| train guard | train frames | digits covered | frames accepted | accuracy on accepted |
+|---|---|---|---|---|
+| 0 | 374 | 10 | 0% | - |
+| 6 | 216 | 10 | 2.2% | 0% |
+| 8 | 162 | 10 | 43.9% | 72.4% |
+| 12 | 116 | 9 | 59.8% | 74.3% |
+| 16 | 93 | 6 | 50.9% | 76.2% |
+| 20 | 78 | **5** | 39.4% | **89.7%** |
+
+Ten digits costs accuracy; accuracy costs coverage. Nothing here is shippable and
+nothing shipped.
+
+**So it IS a capture limitation - but not the one first filed.** `LL-0071` said
+the field never changes, which is false. The real constraint is that the field
+changes *often*: only a handful of record epochs last long enough to yield clean
+training frames, and those few epochs repeat the same digits.
+
+**What would unblock it, stated as a capture request:** a capture with LONGER
+stable stretches per record value - the operator pausing between runs rather
+than starting the next immediately - across at least ten distinct records. The
+existing capture has about 26 records but only about five long epochs. Nothing
+else about the method needs to change: slot geometry, the previous-run labelling
+and the refusal gate are all measured and working.
 - A fresh clone cannot verify a successful read at all: the capture is 1.1 GB of
   the operator's own screen and is never committed, so those tests skip. The
   clone-safe tests cover segmentation, every refusal path, and that every
