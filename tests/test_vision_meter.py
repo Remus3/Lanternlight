@@ -87,6 +87,27 @@ class TestTheRealCapture:
         totals = [read_panel(PANEL / name).total for name, _t, _h in GROUND_TRUTH_RUN]
         assert totals == [10, 21, 31, 41, 52, 62, 72, 83, 93, 103]
 
+    def test_the_second_hand_read_series_is_reproduced_too(self):
+        """ROADMAP 7c names TWO series. This is the one I said was absent.
+
+        Both are acceptance criteria for the item, and only the first was pinned
+        because the second was wrongly reported missing. Pinning it here is what
+        stops that claim being made again from a partial scan.
+        """
+        _require_capture()
+        read = []
+        for name, _total, _hits in SECOND_SERIES:
+            frame = PANEL / name
+            assert frame.is_file(), f"ground-truth frame missing: {frame}"
+            reading = read_panel(frame)
+            read.append((reading.total, reading.hits))
+        assert read == [(t, h) for _n, t, h in SECOND_SERIES]
+
+    def test_the_second_series_totals_match_the_roadmap(self):
+        _require_capture()
+        totals = [read_panel(PANEL / name).total for name, _t, _h in SECOND_SERIES]
+        assert totals == [55, 109, 164, 219, 275, 330, 386, 496, 552]
+
     def test_a_panel_down_frame_is_refused(self):
         """Presence is decided on the digits, never on brightness.
 
@@ -98,6 +119,26 @@ class TestTheRealCapture:
         last = sorted(PANEL.glob("*.png"))[-1]
         with pytest.raises(Unreadable, match="panel is not up"):
             read_panel(last)
+
+
+#: The SECOND series ROADMAP 7c names as ground truth, at about 55 per hit.
+#: A 2026-08-27b pass declared this series absent from the capture and wrote that
+#: into ROADMAP and LL-0071. That was wrong: the scratch scan sampled every third
+#: frame, found a DIFFERENT run that starts at 55, and generalised from one run to
+#: the whole directory - a false negative stated as a positive claim. An
+#: independent refuter found it immediately. Hit 8 (441) is genuinely not in the
+#: capture at this cadence, so it is not pinned.
+SECOND_SERIES = (
+    ("p01185_19.02.34.191.png", 55, 1),
+    ("p01189_19.02.36.427.png", 109, 2),
+    ("p01193_19.02.38.651.png", 164, 3),
+    ("p01198_19.02.41.443.png", 219, 4),
+    ("p01202_19.02.43.672.png", 275, 5),
+    ("p01207_19.02.46.460.png", 330, 6),
+    ("p01211_19.02.48.692.png", 386, 7),
+    ("p01219_19.02.53.145.png", 496, 9),
+    ("p01224_19.02.55.931.png", 552, 10),
+)
 
 
 class TestSynthesisedFrames:
@@ -196,6 +237,19 @@ class TestSynthesisedFrames:
             read_panel(image)
 
     def test_a_fragment_too_narrow_to_be_a_digit_is_refused(self):
+        """Note what this does and does not prove.
+
+        An independent pass measured that neither `MIN_GLYPH_WIDTH` nor
+        `BLEED_CEILING` changes a single READING across all 6,439 reference
+        frames: the frames they would catch are refused anyway, by "matched no
+        digit". So these two tests pin the refusal MESSAGE and the ordering of
+        the checks, not an outcome the reader would otherwise get wrong.
+
+        They are kept because a clear refusal reason is what makes a refusal
+        actionable, and because a future capture with different framing is
+        exactly where a fragment would otherwise be scored. But they are not
+        evidence that the constants are load-bearing on this capture.
+        """
         image = self._frame(field_ink=False)
         px = image.load()
         for y in range(*vision_meter.NORMALISE_ROWS):

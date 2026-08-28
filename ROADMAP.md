@@ -995,18 +995,25 @@ from the `Hit` label.
 So `read_panel` returns the orange pair and reports `progress=None`. That is the
 refusal requirement applied to a whole field rather than a glyph.
 
-**One acceptance detail is wrong in this item and should not be re-attempted as
-written.** The second cited series, `55 109 164 219 275 330 386 441 496 552`, is
-**not in `panel/`**. The run beginning at 55 there reads
-`55 110 166 221 277 333 388 - 500 556`, about 55.6 per hit against the cited
-55.2. Frame `p00504` was checked by eye at hit 3 and reads `166`, agreeing with
-the reader. Either that series came from a different capture or it was
-mis-transcribed; it is not evidence against this reader.
+**A claim made here on 2026-08-27b was WRONG and is withdrawn.** It said the
+second cited series, `55 109 164 219 275 330 386 441 496 552`, was "not in
+`panel/`". It is there, at `p01185` to `p01224`, and the reader reproduces it
+exactly - 55, 109, 164, 219, 275, 330, 386, 496, 552, with hit 8 simply not
+captured at that cadence. Both cited series are now pinned by tests.
 
-**Guards proven non-vacuous - five mutations, each red in a different place:**
+The error is worth keeping: the scratch scan sampled every THIRD frame, found a
+different run that also starts at 55 (`55 110 166 221 ...`, about 55.6 per hit),
+and generalised from that one run to the whole directory. A partial search
+produced a false negative, and it was written down as a positive claim about the
+capture. An independent refuter found the real run immediately. **An empty
+search is a claim about the search.**
+
+**Guards proven non-vacuous - FOUR mutations, each red in a different place:**
 closing the accept/reject gap kills 2 tests; disabling the bleed ceiling kills
 the bleed test; accepting any glyph width kills the fragment test; swapping two
-VALUE template labels kills BOTH ground-truth tests.
+VALUE template labels kills BOTH ground-truth tests. (Filed as "five" in three
+places at first, including the append-only ledger, while enumerating four. The
+count is four.)
 
 And one test here was found vacuous while checking: the corrupted-glyph test
 refuses with "matched no digit", i.e. it scores ABOVE the reject threshold, so
@@ -1016,8 +1023,9 @@ test that erodes a prototype until it lands inside the band.
 **What is left**, and it is the white pair only:
 
 - **Acceptance:** a labelled template set for the white Progress Record digits,
-  and `read_panel` returning the pair instead of None. **NOT blocked on a new
-  capture** - see the groundwork below, which overturns that.
+  and `read_panel` returning the pair instead of None. **BLOCKED on a new
+  capture** - but read the two sections below in order before acting, because
+  the REASON was refuted once and then re-established differently.
 
 ### White-row groundwork MEASURED 2026-08-27d - not blocked on data after all
 

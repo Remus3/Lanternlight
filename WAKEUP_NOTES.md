@@ -5,6 +5,50 @@ fidelity and archive older ones rather than deleting them.
 
 ---
 
+# Wrap 2026-08-27g - the refutation caught a RED HEAD and a false negative
+
+Suite **1297 passed / 1297 collected**, ruff clean, clean tree. Ledger
+`LL-0075`. Two of these are mine and both are the kind that survive a session.
+
+## HEAD was red and the commit said otherwise
+
+`d7b96ce` claims "Docs only. Suite untouched." Its diffstat carries
+`lanternlight/vision_meter.py` with `BLEED_CEILING` 800 -> `10**9`, and a clean
+checkout of it fails. Cause: a refuter was mid-run mutating that constant to
+prove the guard is not vacuous, and **`git add -A` staged its live probe**. The
+risk was noticed earlier in the session and the command was run anyway. Fixed in
+`bc2aad7`; the message cannot be amended because it is pushed.
+
+**Never `git add -A` while a subagent may be writing to the tree.**
+
+## "The second series is not in the capture" was wrong
+
+`LL-0071` and ROADMAP both said 7c's second cited series - `55 109 164 219 275
+330 386 441 496 552` - is not in `panel/`. **It is**, at `p01185` to `p01224`,
+and the shipped reader reproduces it exactly. The scratch scan sampled every
+THIRD frame, caught a *different* run that also starts at 55, and generalised
+from one run to the whole directory. Both series are now pinned by tests.
+
+That is the repo's oldest trap wearing new clothes: an empty SEARCH stated as a
+fact about the world, written into two documents that tell future sessions an
+acceptance criterion is unachievable.
+
+## What survived, and it is the reader
+
+An independent scan of all 6,439 frames found **zero** four-digit totals, **zero**
+monotonicity violations at any gap, and zero merged-glyph runs. It also found the
+reader reproduces a FINDINGS run no test touches.
+
+## Corrections made
+
+Four mutations were filed as five. The docstring's "measured margins 0.032 to
+0.101" were cluster-labelling margins, not read-time ones - measured at read
+time the tightest margin is **0.0311** against a 0.030 threshold. And
+`MIN_GLYPH_WIDTH` and `BLEED_CEILING` change **zero** readings across the
+capture; their tests pin the refusal message, which the test docstring now says.
+
+---
+
 # Session 2026-08-27f - the boundary fix is refuted too, and the limit is the capture
 
 Client **closed**. Suite **1295 passed / 1295 collected**, unchanged - **nothing

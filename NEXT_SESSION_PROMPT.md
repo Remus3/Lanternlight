@@ -36,16 +36,20 @@ A fresh clone runs zero git hooks until that first command runs. The tracked
 
 ## Where the last session left it
 
-**Suite 1295 passed / 1295 collected, ruff clean**, measured on a clean tree
+**Suite 1297 passed / 1297 collected, ruff clean**, measured on a clean tree
 with `__pycache__` purged - that is your merge-gate baseline, and re-measure it
 yourself before dispatching work rather than trusting this line.
 
-The ledger runs to **`LL-0074`**. Read **`LL-0064`** and **`LL-0074`** first,
-then `LL-0066` and `LL-0067`.
+The ledger runs to **`LL-0075`**. Read **`LL-0064`**, **`LL-0074`** and
+**`LL-0075`** first, then `LL-0066` and `LL-0067`.
 
 - **`LL-0064`** is an independent four-agent refutation pass that **overturns
   claims earlier entries make** - reading LL-0056 through LL-0063 without it
   leaves you believing things that were withdrawn.
+- **`LL-0075`** is the wrap refutation. It records that a commit here left
+  HEAD **red** under a message claiming "Docs only", and that a claim in
+  `LL-0071` about the capture was a false negative. Read it before trusting
+  anything else from this session.
 - **`LL-0074`** is the end of the 7c white-row chain and supersedes the
   intermediate conclusions in `LL-0071`, `LL-0072` and `LL-0073`. Those three
   contradict each other on purpose, each correcting the last; only the last one
@@ -189,9 +193,14 @@ work it gates.
   about a mechanism.** Two specified next-steps in a row were wrong because both
   were inferred from the shape of a symptom. A guard sweep and a class-mean
   collision found the real cause in minutes.
+- **NEVER `git add -A` while a subagent may be writing to the tree.** One
+  commit here swept a refuter's live mutation into itself and pushed a red HEAD
+  under the message "Docs only. Suite untouched." Stage named paths, or diff
+  what is staged against what you intended.
 - **A measured null needs the same evidence as a positive.** "The capture
-  cannot supply this" closes an avenue for every later session; one such claim
-  was inferred from a neighbouring field and was wrong.
+  cannot supply this" closes an avenue for every later session. Two such claims
+  were wrong this session - one inferred from a neighbouring field, one from a
+  scan that sampled every third frame and missed the run it was looking for.
 - **Derive an id or a label from BEHAVIOUR, never from shape or from a stored
   order.** Two wrong meter label sets came from a creation-order list that is
   not portable and from reading glyphs by eye. The hit counter settled it.
