@@ -19,6 +19,153 @@ number for cooldowns or damage. Any site quoting one is doing something else
 (tooltip transcription, self-measurement, or invention) - see each category
 below.
 
+## Source register - the single entry point
+
+Added 2026-08-29. **Read this table before consulting or citing any source for
+this game.** It exists because the vetting below had already been done and was
+scattered across four documents - this survey by category, `ROADMAP.md` item 8,
+the [`docs/CLASSES.md`](CLASSES.md) tier ladder and fabrication catalogue, and a
+ledger entry - so a cold session had no entry point and re-vetted from scratch.
+Re-deriving a source's trust is the exact rediscovery this project's continuity
+design exists to prevent.
+
+**The rule that governs the table: provenance beats category.** "Third-party
+site" is not a trust tier. Two sites for this game, reviewed on the same day,
+turned out to have opposite provenances - one datamined from the encrypted
+paks, one walked by hand - and they fail in opposite directions. Check how a
+source was built before quoting it, every time.
+
+**What a non-T0 source is licensed to do**, in every case in this table:
+
+- Supply a **canonical noun** - a class, zone, NPC or item name - subject to the
+  game's own word winning any conflict. The game says *dungeon* and *escape*;
+  `raid` and `extract` appear zero times in the log, so a grep for a term
+  learned from a site returns a clean negative that means nothing.
+- Supply a **hypothesis** or an **expectation to test**. A count is the most
+  useful form, because a count that disagrees is immediately informative.
+- Supply a **cross-check**. A contradiction with our own measurement is a real
+  result worth chasing. **An agreement is not corroboration.**
+
+**What no source in this table may ever do:** write a row into
+[`docs/OBSERVED_IDS.md`](OBSERVED_IDS.md), or put a number into Emberforge.
+Promotion from any tier below T0 is forbidden by
+[ADR-005](adr/ADR-005-omit-rather-than-guess.md).
+
+Tier definitions live in [`docs/CLASSES.md`](CLASSES.md) under "Trust tiers" and
+are not restated here.
+
+### First-party and official
+
+| Source | How it was built | Tier | Use it for | Basis |
+|---|---|---|---|---|
+| This repo's log and save reads, and passive capture of the operator's screen | Measured here, method recorded per row | T0 | Everything. Outranks every row below. | `OBSERVED_IDS.md`, `FINDINGS.md` |
+| `steamcommunity.com/app/3282300/allnews`, `api.steampowered.com` ISteamNews | Bellring's own posts | T1 | Canonical names, patch bookkeeping, what changed. **Never a magnitude** - patch notes are qualitative only, verified by direct fetch. | This survey's header; `CLASSES.md` T1 table |
+| `store.steampowered.com/app/3282300` | Publisher marketing copy | T1, with a caveat | Product facts. Its "two unique weapon stances" line is known-generic and has at least one measured exception (Blackarrow). | `CLASSES.md` C-series |
+| `mistfallhunter.com` | Official site | T1 | Canonical nouns. Carries a stale "(c) 2024" line; links resolve to real first-party accounts. | Section 10 below |
+| `steamdb.info`, `raijin.gg` | Third-party scrapes of Steam metadata | T1-derived | Build ids, player counts. Metadata about the app, never about game mechanics. | Section 9 below |
+
+### Third-party, provenance individually assessed
+
+| Source | How it was built | Tier | Use it for | Basis |
+|---|---|---|---|---|
+| `gyldforge.com` | **Dated Auction House capture** - states its snapshot date (2026-08-07) and game build (`24589503`), and explicitly refuses to backfill absent combinations | T4 by category, **best-documented method in the survey** | Gear, affix and gem cross-checks, and only for what it says it captured - never for what it is silent on | Section 4 below |
+| `questlog.gg` | **DATAMINED.** Measured, not inferred: addresses monsters by numeric id in the same space our save uses, and lists `[Debug]`, `Test Dummy` and `[Discarded]` rows no player can ever see | T4 | Hypothesis and cross-check only. Its ids are **never** written to `OBSERVED_IDS.md`. Its category slugs are internal (`BigElite` where the UI says "Greater Elite") | `ROADMAP.md` item 8, 2026-08-11 |
+| `gamerguides.com` | **HAND-MAPPED**, crowd-sourced - maintainer states a small team "filling them out as we play" with reader-suggested markers | Higher than a datamined dump for *where a thing is*, lower for *completeness* | Map expectations. Two self-declared caveats: its database's first iteration was built on the **DEMO**, and it is "mindful of randomization" - so a marker that fails to match refutes nothing on its own | `ROADMAP.md` item 8, 2026-08-11 |
+| `mistfallhunterguide.org` | States an explicit editorial policy - "no invented player counts, drop rates, class names, weapon stats" - and tiers its own sources | **Disputed, see conflicts below** | Narrative and progression facts where being wrong is low-stakes | Section 5 below vs `CLASSES.md` T4 cluster |
+| `mistfallhunter.app` | Declares its own data tiers (official / tooltip / creator-tested / tentative) | T4 | Cross-check, honouring its own tier marks | Section 1 below |
+| `mistfalldb.com` | **No sourcing method disclosed** - one vague line, "faithful to the current build" | T4 | Cross-check only | Section 1 below |
+| `mistfallhunter.grandwiki.com` | Wiki-farm template; its "mined fields" language reads as multi-game boilerplate, **not** a decryption claim, and is uncorroborated | T4 | Cross-check only | Section 8 below |
+| `mistfall.market` | Watching the player-run Auction House UI. No market API exists | T4 | Price bands as a dated snapshot, never as a spec | Section 7 below |
+| `mobalytics.gg` | Established outlet | T3 | Tier context. **Access is unresolved:** four research passes report HTTP 403, one claims full fetches. This conflict is load-bearing for `CLASSES.md` C1 | `CLASSES.md` T3, C1 |
+| KeenGamer, Destructoid, GameRant, FandomWire, GameSpot, GamingBolt, Deltia's Gaming, Pro Game Guides, Worthplaying | Dated and bylined, frequently uncited on mechanics | T3 | Context and dated claims. GameSpot's tier list is beta-era (2026-06-17) and stale on its own date | `CLASSES.md` T3 |
+| `allthings.how`, `gamerfuzion.com` | Guide sites | **T3 or T4 - passes disagreed**; graded T4 here | Cross-check only, at the lower grade | `CLASSES.md` T3, disagreement recorded |
+
+### The launch-window wiki cluster - one source in total
+
+`mistfallhunters.wiki`, `mistfallhunters.com`, `mistfallhunter.app`,
+`mistfall-hunter.wiki`, `mistfall-hunter.com`, `mistfall-hunter.online`,
+`mistfallhunter.wiki`, `mistfallhunter.xyz`, `mistfallhunterwiki.org`,
+`mistfallhunterwiki.wiki`, `mistfallhunterwiki.vercel.app`,
+`mistfallhuntergg.wiki`, `mistfallhunterclasses.net`,
+`mistfallhunter.grandwiki.com`, `mistfalldb.com`, `mistfallhunter.me`,
+`mistfallloadouts.blog`, `metamist.io`, `questlog.gg`, `fextralife.com`,
+`egamersworld.com`, `dtgre.com`, `thegameswiki.com`, `gmtreks.com`,
+`tposegaming.com`, `gamingpromax.com`, `games.gg`, `grindnstrat.com`,
+`drawpie.com`, `thegamesedge.com`, `showgamer.com`, `gamerblurb.com`,
+`onehitkill.space`, `ggwtb.com`, `captain-carry.com`.
+
+**These count as one source, not thirty-five.** They cross-copy each other close
+to verbatim; two catalogued fabrications were caught precisely because a
+specific false-precision claim appeared word for word on unrelated domains with
+zero citation on either. Agreement across this cluster is one source repeating
+itself. Rows above that name a cluster member individually (`gyldforge.com` is
+not a member; `questlog.gg`, `mistfalldb.com`, `mistfallhunter.app` and
+`mistfallhunter.grandwiki.com` are) carry an assessment that supersedes the
+cluster default for that domain only.
+
+### Excluded - never cited as evidence
+
+`skycoach.gg`, `mmoexp.com`, `iggm.com`, `playerauctions.com`, `lagofast.com`,
+`u4gm.com`, `gladiatorboost.com`. Cheat, boosting and currency vendors, named
+only to record what was thrown out. Their content has matched the consensus in
+places; that is a reason to note that a vendor repeating a true thing is not
+evidence, not a reason to cite one.
+
+Cheat-storefront domains selling ESP or aimbot access for this game are
+deliberately not named anywhere in this repo. The category exists and is
+commercially active; that is the whole record.
+
+### Community hubs and infrastructure - not evidence about mechanics
+
+| Source | What it is | Use it for |
+|---|---|---|
+| Official Discord (member counts via `discordbotlist.com`) | Run by Bellring | Population figures, and as the venue where first-party statements appear |
+| `reddit.com` / `old.reddit.com` r/MistfallHunter | Player community | T2 testimony if a thread is read directly. **Not fetchable from this environment** - every figure in this repo about it is secondhand and marked so |
+| `steamcommunity.com/.../discussions` | Player threads | T2 first-party player evidence. Thread ids are omitted repo-wide because 18-digit runs trip the `LONG_ID` redaction guard |
+| `twitch.tv` category | Streams | Not characterised |
+| `github.com` | Code hosting | The license gate, and the overlays-and-safety-gate table below. `api.githubcopilot.com` appears in the ledger as tooling, not as a game source |
+
+### Conflicts between documents, recorded rather than smoothed
+
+Four sources are treated inconsistently across this repo's own docs. Each is
+named here so the next reader sees the disagreement instead of inheriting
+whichever document they happened to open first.
+
+1. **`questlog.gg`** sits in the `CLASSES.md` T4 copy-farm cluster (2026-08-09),
+   but was **measured as datamined** two days later in `ROADMAP.md` item 8. The
+   later, measured assessment is the one this register carries. It stays T4 - a
+   datamined source is not more trustworthy, it fails differently.
+2. **`mistfallhunterguide.org`** sits in the `CLASSES.md` T4 cluster, and is
+   simultaneously ranked the second-best upstream in this survey for its stated
+   editorial policy. **Unresolved.** A stated policy is a claim about a source,
+   not a measurement of it, and nothing here has tested whether it is honoured.
+3. **`lagofast.com`** is on the `CLASSES.md` excluded-vendor list and is also
+   cited in section 2 of this survey as a tier-list site. **Excluded wins** -
+   the stricter treatment governs, and section 2's citation should be read as a
+   record that the site exists, not as evidence.
+4. **`captain-carry.com`** sits in the T4 cluster despite a name suggesting a
+   carry vendor. `CLASSES.md` already flags that it should probably move to
+   Excluded. **Flagged, not silently reclassified** - it needs someone to look
+   at the site once and decide.
+
+Also recorded: **`gyldforge.com` and `gamerguides.com` appear nowhere in the
+`CLASSES.md` tier ladder**, because that document was written before either was
+assessed. They are not absent because they were rejected.
+
+### When to re-vet
+
+A row here is a statement about a source at a date, not a permanent property.
+
+- **Re-vet on a build pin change.** The current pin is buildid `24813185`
+  (2026-08-19); the assessments in this table were made against the survey of
+  2026-08-09 and the review of 2026-08-11. A site's data can go stale silently,
+  where our own measurements at least carry a banner naming the build they were
+  read on.
+- **Re-vet any source that changes its stated method**, since for most rows here
+  the method is the only thing being trusted.
+- **A decline reason goes stale faster than a count does.** Re-check why
+  something was rejected before citing the rejection.
+
 ## 1. Item / loot databases
 
 Real and numerous, all unofficial:
