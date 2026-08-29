@@ -36,11 +36,17 @@ A fresh clone runs zero git hooks until that first command runs. The tracked
 
 ## Where the last session left it
 
-**Suite 1302 passed / 1302 collected, ruff clean**, measured on a clean tree
-with `__pycache__` purged - that is your merge-gate baseline, and re-measure it
-yourself before dispatching work rather than trusting this line.
+**Suite 1302 passed / 1302 collected, ruff clean**, measured on a clean tree -
+that is your merge-gate baseline, and re-measure it yourself before dispatching
+work rather than trusting this line. **Use `python -m pytest --collect-only`
+WITHOUT `-q`**: `pytest.ini` addopts already carries `-q`, so the form printed
+in `CLAUDE.md` becomes `-qq` and gives per-file counts with no total.
 
-The ledger runs to **`LL-0077`**. Read **`LL-0064`**, **`LL-0074`** and
+The ledger runs to **`LL-0079`**. Read **`LL-0079`** before anything else from
+the last session: it records that a completeness guard which had been correctly
+proven non-vacuous was still blind to an entire TLD, and reported `62 of 62, 0
+missing` while a cited source was absent. **A guard proven non-vacuous is not a
+guard proven correct.** Read **`LL-0064`**, **`LL-0074`** and
 **`LL-0075`** first, then `LL-0066` and `LL-0067`.
 
 - **`LL-0064`** is an independent four-agent refutation pass that **overturns

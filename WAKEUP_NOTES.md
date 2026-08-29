@@ -5,6 +5,86 @@ fidelity and archive older ones rather than deleting them.
 
 ---
 
+# Wrap 2026-08-29b - the source register, and a guard that was proven non-vacuous and still blind
+
+Suite **1302 passed / 1302 collected**, ruff clean, clean tree. Ledger
+`LL-0078` and `LL-0079`. Client **closed** all session - no capture, no log
+read, nothing measured about the game.
+
+## What shipped
+
+`docs/ECOSYSTEM.md` now opens with a **Source register**: the single entry point
+for "can I cite this, and for what". Per source - how it was built, its tier,
+what it is licensed to do, and where that assessment came from. It exists
+because the vetting was already done and was scattered across four documents, so
+every cold session re-derived it.
+
+Nothing about the doctrine changed. Nothing below T0 may write a row into
+`OBSERVED_IDS.md` or a number into Emberforge.
+
+**Four cross-document conflicts are recorded rather than resolved** - the real
+yield. `questlog.gg` is T4 in `CLASSES.md` but was measured DATAMINED two days
+later in ROADMAP 8; `mistfallhunterguide.org` is simultaneously cluster-tier and
+the second-ranked upstream, left open; `lagofast.com` is both excluded and
+cited, excluded wins; `captain-carry.com` stays flagged. Also: `gyldforge.com`
+and `gamerguides.com` are absent from the `CLASSES.md` ladder because it
+predates them, **not** because they were rejected.
+
+## The finding worth carrying forward
+
+**A guard proven non-vacuous is not a guard proven correct.**
+
+The register's completeness was checked by a script, and that script was
+properly proven non-vacuous: delete `gyldforge.com` from the register, watch it
+go red naming the host, restore, watch it go green. That proof was real. It was
+also worthless against the actual bug - the script's bare-domain regex carried a
+**hardcoded TLD allowlist** and `.gl` was not in it, so `th.gl` was cited twice
+in `ECOSYSTEM.md` and invisible to the checker. It reported a confident
+**62 of 62, 0 missing** while a source was missing.
+
+The independent refutation pass caught it. True figures after a TLD-agnostic
+re-derivation: **78 host-shaped tokens cited, 15 of them non-hosts** (code
+identifiers like `str.splitlines`, the GSDK package `com.hermes.pstgame`),
+**63 genuine sources, 63 of 63 present** once `th.gl` was added.
+
+Non-vacuity shows a guard is wired to something. It says nothing about what the
+guard is **blind** to. Ask that separately, every time.
+
+**The wrap order is what made this recoverable.** The refutation ran BEFORE the
+commit. `ROADMAP.md` had already hard-coded `62 of 62` in item 8b's acceptance
+and was still uncommitted, so the false count never entered history.
+
+## Two things opened, neither closed
+
+- **`OPS-13` - READY, and the strongest client-closed candidate on the list.**
+  Nothing guards the register's completeness; the checker lived in a session
+  scratchpad and is gone. The item carries the corrected logic, explicitly
+  forbids the TLD allowlist that caused this, and requires the test be proven
+  non-vacuous. Ownership is genuinely undecided - it guards a research doc but
+  must live in `tests/`, which research does not own.
+- **`OPS-14` - OPEN, an operator question.** C: independently read **0.71 GB
+  free of 954 GB** from two tools, commands died with ENOSPC, and the first
+  append of `LL-0078` failed with `OSError errno 28` **inside `append_entry`**.
+  The ledger survived because that writer is atomic - the first time
+  `CLAUDE.md`'s atomic rule demonstrably saved a file. Minutes later C: read
+  **120 GB free with nothing deleted**. Both halves unexplained.
+  `C:/ll-captures` is 2.96 GB and `C:/ll-worktrees` 0.02 GB, so the capture
+  evidence is ruled out and **must not be pruned in response**.
+
+## Two traps for the next session
+
+**`python -m pytest --collect-only -q` gives you NO total.** `pytest.ini`
+addopts already carries `-q`, so the extra one makes it `-qq` and it prints
+per-file counts only. Drop the extra `-q`. `CLAUDE.md` still prescribes the
+`-q` form.
+
+**Check a lane branch's distance from main before trusting its tree.**
+`lane/research` was **112 commits behind** and 0 ahead when this session started
+- its `docs/` was missing 2372 lines, `FINDINGS.md` alone 1203 short. It was
+fast-forwarded before any authoring. It is now one commit behind main again.
+
+---
+
 # Wrap 2026-08-27g - the refutation caught a RED HEAD and a false negative
 
 Suite **1297 passed / 1297 collected**, ruff clean, clean tree. Ledger
