@@ -36,11 +36,11 @@ A fresh clone runs zero git hooks until that first command runs. The tracked
 
 ## Where the last session left it
 
-**Suite 1297 passed / 1297 collected, ruff clean**, measured on a clean tree
+**Suite 1302 passed / 1302 collected, ruff clean**, measured on a clean tree
 with `__pycache__` purged - that is your merge-gate baseline, and re-measure it
 yourself before dispatching work rather than trusting this line.
 
-The ledger runs to **`LL-0075`**. Read **`LL-0064`**, **`LL-0074`** and
+The ledger runs to **`LL-0077`**. Read **`LL-0064`**, **`LL-0074`** and
 **`LL-0075`** first, then `LL-0066` and `LL-0067`.
 
 - **`LL-0064`** is an independent four-agent refutation pass that **overturns
@@ -59,6 +59,23 @@ The ledger runs to **`LL-0075`**. Read **`LL-0064`**, **`LL-0074`** and
   fixing. **`LL-0067`** is its refutation: it could not overturn the claim, but
   found the fix had **opened a PII hole**, hiding git-TRACKED files from the
   guard.
+
+## Two machine-level things that were repaired, not in this repo
+
+**Ports.** This project's block is **8810-8819** and `CLAUDE.md` carries the
+machine-wide registry for all six local projects. `tests/test_ports.py` fails if
+a constant lands outside the block. Knowing a neighbour's block is not
+permission to talk to it - the standalone rule still holds.
+
+**Two MCP servers were dead and are fixed** (`LL-0077`), both outside this
+repository in the plugin cache, both backed up as `.bak-2026-08-29`:
+
+- **github** rejected a hardcoded `Authorization` header with 401. The header
+  was removed so OAuth fallback can engage - **but it still needs a human to
+  complete the sign-in** when the server next prompts.
+- **serena** re-installed itself through `uvx` on every launch and lost a race
+  extracting a package. It is now installed once via `uv tool install` and the
+  config runs `serena.exe` directly.
 
 ## Check the world before anything else
 
