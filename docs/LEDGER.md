@@ -84,6 +84,22 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0077 - 2026-08-29 - Port block guarded by a test, and both dead MCP servers fixed - github's stale Authorization header and serena's per-launch reinstall
+
+**Evidence:**
+- PORT GUARD SHIPPED: tests/test_ports.py, owned by the safety lane (it is a repository hygiene guard), 5 tests. It checks two different things - a port CONSTANT in the source outside 8810-8819, and the CLAUDE.md table drifting from the block it declares. The sibling registry is deliberately NOT restated in the test; CLAUDE.md is the authority, because a second copy is the exact defect that left 8812 contradicted between CLAUDE.md and ARCHITECTURE.md for weeks.
+- GUARD PROVEN NON-VACUOUS, three mutations, anchors asserted before each: pointing overlay.window.CONTROL_PORT at 8888 (Amberstone's block) kills 2 tests including the positive control; deleting the 8815-8819 row from CLAUDE.md kills test_the_table_covers_the_whole_block; changing CLAUDE.md's declared block to 8810-8814 kills test_the_block_matches_what_claude_md_declares. Each mutation kills a different test.
+- THE POSITIVE CONTROL IS REAL: overlay/window.py defines CONTROL_PORT = 8814, the only port constant in the repository, so the scan has a genuine target rather than agreeing with an empty tree forever.
+- GITHUB MCP FIXED, and no secret was handled. Its plugin .mcp.json carried a hardcoded Authorization header against https://api.githubcopilot.com/mcp/ which the server now rejects with 401, and the error message states OAuth fallback is DISABLED while that header is set. The header block was removed so the fallback can engage; the stale token was never read or printed. Backup at .mcp.json.bak-2026-08-29. Endpoint confirmed reachable - curl returns HTTP 401, i.e. auth-required rather than unreachable.
+- SERENA MCP FIXED, after a WRONG first diagnosis. Its config ran 'uvx --from git+https://github.com/oraios/serena', which resolves and installs the package on EVERY launch. It failed with os error 32 removing bottle-0.13.4.data mid-install.
+- SERENA, WHAT THE FIRST DIAGNOSIS GOT WRONG: two live uv.exe processes held the shared uv cache lock, so lock contention looked like the cause. It was not - an isolated UV_CACHE_DIR failed the same way on the second attempt after passing on the first. The failure is a flaky file-in-use race during extraction, and the first success was luck.
+- SERENA, THE ACTUAL FIX: 'uv tool install --from git+https://github.com/oraios/serena serena-agent' installs it once (3 executables, serena-agent v1.7.1.dev0), and the MCP config now runs the installed C:/Users/Administrator/.local/bin/serena.exe directly. The per-launch install is gone, so the race cannot recur. Verified: 'serena.exe start-mcp-server --help' runs.
+- SUITE THIS RUN, clean tree with __pycache__ purged: 1302 tests collected, 1302 passed, ruff check All checks passed, merge gate OK against a baseline of 1297.
+
+WHAT I DELIBERATELY DID NOT DO, because it would have hurt a sibling project: the two uv.exe processes holding the shared cache lock belong to the Windows-MCP extension (ant.dir.cursortouch.windows-mcp), which is CONNECTED and in use this session. 'uv cache clean --force' would have overridden their lock, and killing them would have broken a working server. Serena got its own path instead. Check WHAT holds a lock before breaking it.
+THE MCP EDITS ARE OUTSIDE THIS REPOSITORY and are not covered by any test here. They live in the plugin cache under ~/.claude/plugins/cache/claude-plugins-official/, which a plugin update may overwrite - both files were backed up alongside as .bak-2026-08-29. If either server dies again after an update, this entry is the record of what was changed and why.
+GITHUB STILL NEEDS A HUMAN. Removing the header re-enables the OAuth fallback but does not authenticate anything; the operator has to complete the sign-in when the server next prompts. Writing a replacement token into that file was not an option - handling a credential in plaintext is forbidden, and the fix that avoids it is better anyway, because a hardcoded token is what went stale in the first place.
+
 ### LL-0076 - 2026-08-27 - Port block widened to 8810-8819 and the machine-wide registry recorded, which exposed a contradiction between CLAUDE.md and ARCHITECTURE.md over 8812
 
 **Evidence:**

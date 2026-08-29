@@ -2392,6 +2392,27 @@ lane's roster made `.claude/commands/lane-ops.md` stale and
 `python scripts/write_lane_contracts.py` regenerated it. The roster is not the
 only copy of itself.
 
+## PORT-1. The port block is guarded by a test - CLOSED 2026-08-29
+
+`LL-0076` recorded, as a deliberate omission, that nothing stopped a port being
+allocated outside this project's block. `LL-0077` closes it.
+
+`tests/test_ports.py` (safety lane - it is a repository hygiene guard) fails on
+a port constant outside **8810-8819**, and separately on `CLAUDE.md`'s own table
+drifting from the block it declares or leaving a port in the block unaccounted
+for. The sibling registry is **not** restated in the test: `CLAUDE.md` is the
+authority, and a second copy is precisely the defect that left port 8812
+contradicted between `CLAUDE.md` and `docs/ARCHITECTURE.md`.
+
+Three mutations, each red on a different test: pointing
+`overlay.window.CONTROL_PORT` at 8888 (Amberstone's block) kills two including
+the positive control; deleting the `8815-8819` row kills the coverage test;
+changing the declared block kills the drift test.
+
+Nothing binds a port yet, so this guards an allocation rather than a service.
+That is the point - the moment a service is built is the moment a stray constant
+becomes expensive, and a guard added then arrives after the mistake.
+
 ## Ordering note
 
 **Items 2b, 2c, 2d, item 7's shipped-code half and item 3 are CLOSED as of
