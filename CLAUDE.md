@@ -165,10 +165,25 @@ Related traps this repo has already hit or inherited:
 
 ## Ports
 
-Reserved for this project only. Chosen to sit clear of every port already in use
-by other local projects on this machine (the occupied set includes 8777-8783 and
-8860, 8888, 8889, 8895). Do not allocate outside this block, and do not bind at
-import time.
+**This project's block is 8810-8819**, widened from 8810-8814 by the operator on
+2026-08-27. Do not allocate outside it, and do not bind at import time.
+
+The machine-wide registry, recorded here so nobody re-derives it by probing for
+a free port:
+
+| Block | Project |
+|---|---|
+| 8770-8789 | Red Moon (RM) |
+| **8810-8819** | **Lanternlight (LL)** |
+| 8860-8879 | Daemon Slayer (DS) |
+| 8888-8895 and 2999 | Amberstone (RC) |
+| 8900-8919 | LegionWallpaper (LW) |
+| 8920-8939 | Clockspeed (CS) |
+
+**Knowing a neighbour's block is not permission to talk to it.** The standalone
+rule at the top of this file still holds: no shared code, no shared ports, no
+shared keys. This table exists so an allocation avoids a collision, not so a
+service can find a sibling.
 
 | Port | Service | State |
 |---|---|---|
@@ -177,6 +192,7 @@ import time.
 | 8812 | Vision / OCR service | reserved, not built |
 | 8813 | Emberforge engine | library only, no service |
 | 8814 | Overlay control channel | reserved, unbound |
+| 8815-8819 | unallocated | free |
 
 ## Paths
 

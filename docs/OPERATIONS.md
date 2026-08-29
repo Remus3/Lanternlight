@@ -159,13 +159,16 @@ See [ADR-004](adr/ADR-004-redaction-is-mandatory.md).
 ## Reserved local ports
 
 None of these are built and nothing is listening on any of them. Reserved so
-future services do not collide.
+future services do not collide. The block is **8810-8819**; `CLAUDE.md` is the
+authority for it and for the machine-wide registry.
 
 | Port | Service |
 |---|---|
 | 8810 | Dashboard |
 | 8811 | Log-tail service |
+| 8812 | Vision / OCR service |
 | 8813 | Emberforge |
+| 8814 | Overlay control channel |
 
 ## Authoring rules enforced at commit time
 
