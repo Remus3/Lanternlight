@@ -168,7 +168,8 @@ contain. What is left in `window.py` is widget construction and a repaint timer.
 
 ### Ports
 
-Reserved for this project: dashboard **8810**, log-tail service **8811**,
+This project's block is **8810-8819** (`CLAUDE.md` is the authority). Named so
+far: dashboard **8810**, log-tail service **8811**, vision / OCR **8812**,
 Emberforge **8813**, and **8814** for an overlay control channel.
 
 **The overlay binds none of them.** It has no socket, no server, no client. 8814

@@ -84,6 +84,20 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0076 - 2026-08-27 - Port block widened to 8810-8819 and the machine-wide registry recorded, which exposed a contradiction between CLAUDE.md and ARCHITECTURE.md over 8812
+
+**Evidence:**
+- OPERATOR-SUPPLIED REGISTRY, recorded verbatim in CLAUDE.md: RM Red Moon 8770-8789, LL Lanternlight 8810-8819, DS Daemon Slayer 8860-8879, RC Amberstone 8888-8895 and 2999, LW LegionWallpaper 8900-8919, CS Clockspeed 8920-8939. Lanternlight's block widens from 8810-8814.
+- RE-DERIVED RATHER THAN TRUSTED: expanding all six blocks to individual ports gives 99 allocations with ZERO overlaps. Lanternlight's block is exactly 10 ports, 8810 to 8819, and 8790-8809 plus 8820-8859 remain unallocated between neighbours - 72 free ports in that span.
+- A CONTRADICTION FOUND WHILE EDITING, and it predates this change: CLAUDE.md's table has always allocated 8812 to a vision / OCR service, while docs/ARCHITECTURE.md said '8812 is deliberately skipped, leaving a gap between the two surfaces most likely to grow a sibling'. Two copies of one allocation, disagreeing. ARCHITECTURE.md now defers to CLAUDE.md and records the correction rather than silently flipping.
+- THE OLD BOUNDARY CLAIM IS GONE. CLAUDE.md previously justified the block by naming a partial occupied set - '8777-8783 and 8860, 8888, 8889, 8895'. That was a hand-derived subset and is replaced by the full registry; grepped to confirm no *.md outside the append-only ledger and wakeup notes still recites it.
+- FOUR DOCUMENTS SYNCED, with CLAUDE.md named as the single authority so the range is not restated five times: docs/ARCHITECTURE.md, docs/OPERATIONS.md and docs/OVERLAY.md now defer to it and list only named services. docs/OPERATIONS.md and docs/OVERLAY.md gained the 8812 and 8814 rows they were missing.
+- SUITE THIS RUN, clean tree with __pycache__ purged: 1297 passed / 1297 collected, ruff check All checks passed. CLAUDE.md is scanned by the ASCII and PII guards, so the edit is covered.
+
+NOTHING BINDS ANY OF THESE PORTS. The widening is an allocation, not a service: no code in this repository opens a socket, and the rule that nothing binds at import time is unchanged.
+KNOWING A NEIGHBOUR'S BLOCK IS NOT PERMISSION TO TALK TO IT, and CLAUDE.md now says so beside the table. The standalone rule at the top of that file still holds - no shared code, no shared ports, no shared keys - and the registry exists so an allocation avoids a collision, not so a service can find a sibling. A table of other projects' ports is exactly the kind of thing a later session could misread as an integration surface.
+NOT ADDED, and recorded so the omission is deliberate: there is no test asserting that no source file references a port outside 8810-8819. Nothing binds a port today so it would guard nothing yet, but it is the obvious guard the moment a service is built.
+
 ### LL-0075 - 2026-08-27 - Wrap refutation - I committed a subagent's live mutation and left HEAD RED, and LL-0071's 'the second series is not in the capture' is withdrawn as a false negative
 
 **Evidence:**

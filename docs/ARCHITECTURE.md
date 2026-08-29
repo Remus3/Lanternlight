@@ -158,8 +158,14 @@ them.** They are reserved so that two future services do not collide.
 | 8811 | Log-tail service | not built - the `lanternlight.tail` **library** shipped 2026-08-12 and deliberately binds nothing (ROADMAP item 3) |
 | 8813 | Emberforge | not built |
 
-8812 is deliberately skipped, leaving a gap between the two surfaces most likely
-to grow a sibling.
+8814 is reserved for an overlay control channel and is unbound; 8815-8819 are
+free. **`CLAUDE.md` is the authority** for the block and for the machine-wide
+registry - this table lists only what has a named service.
+
+Corrected 2026-08-27: this section used to say "8812 is deliberately skipped",
+which contradicted `CLAUDE.md`, where 8812 has been allocated to a vision / OCR
+service all along. Two copies of an allocation is two chances to drift, so the
+range now lives in one place and this file defers to it.
 
 ## Data provenance
 
