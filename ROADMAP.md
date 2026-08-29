@@ -1806,6 +1806,89 @@ opposite provenances - one datamined from encrypted assets, one walked by hand.
 They fail in opposite directions and must be cited differently. Check how a
 source was built before quoting it, every time.
 
+## 8b. Source register - CLOSED 2026-08-29
+
+Ledger `LL-0078`. The direct successor to item 8: that item fixed the tier and
+provenance of two sites, and this one fixed the fact that the answer was
+unfindable.
+
+The vetting had already been done and was scattered across four documents -
+`docs/ECOSYSTEM.md` by category, item 8 above, the `docs/CLASSES.md` tier ladder
+plus its fabrication catalogue, and a ledger entry. A cold session therefore had
+no entry point and re-derived source trust from scratch, which is the exact
+rediscovery this project's continuity design exists to prevent.
+
+`docs/ECOSYSTEM.md` now opens with a **Source register**: per source, how it was
+built, what tier it sits at, what it is licensed to do, and where that
+assessment came from. The provenance column is the load-bearing one, because for
+almost every row the method is the only thing being trusted. Item 8's rule is
+restated there as the register's governing rule: **"third-party site" is not a
+trust tier.**
+
+**Four cross-document conflicts were found and are recorded rather than
+smoothed** - the real yield, because each was a place where a cold session would
+inherit whichever document it happened to open first:
+
+- `questlog.gg` sits in the `CLASSES.md` T4 copy-farm cluster but was measured
+  DATAMINED two days later in item 8. The later measured assessment is carried.
+  It stays T4: a datamined source is not more trustworthy, it fails differently.
+- `mistfallhunterguide.org` is simultaneously in the T4 cluster and ranked the
+  second-best upstream in `ECOSYSTEM.md`. **Left unresolved** - a stated
+  editorial policy is a claim about a source, not a measurement of it, and
+  nothing here has tested whether it is honoured.
+- `lagofast.com` is on the `CLASSES.md` excluded-vendor list AND cited in
+  `ECOSYSTEM.md` section 2 as a tier-list site. Excluded wins.
+- `captain-carry.com` stays flagged for the excluded list rather than silently
+  reclassified.
+
+Also recorded: `gyldforge.com` and `gamerguides.com` appear nowhere in the
+`CLASSES.md` tier ladder because that document predates their assessment, **not**
+because they were rejected - a distinction that would otherwise read as
+rejection.
+
+**Acceptance - MET 2026-08-29, but only after the first claim of it was
+REFUTED.** Left in this shape deliberately, because the error is the useful
+part.
+
+The first pass claimed **62 of 62, 0 missing**. The independent refutation
+overturned it: `th.gl` is cited twice in `docs/ECOSYSTEM.md` (sections 6 and the
+safety-gate table) and was **absent from the register**. The cause was not the
+register, it was the checker - its bare-domain regex carried a **hardcoded TLD
+allowlist** (`com|org|net|gg|io|app|...`) and `.gl` was not in it. So the green
+result was a claim about the pattern, not about `docs/` - the exact
+"an empty grep is a claim about your pattern" anti-pattern in `CLAUDE.md`, and
+the second time this project has shipped a guard that certified what it had no
+basis to certify.
+
+Re-derived after the fix with a **TLD-agnostic** extractor: **78 host-shaped
+tokens cited across `docs/`, 15 of them non-hosts** (code identifiers such as
+`str.splitlines` and `gvas.parse`, filenames, and the GSDK package name
+`com.hermes.pstgame`), leaving **63 genuine external sources, 63 of 63 present,
+0 missing.** `th.gl` was added to the register as a **measured negative**: it
+lists 33 titles and this game is not among them, which is a second independent
+confirmation of the companion-tool gap.
+
+Suite **1302 passed, 1302 collected**, identical to the baseline measured before
+any edit; ruff clean. Both guards were watched going red: removing
+`gyldforge.com` from the register gave exit 1 naming the host; injecting a
+U+2014 into the register's own text failed
+`tests/test_ascii_hygiene.py::test_repository_is_seven_bit_ascii` inside the
+register's own line range. Note what non-vacuity did **not** buy: the checker
+went red correctly for the host it was asked about and was still blind to a
+whole TLD. **A guard proven non-vacuous on one input is not proven correct.**
+
+**Branch hygiene worth keeping:** `lane/research` was **112 commits behind
+main** and 0 ahead when the work started. It was fast-forwarded before any
+authoring, because the acceptance criterion walks all of `docs/` and the stale
+tree was missing 2372 lines of it - `FINDINGS.md` alone was 1203 lines short.
+Authoring on the stale branch would have produced a register that was complete
+only against a docs tree that no longer exists. **Check a lane branch's distance
+from main before trusting anything derived from its tree.**
+
+**What this item did NOT do:** see `OPS-13`. Nothing guards the register's
+completeness, so it can go stale silently the next time a document cites a new
+domain.
+
 ## 9. `cdkey` was invisible to the redactor - CLOSED 2026-08-12
 
 Opened 2026-08-12 by the integrator, closed the same day. Ledger `LL-0046`.
@@ -2413,6 +2496,94 @@ Nothing binds a port yet, so this guards an allocation rather than a service.
 That is the point - the moment a service is built is the moment a stray constant
 becomes expensive, and a guard added then arrives after the mistake.
 
+## OPS-13. Nothing guards the source register's completeness - READY
+
+Opened 2026-08-29 by item 8b, as its own item rather than a note inside that
+item, because a caveat buried in a closed item is invisible to the next session.
+
+The register in `docs/ECOSYSTEM.md` was proven complete by a checker that lived
+in a session scratchpad and is now gone. The research lane wrote it there
+because that lane writes no code and `tests/` belongs to other lanes. So the
+completeness claim is true as of 2026-08-29 and has **no mechanism to stay
+true**: the next document that cites a new domain silently makes the register
+wrong, and the failure is invisible - a register that omits a source reads
+exactly like a register that covers everything.
+
+Same shape as items 0 and 9: the thing being protected is fine, the protection
+is what is missing.
+
+**The checker's logic, so it does not have to be re-derived - and the one way
+it has already been got wrong.** Extract every `https?://host` and every bare
+domain from every `*.md` under `docs/`, and assert each surviving host appears
+between the `## Source register` heading and the `## 1. Item / loot databases`
+heading in `docs/ECOSYSTEM.md`.
+
+**Do NOT filter bare domains through a TLD allowlist.** The first version of
+this checker did exactly that and was blind to `th.gl` for the whole of item 8b,
+reporting a confident 62 of 62 while a cited source was missing. Match
+`(label.)+label` with the last label as 2-24 letters, TLD-agnostic, and subtract
+a **denylist** of the things that shape legitimately matches: file extensions,
+dotted code identifiers (`str.splitlines`, `gvas.parse`, `payload.rows`), and
+the GSDK package name `com.hermes.pstgame`. As of 2026-08-29 that denylist has
+15 members and they are enumerable by running the extractor and reading the
+output - the ratio matters, 78 tokens down to 63 real hosts, so a checker that
+reports zero non-host noise is misconfigured rather than clean.
+
+**Acceptance:** a test under `tests/` that fails when a domain cited anywhere in
+`docs/` is absent from the register, **proven non-vacuous** by citing a new
+domain in some document and watching the test go red, then removing it and
+watching it go green. The failure message must **name the missing host and the
+file that cites it** - a failure that does not name the host is not actionable,
+and this repo has already shipped one guard whose red state told nobody what
+was wrong.
+
+**Ownership question, deliberately not answered here.** The test guards a
+research-lane document but must live in `tests/`, which research does not own.
+`safety` owns the repository hygiene guards (`tests/test_ascii_hygiene.py`,
+`tests/test_no_pii.py`) and this is one of those in shape - but it is a
+doc-completeness check, not a redaction check, and nobody has decided whether
+that stretches the mandate. Read `ops/lanes.py` for who owns a path, not this
+paragraph.
+
+## OPS-14. C: hit 100% mid-session, then recovered with nothing deleted - OPEN
+
+Observed 2026-08-29 during item 8b. Recorded because it will hit the loop, and
+because a session that has never seen it will misdiagnose it and start deleting
+evidence. **This is a question, not a task** - nobody has measured the cause of
+either half.
+
+What was observed, in order:
+
+- `Get-PSDrive C` and git-bash `df -h` **independently** reported **0.71 GB free
+  of 954 GB**, so it was not one tool's mount view being wrong.
+- Two unrelated commands died with `head: write error: No space left on device`.
+- The first attempt to append ledger entry `LL-0078` failed with
+  `OSError: [Errno 28] No space left on device` inside `append_entry`. **The
+  ledger survived intact**, because that writer is atomic - tmp then replace -
+  so the target was never opened for writing. This is the first time the atomic
+  rule in `CLAUDE.md` has demonstrably saved a file rather than merely being
+  good practice.
+- Minutes later, with **nothing deleted by the session**, `Get-PSDrive C`
+  reported **120 GB free**.
+
+**What was ruled out, so nobody repeats it:** `C:/ll-captures` is **2.96 GB
+across 16941 files** and `C:/ll-worktrees` is **0.02 GB**. The capture evidence
+is not the cause and **must not be pruned in response** - the `LL-0016`
+neighbourhood records that those directories are the only record behind several
+published claims. A full-drive scan to find the real consumer **timed out at 10
+minutes and was abandoned** rather than left half-finished.
+
+**Why it matters beyond tidiness:** the STOP CONDITIONS in
+[`docs/HEADLESS.md`](docs/HEADLESS.md) assume a writable disk. An unattended
+loop that hits this mid-write gets a partially applied session, and only the
+atomic-write rule stands between that and a corrupted durable record.
+
+**The question for the operator, not answered here:** is something on this
+machine - a sibling project, a build cache, a VM disk, a shadow copy - expanding
+and contracting by roughly 119 GB, or was this a one-off? Answering it needs a
+directory-level scan that survives longer than a 10-minute tool timeout, which
+is an operator action rather than a session action.
+
 ## Ordering note
 
 **Items 2b, 2c, 2d, item 7's shipped-code half and item 3 are CLOSED as of
@@ -2440,6 +2611,11 @@ question, the headshot mechanism, and whether the ~1.3x per pace is real.
   2026-08-26b, and **OPS-12** and **OPS-7** both closed 2026-08-27, so none of
   them is the fallback any more. `OPS-6`, `OPS-10` and `OPS-11` remain open but
   `OPS-6` is an operator decision, not a task.
+  **`OPS-13` was added 2026-08-29 and is the strongest client-closed
+  candidate on this list**: it is specified, cheap, needs no game running,
+  and its checker logic is already written down in the item. `OPS-14` is
+  also new but is an operator question about this machine's disk, not a
+  task a session can close.
 
 **Item 9 is CLOSED as of 2026-08-12** (ledger `LL-0046`). The `cdkey` hole is
 shut, the `/Game/` anchor is genuinely pinned, and two of that item's four
