@@ -40,8 +40,19 @@ operator's persona and on-screen position. What is committed is the READING.
 
 ## The `Ranged` affix - read 2026-08-30 from a Legendary bow
 
-Observed on `Deathclaw Hunter`, Legendary Bow and Arrow, Blackarrow-restricted,
-at affix level 1. Verbatim from the tooltip:
+Read from frames **`f0636_00.45.07`** (the item tooltip) and
+**`f0749_00.47.32`** (the affix detail panel). A first version of this section
+named NEITHER, while carrying the entire ladder and every item stat - a
+violation of this document's own method paragraph above, which says to name the
+frame a reading came from. Recorded rather than quietly fixed, because the
+sections that cite no source are exactly the ones that go unchecked.
+
+Observed on `Deathclaw Hunter`, `Legendary Bow and Arrow`, at affix level 1.
+The tooltip renders the bare token `Blackarrow` above the price block with no
+label; reading that as a class restriction is an INFERENCE, not a reading.
+
+Quoted from the panel (its own headers are underlined and unpunctuated; the
+bold-with-period styling below is this document's, not the game's):
 
 > **Effect.** If the distance between you and the target is greater than
 > 5 meters when hit, temporarily increase Physical Damage and Magic Damage.
@@ -50,9 +61,19 @@ at affix level 1. Verbatim from the tooltip:
 > **Effective Range.** Different ranged attacks have different Effective
 > Ranges. Beyond the Effective Range, both DMG and Impact will diminish.
 
-**Level Distribution** - the tooltip shows a row of nine equipment-slot icons
-with a value under each. Only the weapon slot carries `1`; the other eight read
-`-`. So this affix appears on weapons only.
+**Level Distribution** - a row of nine equipment-slot icons with a value under
+each. On this reading (frame `f0749`) the weapon slot carried `1` and the other
+eight read `-`.
+
+**A first version of this document read that as "this affix appears on weapons
+only". That was WRONG and is withdrawn.** The row is not an eligibility table,
+it is a **per-character breakdown of where your CURRENT levels come from**. At
+`f0749` the character had `Ranged Lv.1`, all of it from the bow, so the row read
+`1` and eight dashes. The refutation below proves the same affix sits on helm,
+bracers, pendant and ring.
+
+Reading a breakdown as an eligibility table is the error, and it inverted the
+meaning: the row says where levels ARE, not where they CAN BE.
 
 **Affix Level ladder, stated:**
 
@@ -135,8 +156,14 @@ with an `Equipped` gem named **`Warspirit Moonstone`**, and the item's
     Warspirit Moonstone  ->  grants  ->  Fervor Lv.1
 
 The right-hand `Attributes | Affixes` tab then lists `Ranged Lv.1` and
-`Fervor Lv.1` together, undifferentiated. **That is the proof that gems deliver
-affixes rather than forming a parallel system.**
+`Fervor Lv.1` together - identical icon frames, identical seven-segment pip bars
+with one segment filled, identical level labels, nothing distinguishing them.
+
+**That is corroboration, not proof, and an earlier version of this document
+called it proof.** An undifferentiated list is CONSISTENT with one system; it
+does not establish one. The actual evidence is elsewhere and this document has
+it: the game names the category `Affix Gem`, the gem tooltip grants named
+affixes each with a level, and `Warspirit Moonstone` binds to `Fervor Lv.1`.
 
 ### The rule, stated verbatim by the game
 
@@ -151,9 +178,16 @@ document opened with about whether tier gates level:
 1. **Type must match.** A gem goes only into a socket of its own type. The bow
    carried a `Tier II Peridot Slot - Empty` alongside its Moonstone, so one item
    can hold sockets of different types.
-2. **Socket level caps gem level.** A gem cannot exceed its socket. So socket
-   level is the ceiling on how much affix a slot can carry, which makes socket
-   level a first-class stat of the ITEM rather than of the gem.
+2. **Socket LEVEL caps gem LEVEL.** A gem cannot exceed its socket.
+
+**TIER AND LEVEL ARE DIFFERENT QUANTITIES, and an earlier version of this
+document conflated them.** The inlay rule says *level*, twice, and never says
+tier. On the very tooltip that states it, a `Tier 2` gem grants two `Lv.1`
+affixes - so tier is not level. **No socket LEVEL appears anywhere in the
+evidence gathered so far**: the bow's socket shows a TIER (`Tier II`). So the
+rule's ceiling is real and stated, and the quantity it names has not yet been
+observed on any socket. Finding where a socket's level is displayed is the next
+cheap reading, and until then nothing here says what caps what in practice.
 
 ### Gem structure
 
@@ -167,29 +201,45 @@ as a **`Tier 2 Affix Gem`**:
 > **`Wealth` Lv.1** - Increase the amount of `Gyldenblod` from PvE in dungeons.
 
 **One gem carries MORE THAN ONE affix.** This gem grants two, each with its own
-level. Every listing row in the browser shows two small icons, which is
-consistent with two-affix gems being the norm rather than this one being unusual.
+level. Of the listing rows legible in `f1829` - the left column is largely
+occluded by the open tooltip - every one shows two small icons, which is
+consistent with two-affix gems being the norm. "Every row in the browser" would
+be a generalisation from a partial view, and is not claimed.
 
 **Gem types and tiers are both filterable**, so both are real taxonomies: the
 browser offers a `Gem Type` filter with four icons and a `Gem Tier` filter with
 two. Two type names are confirmed - `Peridot` (green) and `Moonstone` (teal) -
-and the other two types are unnamed so far. `Tier 2` is confirmed by name; the
-bow's socket read `Tier II`, so tiers are shared vocabulary between gem and
-socket, exactly as the inlay rule requires.
+and the other two types are unnamed so far. `Tier 2` is confirmed by name and
+the bow's socket read `Tier II`, so tier IS shared vocabulary between gem and
+socket. That is a matching taxonomy and nothing more - it does not satisfy the
+inlay rule, which is about level. An earlier version claimed it did.
 
-**Naming does not map cleanly to contents, so do not parse gem names.** The
-tooltip's gem is `Flawless Fortune Peridot` while its actual affixes are
-`Seamless` and `Wealth`. Neighbouring listings read `Brutal Cunning Peridot`,
-`Melee - Bulwark Peridot`, `Tenacious - Blessed Peridot`, `Agility Dexterity
-Peridot`, `Ranged Ward - Fortune Peridot`. Those words are suggestive and they
-are NOT a reliable index of what a gem grants - only the tooltip is. Recording
-this because parsing the name is the obvious shortcut and it would be wrong.
+**Gem names DO map to their affixes, by SYNONYM, and an earlier version of this
+document said they do not.** That was wrong and the reasoning is corrected here
+because the wrong reason is more dangerous than the wrong advice.
+
+`Flawless Fortune Peridot` grants `Seamless` and `Wealth`. Flawless/Seamless and
+Fortune/Wealth are synonym pairs, in the same word order. The listing icons
+confirm it positionally: `Brutal Blessed Peridot` and `Brutal Fortune Peridot`
+share their first icon; `Tenacious - Blessed Peridot` and `Brutal Blessed
+Peridot` share the flask; `Ranged Ward - Fortune Peridot` carries the same star
+that the tooltip labels `Wealth`.
+
+**The advice stands, the reason changes.** Do not parse gem names - not because
+they carry no information, but because the mapping runs through an unenumerated
+synonym table, and a guess that lands on the wrong synonym is indistinguishable
+from a correct read. Use the tooltip. Recording the synonym structure anyway,
+because it is a real property of the naming scheme and it says the affix set is
+larger than the affix WORDS seen so far.
 
 **Affixes confirmed from gems, adding to the roster above:** `Seamless`
 (Skill Cooldown Speed) and `Wealth` (Gyldenblod from PvE in dungeons).
 
 **Two new game nouns worth binding:** `Gyldhunter`, an enemy or enemy class that
-can be knocked down; and `Gyldenblod`, a currency earned from PvE in dungeons.
+can be knocked down; and `Gyldenblod`, of which the tooltip says only "the amount
+of Gyldenblod from PvE in dungeons". Whether it is a currency, a material or a
+score is UNSTATED - an earlier version of this document called it a currency,
+which the evidence does not say.
 Note `gyldforge.com` already sits in the `docs/ECOSYSTEM.md` source register -
 the shared `Gyld` root is worth a look, but nothing here establishes a link and
 none should be asserted.
@@ -217,31 +267,60 @@ with a level and a pip bar. Read from frame `f1290`:
 | `Curse` | Lv. 1 |
 
 **READ THE CAVEAT BEFORE USING THIS TABLE.** The panel had the `Recommended`
-preset `Legendary - Blackarrow (Bow)` selected, with `Quick Buy & Equip` and a
+preset selected - rendered left-truncated as `ndary - Blackarrow (Bow)`, so
+`Legendary` is RECONSTRUCTED from the Rare/Excellent/Epic entries above it and
+not read - with `Quick Buy & Equip` and a
 `Total Expense` of 16,559 showing. So these are the affixes that preset WOULD
 grant, not a reading of currently equipped gear. It is a statement about a
 loadout the game itself recommends - useful, and not the same fact as "what the
 operator is wearing". Re-read it against `Current Loadout` before treating any
 level here as the operator's.
 
-**Affix levels appear to AGGREGATE across equipment, and that is the mechanical
-find.** A single item showed `Ranged Lv.1` with a `Level Distribution` row
-crediting only the weapon slot; a nine-piece loadout shows `Ranged Lv.7`. The
-per-slot row on the item tooltip is then a breakdown of where an affix's levels
-come from. **Not yet proven** - it needs one loadout read piece by piece and
-summed - but it is the obvious reading and it makes `Level Distribution` mean
-something.
+**ONE ICON IS ONE LEVEL, SUMMED ACROSS EQUIPPED GEAR. This is proven, not
+inferred**, and a first version of this document under-claimed it as "not yet
+proven" while simultaneously over-claiming the weapons-only line above. Both are
+corrected.
+
+Every item tile in `f1290` carries a strip of four affix icons - eight FILLED
+pieces, the ninth tile being an empty secondary-weapon slot. Counting the
+`Ranged` feather glyph across the preset's **eight filled pieces**: bow 2,
+helm 2, bracers 1, pendant 1, ring 1 = **7**, against a panel reading of
+`Ranged Lv.7`. The same count reproduces every other affix:
+
+| Affix | icons counted across the loadout | panel |
+|---|---|---|
+| `Ranged` | bow 2, helm 2, bracers 1, pendant 1, ring 1 | Lv. 7 |
+| `Fervid` | bow 1, bracers 1, pants 2, boots 1, pendant 1, ring 1 | Lv. 7 |
+| `Focused` | bow 1, helm 1, armor 1, bracers 1, boots 1, ring 1 | Lv. 6 |
+| `Skypiercing` | armor 1, pants 1, boots 1, pendant 1 | Lv. 4 |
+| `Valor` | helm 1, bracers 1, boots 1 | Lv. 3 |
+| `Elusive` | pendant 1, ring 1 | Lv. 2 |
+| `Wrath` / `Smiting` / `Curse` | 1 each | Lv. 1 each |
+
+Eight pieces times four icon slots is **32 icons**, and the panel levels sum to
+7+7+6+4+3+2+1+1+1 = **32**. Nine independent per-affix matches and an exact
+total. That is what makes `Level Distribution` a breakdown rather than a
+permission list, and it is why the weapons-only reading above was withdrawn.
 
 ### This resolves the `CLASSES.md` affix-versus-gem confusion
 
 `CLASSES.md` lists, from T4 guide consensus, "Ranged, Focused, Elusive, Fervid,
 Curse, Valor, Fervor" and doubts all of them. Measured against the client:
 
-- **Six are confirmed affixes** - `Ranged`, `Focused`, `Elusive`, `Fervid`,
-  `Curse`, `Valor` all appear in the game's own affix list.
+- **Six are confirmed present on a loadout** - `Ranged`, `Focused`, `Elusive`,
+  `Fervid`, `Curse`, `Valor`. Note the weaker wording: `f1290` is one loadout's
+  affix summary, NOT a catalogue of every affix in the game. Confirming a name
+  appears is enough to refute "this is legacy ARPG vocabulary"; it is not enough
+  to enumerate the game's affix set, and no frame here does that.
 - **Three the guides did not have** - `Skypiercing`, `Wrath`, `Smiting`.
-- **`Fervor` is NOT in the affix list.** On the item it appeared beside a gem
-  icon, in a socket row. So `Fervor` is a GEM effect.
+- **`Fervor` is absent from THIS PRESET's list** - and an earlier version of
+  this document turned that into "`Fervor` is NOT in the affix list", which is
+  **FALSE and is withdrawn**. It contradicted this document's own statement,
+  three sections above, that the character's `Affixes` panel lists `Ranged` and
+  `Fervor` side by side with nothing distinguishing them. Both `f0749` and
+  `f1697` show exactly that. `Fervor` is missing from `f1290` only because that
+  Recommended preset has no Moonstone socketed. **An argument from absence, in a
+  panel that shows one loadout rather than a catalogue.**
 
 That is a clean resolution rather than a flat contradiction. The guides were
 mostly right about the names and wrong to file `Fervor` among them; DevNote #6
@@ -298,9 +377,11 @@ Recorded because they are cheap to capture and were never written down:
   flat percentage on the item, separate from the affix ladder.
 - `Durability 100%`, with its own info tooltip.
 - `Average Transaction Price 2,467` against `Value 345` - two different numbers
-  the UI shows side by side. The first is market-derived, the second is not, and
-  `lanternlight/avgprice.py` already watches the market cache that feeds one of
-  them.
+  the UI shows side by side, and the same pairing appears on gems (116 against
+  100). Which is market-derived and which is intrinsic is NOT stated on screen;
+  an earlier version of this document asserted it. The naming is suggestive and
+  `lanternlight/avgprice.py` already watches an `AvgPrice` cache, so the link is
+  worth measuring rather than assuming.
 - Gem slots are TIERED and typed: `Tier II Peridot Slot`.
 
 ## What to capture next, in priority order
