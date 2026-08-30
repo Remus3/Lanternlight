@@ -2711,6 +2711,73 @@ and contracting by roughly 119 GB, or was this a one-off? Answering it needs a
 directory-level scan that survives longer than a 10-minute tool timeout, which
 is an operator action rather than a session action.
 
+## 11. Bind the remaining four affix ids - READY, needs the client AND a full-screen capture
+
+Opened 2026-08-30. Ledger `LL-0085` and `LL-0086`.
+
+**Three are already bound** - `201 = Valor`, `208 = Fervid`, `211 = Ranged` -
+by the wall-clock join, from log and frames that were both already on disk.
+Four remain: **`101`, `209`, `212`, `214`**.
+
+**They are not blocked on the game. They are blocked on the CAPTURE**, and that
+distinction is the whole item. Every one of the four failed for a reason that a
+different capture would have prevented:
+
+- `212` has FOUR trade-filter requests, two of them singletons - ideal join
+  material - at 22:44 local on 2026-08-25. The captures run 18:51-20:34 and
+  23:08-23:35. The frames were never taken.
+- `214` occurs once in the whole corpus, inside `[212,211,214]`, in that same
+  uncaptured window, and has never been seen on an item.
+- `101` and `209` had their item tooltips opened INSIDE a running capture, and
+  are still unrecoverable because that capture is a **500x310 crop** of the HUD
+  rectangle taken for the damage-meter work.
+
+Only the 2026-08-30 capture is full-screen (2560x1440). Both 2026-08-25
+captures are crops, and no game video exists on the machine.
+
+**Two routes exist and they are COMPLEMENTARY** - neither reaches the whole id
+space. Filter-only: `201`, `214`. Item-only: `101`, `209`. Both: `208`, `211`,
+`212`. The item-tooltip route is validated against a known answer (item
+`3060404` -> affix `211` -> `Ranged Lv.1` on frame `f0636`), so it is a proven
+method and not a hopeful one.
+
+**Cheapest first:** `212` needs no shopping. The operator still holds item
+`1230304` carrying it, so it is one tooltip hover with a full-screen capture
+running.
+
+**Acceptance:** for each id bound, a new row in `docs/OBSERVED_IDS.md` naming
+the id, the name, and the method, plus the frame filename and the UTC log
+timestamp it was joined to. A binding read off an ICON rather than a ROW LABEL
+does not count - several glyphs are confusable at capture resolution. Recording
+that `101` or `209` has no filter row at all is itself a result worth writing
+down, since it is currently unknown whether they are filterable.
+
+**Run a full-screen poller during ordinary menu use.** This item needs no
+deliberate experiment; it needs the frames to exist when the operator happens to
+open a tooltip or a filter.
+
+## 12. The client was PATCHED - 2026-08-25 measurements are provisional - OPEN
+
+Opened 2026-08-30. The log's own marker `TS.Default: [Startup] Version:` reads
+`1.0.14` / Build Date `20260818232428` in both rotated backups and **`1.0.15` /
+`20260826170036`** in the 2026-08-30 log. The client changed between
+2026-08-26 and 2026-08-30.
+
+By `docs/OBSERVED_IDS.md`'s own standing rule, **every row in it dated
+2026-08-25 is now provisional** - including the training-ground damage series
+that `docs/FINDINGS.md` section 11 rests on.
+
+Also recorded here so nobody re-derives it: the literal string `buildid` occurs
+**zero** times in all three logs, so the Steam buildid `24813185` recorded in
+`OBSERVED_IDS.md` is a depot value the log can neither confirm nor refute.
+Anchor future passes on `Version` plus `Build Date`, which is first-party and
+in-log.
+
+**Acceptance:** re-measure the 10.35-per-hit floor value on `1.0.15` and record
+whether it moved. If it did not, say so explicitly - a re-measurement that
+confirms is worth as much as one that overturns, and this project has no record
+of any value being checked across a patch boundary.
+
 ## Ordering note
 
 **Items 2b, 2c, 2d, item 7's shipped-code half and item 3 are CLOSED as of
@@ -2729,10 +2796,20 @@ question, the headshot mechanism, and whether the ~1.3x per pace is real.
 **The next item depends on whether the client is open.**
 
 - **Client open:** 7b's remaining threads are all cheap and all need it. Fold
-  in items 1, 4b, 5 and 6, which also need the client and none of which
+  in items 1, 4b, 5, 6 and **11**, which also need the client and none of which
   deserves its own session. **Arm the wide-shot poller before the first run** -
   the first sweep of 2026-08-25 had to be re-run because its distances were
   inferred from clock order rather than recorded (`docs/FINDINGS.md` 11.10).
+  **Make that poller FULL-SCREEN, not a crop.** Item 11 lost two affix
+  bindings that were sitting inside a running capture, because the capture was
+  a 500x310 HUD rectangle cropped for the damage-meter work. A full-screen
+  poller costs disk and nothing else, and it turns ordinary menu use into
+  evidence.
+
+**Item 12 is a caveat on everything above, not a task to schedule.** The client
+moved from `1.0.14` to `1.0.15` between 2026-08-26 and 2026-08-30, so any
+measurement dated 2026-08-25 that a session leans on should be re-checked before
+being built on rather than assumed to still hold.
 - **Client closed:** item **7c** (read the meter without a human reading it) is
   now the only specified fallback. Item 4c closed 2026-08-25b, **OPS-8** closed
   2026-08-26b, and **OPS-12** and **OPS-7** both closed 2026-08-27, so none of
