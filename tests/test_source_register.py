@@ -254,6 +254,7 @@ KNOWN_NON_HOSTS = frozenset(
         "ops.LEDGER.md",
         "ops.lane",
         "ops.lanes.REPO",
+        "ops.lanes.owner",
         "ops.loop",
         "ops.merge",
         "opss.LEDGER.md",

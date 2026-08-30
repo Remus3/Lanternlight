@@ -1071,66 +1071,93 @@ it. The log's `affixes[].cfgId` for this item is `211` alone. So the item's OWN
 affix is the one WITHOUT a gem icon, and gem-granted affixes do not appear in
 `affixes[]`. Read only the gem-less row.
 
-### Why each of the four failed, exactly
+### Why each of the four failed - CORRECTED 2026-08-30 after a refutation pass
 
-**`212` - the join material exists and the frames do not.** Four trade-filter
-requests carry it, **two of them singletons**:
+**The conclusion below survived the refutation. The evidence originally
+published for it did not, and three statements in it were false.** They are
+replaced here rather than quietly edited, because a false first-party statement
+in a public repo is the exact failure this document has now withdrawn three
+times.
 
-| UTC | local | affixIds |
-|---|---|---|
-| 2026.08.26-03.43.54 | 2026-08-25 22:43:54 | `[212,211,214]` |
-| 2026.08.26-03.44.06 | 2026-08-25 22:44:06 | `[212]` |
-| 2026.08.26-03.44.09 | 2026-08-25 22:44:09 | `[212,211]` |
-| 2026.08.26-03.44.11 | 2026-08-25 22:44:11 | `[212]` |
+**WHAT WAS WRONG, and the mistake underneath it.** The first version of this
+section said "Only ONE capture on this machine is full-screen". That is FALSE:
+there are **eight** full-scene capture sets, three of them at 2560x1440. It also
+listed five capture windows when there are **fourteen** capture directories, and
+it blamed the `101` and `209` failure on the capture being a 500x310 crop - when
+a 1280x720 FULL-SCENE capture covered both timestamps.
 
-A singleton request is exactly what a binding needs. **There is no capture
-covering 22:44 local on 2026-08-25.** The captures run 18:51 to 20:34 and then
-23:08 to 23:35; the requests sit in the gap between them. Nothing is
-recoverable here - the frames were never taken.
+The cause of all three errors was one line of code: the inventory loop tested
+only the subdirectory names `frames`, `panel` and `panel2`, which happened to be
+the ones already known. **It was an empty grep - a claim about my directory
+list, not about the disk** - and this repository's anti-patterns list names that
+exact error.
 
-**`214` - one appearance, and it is a three-element set.** It occurs exactly
-once in the whole corpus, inside `[212,211,214]` at 22:43:54 local, in the same
-uncaptured window. Even with a frame, a three-element array yields a SET; it
-resolves to an assignment only if two members are already known, and only `211`
-is. `214` has never been observed on an item, so the tooltip route cannot reach
-it either.
+**The complete capture inventory, walked rather than assumed:**
 
-**`101` and `209` - the tooltips were opened while the wrong thing was being
-recorded.** Both items had their tooltips opened INSIDE a capture window:
-
-| affix | item | tooltip opened (local) | capture running |
+| directory | files | frame size | window (local) |
 |---|---|---|---|
-| 209 | 3030403 | 2026-08-25 19:54:03 | `2026-08-25/panel2` |
-| 101 | 1430301 | 2026-08-25 19:54:35 | `2026-08-25/panel2` |
+| `2026-08-25/panel` | 6439 | 500x310 | 18:51:31 - 19:51:31 |
+| `2026-08-25/panel2` | 4692 | 500x310 | 19:51:31 - 20:34:50 |
+| `2026-08-25/scene` | 2221 | **1280x720** | 19:32:34 - 20:12:34 |
+| `2026-08-25/scene_early` | 25 | **1280x720** | 18:40:30 - 18:55:14 |
+| `2026-08-25/sheets` | 67 | 1120x1484 | (no timestamps) |
+| `2026-08-25b/panel` | 948 | 540x360 | 23:08:11 - 23:17:18 |
+| `2026-08-25b/panel2` | 893 | 540x360 | 23:27:02 - 23:35:29 |
+| `2026-08-25b/reanchor` | 24 | **2560x1440** | 22:53:29 - 22:55:17 |
+| `2026-08-25b/reanchor_small/panel` | 320 | 540x360 | 22:53:14 - 22:57:43 |
+| `2026-08-25b/reanchor_small/wide` | 320 | **1280x720** | 22:53:14 - 22:57:43 |
+| `2026-08-25b/talents` | 164 | **2560x1440** | 22:23:53 - 22:29:52 |
+| `2026-08-25b/wide` | 238 | **1280x720** | 23:08:11 - 23:17:18 |
+| `2026-08-25b/wide2` | 224 | **1280x720** | 23:27:02 - 23:35:29 |
+| `2026-08-30/frames` | 2172 | **2560x1440** | 00:30:12 - 01:17:06 |
 
-**But `panel2` is not a screenshot.** Its own `MANIFEST.txt` records it as one
-of two simultaneous pollers on the same HUD rectangle, and the frames measure
-**500 by 310 pixels** - a crop showing the character model. No tooltip is in
-frame. The other poller, `panel/`, ended at 19:51:31 and does not cover these
-times either.
+**Re-run against that complete inventory**, the sweep finds **36** tooltip-route
+events on items carrying a target affix, of which **four** fall inside a
+full-scene capture. All four were opened and read:
 
-**Only ONE capture on this machine is full-screen**, measured directly:
+| affix | item | local time | capture | what the frame shows |
+|---|---|---|---|---|
+| 209 | 3030403 | 19:54:03 | `25/scene` 1280x720 | Warehouse open, **no tooltip rendered** |
+| 101 | 1430301 | 19:54:35 | `25/scene` 1280x720 | Warehouse, a slot highlighted, **no tooltip** |
+| 212 | 1230304 | 22:26:34 | `25b/talents` 2560x1440 | a tooltip IS up - but for `Rover Hood`, a **different item** |
+| 209 | 3030403 | 22:26:40 | `25b/talents` 2560x1440 | a context menu and an inventory-full toast, **no tooltip** |
 
-| capture | frame size |
-|---|---|
-| `2026-08-25/panel` and `panel2` | 500 x 310 |
-| `2026-08-25b/panel` and `panel2` | 540 x 360 |
-| `2026-08-30/frames` | **2560 x 1440** |
+**So the conclusion holds and the reason is different from the one published.**
+`101` and `209` are not lost to a cropped capture - they are lost because **no
+usable tooltip was on screen** at any instant a full-scene capture was running.
 
-Every affix binding achieved so far comes from the one full-screen set. No video
-recording of the game exists on this machine either - the only files found are
-clips of an unrelated title - so there is no third source to fall back on.
+**`212` and `214` fail for the originally stated reason, which does survive.**
+Their four trade-filter requests land at 22:43:54 to 22:44:11 local, between the
+`talents` capture (ends 22:29:52) and `reanchor` (starts 22:53:14). That gap is
+real against the complete inventory, not just against the partial one.
 
-This is worth stating plainly because it is the most instructive of the four:
-**the capture was running, the event fired inside it, and the binding is still
-unrecoverable - because the capture was cropped for a different purpose.** A
-full-screen frame at either timestamp would have bound an affix id four days
-before anyone thought to look for one.
+### A METHOD CAVEAT that the refutation exposed, and it weakens the tooltip route
+
+**The logged `cfgid` and the tooltip actually drawn are NOT reliably the same
+item.** At 22:26:34 the log names cfgId `1230304` - a `12xxxxx` cloth-family
+item - while the frame at that second renders a tooltip for `Rover Hood`, a
+`Rare Head`. The event marks an item the UI touched; it does not promise that
+item's tooltip is on screen.
+
+**So a frame at the right second is not sufficient.** A binding needs the
+tooltip in the frame to independently identify the item - its name and type must
+match the cfgId's known family - before its affix row can be attributed.
+
+The control still passes that stricter test, which is why the three existing
+bindings are unaffected: cfgId `3060404` is a `30xxxxx` weapon, and `f0636`
+renders `Deathclaw Hunter`, `Legendary Bow and Arrow`. Family and identity both
+match. But the rule has to be stated, because reading any frame at any matching
+timestamp would have produced a false binding here.
 
 ### The recipe, per id
 
-Capture **full-screen** at 1 Hz or better. A cropped poller is worthless for
-this, as `101` and `209` demonstrate.
+Capture **full-screen** at 1 Hz or better - a cropped poller cannot show a
+tooltip at all. But full-screen is necessary and NOT sufficient, which is the
+lesson of `101` and `209`: a 1280x720 full-scene capture covered both their
+timestamps and neither frame had a usable tooltip on screen. **The operator has
+to actually open the tooltip and leave it up for a beat**, and the frame must
+show a tooltip whose item identity matches the cfgId's family - see the method
+caveat above.
 
 **`212` is the cheapest and needs no shopping.** Item `1230304` is still in the
 live log still carrying affix `212`, so the operator still holds it. Open that
