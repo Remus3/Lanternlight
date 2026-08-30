@@ -1026,20 +1026,176 @@ examined here contains the name `Ethereal`. The count of 16 is what this
 document states, with the two bounding frames named so it is checkable. The
 disagreement is recorded rather than silently resolved in the count's favour.
 
+## Binding the remaining four - `101`, `209`, `212`, `214`
+
+**Result: none of the four can be bound from data now on disk, and that is a
+measured null rather than a failure to look.** Each has a specific, named
+reason, recorded per id so nobody re-runs this search. What the pass DID
+produce is a second binding method, validated against a known answer, and a
+capture recipe that is precise about which method reaches which id.
+
+### The two routes are COMPLEMENTARY, which is the structural finding
+
+An affix id can be reached two ways, and the two sets do not coincide:
+
+| route | what it needs | ids it can reach |
+|---|---|---|
+| **Trade filter** | an `affixIds` request joined to a frame of the Auction House dropdown | 201, 208, 211, 212, 214 |
+| **Item tooltip** | an item carrying the affix, its tooltip opened, joined to a frame | 101, 208, 209, 211, 212 |
+
+- **Filter-only:** `201`, `214` - never observed on any item.
+- **Item-only:** `101`, `209` - never observed in any trade filter.
+- **Both:** `208`, `211`, `212`.
+
+So the tooltip route is not a fallback, it is the ONLY route to `101` and `209`.
+All three ids bound so far were bound through the filter, which is why this was
+not visible until now.
+
+### The tooltip route, VALIDATED on a known answer
+
+The client logs a tooltip-open event carrying the item's `cfgId` - `TS.UI:`
+followed by a localised label and `cfgid == <id>`. Note the label contains
+non-ASCII characters, so match on `cfgid ==` and not on the words around it, and
+note the **space after `==`**, which defeated the first pattern tried here.
+
+**Validated, rather than assumed, on a control with a known answer.** The log
+records item `3060404` carrying affix `cfgId 211`, with tooltip-open events
+through `2026.08.30-05.45.05` UTC (00:45:05 local). Frame `f0636_00.45.07` shows that item's
+tooltip - `Deathclaw Hunter`, `Legendary Bow and Arrow` - and its affix reads
+**`Ranged` Lv.1**. Independently, `211 = Ranged` was established through the
+trade filter. **Two unrelated methods, one answer.**
+
+**The reading rule, now proven rather than assumed.** The same tooltip shows
+`Ranged` with no gem icon above the sockets and `Fervor` with a gem icon beside
+it. The log's `affixes[].cfgId` for this item is `211` alone. So the item's OWN
+affix is the one WITHOUT a gem icon, and gem-granted affixes do not appear in
+`affixes[]`. Read only the gem-less row.
+
+### Why each of the four failed, exactly
+
+**`212` - the join material exists and the frames do not.** Four trade-filter
+requests carry it, **two of them singletons**:
+
+| UTC | local | affixIds |
+|---|---|---|
+| 2026.08.26-03.43.54 | 2026-08-25 22:43:54 | `[212,211,214]` |
+| 2026.08.26-03.44.06 | 2026-08-25 22:44:06 | `[212]` |
+| 2026.08.26-03.44.09 | 2026-08-25 22:44:09 | `[212,211]` |
+| 2026.08.26-03.44.11 | 2026-08-25 22:44:11 | `[212]` |
+
+A singleton request is exactly what a binding needs. **There is no capture
+covering 22:44 local on 2026-08-25.** The captures run 18:51 to 20:34 and then
+23:08 to 23:35; the requests sit in the gap between them. Nothing is
+recoverable here - the frames were never taken.
+
+**`214` - one appearance, and it is a three-element set.** It occurs exactly
+once in the whole corpus, inside `[212,211,214]` at 22:43:54 local, in the same
+uncaptured window. Even with a frame, a three-element array yields a SET; it
+resolves to an assignment only if two members are already known, and only `211`
+is. `214` has never been observed on an item, so the tooltip route cannot reach
+it either.
+
+**`101` and `209` - the tooltips were opened while the wrong thing was being
+recorded.** Both items had their tooltips opened INSIDE a capture window:
+
+| affix | item | tooltip opened (local) | capture running |
+|---|---|---|---|
+| 209 | 3030403 | 2026-08-25 19:54:03 | `2026-08-25/panel2` |
+| 101 | 1430301 | 2026-08-25 19:54:35 | `2026-08-25/panel2` |
+
+**But `panel2` is not a screenshot.** Its own `MANIFEST.txt` records it as one
+of two simultaneous pollers on the same HUD rectangle, and the frames measure
+**500 by 310 pixels** - a crop showing the character model. No tooltip is in
+frame. The other poller, `panel/`, ended at 19:51:31 and does not cover these
+times either.
+
+**Only ONE capture on this machine is full-screen**, measured directly:
+
+| capture | frame size |
+|---|---|
+| `2026-08-25/panel` and `panel2` | 500 x 310 |
+| `2026-08-25b/panel` and `panel2` | 540 x 360 |
+| `2026-08-30/frames` | **2560 x 1440** |
+
+Every affix binding achieved so far comes from the one full-screen set. No video
+recording of the game exists on this machine either - the only files found are
+clips of an unrelated title - so there is no third source to fall back on.
+
+This is worth stating plainly because it is the most instructive of the four:
+**the capture was running, the event fired inside it, and the binding is still
+unrecoverable - because the capture was cropped for a different purpose.** A
+full-screen frame at either timestamp would have bound an affix id four days
+before anyone thought to look for one.
+
+### The recipe, per id
+
+Capture **full-screen** at 1 Hz or better. A cropped poller is worthless for
+this, as `101` and `209` demonstrate.
+
+**`212` is the cheapest and needs no shopping.** Item `1230304` is still in the
+live log still carrying affix `212`, so the operator still holds it. Open that
+item's tooltip with a full-screen capture running and read the gem-less affix
+row. Alternatively use the filter route - `212` is filterable, since it has been
+requested four times.
+
+**`214` needs the Auction House.** Its only route is the filter: tick it alone
+in `Affix Effects`, apply, and read the checked ROW LABEL against the request
+emitted at that wall clock. One affix per cycle - a pair yields a set, not an
+assignment.
+
+**`101` and `209` need an item that carries them, and the operator may no longer
+have one.** Items `1430301` and `3030403` appear in both rotated logs and are
+**absent from the 2026-08-30 log entirely**, so they are likely sold or
+otherwise gone. Either re-acquire an item carrying the affix, or try the filter
+route - but note that `101` and `209` have never appeared in any filter request,
+so **it is unknown whether they are filterable at all.** The `Affix Effects`
+list is 16 entries under one gem type and is demonstrably not the whole affix
+set, so an affix that only ever appears on items may have no filter row. That is
+a question this recipe cannot answer in advance.
+
+**Read the ROW LABEL, never the icon**, on either route. Several glyphs are
+confusable at capture resolution and `Wrath` and `Fervid` in particular render
+similarly.
+
+### What was NOT done
+
+No arithmetic was attempted on the id space. `Valor`, `Fervid` and `Ranged` sit
+at catalogue positions 6, 9 and 11 with ids 201, 208 and 211, and those gaps fit
+no simple rule in either row-major or column-major order. Guessing a fourth id
+from three points would be exactly the reasoning this document has already
+withdrawn twice.
+
 ## What to capture next, in priority order
 
 Each is one hover in a menu and yields a whole ladder, so the ratio of effort to
 recorded fact is better than any measurement this project runs.
 
-1. **`Fervor`** - the other affix on this weapon, and the one arriving via a
-   gem. Its ladder plus its gem tier settles part of the affix-versus-gem
-   question above.
+**Rewritten 2026-08-30 after the binding pass.** Items 3 and 5 of the previous
+list are wholly or partly answered and are marked so rather than deleted.
+
+1. **The four unbound affix ids**, per the recipe in the section above. `212` is
+   the cheapest - the operator still holds item `1230304`, so it is one tooltip
+   hover with a FULL-SCREEN capture running. `214` needs the Auction House
+   filter, one affix ticked alone. `101` and `209` need an item carrying them
+   and may need one re-acquired.
+   **The binding constraint is the capture, not the game.** Every failure in
+   that section is a frame that was never taken or was cropped - so a
+   full-screen poller running during ordinary menu use is worth more here than
+   any deliberate experiment.
 2. **A gem slotting screen** - socket tiers, what a Peridot is, and whether tier
-   gates level.
-3. **The remaining named affixes** `CLASSES.md` lists from guide consensus -
-   `Focused`, `Elusive`, `Fervid`, `Curse`, `Valor`. Each one found in-game
-   converts a T4 guide claim into a first-party fact, or refutes it.
-4. **The `Focus Fire` talent tooltip** - item 10 turns on its exact scope, and
-   the talent screen states it. The log records the loadout as ids
-   (`TS.Ability: talent data response`), so a tooltip reading binds an id to a
-   name the way `docs/OBSERVED_IDS.md` requires.
+   gates level. Still open: the inlay rule names a socket LEVEL and no socket
+   level has been observed on any frame.
+3. **`Fervor`'s ladder** - PARTLY ANSWERED. `Fervor` is confirmed present, is
+   gem-delivered by `Warspirit Moonstone`, and appears in the Auction House
+   catalogue. Its seven-level ladder is still unread.
+4. **The `Focus Fire` talent tooltip** - ANSWERED 2026-08-30 and quoted above.
+   Left here because the remaining half - whether the climbing buff icon is
+   `Focus Fire` or the `Ranged` affix - needs the target-switch test, not
+   another tooltip.
+5. **The remaining named affixes from guide consensus** - ANSWERED. All seven
+   are confirmed real game vocabulary, and `Valor` and `Fervid` are now bound to
+   ids. See `CLASSES.md` C14.
+6. **Whether the `Affix Effects` list is scoped by gem type** - one capture:
+   change the `Gem Type` selection and re-read the dropdown. If the 16 entries
+   change, the list is type-scoped, which would also explain why `Focused`,
+   `Elusive` and `Curse` are missing from it.
