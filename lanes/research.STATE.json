@@ -111,20 +111,20 @@
       "text": "The client was PATCHED between the 2026-08-26 logs and 2026-08-30. The log's own marker TS.Default: [Startup] Version: reads 1.0.14 / Build Date 20260818232428 in both rotated backups and 1.0.15 / 20260826170036 in the live log; verified directly, one hit per log. Every OBSERVED_IDS row dated 2026-08-25 was taken on 1.0.14 and is provisional by that file's own rule. Also: the literal string buildid occurs ZERO times in all three logs, so the recorded Steam buildid 24813185 is a depot value the log cannot confirm or refute - anchor future passes on Version + Build Date instead."
     },
     {
-      "blocked_on": "",
-      "item_id": "RES-20",
-      "opened": "2026-08-30",
-      "text": "SAFETY, one REAL gap of three claimed. roleInfo carries a \"device\" field - a single 19-char alphanumeric device-model string, 2 occurrences in the 2026-08-30 log - and lanternlight.redact.iter_sensitive returns NO label for it, so it passes through redact() unmasked. Verified by running the real redactor against the real shape. Safety lane owns the fix. The other two carriers reported alongside it were re-probed and are ALREADY COVERED - do not re-file them: the player-name field on OnRep_PlayStateTag already masks to a PERSONA placeholder, and the CampData save FILENAME already masks to an ACTOR placeholder with LONG_ID also firing."
-    },
-    {
       "blocked_on": "the client running with a FULL-SCREEN capture, not a cropped HUD poller",
       "item_id": "RES-23",
       "opened": "2026-08-30",
       "text": "The four remaining affix ids 101, 209, 212 and 214 CANNOT be bound from data on disk - measured null with a named cause each, written up in docs/AFFIXES.md. 212 has two singleton trade-filter requests at 22:44 local 2026-08-25 but no capture covers that time; 214 appears once inside a 3-element array in the same uncaptured window and is never on an item; 101 and 209 had their item tooltips opened INSIDE a capture window, but that capture is a 500x310 HUD crop that cannot show a tooltip. Only the 2026-08-30 capture is full-screen (2560x1440) and no game video exists. Recipe per id is in AFFIXES.md; 212 is cheapest because the operator still holds item 1230304."
+    },
+    {
+      "blocked_on": "",
+      "item_id": "RES-24",
+      "opened": "2026-08-30",
+      "text": "WITHDRAWN, do not re-open: RES-20 claimed a redaction gap on the roleInfo \"device\" field. It is FALSE. All 4 real values across the three logs are 19-DIGIT runs, not the alphanumeric model strings RES-20 described, and every one is already masked by LONG_ID - 0 of 4 survive redact(). Verified against the real bytes, not a synthetic. The original error: the value was characterised with a permissive pattern that pure digits also match, then redact() was tested against a fabricated ALPHABETIC input whose shape occurs nowhere in the data. A guard tested on an invented input proves nothing about the data. The residual - an alphabetic value under a device key would not be caught - is a real but UNOBSERVED shape and is already recorded as a stated limit in the redact module docstring. Widening for it was considered and declined: the module's discipline is that rules are added on measurement, and the DEVICE_ID rule itself is documented as a renaming rather than a widening."
     }
   ],
   "resume_note": "2026-08-30b. The four remaining affix ids 101, 209, 212, 214 are UNBINDABLE from data on disk - measured null, cause named per id in docs/AFFIXES.md, ledger LL-0086, open item RES-23. The blocker is the CAPTURE, not the game: only the 2026-08-30 capture is full-screen (2560x1440); both 2026-08-25 captures are 500x310 / 540x360 HUD crops, and 101 and 209 had their tooltips opened inside one of those crops. A SECOND binding route was found and validated on a control - item tooltips, proven by item 3060404 -> affix 211 -> Ranged Lv.1 on frame f0636, agreeing with the trade-filter result. The two routes are complementary: filter-only 201 and 214, item-only 101 and 209, both 208/211/212. Cheapest next win is 212 - the operator still holds item 1230304, so it is one tooltip hover with a full-screen capture running. Bound so far: 201=Valor, 208=Fervid, 211=Ranged.",
   "schema": 1,
   "sessions": 1,
-  "updated": "2026-08-30T09:42:39+00:00"
+  "updated": "2026-08-30T16:22:23+00:00"
 }
