@@ -84,6 +84,27 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0097 - 2026-08-30 - Wrap refutation caught the REDISCOVERY failure - four false first-party claims and a roadmap item asking for what had been on disk for three weeks
+
+**Evidence:**
+- python -m pytest -> '1338 passed in 26.36s', observed this run as its own command
+- python -m ruff check . -> 'All checks passed!', observed this run as its own command
+- python -m pytest --collect-only -> '1338 tests collected'; baseline 1327 re-derived by the refuter from git archive of three older commits, and git diff over tests/ shows 134 insertions and ZERO deletions
+- docs/OBSERVED_IDS.md lines 296-308 carry a talent-cluster table with a Page column, dated 2026-08-09 in commit bfda016, listing all six page-2 clusters; lines 445-448 carry their NODE names
+- frame f0160_22.29.45 opened directly - page two, all six clusters and gates matching that table exactly
+- ledger integrity checked: 97 entries, 0 duplicates, no gaps LL-0000..LL-0096, and all four lane fragments fully integrated
+
+THE REDISCOVERY FAILURE, in the exact form this project's continuity design exists to prevent. This session wrote that the talent tree's second page 'was not recorded anywhere', that 'every prior reading covered page one only', that page two 'remains uncaptured', and that Mighty Archer was 'a cluster name this project had not recorded'. All four are FALSE. docs/OBSERVED_IDS.md has held the two-page cluster table with gates AND the node names inside each page-2 cluster since 2026-08-09.
+WORSE THAN A WRONG SENTENCE: a ROADMAP item was opened asking a future session to capture page two, with an acceptance criterion demanding what had existed for three weeks. A cold session would have spent a capture on it. That item is rewritten to ask for the thing genuinely missing - page-2 node TOOLTIP TEXT - and now opens by telling the reader to open OBSERVED_IDS first.
+HOW IT HAPPENED: the author saw two page dots on screen and asserted an absence from memory without opening the file this same lane OWNS and had read the section headings of an hour earlier. Third instance of that failure in one day, and the first two were already committed to as fixed.
+ALSO WITHDRAWN - a surviving self-contradiction. docs/AFFIXES.md asserted in one section that the affix 'travels with the item TYPE' while a later section withdrew exactly that. An earlier in-flight patch had corrected one occurrence and missed the second; a grep for the claim rather than for the line I remembered editing is what found it.
+CORRECTED - the 'two instances' reasoning. The claim that a 63 percent versus 94 percent durability gap proves two separate items is inference, not observation: a REPAIR explains it as readily. The conclusion survives either way - if it is one item then its affix CHANGED, which refutes the type-level model just as firmly - but the stated reason was wrong.
+CORRECTED - a count that was not re-derivable. 'four independent confirmations' of the sum rule was already four on one screen; adding two Level Distribution rows makes six. Recomputed rather than carried.
+CORRECTED - eight tooltip quotes cited NO FRAME, breaking the method paragraph this same document wrote to shame that omission, and which had already been recorded as a method defect earlier the same day. All eight now name their frame.
+CORRECTED - docs/CLASSES.md still called Seeker and Fervid 'single-sourced' and a gem list 'qualitative' after both gained complete first-party ladders. Updated, and the update runs the OTHER way from this document's habit: where the client has been checked, the T4 guides have been accurate about names and about the shape of effects, and wrong only about magnitudes they never had.
+THE REFUTATION RAN BEFORE THE PUSH THIS TIME. The previous wrap pushed first and had to fix forward. Nothing in this entry reached the remote before being caught.
+STILL UNREAD in the swept captures, recorded so it is not lost: a fourth complete affix ladder for Wealth in reanchor/f0115, and a fourth skill tooltip for Splatter Arrow in talents/f0083. The 'every distinct screen type was read' claim was REFUTED - page two was a distinct screen type in the swept folder and was missed.
+
 ### LL-0096 - 2026-08-30 - The tooltip tail REFUTES a claim published hours earlier, answers half of RES-3, and finds a third affix delivery route
 
 **Evidence:**
