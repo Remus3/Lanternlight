@@ -2360,9 +2360,18 @@ def test_the_device_rule_leaves_ordinary_prose_alone():
     # These rules run over every tracked file, so a rule loose enough to fire on
     # prose blocks every commit. This repository's own ledger discusses the
     # device field in English.
-    prose = "roleInfo carries a device field that iter_sensitive returns no label for"
-    assert redact(prose) == prose
-    assert "DEVICE" not in _labels_of(prose)
+    #
+    # STRENGTHENED after an adversarial review: the first version of this test
+    # used prose with no ":" or "=" in it, so it stayed GREEN under the very
+    # mutation it was meant to catch - widening the rule to a bare key=value
+    # form. Prose that carries a separator is the case that actually guards.
+    for prose in (
+        "roleInfo carries a device field that iter_sensitive returns no label for",
+        "device: the field is a 19-digit run and LONG_ID has always caught it",
+        "the device = the operator hardware, which this rule deliberately masks",
+    ):
+        assert redact(prose) == prose, prose
+        assert "DEVICE" not in _labels_of(prose), prose
 
 
 def test_the_device_label_reaches_the_repository_scan():
@@ -2383,3 +2392,52 @@ def test_the_module_records_the_device_widening_as_a_decision():
     # assume it rests on data.
     doc = redact_module.__doc__ or ""
     assert "unobserved" in doc.lower()
+
+
+# --------------------------------------------------------------------------
+# DEVICE placeholder safety - added after an adversarial review found the
+# first version of the rule breaking the module's own redact -> assert_clean
+# contract. See LL-0092.
+# --------------------------------------------------------------------------
+
+
+def test_assert_clean_accepts_the_devices_own_redacted_output():
+    # THE CONTRACT. Every other rule satisfies it: what redact() emits,
+    # assert_clean() certifies. The first DEVICE rule did not, because its
+    # value pattern had no placeholder lookahead and so matched <DEVICE>
+    # itself. Fail-closed rather than a leak, but it would have armed a
+    # permanent tests/test_no_pii.py failure the day anyone committed a
+    # redacted device excerpt.
+    text = _kj("device", FAKE_DEVICE_MODEL)
+    assert_clean(redact(text, personas=[]), personas=[])
+
+
+def test_the_device_rule_does_not_downgrade_another_rules_placeholder():
+    # A value already masked by a STRONGER rule must not be re-masked as a
+    # device. Losing <PERSONA> to <DEVICE> leaks nothing but destroys the
+    # record of what was masked, which is what a reviewer of a committed
+    # fixture reads.
+    for stronger in ("<PERSONA>", "<STEAMID64>", "<LONG_ID>", "<DEVICE_ID>"):
+        text = _kj("device", stronger)
+        assert redact(text, personas=[]) == text, stronger
+
+
+def test_redacting_a_device_value_is_idempotent():
+    once = redact(_kj("device", FAKE_DEVICE_MODEL), personas=[])
+    assert redact(once, personas=[]) == once
+
+
+def test_the_device_placeholder_lookahead_is_live_and_not_dead_regex():
+    # This module removed the CDKEY lookahead because that value pattern
+    # cannot match '<' or '>', so the guard could never fire - and it records
+    # that a guard which cannot fire is not made real by a test that cannot
+    # fail. The DEVICE value pattern CAN match both characters, so its
+    # lookahead is reachable. This asserts exactly that, so nobody deletes it
+    # by analogy with CDKEY.
+    value_pattern = redact_module._DEVICE_VALUE
+    bare = value_pattern.replace(r"(?!<[A-Z0-9_]+>)", "")
+    assert bare != value_pattern, "the lookahead is not present in the pattern"
+    # Without the lookahead the pattern DOES match a placeholder, which is what
+    # makes the guard reachable rather than dead regex.
+    assert re.compile(bare).match("<DEVICE>")
+    assert not re.compile(value_pattern).match("<DEVICE>")

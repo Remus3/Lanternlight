@@ -236,9 +236,20 @@ Limits, stated rather than hidden:
   ``Device=<memory handle>``, ``DeviceModel: <hardware string>`` and a short
   ``DeviceId=<audio id>``, none of which names anyone, and these rules run over
   every tracked file where the word also appears in ordinary prose. The quotes
-  are the discriminator. Stated limit, so nobody assumes more coverage than
-  exists: a non-numeric device value written WITHOUT the JSON quoting is caught
-  by neither this rule nor ``LONG_ID``.
+  are the discriminator. STATED LIMITS, enumerated by an adversarial review
+  rather than guessed, so nobody assumes more coverage than exists. None of
+  these is caught, and none is a leak of anything measured - the real field is
+  numeric and ``LONG_ID`` holds it:
+
+  * the value written WITHOUT the JSON quoting, which ``LONG_ID`` also declines
+  * the ESCAPED JSON form, where the quotes arrive as backslash-quote inside an
+    outer JSON string. The logs carry that nesting for other keys, so the shape
+    is real; no ``device`` key appears in it today.
+  * ``"DEVICE"``, ``"dEvIcE"`` and any casing other than the two listed, and
+    single-quoted keys
+  * a value containing an escaped quote or a newline is masked only up to that
+    character, so a tail survives
+
 - **The encoded pass reads standard base64, hex and wide characters only.** The
   URL-safe base64 alphabet is not accepted, because ``_`` separates every
   snake_case identifier in this repository and admitting it would fuse ordinary
@@ -426,6 +437,30 @@ _ID_VALUE = rf"\d{{{_LONG_ID_MIN_DIGITS},}}(?!\d)"
 # over an opening quote so the quote survives redaction instead of being eaten
 # with the value, which keeps a redacted JSON blob parseable.
 _ID_KEY_SEP = r'"?[ \t]*[=:][ \t]*"?'
+
+# The value side of the ``DEVICE`` rule: everything up to the closing quote.
+#
+# The placeholder lookahead is LIVE here, unlike the one deliberately absent
+# from the cdkey pattern below. That one was removed because its value pattern
+# cannot match ``<`` or ``>``, so the guard was unreachable - dead regex. This
+# pattern is ``[^"\n]+``, which matches both characters happily, so without the
+# lookahead it swallows ``<DEVICE>`` itself and every other placeholder written
+# under a device key.
+#
+# The first version of this rule shipped without it and an adversarial review
+# caught two consequences, neither a leak and both real:
+#
+#   1. ``assert_clean`` REFUSED ``redact``'s own output, breaking the contract
+#      every other rule in this module honours. Text idempotence survived by
+#      accident - the replacement is a fixed point - but the DETECTOR did not,
+#      and ``DEVICE`` is in :data:`FILE_SCAN_LABELS`, so this would have armed
+#      a permanent ``tests/test_no_pii.py`` failure the first time anyone
+#      committed a redacted device excerpt.
+#   2. A value already masked by a STRONGER rule was re-masked as a device:
+#      ``<PERSONA>`` and ``<STEAMID64>`` under a device key both became
+#      ``<DEVICE>``. That leaks nothing and destroys the record of WHAT was
+#      masked, which is exactly what a reviewer of a committed fixture reads.
+_DEVICE_VALUE = rf'(?!{_PLACEHOLDER})[^"\n]+'
 
 
 def _keyed_id(label: str, keys: Iterable[str], placeholder: str) -> Rule:
@@ -869,7 +904,7 @@ RULES: tuple[Rule, ...] = (
     Rule(
         label="DEVICE",
         pattern=re.compile(
-            r'(?P<key>"(?:device|Device)")(?P<sep>[ \t]*:[ \t]*")(?P<value>[^"\n]+)'
+            rf'(?P<key>"(?:device|Device)")(?P<sep>[ \t]*:[ \t]*")(?P<value>{_DEVICE_VALUE})'
         ),
         replacement=r"\g<key>\g<sep><DEVICE>",
     ),
