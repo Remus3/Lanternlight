@@ -36,6 +36,7 @@ print(lane.worktree_path())  # the concrete path, resolved here
 
 Touch these paths and nothing else. Every other path in the repository belongs to another lane or to nobody:
 
+- `docs/AFFIXES.md`
 - `docs/FINDINGS.md`
 - `docs/OBSERVED_IDS.md`
 - `docs/CLASSES.md`

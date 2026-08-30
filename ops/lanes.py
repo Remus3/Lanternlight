@@ -333,6 +333,7 @@ LANES: tuple[Lane, ...] = (
             "null is a result worth writing down."
         ),
         owns=(
+            "docs/AFFIXES.md",
             "docs/FINDINGS.md",
             "docs/OBSERVED_IDS.md",
             "docs/CLASSES.md",
