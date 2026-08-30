@@ -84,6 +84,22 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0090 - 2026-08-30 - RES-20 WITHDRAWN - the redaction gap does not exist, and the error was testing a guard against a fabricated input whose shape occurs nowhere in the data
+
+**Evidence:**
+- all 4 real device values across the three logs measured: length 19, all_digits True in every case
+- redact() run over each real occurrence in context: 0 of 4 survive; every one masks under LONG_ID, and the surrounding fragment also reports ROLEID
+- the alphabetic value that RES-20 described occurs 0 times in any log - it was invented for the test, not observed
+- python -m pytest -> '1327 passed', observed; no change was made to lanternlight/redact.py or any test
+- git status in the safety worktree -> clean; the fix was declined rather than written
+
+WITHDRAWN: RES-20 claimed roleInfo carries a device field that redact() leaves unmasked. It does not. The field holds a 19-digit run and LONG_ID has always caught it.
+HOW IT HAPPENED, and it is a NEW variety of this session's error rather than another instance of the old one. The value was characterised with a permissive pattern - one that pure digits also satisfy - and with a digit-PRESENCE check that is true of a pure digit run. From that I concluded 'alphanumeric device-model string', then tested redact() against a synthetic ALPHABETIC value consistent with the wrong conclusion and inconsistent with the data. The guard correctly reported no label for an input that never occurs.
+THE LESSON: derive the test input FROM the measurement, not from the description of the measurement. A guard tested on an invented input proves nothing about the data either way - it cannot confirm coverage and it cannot demonstrate a gap.
+THE SESSION PATTERN, now four for four. Three false claims were negatives asserted without a check; this one is a positive asserted from a test whose input was fabricated. Common root: the verification step ran against something other than the real data. Every claim re-derived from the actual bytes has held.
+WIDENING CONSIDERED AND DECLINED. An alphabetic value under a device key would not be caught - that shape is real but UNOBSERVED, and the redact module docstring already records exactly this limit for the DEVICE_ID rule: a value written as fewer than 15 digits, or as a UUID or hex blob, is named by neither rule and caught by neither. The module's discipline is that rules are added on measurement and the DEVICE_ID rule is itself documented as a renaming rather than a widening. Adding speculative coverage would break that discipline for a shape nothing has emitted. Recorded as a decision, not an oversight - if the operator wants the redactor to over-fire here on safety grounds, that is a defensible call and it is theirs.
+NOTHING WAS CHANGED in lanternlight/redact.py. Reporting a fix that was not needed as if it were done would have been the worse outcome.
+
 ### LL-0089 - 2026-08-30 - Withdrawn: the claim that 15 lane ledger entries were unintegrated. All were already folded in, and asserting a negative without checking is now this session's third instance of one error
 
 **Evidence:**
