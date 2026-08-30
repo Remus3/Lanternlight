@@ -15,12 +15,6 @@
       "text": "ROADMAP 4b - how arrows are acquired at all: loot, craft or vendor"
     },
     {
-      "blocked_on": "the client running",
-      "item_id": "RES-3",
-      "opened": "2026-08-09",
-      "text": "ROADMAP 4b - how roll differs from dodge; the class effective range is counted in dodge-lengths"
-    },
-    {
       "blocked_on": "a Sorcerer creation re-walk",
       "item_id": "RES-4",
       "opened": "2026-08-09",
@@ -127,10 +121,16 @@
       "item_id": "RES-26",
       "opened": "2026-08-30",
       "text": "A THIRD affix-id binding route, fully specified and never yet fired: equip an item whose affix cfgId the log carries, with the Affixes panel OPEN across the equip, and the affix that appears names that id. Of 23 single-slot equip events across three logs, exactly ONE involves a known-affix item during a full-screen capture (item 1360303, affix 211, 01:15:35 on 2026-08-30) and the panel is CLOSED on both sides of it. The one equip with the panel open involves item 1330304, whose exEquip the log never carries. RECIPE: keep the Affixes panel open while equipping - it costs nothing and converts ordinary gear changes into id bindings."
+    },
+    {
+      "blocked_on": "",
+      "item_id": "RES-27",
+      "opened": "2026-08-30",
+      "text": "RES-3 is HALF ANSWERED and replaced. The talent Dodge Power Shot states 'Changes roll into dodge', so roll and dodge are DIFFERENT actions and a talent converts one into the other - dodge is the upgraded form, gated behind a talent, and any measurement taken before that talent was allocated was measuring ROLL. What remains open is only the second half: whether the class effective range is counted in dodge-lengths, and what a dodge-length is in the pace units section 11 measures in."
     }
   ],
   "resume_note": "2026-08-30b. The four remaining affix ids 101, 209, 212, 214 are UNBINDABLE from data on disk - measured null, cause named per id in docs/AFFIXES.md, ledger LL-0086, open item RES-23. The blocker is the CAPTURE, not the game: only the 2026-08-30 capture is full-screen (2560x1440); both 2026-08-25 captures are 500x310 / 540x360 HUD crops, and 101 and 209 had their tooltips opened inside one of those crops. A SECOND binding route was found and validated on a control - item tooltips, proven by item 3060404 -> affix 211 -> Ranged Lv.1 on frame f0636, agreeing with the trade-filter result. The two routes are complementary: filter-only 201 and 214, item-only 101 and 209, both 208/211/212. Cheapest next win is 212 - the operator still holds item 1230304, so it is one tooltip hover with a full-screen capture running. Bound so far: 201=Valor, 208=Fervid, 211=Ranged.",
   "schema": 1,
   "sessions": 1,
-  "updated": "2026-08-30T21:53:06+00:00"
+  "updated": "2026-08-30T22:54:44+00:00"
 }
