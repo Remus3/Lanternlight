@@ -84,6 +84,23 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0087 - 2026-08-30 - Wrap: the stale-recital check caught the same cross-document defect a second time, and a CLAUDE.md decision gate is recorded rather than answered
+
+**Evidence:**
+- python -m pytest -> '1327 passed in 23.07s', observed at wrap
+- python -m ruff check . -> 'All checks passed!', observed at wrap
+- python -m pytest --collect-only -> '1327 tests collected', so nothing was deleted or weakened to reach green
+- push verified against the REMOTE ref, not the local one: git rev-parse main == git rev-parse origin/main
+- lane/research merged to main by --ff-only after ops.lanes.owner_of returned 'research' for all 6 changed files, none cross-cutting
+- ops.lane_state.integrate folded exactly ['LL-0086','LL-0085'] and skipped the already-present LL-0025
+
+THE PATTERN, worth more than the fix: docs/CLASSES.md still asserted in TWO places that no cooldowns are published at any trust tier, while docs/AFFIXES.md - edited earlier in the same session - says that blanket is false and names the tooltip refuting it. This is the identical defect fixed hours earlier as CLASSES.md C14. Caught once, it recurred elsewhere in the same file. A correction has to be chased through every file that recited it, and grepping the literal old value is what does that.
+NARROWED, not deleted. Both claims gain the words 'class ability', which is the form that survives contact with the client - nothing in the affix reading touches a class skill. The scope was too wide; the finding was sound.
+DECISION GATE, recorded not answered: CLAUDE.md's Measurement doctrine carries the same sentence, and CLAUDE.md is cross-cutting - reserved for the operator or a merger holding the whole picture, never a lane. Written into ROADMAP item 12 with the two halves separated, because only one of them is wrong: 'nobody publishes cooldowns' is now false, while 'a site quoting an unread number is fabricating it' still stands and is the load-bearing half.
+ROADMAP items 11 and 12 opened. Item 11's framing is the session's main transferable lesson - the four unbound affix ids are blocked on the CAPTURE, not the game, and its acceptance criterion explicitly refuses a binding read off an ICON rather than a ROW LABEL, because three catalogue glyphs tie on shape.
+The ordering note now says to make the poller FULL-SCREEN. That one word is what cost this session two affix bindings: 101 and 209 had their tooltips opened INSIDE a running capture that was a 500x310 HUD crop.
+PROCESS DEVIATION, recorded honestly: the wrap ritual says to run the refutation pass BEFORE the push, and the push was authorised mid-turn by the operator and performed while that pass was still running. The mechanical gates - suite, ruff, collected count, the repo's own PII guard - all passed before the push. Any refutation finding will be fixed forward in a new commit rather than by rewriting pushed history.
+
 ### LL-0086 - 2026-08-30 - The four remaining affix ids are UNBINDABLE from data on disk - a measured null with a named cause each, plus a second binding method validated on a control
 
 **Evidence:**
