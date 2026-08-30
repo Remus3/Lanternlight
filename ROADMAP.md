@@ -2591,11 +2591,34 @@ doc-completeness check, not a redaction check, and nobody has decided whether
 that stretches the mandate. Read `ops/lanes.py` for who owns a path, not this
 paragraph.
 
-## OPS-15. `precommit_gate._block` fails OPEN when stderr is unusable - READY
+## OPS-15. `precommit_gate._block` fails OPEN when stderr is unusable - CLOSED 2026-08-30
 
-Found 2026-08-29c by the adversarial pass on `af70a73`, filed rather than
-fixed because it is not what that pass was reviewing and it predates the
-change under review. **It is not caused by the `pythonw.exe` switch** - both
+Closed by ledger `LL-0082`, on branch `lane/safety` and merged. Found
+2026-08-29c by the adversarial pass on `af70a73`, filed rather than fixed
+because it is not what that pass was reviewing and it predates the change
+under review.
+
+**REPRODUCING IT FIRST CORRECTED THIS ITEM TWICE, which is the reusable
+part.** The text below predicts exit 1. The measured code was **120**, from
+a SECOND path this item did not describe: CPython flushes the standard
+streams at interpreter shutdown and exits 120 when that flush raises,
+overriding whatever the script exited with. A fix built only to this item's
+text would have caught the write failure, looked correct, and still failed
+open. And a THIRD defect went unmentioned entirely - with stderr dead a
+benign `ls -la` also exited 120, because the success path never writes to
+stderr and so never got the chance to recover from it.
+
+The fix is therefore two parts, not one: `_say` writes best-effort and
+detaches a stderr it could not write, and `_exit` flushes both streams
+before exiting and detaches whichever fails, so the exit code survives on
+every path including the ones that never report.
+
+**The gate had NO test before this** - `grep -rln precommit_gate tests/`
+returned nothing. A guard whose whole job is refusing commits, with zero
+coverage, whose one measured behaviour under stress was to permit.
+`tests/test_precommit_gate.py` now carries 5, and both halves were proven
+non-vacuous by one mutation each - each killing exactly one test, so the
+two guard independent failure modes rather than overlapping. **It is not caused by the `pythonw.exe` switch** - both
 interpreters behave identically here, which was measured across 14 cases.
 
 `tools/precommit_gate.py` writes the reason to `sys.stderr` and only THEN
