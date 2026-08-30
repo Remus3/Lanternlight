@@ -2496,10 +2496,32 @@ Nothing binds a port yet, so this guards an allocation rather than a service.
 That is the point - the moment a service is built is the moment a stray constant
 becomes expensive, and a guard added then arrives after the mistake.
 
-## OPS-13. Nothing guards the source register's completeness - READY
+## OPS-13. Nothing guards the source register's completeness - CLOSED 2026-08-29b
 
 Opened 2026-08-29 by item 8b, as its own item rather than a note inside that
 item, because a caveat buried in a closed item is invisible to the next session.
+
+Closed by ledger `LL-0080`. The guard is `tests/test_source_register.py`,
+owned by the **safety** lane - see `ops/lanes.py`, which answers the
+ownership question this item deliberately left open.
+
+**The numbers below were a hypothesis and the shipped checker refutes them.
+Re-derived at merge time, 2026-08-29b: 303 host-shaped tokens in `docs/`,
+227 denylisted, 76 real external sources checked** - not 78/15/63. The
+difference is the extractor, not the register: this one matches ANY dotted
+token whose final label is 2-24 letters, so it also catches `README.md`,
+`state.py` and the `TS.*` gameplay tags, which the wrap's narrower pattern
+never saw. That is the deliberate direction of the error - a broader net
+has fewer blind spots and a bigger denylist, and blindness is the failure
+this item exists to prevent. Do not 'fix' the count back to 63.
+
+**The denylist was adversarially probed, not just asserted.** It is the
+trusted surface, so a real source hidden in it would be `LL-0079` wearing
+the other hat. Measured: 0 of its 227 members are uncited dead weight, and
+only 3 have a final label that is a real public TLD - `Game.Net.Online`
+(an Unreal gameplay tag), `TS.AI` (a log-line category prefix) and
+`v1.7.1.dev` (a version string). None is a source. Re-run that probe after
+any bulk addition to `KNOWN_NON_HOSTS`.
 
 The register in `docs/ECOSYSTEM.md` was proven complete by a checker that lived
 in a session scratchpad and is now gone. The research lane wrote it there
@@ -2524,10 +2546,12 @@ reporting a confident 62 of 62 while a cited source was missing. Match
 `(label.)+label` with the last label as 2-24 letters, TLD-agnostic, and subtract
 a **denylist** of the things that shape legitimately matches: file extensions,
 dotted code identifiers (`str.splitlines`, `gvas.parse`, `payload.rows`), and
-the GSDK package name `com.hermes.pstgame`. As of 2026-08-29 that denylist has
-15 members and they are enumerable by running the extractor and reading the
-output - the ratio matters, 78 tokens down to 63 real hosts, so a checker that
-reports zero non-host noise is misconfigured rather than clean.
+the GSDK package name `com.hermes.pstgame`. The ratio matters - a checker that
+reports zero non-host noise is misconfigured rather than clean. (This
+paragraph originally filed 15 denylist members and 78 tokens down to 63
+hosts. Those were measured against the wrap's narrower extractor and do
+NOT describe the shipped one; see the closure block above for the real
+figures. Left here because the reasoning is still correct.)
 
 **Acceptance:** a test under `tests/` that fails when a domain cited anywhere in
 `docs/` is absent from the register, **proven non-vacuous** by citing a new
@@ -2609,13 +2633,13 @@ question, the headshot mechanism, and whether the ~1.3x per pace is real.
 - **Client closed:** item **7c** (read the meter without a human reading it) is
   now the only specified fallback. Item 4c closed 2026-08-25b, **OPS-8** closed
   2026-08-26b, and **OPS-12** and **OPS-7** both closed 2026-08-27, so none of
-  them is the fallback any more. `OPS-6`, `OPS-10` and `OPS-11` remain open but
-  `OPS-6` is an operator decision, not a task.
-  **`OPS-13` was added 2026-08-29 and is the strongest client-closed
-  candidate on this list**: it is specified, cheap, needs no game running,
-  and its checker logic is already written down in the item. `OPS-14` is
-  also new but is an operator question about this machine's disk, not a
-  task a session can close.
+  them is the fallback any more. **`OPS-10`, `OPS-11` and `OPS-13` all closed
+  2026-08-29b** (ledger `LL-0080`), so none of those three is the fallback
+  either. `OPS-6` remains open and is an operator decision, not a task.
+  `OPS-14` is likewise an operator question about this machine's disk.
+  **With the client closed and no OPS- task left specified, item 7c is the
+  fallback again** - and item 10 still supersedes everything the moment the
+  client is open.
 
 **Item 9 is CLOSED as of 2026-08-12** (ledger `LL-0046`). The `cdkey` hole is
 shut, the `/Game/` anchor is genuinely pinned, and two of that item's four

@@ -1694,3 +1694,89 @@ class TestSharedLedgerRacesAndFragmentsDoNot:
         text = book.read_text(encoding="utf-8")
         for item in ("LL-0001", "LL-0100", "LL-0101"):
             assert f"### {item}" in text
+
+
+class TestIndentedCodeIsNotAnEntryAttempt:
+    """`OPS-11`. A guard that cries wolf is one somebody eventually switches off.
+
+    Found by the refutation pass on `LL-0038`. `_assert_headings_parse` skips
+    FENCED code, but Markdown has a second code form - a block indented by four
+    spaces - and that one is not fenced, so the guard walked straight into it.
+    An indented block whose line begins `### <id>` was therefore reported as a
+    broken entry heading and the whole fragment was REFUSED.
+
+    The refusal is loud rather than silent, so nothing was lost. It is still a
+    false positive, and this repository's stated position on false positives is
+    that they get the guard deleted, after which the real collision passes too.
+
+    Why the fix is correct rather than merely convenient: `_HEADING_RE` anchors
+    at column 0, and CommonMark allows an ATX heading at most three spaces of
+    indentation. A line indented four or more spaces therefore cannot be a
+    heading in the first place, so it cannot be an entry that gets "skipped in
+    silence" - which is the only thing this guard exists to catch.
+    """
+
+    def _fragment(self, tmp_path, body):
+        path = tmp_path / "ops.LEDGER.md"
+        path.write_text(
+            "# Lane ledger fragment - ops\n\n"
+            f"{lane_state.FRAGMENT_MARKER}\n\n{body}",
+            encoding="utf-8",
+        )
+        return path
+
+    #: A real entry that quotes a malformed heading inside an INDENTED block.
+    QUOTES_AN_INDENTED_EXAMPLE = (
+        "### LL-0900 - 2026-08-12 - quotes a bad heading as indented code\n\n"
+        "**Evidence:**\n\n"
+        "A heading that misses the separator looks like this:\n\n"
+        "    ### LL-9999 missing the dash separator\n\n"
+        "and it would be skipped in silence.\n"
+    )
+
+    def test_an_indented_malformed_heading_does_not_refuse_the_fragment(self, tmp_path):
+        path = self._fragment(tmp_path, self.QUOTES_AN_INDENTED_EXAMPLE)
+        assert lane_state.fragment_entry_ids(path) == ["LL-0900"]
+
+    def test_an_indented_well_formed_heading_is_not_counted_as_an_entry(self, tmp_path):
+        body = (
+            "### LL-0900 - 2026-08-12 - quotes a good heading as indented code\n\n"
+            "**Evidence:**\n\n"
+            "    ### LL-9999 - 2026-01-01 - EXAMPLE, not a real entry\n\n"
+            "end of entry.\n"
+        )
+        path = self._fragment(tmp_path, body)
+        assert lane_state.fragment_entry_ids(path) == ["LL-0900"]
+
+    def test_the_SAME_line_at_column_zero_is_still_refused(self, tmp_path):
+        """The control. Without this, the fix could be "switch the guard off"."""
+        body = (
+            "### LL-0900 - 2026-08-12 - a real entry\n\n"
+            "### LL-9999 missing the dash separator\n"
+        )
+        path = self._fragment(tmp_path, body)
+        with pytest.raises(lane_state.MalformedLedgerHeading):
+            lane_state.fragment_entry_ids(path)
+
+    def test_three_spaces_is_still_a_heading_and_is_still_refused(self, tmp_path):
+        """CommonMark allows up to three spaces before an ATX heading.
+
+        Three spaces is a heading that `_HEADING_RE` will not match, so it is
+        exactly the near-miss this guard is for. Only FOUR spaces makes it code.
+        """
+        body = (
+            "### LL-0900 - 2026-08-12 - a real entry\n\n"
+            "   ### LL-9999 missing the dash separator\n"
+        )
+        path = self._fragment(tmp_path, body)
+        with pytest.raises(lane_state.MalformedLedgerHeading):
+            lane_state.fragment_entry_ids(path)
+
+    def test_a_tab_indent_counts_as_code_too(self, tmp_path):
+        """A tab is four columns of indentation in Markdown's block model."""
+        body = (
+            "### LL-0900 - 2026-08-12 - a real entry\n\n"
+            "\t### LL-9999 missing the dash separator\n"
+        )
+        path = self._fragment(tmp_path, body)
+        assert lane_state.fragment_entry_ids(path) == ["LL-0900"]

@@ -241,6 +241,7 @@ LANES: tuple[Lane, ...] = (
             "tests/test_no_pii.py",
             "tests/test_ascii_hygiene.py",
             "tests/test_ports.py",
+            "tests/test_source_register.py",
             "tests/test_tracked_walker.py",
             "tests/_tracked.py",
             "tools/ascii_check.py",

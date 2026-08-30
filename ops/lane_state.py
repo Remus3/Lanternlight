@@ -287,6 +287,29 @@ def _scan_entry_region(body: str) -> _RegionScan:
     )
 
 
+#: Markdown expands a leading tab to the next four-column stop, and four
+#: columns of indentation opens a code block. Below that, an ATX heading is
+#: still a heading.
+_INDENTED_CODE_COLUMNS = 4
+
+
+def _indent_columns(line: str) -> int:
+    """Leading whitespace of ``line`` measured in Markdown columns.
+
+    A tab advances to the next multiple of four, which is what makes a single
+    leading tab equivalent to four spaces for block-structure purposes.
+    """
+    columns = 0
+    for char in line:
+        if char == " ":
+            columns += 1
+        elif char == "\t":
+            columns += _INDENTED_CODE_COLUMNS - (columns % _INDENTED_CODE_COLUMNS)
+        else:
+            break
+    return columns
+
+
 def _looks_like_an_entry_attempt(line: str) -> bool:
     """True when ``line``'s first token after the hashes is an id.
 
@@ -294,7 +317,23 @@ def _looks_like_an_entry_attempt(line: str) -> bool:
     that cites an id in passing is not mistaken for a broken entry. That
     distinction is what keeps the guard from crying wolf, and a guard that cries
     wolf is one somebody eventually deletes.
+
+    **`OPS-11`: indented code is code, and it is the SECOND code form.** This
+    scan already skips FENCED blocks, but Markdown also makes a block out of
+    four columns of indentation, and that form carries no delimiter for a fence
+    scanner to see. A quoted example indented into a code block was therefore
+    read as a broken heading and the whole fragment was refused - a false
+    positive, found by the refutation pass on `LL-0038`.
+
+    The bound is not a guess and it is not tuned to the report. `_HEADING_RE`
+    anchors at column 0 and CommonMark permits an ATX heading at most three
+    spaces of indentation, so a line indented four or more columns cannot be a
+    heading at all. It therefore cannot be an entry that gets skipped in
+    silence, which is the only failure this guard exists to catch. Three spaces
+    still counts, and is still refused.
     """
+    if _indent_columns(line) >= _INDENTED_CODE_COLUMNS:
+        return False
     text = line.lstrip().lstrip("#").strip()
     if not text:
         return False
