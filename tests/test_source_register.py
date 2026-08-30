@@ -162,6 +162,7 @@ KNOWN_NON_HOSTS = frozenset(
         "STATE.json",
         "Scav.sav",
         "TS.AI",
+        "TS.Ability",
         "TS.Avatar",
         "TS.Camp",
         "TS.Default",
