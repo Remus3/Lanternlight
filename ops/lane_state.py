@@ -269,15 +269,17 @@ def _scan_entry_region(body: str) -> _RegionScan:
     """
     headings: list[tuple[int, str]] = []
     suspect: tuple[int, str] | None = None
+    container = 0
 
     scan = mdscan.scan_unfenced(body)
     for number, offset, line in scan.lines:
+        container = _container_column(line, container)
         if not line.lstrip().startswith("#"):
             continue
         match = _HEADING_RE.match(line)
         if match:
             headings.append((offset, match["item_id"]))
-        elif suspect is None and _looks_like_an_entry_attempt(line):
+        elif suspect is None and _looks_like_an_entry_attempt(line, container):
             suspect = (number, line)
 
     return _RegionScan(
@@ -291,6 +293,36 @@ def _scan_entry_region(body: str) -> _RegionScan:
 #: columns of indentation opens a code block. Below that, an ATX heading is
 #: still a heading.
 _INDENTED_CODE_COLUMNS = 4
+
+
+#: A bullet or ordered-list marker, and the whitespace that follows it. The
+#: content column of the item is the marker's indent plus this match's width.
+_LIST_MARKER_RE = re.compile(r"(?:[-*+]|\d{1,9}[.)])\s+")
+
+
+def _container_column(line: str, current: int) -> int:
+    """Track the content column of the innermost enclosing list item.
+
+    **`LL-0081`, and the reason the first `OPS-11` fix was wrong.** CommonMark
+    measures indentation RELATIVE to the containing block's content column, not
+    from column 0. A ``- `` bullet opens content column 2, so a line indented
+    four ABSOLUTE columns inside it sits at two RELATIVE columns and is a
+    HEADING, not a code block. Comparing absolute columns therefore read a real
+    heading as code and dropped the entry in silence - the one failure
+    :func:`_assert_headings_parse` exists to catch.
+
+    Blank lines do not close a list item, so they leave ``current`` alone. A
+    non-blank line dedented to or past the current content column closes it.
+    """
+    if not line.strip():
+        return current
+    indent = _indent_columns(line)
+    if indent < current:
+        current = 0
+    marker = _LIST_MARKER_RE.match(line.lstrip())
+    if marker and indent >= current:
+        return indent + len(marker.group(0))
+    return current
 
 
 def _indent_columns(line: str) -> int:
@@ -310,7 +342,7 @@ def _indent_columns(line: str) -> int:
     return columns
 
 
-def _looks_like_an_entry_attempt(line: str) -> bool:
+def _looks_like_an_entry_attempt(line: str, container: int = 0) -> bool:
     """True when ``line``'s first token after the hashes is an id.
 
     Tested on the FIRST token rather than anywhere in the line, so a sub-heading
@@ -325,14 +357,20 @@ def _looks_like_an_entry_attempt(line: str) -> bool:
     read as a broken heading and the whole fragment was refused - a false
     positive, found by the refutation pass on `LL-0038`.
 
-    The bound is not a guess and it is not tuned to the report. `_HEADING_RE`
-    anchors at column 0 and CommonMark permits an ATX heading at most three
-    spaces of indentation, so a line indented four or more columns cannot be a
-    heading at all. It therefore cannot be an entry that gets skipped in
-    silence, which is the only failure this guard exists to catch. Three spaces
-    still counts, and is still refused.
+    **`LL-0081` corrects the justification that first shipped with that fix,
+    which was stated as a proof and was false.** It claimed "a line indented
+    four or more columns cannot be a heading at all". CommonMark measures
+    indentation RELATIVE to the containing block's content column, so inside a
+    ``- `` bullet - which opens content column 2 - four absolute columns is two
+    relative columns and IS a heading. The absolute comparison therefore
+    silently dropped real entries in list context, which is this repository's
+    own house format for an entry body. ``container`` is the content column of
+    the innermost enclosing list item, from :func:`_container_column`, and the
+    comparison below is relative to it.
+
+    Three relative columns still counts as a heading, and is still refused.
     """
-    if _indent_columns(line) >= _INDENTED_CODE_COLUMNS:
+    if _indent_columns(line) - container >= _INDENTED_CODE_COLUMNS:
         return False
     text = line.lstrip().lstrip("#").strip()
     if not text:

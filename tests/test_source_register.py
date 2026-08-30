@@ -39,8 +39,22 @@ that lives only in conversation is a lie in the artifact:
   check that the row next to it says anything true, or that the tier is right.
 * It reads ``docs/**/*.md`` only. A source cited from ``README.md``,
   ``ROADMAP.md`` or code is out of scope and unchecked.
-* Presence is matched against the lowercased section text, so a host appearing
-  only inside a longer token would satisfy it.
+* Presence is matched against the lowercased section text. It now requires a
+  host BOUNDARY - see :func:`_present_in_register` - so a tail match no longer
+  counts. Before `LL-0081` it did, and that was not hypothetical:
+  ``grandwiki.com`` was cited standalone and unregistered, and passed on the
+  strength of the neighbouring ``mistfallhunter.grandwiki.com`` row.
+* Presence still says nothing about CORRECTNESS. A host with a register row is
+  accepted whatever that row claims, and a sentence inside the section that
+  merely NAMES a host - even one saying it has not been assessed - satisfies
+  the check. The guard proves a source was written down, not that it was
+  judged.
+* IPv4 and IPv6 literals are invisible - :data:`HOST_SHAPED` emits no token for
+  them at all, so a source cited by bare address is unchecked and silent.
+* Underscores and punycode truncate rather than fail. ``mistfall_hunter.wiki``
+  is seen as ``hunter.wiki`` and ``example.xn--p1ai`` as ``example.xn``,
+  because the label pattern excludes ``_`` and stops at the first hyphenated
+  suffix. The truncated form is what any failure message will name.
 
 REGENERATING THE DENYLIST after a legitimate new non-host token appears - a new
 module path quoted in a ledger entry, say - run :func:`cited_hosts` over
@@ -79,17 +93,20 @@ KNOWN_NON_HOSTS = frozenset(
         "ADR-002-no-asset-extraction.md",
         "ADR-003-log-is-primary-surface.md",
         "ADR-004-redaction-is-mandatory.md",
+        "ADR-005-omit-rather-than-guess.md",
         "ADR-006-apache-2-and-public.md",
         "ARCHITECTURE.md",
         "AvgPrice.ini",
         "BACKLOG.md",
         "BotData.TreasurableItems",
+        "CLASSES.md",
         "CLAUDE.md",
         "Deck.sav",
         "ECOSYSTEM.md",
         "Engine.ini",
         "EnhancedInput.EnhancedPlayerMappableKe",
         "EnhancedInputUserSettings.sav",
+        "FINDINGS.md",
         "FTE.Event.ChangeWeapon",
         "Game.EscapeType.GroveSprite",
         "Game.Net.Online",
@@ -107,6 +124,7 @@ KNOWN_NON_HOSTS = frozenset(
         "GvasSave.trailing",
         "GvasSave.undecoded",
         "HEADLESS.md",
+        "IDS.md",
         "IdGeneratorData.NumIdToUUID",
         "IdGeneratorData.UUIDToNumId",
         "Inventory.equipments",
@@ -139,6 +157,7 @@ KNOWN_NON_HOSTS = frozenset(
         "RE.finditer",
         "README.md",
         "RESEARCH.md",
+        "ROADMAP.md",
         "SEscapePortalSpawner.initialize",
         "STATE.json",
         "Scav.sav",
@@ -165,6 +184,7 @@ KNOWN_NON_HOSTS = frozenset(
         "bottle-0.13.4.data",
         "bytes.splitlines",
         "channel.steam",
+        "check.py",
         "com.hermes.pstgame",
         "config.json",
         "contract.py",
@@ -282,6 +302,7 @@ KNOWN_NON_HOSTS = frozenset(
         "state.py",
         "state.stale",
         "str.splitlines",
+        "sys.exit",
         "sys.stderr",
         "sys.stdin",
         "tail.py",
@@ -320,6 +341,38 @@ def _normalise(token: str) -> str:
     """Lowercase, and drop a leading ``www.`` - one source, two spellings."""
     lowered = token.lower()
     return lowered[4:] if lowered.startswith("www.") else lowered
+
+
+#: A character that can continue a host label to the LEFT of a match. A dot is
+#: included so that ``grandwiki.com`` does not match inside
+#: ``mistfallhunter.grandwiki.com`` - that is a different host, not this one.
+_CONTINUES_LEFT = re.compile(r"[A-Za-z0-9.-]")
+#: ...and to the RIGHT. A trailing dot is only a continuation when a label
+#: actually follows it, so a host at the end of a sentence still counts.
+_CONTINUES_RIGHT = re.compile(r"[A-Za-z0-9-]|\.[A-Za-z0-9]")
+
+
+def _present_in_register(host: str, section: str) -> bool:
+    """True when ``host`` appears in ``section`` as a WHOLE host token.
+
+    **`LL-0081`, and the reason a bare substring test is not good enough.** The
+    first version of this guard asked ``host in section``. That let
+    ``grandwiki.com`` pass on the strength of a row for
+    ``mistfallhunter.grandwiki.com``, and would let ``x.com`` pass inside
+    ``gamingpromax.com``. A registry entry for a subdomain says nothing about
+    its parent, and vice versa - they are separate sources with separate
+    operators, and conflating them is how an unvetted source gets cited.
+
+    Both callers lowercase before reaching here.
+    """
+    for match in re.finditer(re.escape(host), section):
+        before = section[match.start() - 1] if match.start() else ""
+        if before and _CONTINUES_LEFT.match(before):
+            continue
+        if _CONTINUES_RIGHT.match(section[match.end() : match.end() + 2]):
+            continue
+        return True
+    return False
 
 
 def cited_hosts(root: Path = DOCS) -> dict[str, set[str]]:
@@ -398,6 +451,42 @@ def test_a_www_prefix_normalises_to_the_bare_domain():
     assert _normalise("wwwfoo.com") == "wwwfoo.com"
 
 
+def test_presence_requires_a_host_BOUNDARY_not_a_substring():
+    """`LL-0081`. A tail match is not a register entry.
+
+    REFUTED BY THE ADVERSARIAL PASS ON `LL-0080`, and it was live in the tree
+    rather than hypothetical. ``grandwiki.com`` is cited standalone in
+    ``docs/ECOSYSTEM.md`` - "grandwiki.com hosts wikis for many titles under
+    the same subdomain pattern" - and had no register row of its own. The
+    guard passed anyway, because the string is a TAIL of the neighbouring row
+    for ``mistfallhunter.grandwiki.com``. The green was luck, not coverage.
+
+    The same defect swallows the two most plausible first-party sources a
+    future session would reach for: ``x.com`` sits inside ``gamingpromax.com``
+    and ``t.co`` inside ``grindnstrat.com``, both already in the register. A
+    two-label host will pass against almost any register that ever grows.
+
+    This is `LL-0079`'s lesson for the third time. The extractor was fixed to
+    be TLD-agnostic and was proven non-vacuous; the PRESENCE half was never
+    examined, so the guard remained blind somewhere nobody had looked.
+    """
+    section = (
+        "| `mistfallhunter.grandwiki.com` | wiki farm | t4 |\n"
+        "| `gamingpromax.com` | outlet | t4 |\n"
+        "| `grindnstrat.com` | outlet | t4 |\n"
+    )
+    # A tail of a longer host is NOT a register entry.
+    assert not _present_in_register("grandwiki.com", section)
+    assert not _present_in_register("x.com", section)
+    assert not _present_in_register("t.co", section)
+    # The whole tokens still register - the fix must not break the positive case.
+    assert _present_in_register("mistfallhunter.grandwiki.com", section)
+    assert _present_in_register("gamingpromax.com", section)
+    assert _present_in_register("grindnstrat.com", section)
+    # A longer host must not be satisfied by a shorter row either.
+    assert not _present_in_register("grandwiki.com.au", section)
+
+
 def test_every_cited_external_source_appears_in_the_register():
     """The item's acceptance criterion.
 
@@ -409,7 +498,7 @@ def test_every_cited_external_source_appears_in_the_register():
     missing = {
         token: files
         for token, files in external_sources().items()
-        if _normalise(token) not in section
+        if not _present_in_register(_normalise(token), section)
     }
     if missing:
         lines = [

@@ -1772,6 +1772,48 @@ class TestIndentedCodeIsNotAnEntryAttempt:
         with pytest.raises(lane_state.MalformedLedgerHeading):
             lane_state.fragment_entry_ids(path)
 
+    def test_a_heading_indented_INSIDE_A_LIST_is_refused_not_skipped(self, tmp_path):
+        """`LL-0081`. The `OPS-11` fix was context-blind and traded down.
+
+        REFUTED BY THE ADVERSARIAL PASS ON `LL-0080`. CommonMark measures
+        indentation RELATIVE to the containing block's content column, not
+        absolutely. A bullet `- ` opens content column 2, so four ABSOLUTE
+        columns inside that bullet is only two RELATIVE columns - which is a
+        heading, not a code block.
+
+        The first `OPS-11` fix compared absolute columns, so it treated this
+        line as code and dropped the entry WITHOUT A WORD. That is the exact
+        failure `_assert_headings_parse` exists to catch, and it is worse than
+        the false positive it replaced: the entry is absorbed into the previous
+        one's block, `duplicate_claims()` reports nothing, and two lanes can
+        land the same id with different text in an append-only ledger.
+
+        This repository's own house format for an entry is `**Evidence:**`
+        followed by a bullet list, so list context is the NORM here, not an
+        exotic input.
+
+        Loud beats silent when the two are the only options. A false positive
+        is seen and fixed; a silent drop is permanent.
+        """
+        body = (
+            "### LL-0900 - 2026-08-12 - a real entry\n\n"
+            "**Evidence:**\n"
+            "- the suite is green\n\n"
+            "    ### LL-0901 - 2026-08-12 - a second entry under the bullet\n"
+        )
+        path = self._fragment(tmp_path, body)
+        with pytest.raises(lane_state.MalformedLedgerHeading):
+            lane_state.fragment_entry_ids(path)
+
+    def test_the_top_level_indented_code_exemption_still_holds(self, tmp_path):
+        """The control for the fix above - `OPS-11` must not be undone.
+
+        At top level the container column is 0, so four columns really is a
+        code block and the quoted example must still be exempt.
+        """
+        path = self._fragment(tmp_path, self.QUOTES_AN_INDENTED_EXAMPLE)
+        assert lane_state.fragment_entry_ids(path) == ["LL-0900"]
+
     def test_a_tab_indent_counts_as_code_too(self, tmp_path):
         """A tab is four columns of indentation in Markdown's block model."""
         body = (
