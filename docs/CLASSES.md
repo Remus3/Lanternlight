@@ -120,9 +120,12 @@ from what that patch contained, not a citation to a source that saw it.
 
 ## Contradictions and how they were resolved
 
-Thirteen genuine conflicts. Four resolved, nine open. A conflict is recorded
+Fourteen genuine conflicts. Five resolved, nine open. A conflict is recorded
 here rather than silently decided, because a silent pick destroys the
 information that there was ever a disagreement.
+
+Counts recomputed from the `C` headings at merge time on 2026-08-30, not carried
+forward - a filed count in this repo has been wrong more than once.
 
 ### C1. Shadowstrix solo versus trio, and what Mobalytics actually says - OPEN
 
@@ -344,6 +347,46 @@ so this may be no conflict at all. It is recorded because of *who says what*:
 the high-ceiling framing came exclusively from build-guide sites, which have an
 incentive to make every class sound deep, and never from an official source or
 from player testimony independent of a guide.
+
+### C14. Are the community "affix" names real, or gem effects in ARPG costume? - RESOLVED 2026-08-30, against this document
+
+This one is recorded with the others because **this document was the side that
+was wrong**, and a conflict where the in-repo doc loses is exactly the kind that
+gets silently edited away.
+
+- **This document claimed**, in Blackarrow's gearing section, that the community
+  affix names were "almost certainly gem effects wearing legacy ARPG
+  vocabulary". The reasoning: guide sites say "affix", but DevNote #6 and Dev
+  Team FAQ #2 (T1) say gems replaced random gear affix rolls, and no guide used
+  the two words consistently side by side.
+- **Guide sites (T4) claimed** a list of named affixes for Blackarrow: `Ranged`,
+  `Focused`, `Elusive`, `Fervid`, `Curse`, `Valor`, `Fervor`.
+- **T0 client reads settle it, 2026-08-30.** Item tooltips, the socketing
+  screen and the `PREPARE` -> `Affixes` panel were read off passive screen
+  capture. Six of the seven names appear in the affix panel and the seventh,
+  `Fervor`, on the weapon tooltip and the socketing screen. Three further names
+  appear that no guide had: `Skypiercing`, `Wrath`, `Smiting`.
+- **Adjudication: the guides were right about the vocabulary and this document
+  was wrong.** Affixes and gems coexist on a single item and the tooltip renders
+  them differently - `Ranged` sits above the sockets with no gem icon while
+  `Fervor` arrives through a socketed `Warspirit Moonstone`. The game's own name
+  for the category is `Affix Gem`, and such a gem GRANTS affixes. One system,
+  two delivery routes.
+- **The T1 dev notes were not wrong either, and that is the interesting part.**
+  DevNote #6 and FAQ #2 say gems replaced random affix ROLLS. That is a
+  statement about how affix values are DETERMINED - rolls became gems - and this
+  document read it as a statement about whether affixes EXIST. The dev note was
+  reported accurately and interpreted wrongly.
+- **Failure mode, named so it is recognisable.** An inference chained off two
+  correctly-reported T1 sources was written at almost the confidence of a fact,
+  and the hedge "almost certainly" did no work at all - nothing downstream
+  treated it as uncertain. The `docs/AFFIXES.md` history from the same week has
+  two more of exactly this shape, both withdrawn. Transcription was never the
+  problem in any of the three; the reasoning on top of it was.
+- **What it cost:** the wrong schema guidance for Emberforge sat in this file
+  for three weeks, and the correct model - affix as effect, gem as one source,
+  levels summing across sources - is materially different from the "keep them
+  distinct" advice it replaced.
 
 ### Corrections to prior art - not conflicts
 
@@ -831,14 +874,43 @@ strength may have been a mobility bug on top of intended power. Texture only.
 
 ### Gearing and gems
 
-**Terminology flag for Emberforge's data model.** Guide sites uniformly say
+**Terminology flag for Emberforge's data model - REWRITTEN 2026-08-30, the
+previous version's central inference was FALSE.** Guide sites uniformly say
 "affix" for Blackarrow's gearing stats - Ranged, Focused, Elusive, Fervid, Curse,
-Valor, Fervor - but gems replaced random affix rolls per DevNote #6 and Dev Team
-FAQ #2. These community "affixes" are almost certainly gem effects wearing legacy
-ARPG vocabulary. Not one guide was found using "gem" and "affix" consistently
-side by side for the same mechanic, so the community's language has not caught up
-to the official change. **Keep "affix" and "gem" distinct in Emberforge's schema
-rather than assuming guide vocabulary maps onto dev-note vocabulary.**
+Valor, Fervor - and this section used to answer that gems replaced random affix
+rolls per DevNote #6 and Dev Team FAQ #2, so these community "affixes" were
+"almost certainly gem effects wearing legacy ARPG vocabulary".
+
+**That is withdrawn.** It was an inference from two dev notes, stated at nearly
+the confidence of a fact, and T0 client reads refute it. See C14 below and
+[`docs/AFFIXES.md`](AFFIXES.md) for the frames.
+
+What the client actually shows: affixes and gems **coexist on one item**, and the
+game renders them differently. The same `Legendary` bow tooltip carries
+`Ranged Lv.1` with an affix icon and no gem icon, above the sockets, and a
+separately socketed `Fervor Lv.1` with its gem icon beside it. The game names the
+category `Affix Gem` and such a gem GRANTS named affixes, each with its own
+level - `Warspirit Moonstone` grants `Fervor Lv.1`. So it is one system with two
+delivery routes, not two systems.
+
+**All seven of the guide names are real game vocabulary**, which is the opposite
+of the "legacy ARPG vocabulary" reading. Six - `Ranged`, `Focused`, `Elusive`,
+`Fervid`, `Curse`, `Valor` - are read off the `PREPARE` -> `Affixes` panel, and
+`Fervor` off the weapon tooltip and the socketing screen. The client also shows
+three names no guide had: `Skypiercing`, `Wrath`, `Smiting`.
+
+**Revised schema guidance.** Do not model affix and gem as two parallel effect
+systems - that was the old advice and it rested on the withdrawn inference. Model
+the **affix as the effect**, carrying a level, and the **gem as one SOURCE** of
+affix levels alongside the item's own. The character's `Affixes` panel lists both
+kinds side by side with no marker distinguishing them, and levels from every
+source SUM - proven by icon count in `docs/AFFIXES.md`. Emberforge therefore
+needs affix level to be an aggregate over sources, not a per-item property.
+
+The one part of the old flag that survives: guide vocabulary still should not be
+trusted to map onto dev-note vocabulary without a client read. It happened to be
+right here, and it was right by luck rather than by care - not one guide was
+found using "gem" and "affix" consistently side by side for the same mechanic.
 
 Top picks, reconfirmed with more detail than prior art had: **Ranged** (damage at
 distance), then **Focused** (raises charging speed and, past a threshold,

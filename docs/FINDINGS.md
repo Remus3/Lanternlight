@@ -1535,7 +1535,8 @@ this attack, this bot and this build, and the floor boundary sits between 7 and
   observation here that requires randomness to explain it.
 - Why the floor is a step rather than a tangent. The extrapolated slope says 8
   paces should read about 174 and it reads 104. That gap is measured; its cause
-  is not.
+  is not. **A first-party candidate cause arrived 2026-08-30 and is recorded in
+  11.7.1 below. It is a candidate, not an answer.**
 - Whether the ~1.3x per pace on the slope is a real rate or a coincidence of
   four points. It is regular enough to be worth testing and not enough to name.
 - The shape between them as a formula. Four interior points that happen to sit
@@ -1545,6 +1546,58 @@ this attack, this bot and this build, and the floor boundary sits between 7 and
 
 **No coefficient enters Emberforge from this.** A measured floor value with its
 conditions attached is a fact; a falloff formula would be a story.
+
+### 11.7.1 The game states an `Effective Range` mechanic - added 2026-08-30
+
+Read off the client on 2026-08-30 and written up in
+[`docs/AFFIXES.md`](AFFIXES.md), the `Ranged` affix's detail panel states, in
+the game's own words:
+
+> **Effective Range.** Different ranged attacks have different Effective
+> Ranges. Beyond the Effective Range, both DMG and Impact will diminish.
+
+**A stated mechanic that makes damage diminish past a range boundary is the
+same SHAPE as the step this section measured** and could not explain. That is
+worth recording immediately, because 11.7 was written believing no first-party
+statement about range falloff existed.
+
+**It is not an answer, and four things stop it from being one.**
+
+1. **The units are not bound.** The affix panel speaks in **meters**; every
+   measurement in section 11 is in **paces**, counted off an animation loop
+   (11.2). Nothing in this project has ever measured a pace in meters. The
+   affix's other clause gates at "greater than 5 meters" and this section's
+   floor boundary sits between 7 and 8 paces - those two numbers are in
+   different units and **must not be compared**. Writing "so a pace is under a
+   meter" would be inventing the conversion that is missing.
+2. **The affix state of the runs was never recorded.** No run in section 11
+   recorded which affixes the weapon carried or at what level, so no run here
+   can be re-attributed to this mechanic. `AFFIXES.md` makes the same point
+   about `ROADMAP` item 10.
+3. **The ladder gates the range bonus at Lv. 5.** The stated `Effective Range`
+   column is blank for levels 1 to 4 and reads `+12%` from Lv. 5. Whether this
+   character was at or above that level during the section 11 runs is
+   unrecorded, so the mechanic's own precondition is unverified here.
+4. **`Effective Range` is stated as a property of the ATTACK, not of the
+   affix** - "different ranged attacks have different Effective Ranges". So
+   falloff plausibly exists with no affix involved, and the affix only shifts
+   the boundary. If so this is a base mechanic that was always there, and the
+   step in the table needs no affix to explain it. That reading is at least as
+   consistent with the data as the other.
+
+**What would test it.** Re-run the pace sweep twice on the same target and
+attack with a deliberately different `Ranged` level - the affix panel reports
+the level directly, so it is a recorded input rather than an inferred one - and
+see whether the floor boundary MOVES. A boundary that shifts with affix level
+belongs to the affix; a boundary that does not is the attack's own Effective
+Range. Either outcome is publishable, and the run costs the same as the sweep
+already done.
+
+**Do not fold this into 11.7's conclusion.** That section's "what is
+established" list stands unchanged: the floor value, its conditions and the
+boundary's location are measurements, and none of them moves because an
+explanation became available. What changed is that the gap now has a named
+first-party candidate instead of none.
 
 ### 11.8 The game log is PERISHABLE, and one was already lost
 
