@@ -121,10 +121,16 @@
       "item_id": "RES-25",
       "opened": "2026-08-30",
       "text": "RES-8 NARROWED and replaced. The SKILLS screen shows the three arrow slots keyed Z, X, C in that left-to-right order (frame f0059_22.26.04, 2026-08-25b/talents). What remains is ONE question, not two: destSlot is an integer and nothing observed says it indexes that row left-to-right from zero. Closing it needs one capture of an arrow equipped to the Z slot joined to the destSlot emitted at that wall clock."
+    },
+    {
+      "blocked_on": "the client running with a full-screen capture and the Affixes panel open",
+      "item_id": "RES-26",
+      "opened": "2026-08-30",
+      "text": "A THIRD affix-id binding route, fully specified and never yet fired: equip an item whose affix cfgId the log carries, with the Affixes panel OPEN across the equip, and the affix that appears names that id. Of 23 single-slot equip events across three logs, exactly ONE involves a known-affix item during a full-screen capture (item 1360303, affix 211, 01:15:35 on 2026-08-30) and the panel is CLOSED on both sides of it. The one equip with the panel open involves item 1330304, whose exEquip the log never carries. RECIPE: keep the Affixes panel open while equipping - it costs nothing and converts ordinary gear changes into id bindings."
     }
   ],
   "resume_note": "2026-08-30b. The four remaining affix ids 101, 209, 212, 214 are UNBINDABLE from data on disk - measured null, cause named per id in docs/AFFIXES.md, ledger LL-0086, open item RES-23. The blocker is the CAPTURE, not the game: only the 2026-08-30 capture is full-screen (2560x1440); both 2026-08-25 captures are 500x310 / 540x360 HUD crops, and 101 and 209 had their tooltips opened inside one of those crops. A SECOND binding route was found and validated on a control - item tooltips, proven by item 3060404 -> affix 211 -> Ranged Lv.1 on frame f0636, agreeing with the trade-filter result. The two routes are complementary: filter-only 201 and 214, item-only 101 and 209, both 208/211/212. Cheapest next win is 212 - the operator still holds item 1230304, so it is one tooltip hover with a full-screen capture running. Bound so far: 201=Valor, 208=Fervid, 211=Ranged.",
   "schema": 1,
   "sessions": 1,
-  "updated": "2026-08-30T21:06:14+00:00"
+  "updated": "2026-08-30T21:53:06+00:00"
 }

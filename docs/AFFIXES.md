@@ -1439,6 +1439,211 @@ succession". The bow this project has been reading affixes off is called
 naming link, with no mechanical claim attached.
 
 
+## Sweeping the unread captures - 2026-08-30c
+
+**Method, stated because the coverage claim depends on it.** The two unread
+captures hold 188 frames. Rather than read them one by one, every frame was
+reduced to a 16x16 average hash and consecutive frames grouped where the Hamming
+distance was 12 or less. That collapses **188 frames to 75 distinct states** -
+53 in `talents`, 22 in `reanchor`. States were then read in descending order of
+expected information, and every distinct SCREEN TYPE below was opened directly.
+
+**What that does and does not cover.** Every distinct screen type in the
+captures has been read. Individual item-tooltip hovers - the long tail of
+single-frame states in the warehouse - were sampled, not exhausted, so an item
+name or a Source list may remain unread. No screen type is unaccounted for.
+
+### THREE COMPLETE AFFIX LADDERS, and the third refutes the pattern
+
+This document previously had ONE published ladder, for `Ranged`. Two more were
+read off `f0092_22.27.16` and `f0104_22.27.42`.
+
+**`Fervid`**, quoted:
+
+> **Effect.** When `Health` is above 70%, increase `Physical Damage` and
+> `Magic Damage`. Upon reaching a certain level, when `Health` is above 70%,
+> reduce `Skill Energy Cost`.
+
+| Level | Physical Damage | Magic Damage | Skill Energy Cost Reduction |
+|---|---|---|---|
+| Lv. 1 | +1.8% | +1.8% | - |
+| Lv. 2 | +3.6% | +3.6% | - |
+| Lv. 3 | +5.4% | +5.4% | - |
+| Lv. 4 | +7.2% | +7.2% | - |
+| Lv. 5 | +9% | +9% | +6% |
+| Lv. 6 | +10.8% | +10.8% | +6% |
+| Lv. 7 | +12.6% | +12.6% | +6% |
+
+**`Seeker`**, quoted:
+
+> **Effect.** Hitting an enemy increases `Movement Speed` for 3s. Upon reaching
+> a certain level, the `Speed Boost` can stack.
+
+| Level | Movement Speed |
+|---|---|
+| Lv. 1 | +1.5% |
+| Lv. 2 | +3% |
+| Lv. 3 | +4.5% |
+| Lv. 4 | +4.5%, stacking up to 2 times |
+| Lv. 5 | +6%, stacking up to 2 times |
+
+### A TEMPLATE WAS ALMOST PUBLISHED FROM TWO LADDERS, AND THE THIRD BREAKS IT
+
+With `Ranged` and `Fervid` in hand the pattern looks firm: a primary that is
+exactly `rate * level`, a secondary that unlocks at **Lv. 5** and stays flat,
+and a ladder **7 levels** long. `Ranged` is 1.6% per level with Effective Range
+appearing at Lv. 5 and flat at +12%; `Fervid` is 1.8% per level with Skill
+Energy Cost Reduction appearing at Lv. 5 and flat at +6%.
+
+**`Seeker` breaks all three properties at once.** Its ladder is **5 levels, not
+7**. Its secondary unlocks at **Lv. 4, not Lv. 5**. And its primary is **not
+linear** - Lv. 3 and Lv. 4 both read +4.5%, with the level-4 step spent on
+gaining the stack instead of on the number.
+
+**Recorded as a near miss rather than quietly dropped.** Two ladders agreeing
+was a hypothesis, and it was one edit away from being written down as a law that
+Emberforge could have encoded. What survives is weaker and true: an affix has a
+primary that scales with level and MAY gain a secondary clause at some level,
+and neither the ladder length nor the unlock level nor the linearity is shared
+across affixes.
+
+### The conditional gate is a real family
+
+Each ladder's effect is gated on a condition, and the conditions differ in kind:
+
+| affix | gate |
+|---|---|
+| `Ranged` | distance to target greater than 5 meters |
+| `Distant Ward` | distance to attacker greater than 5 meters |
+| `Fervid` | `Health` above 70% |
+| `Seeker` | on hitting an enemy, for 3s |
+
+**More published durations and thresholds:** `3s` for `Seeker`, `70%` for
+`Fervid`, `10s` and `60s` from the gem tooltip recorded earlier. The claim that
+this game publishes no durations is false for affixes by a widening margin.
+
+### The `Affix Details` slot attributions can now be NAMED
+
+An earlier reading of the `Affix Details` table described the per-slot counts by
+GROUP rather than by name, because the header glyphs are small. **Two
+independent surfaces now agree**, so the hedge can be lifted for the two that
+are cross-checked: each affix's own `Level Distribution` row names the same
+slots the table does.
+
+| affix | level | slots, agreed by BOTH surfaces |
+|---|---|---|
+| `Fervid` | Lv.2 | pants 1, boots 1 |
+| `Seeker` | Lv.1 | weapon 1 |
+
+`Fervor` Lv.2 and `Wealth` Lv.1 are read from the table only - helm and chest
+for the first, an accessory column for the second - and stay unconfirmed by a
+second surface.
+
+**The sum rule now has four independent confirmations** and holds on every row
+of every surface examined.
+
+### An affix appearing LIVE on an equip
+
+Between `f0128_22.28.34` and `f0141_22.29.02` the `Affixes` panel goes from four
+entries to five, and the new entry is **`Elusive` Lv.1**. The four existing
+affixes are unchanged. The log names the cause exactly:
+
+    22:28:56 local - server_EquipArmor: ... slot-2 cfg-1330304
+
+Slot 2 is `glove`. So **item `1330304` grants `Elusive` Lv.1**, and the previous
+occupant of that slot granted nothing.
+
+**Whether `Elusive` is the item's OWN affix or comes from a gem socketed in it is
+NOT determined.** The `Affixes` panel lists both kinds undifferentiated - this
+document establishes that elsewhere - and the log never carries this item's
+`exEquip`, so its affix cfgId is unknown. An item-to-affix-NAME binding, not an
+id binding.
+
+### A THIRD binding route exists, and its two halves have never co-occurred
+
+The equip above is the template for a route this document had not identified:
+**equip an item whose affix cfgId the log carries, with the `Affixes` panel OPEN
+across the equip, and the affix that appears names that id.**
+
+It has never fired, and the reason is precise. There are 23 single-slot equip
+events across the three logs. Only ONE involves an item with a known affix
+cfgId while a full-screen capture was running - item `1360303`, affix `211`, at
+01:15:35 on 2026-08-30. **The `Affixes` panel is CLOSED in the frames on both
+sides of it**, showing only the `F2 Attributes & Affixes` prompt, so no delta
+can be read.
+
+The one equip with the panel open is the `Elusive` case, whose item has no
+recorded affix cfgId.
+
+**So the recipe is one sentence: keep the `Affixes` panel open while equipping.**
+That costs nothing and converts ordinary gear changes into id bindings.
+
+### `211 = Ranged` re-confirmed by a third method
+
+`f0134_22.55.00` in the `reanchor` capture shows a side-by-side comparison:
+`Deathclaw Hunter`, a `Legendary Bow and Arrow`, against `Oil-soaked Wooden
+Bow`, a `Rare Bow and Arrow`. **Both carry `Ranged` Lv.1**, in the gem-less
+position.
+
+`Deathclaw Hunter` is item `3060404`, whose affix cfgId the log gives as `211`.
+So the item route agrees with the trade-filter route that `211` is `Ranged` -
+now three independent confirmations of that binding.
+
+**Two different bows, different rarities, same item-borne affix.** That is UI
+evidence for what the log says with `"fixed":true` - the affix travels with the
+item TYPE rather than being rolled per instance. Two bows is not a proof; it is
+a second surface agreeing with the first.
+
+### The character ATTRIBUTE sheet, which nothing had recorded
+
+From `f0079_22.26.47`, the `Attributes` tab. `docs/CLASSES.md` lists the
+attribute system under what nobody knows; this is a partial answer.
+
+| Basic | | Energy | |
+|---|---|---|---|
+| `Attack` | 140 | `Maximum Energy` | 100 |
+| `Defense` | 198 | `Energy Recovery Speed` | 10 |
+| `Maximum Health` | 844 | `Skill Energy Cost Reduction` | +0.00% |
+| | | `Max Dodge` | 250 |
+| | | `Dodge Recovery Speed` | 20 |
+| | | `Dodge Energy Cost Reduction` | +0.00% |
+| | | `Max Stagger` | 100 |
+| | | `Stagger Recovery Speed` | 5 |
+
+A `Damage` section sits below and was scrolled off in every frame examined.
+
+**`Dodge` is a numeric resource with a cap of 250 and its own recovery speed**,
+separate from `Energy`, and `Stagger` is a third such resource. That bears on
+`RES-3`, which asks how roll differs from dodge - dodge is at least a metered
+resource here, which a roll may or may not share.
+
+**A guide claim gains a mechanism, and only that.** `docs/CLASSES.md` reports
+from T4 guides that `Elusive` "reduces dodge energy cost". A stat literally
+named `Dodge Energy Cost Reduction` exists. That makes the guide claim
+mechanically POSSIBLE; it does not confirm it, and no reading here connects
+`Elusive` to that stat.
+
+### Items state their SOURCE
+
+From `f0128_22.28.34`, the tooltip for `Mithril Ingot`, an
+`Epic Forging Material`, carries a `Source` block listing where to obtain it:
+
+- `Auction`
+- `Brandrgarde Exploration`
+- `Explore the Hallowgrove`
+
+plus a `Value` of 192.
+
+**This is an acquisition taxonomy stated by the game**, and it is the surface
+`RES-2` needs - that item asks how arrows are acquired at all, loot or craft or
+vendor, and the answer is written on the tooltip of any item worth asking about.
+`Hallowgrove` is the player-facing name this project has already bound to the
+`Whitewoods` map, so one Source entry names a dungeon and another names
+`Brandrgarde`, which the skill flavour text also names.
+
+No arrow's tooltip was captured, so no arrow's Source is read here.
+
+
 ## What to capture next, in priority order
 
 Each is one hover in a menu and yields a whole ladder, so the ratio of effort to
