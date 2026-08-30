@@ -1,4 +1,5 @@
 {
+  "claimed_paths": [],
   "lane_id": "research",
   "open_items": [
     {
@@ -80,18 +81,6 @@
       "text": "ROADMAP item 2b carries two lines this lane measured as wrong: it plans the fixture against a 23-entry IdGeneratorData.NumIdToUUID (23 holds in 5 of 263 generations; the largest has 91), and it says the FILENAME embeds the roleId when the roleId is also inside the bytes twice, in AutoSaveTempSlot and AutoSaveFinalSlot. ROADMAP.md is not this lane's file - ops or safety must apply it. FINDINGS 10.2 and 10.4.1 carry the evidence"
     },
     {
-      "blocked_on": "",
-      "item_id": "RES-14",
-      "opened": "2026-08-11",
-      "text": "SAFETY: lanternlight/redact.py has two false-positive classes on any Blueprint-class save. PRODUCTUSERID (bare 32-hex) fires 772 times on the largest generation with zero true positives, all uppercase against a lowercase real ProductUserId. LONG_ID (15+ digits) fires 100 times of which 62 sit inside two Blueprint property GUIDs. One cause, two detectors. Safety lane owns the fix; FINDINGS 10.4 carries the counts"
-    },
-    {
-      "blocked_on": "",
-      "item_id": "RES-15",
-      "opened": "2026-08-11",
-      "text": "SAFETY: LeaderRankScoreData.KillPlayerHistoryDatas is an array of structs carrying PlayerName, MsgAppearanceString and MsgSubChannelString. No current redact rule reaches a name inside a struct array. It holds a generated bot name in this solo capture and would hold a real third party's display name in a PvP run"
-    },
-    {
       "blocked_on": "the client running, in a dungeon, with a door in view",
       "item_id": "RES-16",
       "opened": "2026-08-11",
@@ -114,10 +103,22 @@
       "item_id": "RES-19",
       "opened": "2026-08-11",
       "text": "No id taken from the transient save is bound to a name: 19 monster config ids, 3 zone-name strings (WhiteWoodsOutskirts, GiantHighland, Default), container ids, 5 eight-digit assist-source ids, one bot AttributeId, 5 LevelDetail keys, and 23 item cfgIds new to this project. Nothing in the save carries a name string, so every one needs the wall-clock pixel join. Recorded unbound in docs/OBSERVED_IDS.md rather than guessed"
+    },
+    {
+      "blocked_on": "",
+      "item_id": "RES-21",
+      "opened": "2026-08-30",
+      "text": "The client was PATCHED between the 2026-08-26 logs and 2026-08-30. The log's own marker TS.Default: [Startup] Version: reads 1.0.14 / Build Date 20260818232428 in both rotated backups and 1.0.15 / 20260826170036 in the live log; verified directly, one hit per log. Every OBSERVED_IDS row dated 2026-08-25 was taken on 1.0.14 and is provisional by that file's own rule. Also: the literal string buildid occurs ZERO times in all three logs, so the recorded Steam buildid 24813185 is a depot value the log cannot confirm or refute - anchor future passes on Version + Build Date instead."
+    },
+    {
+      "blocked_on": "",
+      "item_id": "RES-20",
+      "opened": "2026-08-30",
+      "text": "SAFETY, one REAL gap of three claimed. roleInfo carries a \"device\" field - a single 19-char alphanumeric device-model string, 2 occurrences in the 2026-08-30 log - and lanternlight.redact.iter_sensitive returns NO label for it, so it passes through redact() unmasked. Verified by running the real redactor against the real shape. Safety lane owns the fix. The other two carriers reported alongside it were re-probed and are ALREADY COVERED - do not re-file them: the player-name field on OnRep_PlayStateTag already masks to a PERSONA placeholder, and the CampData save FILENAME already masks to an ACTOR placeholder with LONG_ID also firing."
     }
   ],
-  "resume_note": "docs/FINDINGS.md section 10 and the save-derived id section of docs/OBSERVED_IDS.md are current to the 2026-08-09 transient-save capture, re-measured 2026-08-11. Two filed claims and two prior statements were refuted - see lanes/research.LEDGER.md LL-0023. The next research question that does not need the client running is binding the E_DoorState and E_LockState enumerators, which needs a capture joined on wall clock.",
+  "resume_note": "2026-08-30. THREE AFFIX IDS ARE BOUND: 201=Valor, 208=Fervid, 211=Ranged - the first affix id-to-name bindings this project has. Method is the wall-clock join on the Auction House [TradeCtrl] trade filter; the logs contain NO affix names at all, so the join is the only route and no amount of further log reading will substitute. 101, 209, 212 and 214 remain unbound and the recipe for binding them is written down in docs/AFFIXES.md - one affix ticked per cycle, read off the ROW LABEL not the icon. Also this session: the client was PATCHED 1.0.14 -> 1.0.15 between 2026-08-26 and 2026-08-30, so every OBSERVED_IDS row dated 2026-08-25 is provisional; the Auction House affix dropdown is a 16-entry catalogue but NOT the whole affix set; equipment slots 0-6 and 11 are bound to the game's slot nouns from the log alone; and the game publishes affix COOLDOWNS in seconds, so the blanket 'no cooldowns are published' is false for affixes though still true for class abilities. Next unblocked research item is binding the four remaining affix ids, which needs the client running. RES-20 is a real redaction gap for the safety lane.",
   "schema": 1,
   "sessions": 1,
-  "updated": "2026-08-11T23:53:40+00:00"
+  "updated": "2026-08-30T09:07:20+00:00"
 }

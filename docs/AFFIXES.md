@@ -892,6 +892,140 @@ EXACTLY. **A gem name part can be a synonym or an identity**, which makes
 name-parsing worse than the earlier advice implied, not better: a parser cannot
 even tell from the shape whether it is looking at a synonym or a literal.
 
+## THREE AFFIX IDS ARE BOUND TO NAMES - 2026-08-30
+
+**This is the first time this project has bound a numeric affix id to the name
+the game shows a player.** It needed no new capture: the log and the frames were
+both already on disk, joined on wall clock.
+
+    201 = Valor        208 = Fervid        211 = Ranged
+
+### Why a join was needed at all
+
+**The logs contain no affix names.** Every name in the Auction House catalogue
+above was searched for, case-sensitively, in all three logs: `Brotherhood`,
+`Burst`, `Distant Ward`, `Eloquence`, `Fervid`, `Fervor`, `Resilience`,
+`Seeker`, `Skypiercing`, `Smiting`, `Spirit Shield`, `Strife`, `Unyielding`,
+`Valor`, `Wrath` - **zero occurrences each**. `Ranged` returns 4 hits and all
+four are the UI module `RangedAttackIndicator`, nothing to do with the affix.
+
+So the numeric namespace and the player-facing namespace never meet in text, and
+no amount of further log reading will bind them. The wall-clock join - log in
+UTC, capture filenames in local time, UTC-5 here - is the only sanctioned route,
+and it is the same method that bound the class ids in 2026-08-09.
+
+### The mechanism
+
+The client emits `TS.Default: [TradeCtrl] request Trade Goods {...}` when the
+Auction House filter changes. 18 such requests exist in the live log and 6 carry
+`affixIds`. They form a clean progressive narrowing, each adding one filter:
+
+| UTC | filter added |
+|---|---|
+| 06.04.16 | `itemType: AFFIX_GEM` |
+| 06.09.04 | `affixGemTypes:[4]` |
+| 06.09.10 | `affixGemLevels:[2]` |
+| 06.09.22 | `affixIds:[208,211]` |
+| 06.09.25 | `affixIds:[211]` |
+| 06.09.36 | `affixIds:[208]` |
+| 06.09.40 | `affixIds:[201]` |
+
+**Two rendered channels report the applied filter**, and both were used:
+
+1. **The `Affix Effects` header** renders the icon of each applied affix. Icon
+   count equals array length in every observed case, including zero.
+2. **The dropdown rows** show selection as an amber fill PLUS a checkmark. A
+   white outline with no fill is HOVER, not selection - `f1816_01.09.42`
+   separates them in one frame, with `Valor` amber-and-checked while `Wrath`
+   carries only the outline.
+
+### `201 = Valor`
+
+`f1816_01.09.42`, two seconds after the `[201]` request. **Two independent
+channels agree inside a single frame:** the `Affix Effects` header carries one
+icon, a maroon tile with a diagonal sword, and `Valor` is the sole amber-filled
+checked row - carrying that same maroon diagonal sword as its row glyph.
+
+**Caveat, and it is required.** Glyph shape alone does NOT identify `Valor` - the
+diagonal-sword form is shared with other entries, and an icon-only argument
+would be a three-way tie broken by the maroon tile colour. This binding does not
+rest on the glyph: it rests on the CHECKED ROW, read from its text label, with
+the header icon as corroboration.
+
+### `211 = Ranged`
+
+`f1932_01.11.56`, with `[211]` applied and the dropdown closed. The header
+carries one icon, a maroon feather. **All eleven result cards carry that same
+maroon feather as one of their badges.** The `Ranged` row's glyph in the open
+dropdown is the same maroon feather.
+
+**A tempting and WRONG argument is recorded here so nobody re-derives it.** The
+results under `[211]` are almost all named `Ranged something Peridot`, and
+reading that as proof is invalid twice over. `Tenacious - Ranged Peridot` does
+not begin with the word. More seriously, **gem names map to affixes by SYNONYM**
+- this document establishes that `Ranged Ward` is the gem-name form of the affix
+`Distant Ward`, not of `Ranged`. `Ranged Ward - Ranged Peridot` proves it on
+screen: it carries a BLUE defensive badge and a separate maroon feather. A
+`Ranged`-prefixed name does not imply the `Ranged` affix. The binding rests on
+the badge and header ICON, never on the name.
+
+### `208 = Fervid`
+
+By set difference, with no appeal to array ordering.
+
+- `f1799_01.09.21`: `Fervid` is the sole amber-filled checked row; `Ranged`
+  carries only a white hover outline.
+- The next request, 06.09.22, is `affixIds:[208,211]` - so between those two
+  instants `Ranged` was also ticked, and the checked SET became
+  `{Fervid, Ranged}` = `{208, 211}`.
+- `211 = Ranged` is established independently above.
+- Therefore `208 = Fervid`.
+
+`208` also appears as a **singleton** request at 06.09.36, so the pair is not
+load-bearing either way.
+
+**An earlier version of this reasoning said "array order is selection order".
+That is withdrawn as unsupported.** `Fervid` sits directly above `Ranged` in the
+left column, so display order and selection order predict `[208,211]`
+identically and the array cannot distinguish them. The backup log's
+`[212,211,214]` shows only that the array is not sorted ascending. The set
+argument above needs none of it.
+
+### What is NOT bound
+
+Four of the seven known numeric affix ids remain unbound: **101, 209, 212,
+214**. Nothing here guesses them.
+
+**`GA_Affix_RangeEnhanced_1_C` is still NOT bound to `211`**, even though `211`
+is now known to be `Ranged`. The gameplay-ability class names and the numeric
+ids never co-occur on any line in any log, so the pairing would rest on a shared
+English root and nothing else - which is the precise shape of the reasoning this
+document has already withdrawn twice.
+
+### The recipe, for the remaining ids
+
+Recorded so a future session does not re-derive the method. Capture at 1 Hz.
+Auction House -> `Purchase` -> `Affix Gem` -> `Affix Effects`. Tick exactly ONE
+box, apply, pause, then untick and repeat. **One affix per cycle** - a pair
+yields a set, not an assignment, and only decomposes if one member is already
+known. Read the binding off the ROW LABEL, never off the icon: several glyphs
+are confusable at capture resolution, and `Wrath` and `Fervid` in particular
+render similarly.
+
+### A disagreement left open
+
+An independent refutation pass on these three bindings confirmed all three
+conclusions while correctly refuting two of the arguments originally offered -
+both rewritten above. That pass also reported the dropdown holding **22 affixes
+across 11 rows** and referred to a row named `Ethereal`.
+
+**Neither could be reproduced.** `f1797_01.09.19` shows row 1 flush against the
+top of the panel and `f1810_01.09.34` shows row 8 flush against the `Reset` and
+`Confirm` buttons, which bounds the list at 8 rows and 16 entries, and no frame
+examined here contains the name `Ethereal`. The count of 16 is what this
+document states, with the two bounding frames named so it is checkable. The
+disagreement is recorded rather than silently resolved in the count's favour.
+
 ## What to capture next, in priority order
 
 Each is one hover in a menu and yields a whole ladder, so the ratio of effort to

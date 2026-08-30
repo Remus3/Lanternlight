@@ -11,6 +11,32 @@ The integrator folds these entries into `docs/LEDGER.md` on `main`, with
 
 <!-- LANE ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0085 - 2026-08-30 - Affix ids BOUND to names from capture already on disk - plus the affix text surface the tooltip pass never opened, and two docs still carrying what AFFIXES.md had refuted
+
+**Evidence:**
+- python -m pytest -> '1327 passed in 26.38s', observed this run in the lane worktree; baseline 1327 collected, measured before dispatch
+- merge_gate.verify(claimed_paths=[AFFIXES, OBSERVED_IDS, CLASSES, FINDINGS, research.STATE.json], baseline=1327) -> 'OK (1327 tests collected)'
+- tests/test_ascii_hygiene.py + tests/test_no_pii.py -> 46 passed, observed; 0 non-ASCII lines in every edited doc
+- the no-PII guard FIRED on my own lane-state wording and was fixed by rewording, never by weakening the rule - proof this run that the guard is not decoration
+- 201=Valor and 211=Ranged read off frames f1816_01.09.42 and f1932_01.11.56 joined to [TradeCtrl] requests at 06.09.40 and 06.10.32 UTC; 208=Fervid by set difference from [208,211] at 06.09.22 with f1799_01.09.21
+- equipment affix model re-derived independently: 8 affixed item cfgIds, each with exactly ONE affix triple, all 8 recurring across 2+ logs, 68/68 observations level:1 and fixed:true
+- equipment slot binding re-derived: all 8 bot equipment cfgIds resolve to exactly one slot number, checked for ambiguity rather than assumed
+- client patch verified directly: [Startup] Version: 1.0.14/20260818232428 in both backups, 1.0.15/20260826170036 in the live log, one hit per log
+
+BOUND, a first for this project - 201=Valor, 208=Fervid, 211=Ranged. No new capture was needed: log and frames were both already on disk and the wall-clock join had never been run on the trade filter.
+REFUTED, my own reasoning, by an independent adversarial pass that confirmed all three conclusions while breaking two of my arguments. 'Array order is selection order' was unsupported - Fervid sits directly above Ranged, so display order and selection order predict the same array. And 'the results are all named Ranged...' was invalid because gem names map to affixes by SYNONYM: this document's own evidence shows Ranged Ward is the gem-name form of Distant Ward, not of Ranged. Both rewritten; the withdrawn versions recorded in place.
+REFUTED, a sub-agent's claim that the dropdown logs all affix names on open. Zero occurrences of every catalogue name across all three logs; the 4 Ranged hits are the RangedAttackIndicator UI module. Two sub-agents disagreed and the measurement settled it - the frame join is the ONLY route to these bindings.
+REFUTED, my own itemType/itemSubType pairing. The live log shows a perfect one-to-one match across 18 payloads; the backups show ARMOR taking seven subtypes and OTHER six. A clean pattern in a small sample is not a rule.
+REFUTED, two of three PII carriers a sub-agent reported. Re-probing the real redactor showed the player-name field and the CampData filename are already masked; only the roleInfo device field is a genuine gap, filed as RES-20. Relaying it unchecked would have sent the safety lane after two non-problems.
+REFUTED, a sub-agent's diagnosis of the setClassGender pattern. It is broken, but the doubled space is between inclassid and ==, not after setClassGender, and only the quoted log line was wrong - the grep instruction lower in the same section always worked. Corrected in OBSERVED_IDS.md.
+NEW - the Auction House Affix Effects dropdown is a CATALOGUE, the thing AFFIXES.md said it did not have. 16 entries, bounded by two frames showing the first and last rows flush. It is NOT the whole affix set: Focused, Elusive and Curse are on the character and absent from it, so an argument from absence is refused in advance. 22 affix names now known, ten of them new.
+NEW - the game PUBLISHES COOLDOWNS, 10s and 60s verbatim in a gem tooltip. The blanket 'no cooldowns are published for this game' is false as written; it stays true for class abilities, which nothing here touched.
+NEW - a client patch runs through the corpus, 1.0.14 to 1.0.15. Every 2026-08-25 row in OBSERVED_IDS is provisional by that file's own rule. Consequences recorded both ways: the eight-item affix stability result gets STRONGER because six items survive the patch unchanged, while the missing GA_Affix_HitSwiftness now has two competing explanations - rotation or removal - which the document refuses to choose between.
+NEW - equipment slots 0 to 6 and 11 bound to the game's own slot nouns by a two-surface join on item cfgId, no pixels needed. weapon1 deliberately left UNBOUND because the log never emits it with a cfgId; slot 10 by elimination is an inference, not a join.
+CORRECTED, three of my own counts before they shipped: a '3,756 affix hits' figure that added two LINE counts, an escaped-form count of 25 that is 17, and an id-211 total of 31 that is 37. A second pass re-derived every published number and caught all three.
+CORRECTED across documents - CLASSES.md still claimed the community affix names were 'almost certainly gem effects wearing legacy ARPG vocabulary' three weeks after AFFIXES.md refuted it, because the whole affix workstream touched only one file. All seven guide names are real game vocabulary. Recorded as C14 with the wrong Emberforge schema guidance it produced.
+OPEN, recorded not answered: the refutation pass reported the dropdown holding 22 affixes across 11 rows and named a row 'Ethereal'. Neither is reproducible from any frame examined here, and two frames bound the list at 8 rows. Written down rather than resolved in the count's favour.
+
 ### LL-0025 - 2026-08-11 - Transient dungeon save decoded from its whole 263-generation lifetime - 8 filed claims re-measured, 2 refuted, 2 redaction false-positive classes named
 
 **Evidence:**
