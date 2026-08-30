@@ -216,8 +216,31 @@ class TestTheCommittedFixture:
         )
 
     def test_the_fixture_carries_no_png_metadata(self):
-        """PNG text and time chunks are a leak a visual check cannot see."""
+        """PNG metadata is a leak a visual check cannot see.
+
+        **Widened after a refutation pass caught this guard being narrower than
+        its own docstring.** The first version denylisted four chunk names -
+        ``tEXt``, ``zTXt``, ``iTXt``, ``tIME`` - and passed on both of these,
+        each carrying an arbitrary payload into a public repository:
+
+        * bytes appended AFTER ``IEND``, which the walk simply never reached;
+        * a chunk with any other ancillary name, e.g. ``prVt``.
+
+        A denylist of four names is the `LL-0079` shape again - it decides what
+        to look for instead of what to allow. So this now ALLOWLISTS the four
+        chunk types a redacted screenshot legitimately needs and rejects every
+        other, which covers ancillary types nobody has thought of. PNG marks
+        ancillary chunks with a lowercase first letter, so an unknown chunk is
+        rejected by construction rather than by enumeration.
+
+        The EOF assertion is the other half: a walk that ends early cannot see
+        what is past it.
+        """
         import struct
+
+        #: The only chunks a plain redacted screenshot needs. PLTE is included
+        #: because a future fixture could legitimately be palettised.
+        CRITICAL = {"IHDR", "PLTE", "IDAT", "IEND"}
 
         raw = FIXTURE.read_bytes()
         assert raw[:8] == b"\x89PNG\r\n\x1a\n"
@@ -226,8 +249,18 @@ class TestTheCommittedFixture:
             (length,) = struct.unpack(">I", raw[offset : offset + 4])
             chunks.append(raw[offset + 4 : offset + 8].decode("ascii", "replace"))
             offset += 12 + length
-        leaky = [c for c in chunks if c in ("tEXt", "zTXt", "iTXt", "tIME")]
-        assert not leaky, f"fixture carries metadata chunks that can leak: {leaky}"
+
+        assert offset == len(raw), (
+            f"the chunk walk ended at byte {offset} but the file is "
+            f"{len(raw)} bytes - {len(raw) - offset} trailing byte(s) sit past "
+            "IEND where no PNG reader will show them and any payload could hide"
+        )
+        extra = [c for c in chunks if c not in CRITICAL]
+        assert not extra, (
+            f"fixture carries non-essential PNG chunk(s): {extra}. Only "
+            f"{sorted(CRITICAL)} belong in a redacted screenshot; anything else "
+            "can carry text, timestamps or arbitrary bytes into a public repo"
+        )
 
 
 class TestSynthesisedFrames:

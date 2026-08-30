@@ -80,9 +80,20 @@ def _say(message: str) -> None:
       raises**, overriding whatever this script exited with. Measured at exit
       120 on a blocking payload and on a benign one alike.
 
-    So catching the failure is not enough - the stream has to stop being
-    flushable. On failure ``sys.stderr`` is detached, which is the whole reason
-    this is a function rather than an inline ``try``.
+    **What is actually load-bearing here, corrected after a refutation pass.**
+    The ``try``/``except`` is: without it a raising write propagates and the
+    exit code goes with it. The ``sys.stderr = None`` inside the handler is
+    NOT - it is measurably inert. Replacing that line with ``pass`` leaves
+    ``tests/test_precommit_gate.py`` at 5 passed and every behaviour case
+    unchanged, because :func:`_exit` detaches an unflushable stream anyway and
+    every call site here is immediately followed by ``_exit``.
+
+    An earlier version of this docstring claimed the detach was "the whole
+    reason this is a function". That was a behaviour claim the artifact does
+    not support, which this repository treats as a defect in its own right. The
+    line is kept as defence in depth against a FUTURE call site that does not
+    reach ``_exit``; it is not what makes the current code correct. If you
+    simplify it away, nothing will fail - so read :func:`_exit` first.
 
     Losing the message is an acceptable trade. Losing the verdict is not.
     """
