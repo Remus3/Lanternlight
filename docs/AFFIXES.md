@@ -118,11 +118,86 @@ affixes; the two coexist on one item, and the tooltip renders them differently.*
 The community vocabulary was not simply legacy ARPG noise - `Ranged` and
 `Fervor` are both names the game itself uses.
 
-**Not yet established, and deliberately left open:** whether `Ranged` is
-strictly intrinsic, or whether the visual difference is only "socketed versus
-not". One item at one level cannot settle it. The check is cheap - compare two
-items whose gem sets differ - and it needs doing before Emberforge encodes
-either shape.
+**That open question is now SETTLED** - see the gem section below. Gems are
+called `Affix Gem` by the game and they GRANT affixes. The character's `Affixes`
+panel lists `Ranged` and `Fervor` side by side with no marker distinguishing
+them, so an affix is an affix regardless of how it arrived. `Ranged` sits on the
+item; `Fervor` is delivered by a socketed gem. One system, two delivery routes.
+
+## Gems - the socketing rules, read 2026-08-30
+
+### The gem that was in the bow
+
+The socketing screen (`PREPARE`, frame `f1697`) shows the `Deathclaw Hunter`
+with an `Equipped` gem named **`Warspirit Moonstone`**, and the item's
+`Fervor Lv.1` row carries that gem's icon. So:
+
+    Warspirit Moonstone  ->  grants  ->  Fervor Lv.1
+
+The right-hand `Attributes | Affixes` tab then lists `Ranged Lv.1` and
+`Fervor Lv.1` together, undifferentiated. **That is the proof that gems deliver
+affixes rather than forming a parallel system.**
+
+### The rule, stated verbatim by the game
+
+From an `Affix Gem` tooltip in the Auction House (frame `f1829`):
+
+> Can be inlaid into equipment sockets of the matching type. **The level of an
+> Affix Gem cannot exceed the level of the target equipment socket.**
+
+Two constraints, both first-party, and together they answer the question this
+document opened with about whether tier gates level:
+
+1. **Type must match.** A gem goes only into a socket of its own type. The bow
+   carried a `Tier II Peridot Slot - Empty` alongside its Moonstone, so one item
+   can hold sockets of different types.
+2. **Socket level caps gem level.** A gem cannot exceed its socket. So socket
+   level is the ceiling on how much affix a slot can carry, which makes socket
+   level a first-class stat of the ITEM rather than of the gem.
+
+### Gem structure
+
+Read from the same tooltip - `Flawless Fortune Peridot`, described by the game
+as a **`Tier 2 Affix Gem`**:
+
+> **`Seamless` Lv.1** - Increases `Skill Cooldown Speed`. Upon reaching a
+> certain level, knocking down a `Gyldhunter` reduces skill `cooldowns`
+> currently in progress.
+>
+> **`Wealth` Lv.1** - Increase the amount of `Gyldenblod` from PvE in dungeons.
+
+**One gem carries MORE THAN ONE affix.** This gem grants two, each with its own
+level. Every listing row in the browser shows two small icons, which is
+consistent with two-affix gems being the norm rather than this one being unusual.
+
+**Gem types and tiers are both filterable**, so both are real taxonomies: the
+browser offers a `Gem Type` filter with four icons and a `Gem Tier` filter with
+two. Two type names are confirmed - `Peridot` (green) and `Moonstone` (teal) -
+and the other two types are unnamed so far. `Tier 2` is confirmed by name; the
+bow's socket read `Tier II`, so tiers are shared vocabulary between gem and
+socket, exactly as the inlay rule requires.
+
+**Naming does not map cleanly to contents, so do not parse gem names.** The
+tooltip's gem is `Flawless Fortune Peridot` while its actual affixes are
+`Seamless` and `Wealth`. Neighbouring listings read `Brutal Cunning Peridot`,
+`Melee - Bulwark Peridot`, `Tenacious - Blessed Peridot`, `Agility Dexterity
+Peridot`, `Ranged Ward - Fortune Peridot`. Those words are suggestive and they
+are NOT a reliable index of what a gem grants - only the tooltip is. Recording
+this because parsing the name is the obvious shortcut and it would be wrong.
+
+**Affixes confirmed from gems, adding to the roster above:** `Seamless`
+(Skill Cooldown Speed) and `Wealth` (Gyldenblod from PvE in dungeons).
+
+**Two new game nouns worth binding:** `Gyldhunter`, an enemy or enemy class that
+can be knocked down; and `Gyldenblod`, a currency earned from PvE in dungeons.
+Note `gyldforge.com` already sits in the `docs/ECOSYSTEM.md` source register -
+the shared `Gyld` root is worth a look, but nothing here establishes a link and
+none should be asserted.
+
+**Gems are auction-house tradeable** with an `Average Transaction Price` and a
+`Value` shown side by side, the same two-number pattern the weapon carried
+(116 against 100 here). `lanternlight/avgprice.py` already watches the cache
+behind one of them.
 
 ## The affix ROSTER, read 2026-08-30 from `PREPARE` -> `Affixes`
 
