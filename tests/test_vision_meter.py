@@ -141,6 +141,95 @@ SECOND_SERIES = (
 )
 
 
+#: A single reviewed frame from the reference capture, redacted down to the
+#: pixels `read_panel` actually consumes and committed so a FRESH CLONE can
+#: verify a successful read. Derived from `p01146` of the 2026-08-25 capture,
+#: which reads 103 with 10 hits in the hand-read floor series.
+FIXTURE = REPO_ROOT / "tests" / "fixtures" / "panel_total_103_hits_10.png"
+
+
+class TestTheCommittedFixture:
+    """`ROADMAP 7c`. A clone with no capture could not verify a SUCCESSFUL read.
+
+    That was the honest gap in this module: everything above needs 1.1 GB of
+    the operator's screen and skips without it, and everything below is built
+    from the same templates the reader scores against, so it cannot prove the
+    templates match anything the game rendered. A fresh clone therefore tested
+    segmentation and every refusal path, and never once saw the reader get a
+    real number right.
+
+    WHY A REDACTED FRAME CLOSES IT RATHER THAN A SYNTHESISED ONE. The pixels
+    kept here are REAL, unmodified capture - the game's own rendering of `103`
+    and `10`. That is exactly what a synthesised frame cannot supply and what
+    makes this a ground-truth test instead of a restatement of the templates.
+
+    WHY IT IS SAFE TO COMMIT, measured rather than asserted. `read_panel` reads
+    only :data:`vision_meter.TOTAL_BAND` within two column windows, so 98.69%
+    of the frame is irrelevant to it and is blacked out - all of the game scene
+    visible through the semi-transparent plate, the white Progress Record row,
+    and both headers. What survives is 2,025 pixels showing two orange numbers.
+    The source frame was reviewed before selection, carried no PNG text or time
+    chunks, and the fixture is renamed so the filename does not carry the
+    capture wall-clock. The redaction is not left to trust: the two tests below
+    re-derive it from the committed bytes on every run.
+    """
+
+    def test_a_clone_can_verify_a_SUCCESSFUL_read_not_only_refusals(self):
+        """The gap this fixture exists to close. Never skips."""
+        reading = read_panel(FIXTURE)
+        assert (reading.total, reading.hits) == (103, 10), (
+            f"the committed fixture read {reading.total}/{reading.hits}, not "
+            "103/10. Either the reader regressed or the fixture was replaced - "
+            "check which before touching either"
+        )
+        assert reading.progress is None, "the white row is still unread by design"
+
+    def test_the_fixture_stays_redacted_to_the_bands_the_reader_uses(self):
+        """A guard on the REDACTION, so it cannot quietly erode.
+
+        If someone later regenerates this fixture from a fuller crop, this goes
+        red. Without it the redaction is a one-time act that nothing maintains,
+        and the next person to refresh the fixture ships the scene with it.
+        """
+        Image = _pillow()
+        image = Image.open(FIXTURE).convert("RGB")
+        top, bottom = vision_meter.TOTAL_BAND
+        allowed = set()
+        for x0, x1 in (vision_meter.VALUE_WINDOW, vision_meter.HITS_WINDOW):
+            for y in range(top, bottom):
+                for x in range(x0, x1):
+                    allowed.add((x, y))
+
+        px = image.load()
+        width, height = image.size
+        stray = [
+            (x, y)
+            for y in range(height)
+            for x in range(width)
+            if px[x, y] != (0, 0, 0) and (x, y) not in allowed
+        ]
+        assert not stray, (
+            f"{len(stray)} non-black pixel(s) outside the bands read_panel "
+            f"uses, first at {stray[0]}. The fixture must carry ONLY the "
+            "pixels the reader consumes - everything else is the operator's "
+            "screen and does not belong in a public repository"
+        )
+
+    def test_the_fixture_carries_no_png_metadata(self):
+        """PNG text and time chunks are a leak a visual check cannot see."""
+        import struct
+
+        raw = FIXTURE.read_bytes()
+        assert raw[:8] == b"\x89PNG\r\n\x1a\n"
+        offset, chunks = 8, []
+        while offset < len(raw):
+            (length,) = struct.unpack(">I", raw[offset : offset + 4])
+            chunks.append(raw[offset + 4 : offset + 8].decode("ascii", "replace"))
+            offset += 12 + length
+        leaky = [c for c in chunks if c in ("tEXt", "zTXt", "iTXt", "tIME")]
+        assert not leaky, f"fixture carries metadata chunks that can leak: {leaky}"
+
+
 class TestSynthesisedFrames:
     """Geometry and every refusal path, without needing the capture."""
 
