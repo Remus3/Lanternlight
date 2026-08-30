@@ -15,6 +15,7 @@ be.
 
 > **Living docs, read at session start:** [`README.md`](README.md) -
 > [`docs/FINDINGS.md`](docs/FINDINGS.md) - [`docs/OBSERVED_IDS.md`](docs/OBSERVED_IDS.md) -
+> [`docs/AFFIXES.md`](docs/AFFIXES.md) -
 > [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) - [`ROADMAP.md`](ROADMAP.md) -
 > [`docs/HEADLESS.md`](docs/HEADLESS.md)
 > **Decisions:** [`docs/adr/README.md`](docs/adr/README.md) - check here before
