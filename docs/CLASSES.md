@@ -10,7 +10,20 @@ damage coefficients, no stealth or buff durations, no heal amounts, no energy
 costs, no crowd-control durations. All six research passes went looking, and all
 six independently reached the same result: **none of those values are published
 anywhere, at any trust tier, as of 2026-08-09.** Any site quoting a second value
-or a percentage is manufacturing it. Where a specific number was found
+or a percentage is manufacturing it.
+
+**NARROWED 2026-08-30, and the scope of the narrowing matters.** That blanket is
+false as written. The game publishes **affix** cooldowns, exactly, in seconds -
+a gem tooltip reads "once triggered, this effect has a cooldown of 10s" and
+another "Cooldown: 60s" (`docs/AFFIXES.md`). It also publishes full affix
+ladders with exact percentages.
+
+What survives, and what this document is still about: **no CLASS ABILITY
+cooldown, coefficient or duration has been found published anywhere.** Nothing
+in the affix reading touches a class skill. The doctrine holds for the subject
+of this file and is simply not the game-wide absolute it was stated as - and the
+reason it looked absolute is that nobody had opened an item tooltip, which is
+the same sourcing error `LL-0079`, `LL-0081` and C14 all record. Where a specific number was found
 circulating, it is named in [Fabrications identified](#fabrications-identified)
 so the next reader recognises it rather than re-adopting it. Emberforge exists to
 measure this gap, not to fill it with guesses.
@@ -1755,9 +1768,14 @@ it is a first-class section rather than an appendix.
 
 ### Game-wide, reconfirmed independently by all six passes
 
-1. **No cooldowns, damage coefficients, durations, heal amounts, energy costs or
-   crowd-control durations are published anywhere, at any trust tier.** This is
-   the project's standing doctrine and six independent passes found no exception.
+1. **No CLASS ABILITY cooldowns, damage coefficients, durations, heal amounts,
+   energy costs or crowd-control durations are published anywhere, at any trust
+   tier.** Six independent passes found no exception for class abilities, and
+   that still holds. **The words "class ability" were added 2026-08-30** - as
+   written before, this line claimed a game-wide absolute that the client
+   refutes: affix cooldowns ARE published, in seconds, in item tooltips
+   (`docs/AFFIXES.md`). The gap this item names is real; its stated scope was
+   too wide.
    Every official balance note describes changes qualitatively - "slightly
    reduced", "slightly increased", "sped up" - with no before or after value.
 2. **No tier list verifiably dated after the 2026-08-06 patch exists for any of

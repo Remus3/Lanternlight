@@ -2778,6 +2778,31 @@ whether it moved. If it did not, say so explicitly - a re-measurement that
 confirms is worth as much as one that overturns, and this project has no record
 of any value being checked across a patch boundary.
 
+### DECISION GATE FOR THE OPERATOR - `CLAUDE.md` carries a claim the client refutes
+
+Not answered here, because `CLAUDE.md` is cross-cutting and reserved for the
+operator or a merger holding the whole picture - a lane may not edit it.
+
+Its **Measurement doctrine** section says "Nobody has published cooldowns,
+damage coefficients or stealth durations for this game. Any site quoting a
+second value is fabricating one."
+
+**The first sentence is now false as written.** The game publishes affix
+cooldowns exactly, in seconds, in item tooltips - `10s` and `60s`, quoted in
+`docs/AFFIXES.md` - along with full affix ladders carrying exact percentages.
+`docs/CLASSES.md` had the same blanket in two places and both were narrowed on
+2026-08-30 to say **class ability**, which is the form that survives contact
+with the client.
+
+The second sentence still stands and is the load-bearing half: a site quoting a
+number it did not read off the client is still fabricating one.
+
+**The decision:** whether to narrow `CLAUDE.md`'s wording the same way. The risk
+of leaving it is that the doctrine reads as a licence to skip the client, which
+is precisely the sourcing error that `LL-0079`, `LL-0081` and `CLASSES.md` C14
+all record - the answer was not hard to get, it was being sought in the wrong
+place.
+
 ## Ordering note
 
 **Items 2b, 2c, 2d, item 7's shipped-code half and item 3 are CLOSED as of
