@@ -2724,16 +2724,22 @@ distinction is the whole item. Every one of the four failed for a reason that a
 different capture would have prevented:
 
 - `212` has FOUR trade-filter requests, two of them singletons - ideal join
-  material - at 22:44 local on 2026-08-25. The captures run 18:51-20:34 and
-  23:08-23:35. The frames were never taken.
+  material - at 22:43:54 to 22:44:11 local on 2026-08-25. That falls between the
+  `talents` capture (ends 22:29:52) and `reanchor` (starts 22:53:14). The frames
+  were never taken. Checked against the COMPLETE 14-directory capture inventory,
+  not a partial one - an earlier version of this item cited a five-window list
+  that omitted nine directories.
 - `214` occurs once in the whole corpus, inside `[212,211,214]`, in that same
   uncaptured window, and has never been seen on an item.
-- `101` and `209` had their item tooltips opened INSIDE a running capture, and
-  are still unrecoverable because that capture is a **500x310 crop** of the HUD
-  rectangle taken for the damage-meter work.
+- `101` and `209` are covered by a **1280x720 full-scene** capture at both
+  their timestamps, and are still unrecoverable because **no usable tooltip was
+  on screen** in any covering frame. The original diagnosis - that the capture
+  was a 500x310 crop - was FALSE and was corrected after a refutation pass.
 
-Only the 2026-08-30 capture is full-screen (2560x1440). Both 2026-08-25
-captures are crops, and no game video exists on the machine.
+There are EIGHT full-scene capture sets, three at 2560x1440 - the claim that
+only one exists was false and is withdrawn. No game video exists on the machine.
+The binding constraint is not resolution alone: a tooltip has to be open, held
+long enough to land in a frame, and identifiable as the right item.
 
 **Two routes exist and they are COMPLEMENTARY** - neither reaches the whole id
 space. Filter-only: `201`, `214`. Item-only: `101`, `209`. Both: `208`, `211`,

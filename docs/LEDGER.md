@@ -84,6 +84,22 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0088 - 2026-08-30 - Refutation pass caught a FALSE first-party claim in a public repo - the conclusion survived, three pieces of its published evidence did not
+
+**Evidence:**
+- python -m pytest -> '1327 passed in 23.70s', observed this run
+- python -m pytest --collect-only -> '1327 tests collected'
+- python -m ruff check . -> 'All checks passed!', observed this run
+- capture inventory re-derived by WALKING every directory under the capture root with PIL, not by testing known subdirectory names: 14 directories, 8 full-scene sets, 3 at 2560x1440
+- sweep re-run against the complete inventory: 36 tooltip-route events on target-affix items, 4 inside a full-scene capture, and ALL FOUR were opened and read
+
+FALSE CLAIM, published and now withdrawn: 'Only ONE capture on this machine is full-screen'. There are eight full-scene sets, three at 2560x1440. Also wrong: a five-window capture list where there are fourteen directories, and the stated cause for the 101 and 209 failure.
+THE MISTAKE UNDERNEATH IT was one line: the inventory loop tested only the subdirectory names already known to me instead of walking the tree. An empty grep - a claim about my directory list, not about the disk - which is an anti-pattern this repository already names. The lesson generalises past directories: any inventory built from remembered names is a hypothesis.
+THE CONCLUSION SURVIVED, for a corrected reason. 101 and 209 are covered by a 1280x720 full-scene capture at both timestamps and are lost not to a crop but because NO USABLE TOOLTIP WAS ON SCREEN in any covering frame. 212 and 214 fail for the originally stated reason, and that gap is real against the complete inventory too.
+NEW METHOD CAVEAT, and it weakens the tooltip route this session published as validated: the logged item id and the tooltip actually DRAWN are not reliably the same item. At one event the log names a cloth-family id while the frame renders a Rare Head tooltip. A frame at the right second is therefore NOT sufficient - the tooltip must independently identify the item before its affix row can be attributed. The existing control passes that stricter test, so the three bindings are unaffected.
+PROCESS FAILURE, recorded because it is the more useful half. Two separate mistakes compounded: the push happened before the refutation pass returned, on operator instruction; and a gate command was chained so that a piped pytest returned the exit code of tail, so a RED suite was committed and pushed without being noticed. The suite was red for a documented reason - the source-register guard trips on a dotted code identifier in a ledger entry - and was fixed forward by adding the token to the known-non-hosts allowlist, which was re-sorted rather than merely appended.
+WHAT WORKED: the refutation pass is the only reason any of this was caught, and it was pointed at a claim I was confident in. Its verdict on the other five claims was CONFIRMED after independent re-derivation, which is what makes the one REFUTED verdict worth acting on.
+
 ### LL-0087 - 2026-08-30 - Wrap: the stale-recital check caught the same cross-document defect a second time, and a CLAUDE.md decision gate is recorded rather than answered
 
 **Evidence:**
