@@ -45,12 +45,6 @@
       "text": "Operator-attested 2026-08-09: at level 3 the talent Marksman was the ONLY choice at that tier, and Lightning Arrow was equipped to the C slot. Attestation is a weaker evidence class than a frame read - label it as such, per LL-0017"
     },
     {
-      "blocked_on": "confirming the Z/X/C to 0/1/2 mapping directly",
-      "item_id": "RES-8",
-      "opened": "2026-08-09",
-      "text": "destSlot 2 is the ONLY slot ever equipped in the whole log, and it happened at level 3 - independent corroboration that the C arrow slot unlocks at Lv. 3 (LL-0016), from the log rather than the screen"
-    },
-    {
       "blocked_on": "",
       "item_id": "RES-9",
       "opened": "2026-08-09",
@@ -121,10 +115,16 @@
       "item_id": "RES-24",
       "opened": "2026-08-30",
       "text": "WITHDRAWN, do not re-open: RES-20 claimed a redaction gap on the roleInfo \"device\" field. It is FALSE. All 4 real values across the three logs are 19-DIGIT runs, not the alphanumeric model strings RES-20 described, and every one is already masked by LONG_ID - 0 of 4 survive redact(). Verified against the real bytes, not a synthetic. The original error: the value was characterised with a permissive pattern that pure digits also match, then redact() was tested against a fabricated ALPHABETIC input whose shape occurs nowhere in the data. A guard tested on an invented input proves nothing about the data. The residual - an alphabetic value under a device key would not be caught - is a real but UNOBSERVED shape and is already recorded as a stated limit in the redact module docstring. Widening for it was considered and declined: the module's discipline is that rules are added on measurement, and the DEVICE_ID rule itself is documented as a renaming rather than a widening."
+    },
+    {
+      "blocked_on": "the client running with a full-screen capture",
+      "item_id": "RES-25",
+      "opened": "2026-08-30",
+      "text": "RES-8 NARROWED and replaced. The SKILLS screen shows the three arrow slots keyed Z, X, C in that left-to-right order (frame f0059_22.26.04, 2026-08-25b/talents). What remains is ONE question, not two: destSlot is an integer and nothing observed says it indexes that row left-to-right from zero. Closing it needs one capture of an arrow equipped to the Z slot joined to the destSlot emitted at that wall clock."
     }
   ],
   "resume_note": "2026-08-30b. The four remaining affix ids 101, 209, 212, 214 are UNBINDABLE from data on disk - measured null, cause named per id in docs/AFFIXES.md, ledger LL-0086, open item RES-23. The blocker is the CAPTURE, not the game: only the 2026-08-30 capture is full-screen (2560x1440); both 2026-08-25 captures are 500x310 / 540x360 HUD crops, and 101 and 209 had their tooltips opened inside one of those crops. A SECOND binding route was found and validated on a control - item tooltips, proven by item 3060404 -> affix 211 -> Ranged Lv.1 on frame f0636, agreeing with the trade-filter result. The two routes are complementary: filter-only 201 and 214, item-only 101 and 209, both 208/211/212. Cheapest next win is 212 - the operator still holds item 1230304, so it is one tooltip hover with a full-screen capture running. Bound so far: 201=Valor, 208=Fervid, 211=Ranged.",
   "schema": 1,
   "sessions": 1,
-  "updated": "2026-08-30T16:22:23+00:00"
+  "updated": "2026-08-30T21:06:14+00:00"
 }

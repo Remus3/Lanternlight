@@ -1335,6 +1335,110 @@ running, then read the node name off the frame against the `talent data
 response` emitted at that wall clock. One talent per cycle. The same recipe the
 affix ids need, and the same reason.
 
+## The SKILLS screen - 2026-08-25, and it carries a `5` that ROADMAP item 10 needs
+
+Read from `f0059_22.26.04` in `C:\ll-captures\2026-08-25b\talents\`, part of the
+2560x1440 capture no session had opened. Level 5 Blackarrow.
+
+**Scope note.** This document opened as a record of affix and item readings and
+has drifted into being the home for anything read off the client. That drift is
+recorded rather than resisted - the alternative is scattering first-party
+readings across three files - but a reader looking for CLASS facts should also
+check `docs/CLASSES.md`.
+
+### `Rapid Arrows`, quoted in full
+
+The skill tooltip, verbatim:
+
+> **`Rapid Arrows`** - `Bow`
+>
+> After using the skill, Blackarrow enters `Volley` mode, allowing you to hold
+> to rapidly fire **up to 5 arrows** for a certain duration, dealing
+> `Physical Damage`. During Volley, shooting does not reduce `Movement Speed`.
+> Dodging removes Volley.
+
+### Why this matters to ROADMAP item 10, and what it does NOT settle
+
+Item 10 chases a buff icon **that climbs to 5** while the operator keeps hitting
+one target. `docs/AFFIXES.md` already quotes the `Focus Fire` talent as scoping
+to `Rapid Arrows`. Here the game states that `Rapid Arrows` fires **up to 5
+arrows** in a mode it names `Volley`.
+
+**A fourth candidate for the climbing icon now exists, and it is the first one
+carrying the number 5 from the game itself:** the icon may be the Volley arrow
+COUNT rather than any stacking damage buff.
+
+**This is a candidate, not a resolution, and the coincidence of the number is
+exactly the kind of evidence this project has been burned by.** Three things
+stop it being an answer:
+
+1. Nothing observed ties the on-screen icon to Volley. The match is between a
+   remembered maximum of 5 and a stated maximum of 5.
+2. Volley is described as lasting "a certain duration" - a TIME bound - whereas
+   item 10 reports the icon climbing with hits on one target. A count that
+   ticks down over time and a count that climbs per hit behave differently, and
+   nobody has watched which one the icon does.
+3. `Focus Fire` still exists and is still scoped to this same skill, so the two
+   candidates are not mutually exclusive - a Volley counter and a per-hit
+   multiplier could both be on screen.
+
+**What separates them is cheap and already specified.** Item 10's target-switch
+test discriminates `Focus Fire` from the `Ranged` affix. Volley needs a
+different one: fire Rapid Arrows and then STOP, without dodging. A duration
+counter decays on its own; a per-hit stack does not.
+
+### The skill screen's structure, recorded because nothing had it
+
+TRANSCRIPTION. Two sections:
+
+- **`Basic Skill`** - one slot.
+- **`Weapon Skill`** - split into two columns, `Arrow` and `Skills`.
+
+The `Arrow` column has three equipped slots keyed, left to right, **`Z`, `X`,
+`C`**. Below them sit two named rows of five icons each:
+
+| row | slots |
+|---|---|
+| `Archer's Arrow` | 5, of which 3 render unlocked and 2 locked |
+| `Hunter's Arrow` | 5, all rendering locked except one |
+
+The `Skills` column has three equipped slots keyed **hold**, **`Q`**, **`E`**,
+over a pool of seven icons of which three render locked.
+
+### This narrows RES-8, which was blocked on exactly this
+
+`docs/OBSERVED_IDS.md` records that `destSlot 2` is the only arrow slot ever
+equipped in the log, and the open question was the mapping of `Z`/`X`/`C` to
+`0`/`1`/`2`. **The screen shows the three arrow slots keyed `Z`, `X`, `C` in
+that left-to-right order.**
+
+That does not finish the binding, and the remaining gap should be stated
+precisely rather than waved through: `destSlot` is an integer and nothing
+observed says it indexes this row left-to-right from zero. What was a
+two-part question - what the slots are, and how they are numbered - is now a
+one-part question. A single capture of an arrow being equipped to the `Z` slot,
+joined to the `destSlot` value emitted at that wall clock, closes it.
+
+### Two arrow FAMILIES, which ROADMAP 4b needs
+
+`Archer's Arrow` and `Hunter's Arrow` are named rows of five. `OBSERVED_IDS`
+records four ammoIds in a `1205xx` space observed being equipped. Ten arrow
+types are visible here against four ids observed.
+
+**No id is bound to any arrow name by this frame** - the screen shows icons and
+row names, the log shows ids, and nothing on this frame carries both. Recorded
+as a count that constrains the id space, not as a binding.
+
+### New game nouns
+
+`Volley`, a mode entered after using `Rapid Arrows`, removed by dodging.
+`Brandrgarde`, a faction or place named in the skill's flavour text, which also
+names `Deathclaw Hunter Eric` as "the last Blackarrow to shoot 10 arrows in
+succession". The bow this project has been reading affixes off is called
+`Deathclaw Hunter`, so the weapon is named for that figure - recorded as a
+naming link, with no mechanical claim attached.
+
+
 ## What to capture next, in priority order
 
 Each is one hover in a menu and yields a whole ladder, so the ratio of effort to
