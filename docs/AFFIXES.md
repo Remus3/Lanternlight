@@ -124,6 +124,95 @@ not". One item at one level cannot settle it. The check is cheap - compare two
 items whose gem sets differ - and it needs doing before Emberforge encodes
 either shape.
 
+## The affix ROSTER, read 2026-08-30 from `PREPARE` -> `Affixes`
+
+The `PREPARE` screen carries an `Attributes | Affixes` tab that lists affixes
+with a level and a pip bar. Read from frame `f1290`:
+
+| Affix | Level |
+|---|---|
+| `Fervid` | Lv. 7 |
+| `Ranged` | Lv. 7 |
+| `Focused` | Lv. 6 |
+| `Skypiercing` | Lv. 4 |
+| `Valor` | Lv. 3 |
+| `Elusive` | Lv. 2 |
+| `Wrath` | Lv. 1 |
+| `Smiting` | Lv. 1 |
+| `Curse` | Lv. 1 |
+
+**READ THE CAVEAT BEFORE USING THIS TABLE.** The panel had the `Recommended`
+preset `Legendary - Blackarrow (Bow)` selected, with `Quick Buy & Equip` and a
+`Total Expense` of 16,559 showing. So these are the affixes that preset WOULD
+grant, not a reading of currently equipped gear. It is a statement about a
+loadout the game itself recommends - useful, and not the same fact as "what the
+operator is wearing". Re-read it against `Current Loadout` before treating any
+level here as the operator's.
+
+**Affix levels appear to AGGREGATE across equipment, and that is the mechanical
+find.** A single item showed `Ranged Lv.1` with a `Level Distribution` row
+crediting only the weapon slot; a nine-piece loadout shows `Ranged Lv.7`. The
+per-slot row on the item tooltip is then a breakdown of where an affix's levels
+come from. **Not yet proven** - it needs one loadout read piece by piece and
+summed - but it is the obvious reading and it makes `Level Distribution` mean
+something.
+
+### This resolves the `CLASSES.md` affix-versus-gem confusion
+
+`CLASSES.md` lists, from T4 guide consensus, "Ranged, Focused, Elusive, Fervid,
+Curse, Valor, Fervor" and doubts all of them. Measured against the client:
+
+- **Six are confirmed affixes** - `Ranged`, `Focused`, `Elusive`, `Fervid`,
+  `Curse`, `Valor` all appear in the game's own affix list.
+- **Three the guides did not have** - `Skypiercing`, `Wrath`, `Smiting`.
+- **`Fervor` is NOT in the affix list.** On the item it appeared beside a gem
+  icon, in a socket row. So `Fervor` is a GEM effect.
+
+That is a clean resolution rather than a flat contradiction. The guides were
+mostly right about the names and wrong to file `Fervor` among them; DevNote #6
+was right that gems grant effects of this kind; and the inference that ALL of
+these names were "gem effects wearing legacy ARPG vocabulary" was wrong. Both
+systems exist, the tooltip renders them differently, and the affix list names
+only one of them.
+
+## `Focus Fire`, the talent - read 2026-08-30 from `TALENTS`
+
+`ROADMAP` item 10 turns on this talent's exact scope, and the talent screen
+states it. Verbatim from frame `f1200`, tooltip open:
+
+> **Focus Fire.** Rapid Arrows increase the `Damage Multiplier` with each hit
+> on the same enemy.
+
+Recorded with it: the node is **currently allocated** - it renders lit with a
+`Revert` action offered - and the character has **0 Talent Point** unspent at
+**Level 5**. Neighbouring nodes are gated: `Swift Shot` at Lv. 8, `Nimble
+Evade` at Lv. 7, a second `Archer's Arrow Enhancement` at Lv. 11. Other named
+nodes visible: `Battle Hardened`, `Archer's Arrow Enhancement 1`.
+
+**What this settles for item 10.** That item recorded the tooltip as scoping
+the effect to `Rapid Arrows` and could not quote it. Now it is quoted, and it
+adds a term the item did not have: the thing that increases is a named
+`Damage Multiplier`, not a flat damage add. "With each hit on the same enemy"
+matches the observed icon climbing to 5 while hitting one target.
+
+**What it does NOT settle, and the contradiction now on the table.** The
+operator reports the buff is not appearing at all in this session - while
+`Focus Fire` is allocated. Both cannot be casually true. The candidates, none
+eliminated:
+
+1. `Rapid Arrows` is not the skill being used now, so the talent never fires.
+   The tooltip scopes it to that skill and previous runs measured inter-hit
+   intervals of 2.27 to 2.87 s, which item 10 reads as drawn shots.
+2. The climbing icon was never `Focus Fire` at all, and was the `Ranged` affix's
+   temporary distance buff - a candidate that did not exist when item 10 was
+   written.
+3. The effect is present but invisible at this character's level and gear.
+
+**The target-switch test item 10 already specifies now discriminates cleanly**,
+which it could not before: `Focus Fire` is scoped to ONE ENEMY, and the `Ranged`
+affix is scoped to DISTANCE and indifferent to the target. Ten hits alternating
+between two enemies separates them in one run.
+
 ## Other item facts read from the same tooltip
 
 Recorded because they are cheap to capture and were never written down:
