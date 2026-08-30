@@ -11,6 +11,28 @@ The integrator folds these entries into `docs/LEDGER.md` on `main`, with
 
 <!-- LANE ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0093 - 2026-08-30 - 188 full-screen frames nobody had ever opened - the game STATES the affix aggregation rule in a table, and the talent tree has a second page
+
+**Evidence:**
+- python -m pytest -> '1338 passed in 23.14s', observed this run in the research worktree
+- python -m ruff check . -> 'All checks passed!', observed this run
+- merge_gate.verify(['docs/AFFIXES.md'], baseline=1338) -> OK
+- tests/test_ascii_hygiene.py + tests/test_no_pii.py -> 46 passed; 0 non-ASCII lines in docs/AFFIXES.md
+- frames read directly: f0119_22.28.15 and f0000_22.23.53 in the 2026-08-25b talents capture, 2560x1440
+
+THE CAPTURE EXISTED ALL ALONG. 164 frames at 2560x1440 from 2026-08-25, plus 24 more in a sibling directory, none ever opened. They were found by walking the capture tree - the same omission that produced the false 'only one capture is full-screen' claim withdrawn in LL-0088 had also hidden this. Correcting a false claim turned up real evidence, which is the argument for correcting them rather than quietly dropping them.
+THE GAME STATES THE AGGREGATION RULE. There is an Affix Details screen rendering a Type header of nine equipment-slot icons and one row per active affix carrying a level and a per-slot count. On the frame read, EVERY affix's level equals the sum of its own row - Fervid Lv.2 = 1+1, Fervor Lv.2 = 1+1, Seeker Lv.1 = 1, Wealth Lv.1 = 1. Four independent matches on one screen.
+THAT IS INDEPENDENT CORROBORATION, not a re-reading. AFFIXES.md derived 'one icon is one level, summed across gear' by COUNTING ICONS on a 2026-08-30 frame, as the replacement for a withdrawn claim. This is a different capture session, four days earlier, a different loadout, and a tabular statement rather than an icon count - and it shows exactly what the derivation predicted.
+It also settles the withdrawn claim beyond argument: a row whose counts SUM to the level the same screen reports is plainly a per-character breakdown, not an eligibility table.
+Seeker and Wealth are confirmed on a real loadout for the first time - previously Seeker existed only in the Auction House catalogue and Wealth only inside a gem tooltip.
+THE NINE-SLOT COUNT AGREES WITH THE LOG. The Type header carries nine slot icons; OBSERVED_IDS binds nine equipment slots from the log alone by joining bot state data against equipment payloads on item cfgId. Two unrelated surfaces, one number.
+NEW - the TALENTS screen has TWO PAGES. Two page indicators and a D-key arrow. Every prior reading of the talent tree covered page one only, and OBSERVED_IDS' description of it as 'complete for a level-2 character' should be read as complete for page one.
+NEW talent nouns, quoted: the node Unstoppable Edge - 'Sky Piercer's Physical Damage is partially converted to True Damage' - plus the cluster Mighty Archer. Swift Shot at Lv.8 and Nimble Evade at Lv.7 match the 2026-08-30 frame exactly, four days apart.
+TRUE DAMAGE is a damage type Emberforge has no representation for, and the conversion FRACTION is unstated - the tooltip says 'partially' and gives no number. Recorded as a named mechanic with an unmeasured coefficient, kept distinct from a measured zero.
+NOT DONE - the numeric talent ids stay UNBOUND. Three gameplay tags and three ids exist and nothing joins them. Pairing HomingTarget with a node called Unstoppable Edge on a shared intuition would be the reasoning this project has withdrawn three times.
+PER-SLOT ATTRIBUTIONS deliberately described by group rather than named. Several header glyphs are confusable at this resolution, and this document already withdrew one claim that rested on reading an icon instead of a label. The SUM rule needs no icon identification and is stated without hedging.
+LANE COUPLING, recorded as a real property rather than an accident: this research finding could not be committed green without a SAFETY commit, because citing three new gameplay tags trips the source-register guard and that guard is safety-owned. The safety half was ordered first so neither branch was committed red.
+
 ### LL-0086 - 2026-08-30 - The four remaining affix ids are UNBINDABLE from data on disk - a measured null with a named cause each, plus a second binding method validated on a control
 
 **Evidence:**
