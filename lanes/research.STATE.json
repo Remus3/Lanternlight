@@ -115,10 +115,16 @@
       "item_id": "RES-20",
       "opened": "2026-08-30",
       "text": "SAFETY, one REAL gap of three claimed. roleInfo carries a \"device\" field - a single 19-char alphanumeric device-model string, 2 occurrences in the 2026-08-30 log - and lanternlight.redact.iter_sensitive returns NO label for it, so it passes through redact() unmasked. Verified by running the real redactor against the real shape. Safety lane owns the fix. The other two carriers reported alongside it were re-probed and are ALREADY COVERED - do not re-file them: the player-name field on OnRep_PlayStateTag already masks to a PERSONA placeholder, and the CampData save FILENAME already masks to an ACTOR placeholder with LONG_ID also firing."
+    },
+    {
+      "blocked_on": "the client running with a FULL-SCREEN capture, not a cropped HUD poller",
+      "item_id": "RES-23",
+      "opened": "2026-08-30",
+      "text": "The four remaining affix ids 101, 209, 212 and 214 CANNOT be bound from data on disk - measured null with a named cause each, written up in docs/AFFIXES.md. 212 has two singleton trade-filter requests at 22:44 local 2026-08-25 but no capture covers that time; 214 appears once inside a 3-element array in the same uncaptured window and is never on an item; 101 and 209 had their item tooltips opened INSIDE a capture window, but that capture is a 500x310 HUD crop that cannot show a tooltip. Only the 2026-08-30 capture is full-screen (2560x1440) and no game video exists. Recipe per id is in AFFIXES.md; 212 is cheapest because the operator still holds item 1230304."
     }
   ],
-  "resume_note": "2026-08-30. THREE AFFIX IDS ARE BOUND: 201=Valor, 208=Fervid, 211=Ranged - the first affix id-to-name bindings this project has. Method is the wall-clock join on the Auction House [TradeCtrl] trade filter; the logs contain NO affix names at all, so the join is the only route and no amount of further log reading will substitute. 101, 209, 212 and 214 remain unbound and the recipe for binding them is written down in docs/AFFIXES.md - one affix ticked per cycle, read off the ROW LABEL not the icon. Also this session: the client was PATCHED 1.0.14 -> 1.0.15 between 2026-08-26 and 2026-08-30, so every OBSERVED_IDS row dated 2026-08-25 is provisional; the Auction House affix dropdown is a 16-entry catalogue but NOT the whole affix set; equipment slots 0-6 and 11 are bound to the game's slot nouns from the log alone; and the game publishes affix COOLDOWNS in seconds, so the blanket 'no cooldowns are published' is false for affixes though still true for class abilities. Next unblocked research item is binding the four remaining affix ids, which needs the client running. RES-20 is a real redaction gap for the safety lane.",
+  "resume_note": "2026-08-30b. The four remaining affix ids 101, 209, 212, 214 are UNBINDABLE from data on disk - measured null, cause named per id in docs/AFFIXES.md, ledger LL-0086, open item RES-23. The blocker is the CAPTURE, not the game: only the 2026-08-30 capture is full-screen (2560x1440); both 2026-08-25 captures are 500x310 / 540x360 HUD crops, and 101 and 209 had their tooltips opened inside one of those crops. A SECOND binding route was found and validated on a control - item tooltips, proven by item 3060404 -> affix 211 -> Ranged Lv.1 on frame f0636, agreeing with the trade-filter result. The two routes are complementary: filter-only 201 and 214, item-only 101 and 209, both 208/211/212. Cheapest next win is 212 - the operator still holds item 1230304, so it is one tooltip hover with a full-screen capture running. Bound so far: 201=Valor, 208=Fervid, 211=Ranged.",
   "schema": 1,
   "sessions": 1,
-  "updated": "2026-08-30T09:07:20+00:00"
+  "updated": "2026-08-30T09:42:39+00:00"
 }

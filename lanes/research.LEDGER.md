@@ -11,6 +11,24 @@ The integrator folds these entries into `docs/LEDGER.md` on `main`, with
 
 <!-- LANE ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0086 - 2026-08-30 - The four remaining affix ids are UNBINDABLE from data on disk - a measured null with a named cause each, plus a second binding method validated on a control
+
+**Evidence:**
+- python -m pytest -> see the run recorded below; tests/test_ascii_hygiene.py + tests/test_no_pii.py -> 46 passed, observed
+- every affixIds request in all three logs enumerated and converted to local time, then tested against every capture window: 41 requests, 4 touching a target id, 0 with capture coverage
+- tooltip-open events (cfgid ==, note the space) cross-joined against capture windows: 1036 total, 317 inside a window, 0 of them on an item carrying 101, 209, 212 or 214 while a FULL-SCREEN capture ran
+- frame sizes measured directly with PIL: 2026-08-25 captures are 500x310, 2026-08-25b are 540x360, only 2026-08-30 is 2560x1440
+- no game video recording exists on the machine - a filesystem sweep found only clips of an unrelated title
+
+MEASURED NULL, not a failure to look. 212 has two SINGLETON trade-filter requests - ideal join material - at 22:44 local on 2026-08-25, and the captures run 18:51-20:34 then 23:08-23:35. The frames sit either side of the gap and were never taken.
+214 occurs exactly once in the entire corpus, inside [212,211,214], in that same uncaptured window, and has never been observed on an item. A 3-element array yields a SET; it resolves only if two members are known and only 211 is.
+THE MOST INSTRUCTIVE FAILURE - 101 and 209 had their item tooltips opened INSIDE a running capture, at 19:54:35 and 19:54:03 local, and are still unrecoverable because that capture is a 500x310 crop of the HUD rectangle taken for the damage-meter work. The capture was running, the event fired inside it, and the binding is lost because the crop was chosen for a different purpose.
+NEW METHOD, and it is validated rather than asserted. Item tooltips are a SECOND binding route, proven on a control with a known answer: the log records item 3060404 carrying affix cfgId 211, and frame f0636_00.45.07 shows that item's tooltip reading 'Ranged Lv.1'. 211=Ranged was established independently through the trade filter, so two unrelated methods agree.
+READING RULE now proven, not assumed - the item's OWN affix is the row WITHOUT a gem icon. The same control tooltip shows Ranged with no gem icon and Fervor with one, and the log's affixes[] for that item holds 211 alone, so gem-granted affixes do not appear in affixes[].
+STRUCTURAL - the two routes are COMPLEMENTARY and neither covers the id space. Filter-only: 201, 214. Item-only: 101, 209. Both: 208, 211, 212. So the tooltip route is not a fallback, it is the ONLY route to 101 and 209 - which is invisible while every binding so far came through the filter.
+NOT DONE, deliberately - no arithmetic was attempted on the id space. Valor, Fervid and Ranged sit at catalogue positions 6, 9 and 11 with ids 201, 208 and 211, fitting no simple rule in either row-major or column-major order. Guessing a fourth id from three points is the reasoning this document has withdrawn twice.
+OPEN - it is unknown whether 101 and 209 are filterable at all. Neither has ever appeared in a filter request, and the Affix Effects list is 16 entries under one gem type and demonstrably not the whole affix set, so an item-only affix may have no filter row.
+
 ### LL-0085 - 2026-08-30 - Affix ids BOUND to names from capture already on disk - plus the affix text surface the tooltip pass never opened, and two docs still carrying what AFFIXES.md had refuted
 
 **Evidence:**
