@@ -1192,6 +1192,149 @@ no simple rule in either row-major or column-major order. Guessing a fourth id
 from three points would be exactly the reasoning this document has already
 withdrawn twice.
 
+## The `Affix Details` panel STATES the aggregation rule - 2026-08-25, read 2026-08-30
+
+Read from frame `f0119_22.28.15` in `C:\ll-captures\2026-08-25b\talents\`, a
+2560x1440 capture that **no session had ever opened**. It was found by walking
+the capture tree rather than by looking where the frames were expected to be -
+the same omission that produced the false "only one capture is full-screen"
+claim withdrawn in `LL-0088`.
+
+The game has a screen called **`Affix Details`**. It renders a `Type` header of
+**nine equipment-slot icons** and, under a heading `Active`, one row per affix
+carrying that affix's level and a per-slot count.
+
+**Transcribed, with the counts exactly as rendered:**
+
+| affix | level | slots carrying a count | row sums to |
+|---|---|---|---|
+| `Fervid` | Lv.2 | two adjacent slots in the lower-body group | 2 |
+| `Fervor` | Lv.2 | two adjacent slots in the upper-body group | 2 |
+| `Seeker` | Lv.1 | the leftmost slot, the weapon column | 1 |
+| `Wealth` | Lv.1 | one slot in the accessory group | 1 |
+
+**Every affix's stated level equals the sum of its own row.** 1+1=2, 1+1=2,
+1=1, 1=1. Four independent matches on one screen.
+
+### Why this matters more than another reading
+
+`docs/AFFIXES.md` derived "one icon is one level, summed across equipped gear"
+by COUNTING ICONS across a loadout on frame `f1290`, captured 2026-08-30. That
+derivation replaced a withdrawn claim which had read the same row as an
+eligibility table.
+
+**This frame states the rule directly, in a table, from a different capture
+session four days earlier and on a different loadout.** It is not the same
+evidence re-examined - it is an independent surface, and the icon-counting
+derivation predicted exactly what it shows.
+
+It also settles the withdrawn claim's replacement beyond argument: a row here is
+plainly a per-character BREAKDOWN, because the counts sum to the level the same
+screen reports. Nothing about it reads as a permission list.
+
+### Two affixes confirmed on a real loadout for the first time
+
+`Seeker` had been seen only in the Auction House catalogue, and `Wealth` only
+inside a gem tooltip. Both appear here as `Active` affixes on the operator's own
+gear, which is a stronger class of observation than either.
+
+### The slot count agrees with the log
+
+The `Type` header carries NINE slot icons. `docs/OBSERVED_IDS.md` binds nine
+equipment slots from the log alone - 0 through 6 plus 10 and 11 - by joining
+`generateBotPlayerStateData` against equipment payloads on item cfgId. Two
+unrelated surfaces, one number.
+
+**The per-slot attributions above are deliberately described by GROUP rather
+than named.** Several of the nine header glyphs are small and two pairs are
+confusable at this resolution, and this document has already withdrawn one
+claim that rested on reading an icon instead of a label. The SUM rule needs no
+icon identification and is stated without hedging; the individual slot
+assignments would need a frame where the header is legible or a hover that
+labels a column.
+
+### What this does NOT establish
+
+The panel shows one character's active affixes, so it is not a catalogue - the
+same caveat this document applies to `f1290` and to the Auction House list. No
+level above 2 appears here, so nothing about the upper end of the ladder is
+observed on this screen.
+
+
+## The TALENTS screen at level 5 - 2026-08-25, from an unread capture
+
+Read from `f0000_22.23.53` in `C:\ll-captures\2026-08-25b\talents\`, 164 frames
+at 2560x1440 that no session had opened before 2026-08-30.
+
+### The screen has TWO pages, which was not recorded anywhere
+
+Two page indicators sit at the bottom, the first filled, and a `D` key prompt
+with a right arrow sits at the right edge. **So the talent tree is paged and
+every prior reading of it covered page one only.** `docs/OBSERVED_IDS.md`
+describes the Blackarrow talent tree as "complete for a level-2 character"; that
+completeness claim is about page one and should be read that way until page two
+is captured.
+
+### Six clusters on page one, with their gates
+
+TRANSCRIPTION:
+
+| cluster | state |
+|---|---|
+| `Swift Shot` | locked - `Unlocks at Lv. 8.` |
+| `Nimble Evade` | locked - `Unlocks at Lv. 7.` |
+| `Battle Hardened` | unlocked, nodes lit |
+| `Archer's Arrow Enhancement 1` | unlocked |
+| `Mighty Archer` | unlocked |
+| one lower-centre cluster | name occluded by the open tooltip |
+
+`Swift Shot` at Lv. 8 and `Nimble Evade` at Lv. 7 match what
+`docs/AFFIXES.md` records from the 2026-08-30 `TALENTS` frame, four days later
+and one level higher. Two captures, same gates.
+
+`Mighty Archer` is a cluster name this project had not recorded.
+
+### A talent tooltip, quoted
+
+The frame has a node tooltip open. Verbatim:
+
+> **`Unstoppable Edge`.** `Sky Piercer`'s `Physical Damage` is partially
+> converted to `True Damage`.
+
+The tooltip offers an `Activate` action, and the character has **1 Talent
+Point** unspent at Level 5.
+
+**Three game nouns bound for the first time by this reading:**
+`Unstoppable Edge` a talent node, `Sky Piercer` a skill it modifies, and
+`True Damage` a damage type distinct from `Physical Damage`.
+
+**`True Damage` is the one worth flagging to Emberforge.** A damage type that
+`Physical Damage` can be "partially converted" into is a mechanic the engine
+has no representation for, and the conversion FRACTION is not stated - the
+tooltip says "partially" and gives no number. Recorded as a named mechanic with
+an unmeasured coefficient, which is the state this project keeps distinct from
+a measured zero.
+
+### The numeric talent ids remain UNBOUND
+
+The log carries `TS.Ability: talent data response: [30008,30009]` on 2026-08-25
+and `[32000,30008,30009]` on 2026-08-30, plus three gameplay tags -
+`Talent.Scout.Bow.ContinuouseShoot` (the game's spelling),
+`Talent.Scout.Bow.DrawEnhanced` and `Talent.Scout.Bow.HomingTarget`.
+
+**None of the three tags is bound to any of the three ids, and no id is bound to
+any name on this screen.** The 2026-08-25 response falls inside the `25/scene`
+capture, so a join is available in principle - but a two-element array yields a
+SET, not an assignment, exactly as with the affix ids, and the allocated set at
+that moment is not otherwise known. Pairing `HomingTarget` with a node called
+`Unstoppable Edge` on a shared intuition would be the reasoning this project has
+withdrawn three times.
+
+**What would bind them:** allocate ONE talent with a full-screen capture
+running, then read the node name off the frame against the `talent data
+response` emitted at that wall clock. One talent per cycle. The same recipe the
+affix ids need, and the same reason.
+
 ## What to capture next, in priority order
 
 Each is one hover in a menu and yields a whole ladder, so the ratio of effort to
