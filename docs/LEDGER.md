@@ -84,6 +84,44 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0092 - 2026-08-30 - Adversarial review of the DEVICE rule found a BLOCKING defect - the rule broke the module's own redact-to-assert_clean contract. Fixed test-first; four further gaps recorded as stated limits
+
+**Evidence:**
+- python -m pytest -> '1338 passed in 24.82s', observed this run = 1327 baseline + 11 tests
+- python -m ruff check . -> 'All checks passed!', observed this run
+- RED FIRST: three assertions failed before the fix - assert_clean refusing redact's own output, stronger placeholders being downgraded, and the lookahead being absent from the value pattern
+- MUTATION on the new lookahead: removing it from _DEVICE_VALUE drove THREE guards red. The mutation was applied only after asserting the anchor matched exactly once
+- an earlier attempt at that same mutation was REFUSED by its own anchor assertion, which is the trap CLAUDE.md names - the suite showed green because nothing had been mutated
+- restored from a sha256-verified copy and the restored hash compared against the pre-mutation value
+- coverage UNCHANGED by the fix: DEVICE still fires exactly 4 times across the three logs and 0 times in the tracked tree
+- contract re-verified directly: redact() output now passes assert_clean(), and <PERSONA>, <STEAMID64>, <LONG_ID> and <DEVICE_ID> under a device key all survive untouched
+
+BLOCKING DEFECT, found by an independent reviewer and confirmed by re-derivation: the value pattern was a bare character class with no placeholder lookahead, so it matched <DEVICE> itself. assert_clean REFUSED redact's own output - the contract every other rule in this module honours. No leak, fail-closed, but DEVICE is in FILE_SCAN_LABELS, so it would have armed a permanent tests/test_no_pii.py failure the first time anyone committed a redacted device excerpt.
+SAME ROOT, second symptom: a value already masked by a STRONGER rule was re-masked as a device. <PERSONA> and <STEAMID64> under a device key both became <DEVICE>. That leaks nothing and destroys the record of WHAT was masked, which is what a reviewer of a committed fixture actually reads.
+TEXT IDEMPOTENCE SURVIVED BY ACCIDENT and hid the defect. The replacement is a fixed point, so redact(redact(x)) == redact(x) held while the DETECTOR was broken. An idempotence test alone would have passed and certified nothing - the contract test is the one that catches it.
+THE LOOKAHEAD IS LIVE HERE, unlike the one this module deliberately does NOT have on the cdkey pattern. That one was removed because its value cannot match < or >, making the guard unreachable, and the module records that a guard which cannot fire is not made real by a test that cannot fail. A test now pins the distinction so nobody deletes this one by analogy.
+A GUARD THAT WAS NEAR-DECORATION, also found by the reviewer: the prose test stayed GREEN under the very widening it was meant to catch, because its sample prose contained no separator. Strengthened with prose carrying a colon and an equals sign.
+FOUR FURTHER GAPS, none a measured leak, all now enumerated in the module docstring rather than left implicit: the escaped-JSON nesting, alternative key casings, single-quoted keys, and partial masking of a value containing an escaped quote or newline. The docstring previously stated only ONE limit, which understated the rule's reach.
+PROCESS NOTE: the review was requested by the operator instead of a merge, and it changed the outcome. The rule as first written would have gone to main with a broken contract.
+
+### LL-0091 - 2026-08-30 - DEVICE rule added at the operator's direction - a deliberate widening for an UNOBSERVED shape, written test-first and proven non-vacuous by two mutations
+
+**Evidence:**
+- baseline measured BEFORE any change: 1327 tests collected. After: 'python -m pytest' -> '1334 passed in 25.39s', observed this run, which is 1327 + 7 new tests
+- python -m ruff check . -> 'All checks passed!', observed this run
+- RED FIRST: the four new assertions failed before the rule existed - no DEVICE label, label absent from ALL_LABELS, assert_clean did not raise, docstring did not record the decision
+- MUTATION 1 - renamed the rule's label; test_a_non_numeric_device_value_is_masked and the label-registry test both went RED
+- MUTATION 2 - broke the pattern key so it can never match; the masking test and the assert_clean test both went RED
+- both mutations asserted their anchor matched EXACTLY ONCE before being applied, because a mutation that fails to apply looks identical to a passing test
+- restored from a sha256-verified copy after each mutation, not by git checkout, and the restored sha was compared against the pre-mutation value
+- FALSE-POSITIVE MEASUREMENT: the rule fires exactly 4 times across all three logs - precisely the 4 real occurrences, all under the quoted device key, all value length 19 - and 0 times anywhere in the tracked repository tree
+
+NOT A MEASURED RULE, and the module docstring now says so in those terms. The real device field holds a 19-digit run that LONG_ID has always caught; LL-0090 withdrew the claim that it leaked. This rule covers the NON-NUMERIC shape that withdrawn claim wrongly described, which is unobserved in every log on this machine. It is a widening on safety grounds taken at the operator's direction, and it is the one rule in the module that does not rest on data.
+SCOPED TO THE JSON FORM for a measured reason. The engine writes a device key holding a memory handle, a hardware model string, and a short audio id - none of which names a person - and a bare key=value rule masks all three. These rules also run over every tracked file, where this repository's own ledger discusses the device field in English prose. The quotes are the discriminator, and three over-fire guards cover exactly those shapes.
+THE GUARD CAUGHT ITS OWN DOCUMENTATION. The first version of the docstring wrote the JSON example literally and the repository scan fired on it - proof the rule matches the intended shape, arriving from an unintended direction. The example is now defanged and the docstring says why.
+STATED LIMIT, so nobody assumes more coverage than exists: a non-numeric device value written WITHOUT the JSON quoting is caught by neither this rule nor LONG_ID.
+NO INDEPENDENT AGENT REVIEWED THIS. The tests, mutations and false-positive measurement are all mine. The safety lane holds a veto on redaction precisely so that this kind of change gets an out-of-domain check, and that check has not been run.
+
 ### LL-0090 - 2026-08-30 - RES-20 WITHDRAWN - the redaction gap does not exist, and the error was testing a guard against a fabricated input whose shape occurs nowhere in the data
 
 **Evidence:**
