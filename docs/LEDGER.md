@@ -84,6 +84,29 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0096 - 2026-08-30 - The tooltip tail REFUTES a claim published hours earlier, answers half of RES-3, and finds a third affix delivery route
+
+**Evidence:**
+- python -m pytest -> '1338 passed in 34.21s', observed this run in the research worktree
+- python -m ruff check . -> 'All checks passed!', observed this run
+- 0 non-ASCII lines in docs/AFFIXES.md
+- frames read this pass: f0023, f0039, f0044, f0050, f0056, f0125, f0130, f0133, f0136, f0146 in talents; f0151 in reanchor
+
+WITHDRAWN, published only hours earlier: that a Legendary and a Rare bow 'both carry Ranged Lv.1', offered as UI evidence that the item-borne affix travels with the item TYPE. An Oil-soaked Wooden Bow carries SEEKER Lv.1 in one frame and RANGED Lv.1 in another - same name, same base stats, different durability so different instances. Two instances of the same-named item carry different affixes.
+THAT IS THE TEST THE LOG SECTION NAMED AS MISSING. It says in terms that every observed item was a distinct type so nothing compared two instances of the SAME type. Two now exist and they disagree. What survives: the log's fixed:true flag and the one-to-one mapping are still measured facts; what they cannot support is the inference that the mapping is a property of the item TYPE, since one character owning one instance of each produces that pattern either way.
+HONEST LIMIT of the refutation: the two bows are matched by display NAME and base stats, not by cfgId, and two cfgIds could share a name. The log carries no exEquip for either, so it cannot be closed from disk.
+A THIRD AFFIX DELIVERY ROUTE. Malt is an 'Ingredient for Victory Wine', and the log carries WineAffixPoolView plus wines[{id:1, affixes:[208,211]}]. Wine carries affixes, and 208 and 211 are already bound to Fervid and Ranged. So an affix reaches a character borne by the item, delivered by a gem, OR carried by a wine - and the Affixes panel lists all three undifferentiated.
+RES-3 HALF ANSWERED and replaced by RES-27. The talent Dodge Power Shot states 'Changes roll into dodge' - they are different actions and a talent converts one into the other, so dodge is the upgraded form and any measurement before that talent was measuring roll. The dodge-length half of the question is untouched.
+THE NUMBER 5 IS NOT DISTINCTIVE, which weakens a candidate this project raised one pass earlier. Volley fires 'up to 5 arrows' and was offered as a fourth candidate for ROADMAP item 10's icon climbing to 5. Sky Piercer also states 5 - it can 'pierce 5 units'. Two unrelated skills in one kit both state 5, so matching on the number discriminates nothing. The candidate survives on the Volley mechanic, not on its maximum.
+TRIO MODE CHANGES A BASE COOLDOWN - Scattershot is stated to have a shorter base cooldown in trio mode. That is the game stating a party-size mechanic, bearing on the solo-versus-group section CLASSES.md calls its least settled. NO magnitude is given, only a direction, so the narrowed claim that no class-ability cooldown VALUES are published survives intact.
+DAMAGE MULTIPLIER is a shared named quantity, used by Focus Fire and by the quick-charge arrow description. Two draw states exist, fully drawn and quick-charge, differing in that multiplier while sharing special effects.
+ITEMS STATE THEIR SOURCE and the taxonomy has two kinds of entry - Shop and Auction render with a navigation arrow while the two Explore entries do not, which INFERENCE separates vendor sources from activity sources. No arrow tooltip was captured, so RES-2's specific question is still unanswered.
+THE COMBAT BAG PRESET SYSTEM, recorded for the first time: four bag tiers with owned counts, and loadout presets named to the scheme rarity-class-build-mode, with Bow Hunter and Bow Archer as builds and PvE and Balanced as modes. This CONFIRMS a reconstruction AFFIXES.md flagged as reconstructed - the truncated 'ndary - Blackarrow (Bow)' label had Legendary inferred from position, and the scheme has rarity in exactly that position.
+CANDIDATE ONLY, no binding claimed: a preset loadout system is a natural producer of the unexplained second equipment slot range 33-38 in OBSERVED_IDS. Nothing observed connects them.
+PAGE ONE OF THE TALENT TREE IS NOW COMPLETELY NAMED - the occluded cluster is Archer's Arrow Enhancement 2, Unlocks at Lv. 11. Page two remains uncaptured.
+THE IN-DUNGEON HUD confirms the Z/X/C arrow slots in combat with live ammo counts, matching the SKILLS screen layout. Also Item Wheel on tilde and Inspect on Y.
+Class restriction renders in RED when unusable. Blessing is a new affix name, taking the vocabulary to 23.
+
 ### LL-0095 - 2026-08-30 - Swept the unread captures - three complete affix ladders, a template refuted by the third, the character attribute sheet, and an item Source taxonomy
 
 **Evidence:**
