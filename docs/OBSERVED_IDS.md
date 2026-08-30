@@ -17,7 +17,20 @@ checked.
 
 ## Class ids
 
-Log line: `TS.Dungeon: [basedatacomponent] setClassGender inclassid ==NN, inGender ==N`
+Log line, **transcribed exactly** - note the DOUBLE space before `==`:
+
+    TS.Dungeon: [basedatacomponent] setClassGender inclassid  ==NN, inGender ==N
+
+**This line was quoted wrongly here until 2026-08-30**, with a single space. The
+wrong form matches **0** lines in every log on this machine and the corrected
+form matches 156 in the 2026-08-30 log alone. The `grep for setClassGender
+inclassid` instruction further down was never affected - it stops before the
+double space - so one of the two patterns in this section worked and the other
+silently returned nothing.
+
+Recorded rather than quietly fixed because a quoted log line is load-bearing: it
+is what the next session pastes into a grep, and a transcription that is one
+space wrong fails closed and looks exactly like "the game stopped emitting it".
 
 | classId | Class | How established |
 |---|---|---|
@@ -907,6 +920,175 @@ an icon. Only `Rapid Arrows` is confirmed both named and owned.
 **No magnitude appears on any node.** "Increases the Damage Multiplier" and
 "Increases the knockback distance" carry no number, so nothing here supports a
 coefficient and none is recorded.
+
+## 2026-08-30 session - client `1.0.15`, and the ids it bound
+
+Read from the live `MistfallHunter.log` covering 2026-08-30 00:20 to 01:24
+local, plus the two rotated backups from 2026-08-26 where a comparison is
+stated. Log stamps are UTC; local is UTC-5.
+
+### The client build marker - use THIS, not the Steam buildid
+
+TRANSCRIPTION, one hit per log:
+
+    TS.Default: [Startup] Version: <version>, Build Date: <stamp>
+
+| log | Version | Build Date |
+|---|---|---|
+| backup 2026.08.26-01.27.09 | `1.0.14` | `20260818232428` |
+| backup 2026.08.26-04.45.02 | `1.0.14` | `20260818232428` |
+| live 2026-08-30 | `1.0.15` | `20260826170036` |
+
+**The client was patched between 2026-08-26 and 2026-08-30.** By this file's own
+standing rule, every row dated 2026-08-25 was measured on `1.0.14` and is now
+provisional.
+
+**The string `buildid` occurs ZERO times in all three logs.** The Steam buildid
+`24813185` recorded at the top of this file is a depot value; the log is not its
+source and can neither confirm nor refute it. Anchor future passes on `Version`
+plus `Build Date`, which is first-party and in-log.
+
+### Equipment slots are BOUND - slot number to slot NAME, from the log alone
+
+**Method: a two-surface join on item cfgId, no pixels involved.** The log emits
+one line per slot naming it:
+
+    TS.AI: generateBotPlayerStateData <slotName>: <itemCfgId>
+
+and equipment payloads elsewhere carry the same items as
+`{"cfgId":<id>,"slot":<n>}`. Joining on the cfgId gives the binding. **Every one
+of the eight bot equipment cfgIds resolves to exactly ONE slot number** across
+the whole log - checked for ambiguity rather than assumed.
+
+| slot | name | joined via cfgId | uniqueness |
+|---|---|---|---|
+| 0 | `helmet` | 1150108 | unique |
+| 1 | `cloth` | 1250108 | unique |
+| 2 | `glove` | 1350108 | unique |
+| 3 | `pants` | 1450108 | unique |
+| 4 | `shoe` | 1550108 | unique |
+| 5 | `necklace` | 1650103 | unique |
+| 6 | `ring` | 1750201 | unique |
+| 11 | `weapon2` | 3050208 | unique |
+
+**`weapon1` is NOT bound.** The log emits the name but never with a cfgId in
+this capture, so slot 10 holding weapon-family cfgIds and being the only
+unclaimed weapon slot is an INFERENCE by elimination, not a join. It is left
+unbound here deliberately.
+
+The game's own slot nouns differ from the words this project's UI notes use.
+Recorded as the game states them: `cloth` not "armor", `glove` not "bracers",
+`shoe` not "boots", `necklace` not "pendant".
+
+### Item cfgIds are partitioned by equipment family
+
+TRANSCRIPTION. Grouping every `{"cfgId":<id>,"slot":<n>}` by the id's leading
+two digits:
+
+| cfgId family | slots it appears at |
+|---|---|
+| `11xxxxx` | 0 |
+| `12xxxxx` | 1, 37 |
+| `13xxxxx` | 2, 35 |
+| `14xxxxx` | 3, 36 |
+| `15xxxxx` | 4, 38 |
+| `16xxxxx` | 5 |
+| `17xxxxx` | 6 |
+| `30xxxxx` | 1, 10, 11, 33, 34 |
+| `90xxxxx` | 1, 2, 17, 38 |
+
+The leading two digits track the equipment family exactly for `11` through `17`,
+matching the slot names above. **INFERENCE:** item cfgIds are allocated in
+per-slot blocks. Useful, and not a licence to guess an unobserved id.
+
+**Slots 33 to 38 are a SECOND range carrying the same item families**, and this
+file does not explain them. They are not a fixed offset of 0 to 6 - `13xxxxx`
+sits at 2 and 35 while `12xxxxx` sits at 1 and 37 - so a simple "+33 preset"
+reading is refuted by the data. A second loadout or preset is the obvious guess
+and is NOT asserted. Slots 17 and 53 are likewise unexplained.
+
+**`slot` is NOT one namespace.** The same key carries equipment slots, inventory
+positions and at least one ammo id (`120508` appears as a `slot` value). Read
+`slot` only in the context of the payload it sits in.
+
+### Seven wearable non-weapon slots, and what that does NOT settle
+
+Slots 0 to 6 are exactly seven wearable non-weapon slots. The Auction House
+trade filter's `ARMOR` category takes `itemSubType` values 1 to 7, also exactly
+seven - see `docs/AFFIXES.md`.
+
+**The correspondence is suggestive and the mapping is NOT established.** Slot
+numbers start at 0 and subtypes start at 1, so any binding needs an offset that
+nothing has observed, and the ORDER of the subtype numbering is unobserved too.
+Recorded as a testable hypothesis, not a binding.
+
+### Class and gender ids, re-observed on client `1.0.15`
+
+Corrected log shape - note the DOUBLE space before `==`:
+
+    TS.Dungeon: [basedatacomponent] setClassGender inclassid  ==NN, inGender ==N
+
+156 matches in the live log. Distinct pairs, with counts:
+
+| classId | class (from the table above) | inGender | count |
+|---|---|---|---|
+| 10 | Mercenary | 1 | 8 |
+| 12 | Blackarrow | 1 | 3 |
+| 12 | Blackarrow | 2 | 139 |
+| 13 | Shadowstrix | 1 | 5 |
+| 15 | Withered Knight | 2 | 1 |
+
+**RE-OBSERVATION, not a new binding.** These four class ids were already bound
+by the 2026-08-09 pixel join. What is new is that they still hold on client
+`1.0.15`, four days after the previous capture and across a patch. Classes 11
+(Sorcerer) and 14 (Seer) were not emitted in this session - an absence of
+observation, nothing more.
+
+### The numeric affix namespace
+
+Seven ids observed across two surfaces and three logs. Full derivation, counts
+and per-log breakdown are in [`AFFIXES.md`](AFFIXES.md); recorded here because
+this file is the authority for engine ids.
+
+| affix id | name | key paths it appears at | how established |
+|---|---|---|---|
+| 101 | UNBOUND | `affixes[].cfgId` | - |
+| 201 | **`Valor`** | `affixIds[]` | pixel-joined, 2026-08-30 |
+| 208 | **`Fervid`** | `affixIds[]`, `affixes[].cfgId` | pixel-joined by set difference, 2026-08-30 |
+| 209 | UNBOUND | `affixes[].cfgId` | - |
+| 211 | **`Ranged`** | `affixIds[]`, `affixes[].cfgId` | pixel-joined, 2026-08-30 |
+| 212 | UNBOUND | `affixIds[]`, `affixes[].cfgId` | - |
+| 214 | UNBOUND | `affixIds[]` | - |
+
+**Method for the three bound rows**, same wall-clock join that bound the class
+ids: the client emits `[TradeCtrl] request Trade Goods {...,"affixIds":[N],...}`
+when the Auction House affix filter changes, and a frame captured at the same
+wall clock shows which row is checked and which icon the filter header carries.
+`201` and `211` are read directly; `208` follows by set difference from a
+two-element request whose other member is `211`. Full derivation, the frames
+cited, and the two arguments that were tried and REFUTED are in
+[`AFFIXES.md`](AFFIXES.md).
+
+**The logs contain no affix names at all** - every catalogue name returns zero
+occurrences across all three logs - so this binding is not recoverable from text
+and the join is the only route.
+
+**`cfgId` is a PER-TABLE key, not a global id, and this matters more than the
+list does.** The same field name carries item ids of six and seven digits, affix
+ids of three, and gem ids in a `22xxxx` family. `101` is an affix id here and a
+currency id elsewhere in the same corpus. **The namespace is decided by the KEY
+PATH, never by the value** - which is why every row above names its path. A
+lookup that takes the bare integer without its path returns the wrong row.
+
+**The `101` collision, verified rather than asserted.** The live log carries both
+`"affixes":[{"cfgId":101,...}]` (in the backups) and `"currencyId":101` with a
+matching `TS.Default: [Currency] Request currency info 101 169`. Two different
+tables, same integer. The value `169` in that line also equals the coin balance
+rendered in the Auction House header at the same wall clock, so currency `101`
+is the currency the Auction House spends - **which this project has NOT bound to
+a name.** `docs/AFFIXES.md` records `Gyldenblod` as a game noun of unstated
+kind; nothing here connects the two and no connection is asserted.
+
 
 ## Rule
 
