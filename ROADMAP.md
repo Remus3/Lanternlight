@@ -1194,12 +1194,30 @@ than starting the next immediately - across at least ten distinct records. The
 existing capture has about 26 records but only about five long epochs. Nothing
 else about the method needs to change: slot geometry, the previous-run labelling
 and the refusal gate are all measured and working.
-- A fresh clone cannot verify a successful read at all: the capture is 1.1 GB of
-  the operator's own screen and is never committed, so those tests skip. The
-  clone-safe tests cover segmentation, every refusal path, and that every
-  prototype classifies as its own digit. Closing that gap needs a reviewed,
-  redacted single-frame fixture, which is a safety-lane call and is not taken
-  here.
+- **CLOSED 2026-08-30 (ledger `LL-0083`). A fresh clone CAN now verify a
+  successful read.** The gap was real: every real-frame test needed 1.1 GB of
+  the operator's screen and skipped without it, and the clone-safe tests are
+  built from the same templates the reader scores against, so they could never
+  prove the templates match anything the game rendered. A clone tested
+  segmentation and refusals and never saw the reader get a real number right.
+
+  `tests/fixtures/panel_total_103_hits_10.png` closes it. `read_panel` reads
+  only `TOTAL_BAND` inside two column windows, so the fixture keeps exactly
+  those pixels - **2,025 of 155,000, 1.31%** - and blacks out the other 98.69%:
+  the whole scene behind the semi-transparent plate, the white row, both
+  headers. The kept pixels are REAL capture, which is what a synthesised frame
+  cannot supply. 3.5 KB, reads `103` with `10` hits.
+
+  **Proven by taking the capture away**, not by assertion: the directory was
+  renamed and the suite re-run - the three fixture tests passed, the five
+  real-capture tests skipped, capture restored at 6,439 frames.
+
+  The safety-lane call this item deferred was taken and recorded: source frame
+  reviewed before selection, no PNG text or time chunks, filename renamed so it
+  carries no capture wall-clock (the `SAF-1` precedent), and committed only on
+  the operator's explicit approval since it enters a public repository
+  permanently. **Two of the three guards protect the REDACTION itself**, so it
+  cannot erode when the fixture is next regenerated.
 
 ## 4c. Archive the log and the market cache on every session - CLOSED 2026-08-25b
 
@@ -2533,8 +2551,8 @@ first-party sources a future session would reach for. Presence now requires
 a host BOUNDARY, and `grandwiki.com` has a row of its own.
 
 **The counts, re-derived after the repair. Every earlier figure in this item
-was wrong at least once, so re-measure rather than cite:** 305 host-shaped
-tokens in `docs/`, 234 denylisted, 71 surviving tokens, and **63 DISTINCT
+was wrong at least once, so re-measure rather than cite:** 309 host-shaped
+tokens in `docs/`, 238 denylisted, 71 surviving tokens, and **63 DISTINCT
 external sources** once 8 case/`www.` duplicates collapse. Only that last
 number is stable - the first three move every time a ledger entry names a
 new file, which is precisely how the previous closure's figures went stale
@@ -2722,8 +2740,13 @@ question, the headshot mechanism, and whether the ~1.3x per pace is real.
   2026-08-29b** (ledger `LL-0080`), so none of those three is the fallback
   either. `OPS-6` remains open and is an operator decision, not a task.
   `OPS-14` is likewise an operator question about this machine's disk.
-  **With the client closed and no OPS- task left specified, item 7c is the
-  fallback again** - and item 10 still supersedes everything the moment the
+  **`OPS-15` closed 2026-08-30** (ledger `LL-0082`), and item **7c's**
+  fresh-clone gap closed the same day (`LL-0083`), leaving only 7c's WHITE
+  row - which is blocked on a capture, not on a session. **So there is no
+  fully specified client-closed task left.** The best client-closed work is
+  now reading more first-party data off the game's own menus into
+  [`docs/AFFIXES.md`](docs/AFFIXES.md), which needs the operator in a menu
+  but not in combat - and item 10 still supersedes everything the moment the
   client is open.
 
 **Item 9 is CLOSED as of 2026-08-12** (ledger `LL-0046`). The `cdkey` hole is

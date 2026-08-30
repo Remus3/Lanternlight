@@ -113,6 +113,7 @@ never cloned. See `docs/OPERATIONS.md`.
 |---|---|
 | [`docs/FINDINGS.md`](docs/FINDINGS.md) | The feasibility probe. Every line is a measurement, and where something was not measured it says so |
 | [`docs/OBSERVED_IDS.md`](docs/OBSERVED_IDS.md) | First-party id observations, each with the method that established it |
+| [`docs/AFFIXES.md`](docs/AFFIXES.md) | **What the game STATES**, read off its own tooltips - affix ladders, the gem inlay rules, item stats. Kept apart from the measured record on purpose: a tooltip is a developer claim, not an observation |
 | [`docs/CLASSES.md`](docs/CLASSES.md) | **Single source of truth for all six classes.** Six independent research passes, adjudicated by a seventh agent that wrote none of them |
 | [`docs/CLASS_RESEARCH.md`](docs/CLASS_RESEARCH.md) | Blackarrow vs Shadowstrix, the earlier decision record behind the operator's class choice |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Module map, the three data surfaces, and where the redactor sits |
