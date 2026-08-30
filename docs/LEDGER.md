@@ -84,6 +84,21 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0089 - 2026-08-30 - Withdrawn: the claim that 15 lane ledger entries were unintegrated. All were already folded in, and asserting a negative without checking is now this session's third instance of one error
+
+**Evidence:**
+- lane_state.integrate run on all three fragments -> each returned an EMPTY list, and git status showed docs/LEDGER.md byte-unchanged
+- the integrator compares CONTENT as well as id and raises on a mismatch; none raised, so all 15 entries are present identically
+- id comparison independently: 89 entries in the ledger contain every id from all three fragments, 0 missing
+- git rev-list --count main..lane/<name> -> 0 for ingest, ops, safety and research, so no lane branch holds unmerged work
+- python -m pytest -> '1327 passed in 23.42s', observed this run; python -m ruff check . -> 'All checks passed!'
+
+WITHDRAWN: 'lanes/ingest.LEDGER.md, lanes/ops.LEDGER.md and lanes/safety.LEDGER.md hold 15 entries between them, none folded into docs/LEDGER.md, going stale.' Every part of that is false. The entries are integrated, the content matches, and the branches hold no unmerged work.
+HOW IT HAPPENED, and it is the same shape as the other two this session: I counted the entries IN the fragments and asserted they were absent from the ledger without ever comparing the two sets. An assertion about absence, made from a count of presence. The capture-inventory error was the identical move - counting what I had listed and concluding what was not there.
+THE PATTERN WORTH KEEPING: this session produced three false claims and every one was a NEGATIVE asserted without a check - 'only one capture is full-screen', 'no capture covers these timestamps', 'these entries are unintegrated'. Positive claims were re-derived and held. A negative needs the same re-derivation as a number, and this repository's anti-patterns list already says an empty grep is a claim about the pattern.
+WHAT IS ACTUALLY TRUE and was missed by the false claim: the lane branches are BEHIND main - ingest by 128 commits, ops by 109, safety by 18, research by 5. That is housekeeping rather than risk, but a lane starting work without syncing will branch from a stale base. Recorded here because it is the real version of the concern the false claim gestured at.
+The loop directive carried the false claim into the continuity record where a cold session would have acted on it. Corrected in place.
+
 ### LL-0088 - 2026-08-30 - Refutation pass caught a FALSE first-party claim in a public repo - the conclusion survived, three pieces of its published evidence did not
 
 **Evidence:**
