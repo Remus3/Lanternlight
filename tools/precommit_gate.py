@@ -10,13 +10,16 @@ Reads the tool-call payload on stdin as JSON, and:
   - blocks a commit message carrying a banned glyph
   - blocks `Stop-Process`
 
-Exit 0 allows. Exit 2 blocks and the stderr text is shown to the model.
+Exit 0 allows. Exit 2 blocks and the stderr text is shown to the model. The
+exit code is the verdict and the stderr text is best-effort - see `_say`, and
+`OPS-15` for the fail-open this ordering used to produce.
 Never raises - a crashing gate that blocks every command is worse than no gate,
 so anything unexpected exits 0 and says why on stderr.
 """
 
 from __future__ import annotations
 
+import contextlib
 import json
 import re
 import subprocess
@@ -58,9 +61,71 @@ def _staged_paths() -> list[str]:
     return [line.strip() for line in out.stdout.splitlines() if line.strip()]
 
 
+def _say(message: str) -> None:
+    """Report ``message`` on stderr, best-effort, without risking the exit code.
+
+    **`OPS-15`, and the coupling it removes.** This gate's verdict IS its exit
+    code - a PreToolUse hook blocks on 2 and permits on everything else. The
+    reason text is a courtesy. Before this, the two were coupled: :func:`_block`
+    wrote first and exited second, so a stderr that could not be written took
+    the refusal with it and the gate FAILED OPEN.
+
+    Two distinct paths lost the code, and the second is the one that makes a
+    bare ``try``/``except`` at each call site insufficient:
+
+    * the write raises, the outer handler in ``__main__`` writes again, raises
+      again, and the process exits 1;
+    * the write is merely BUFFERED and never flushed. CPython flushes the
+      standard streams at interpreter shutdown and **exits 120 if that flush
+      raises**, overriding whatever this script exited with. Measured at exit
+      120 on a blocking payload and on a benign one alike.
+
+    So catching the failure is not enough - the stream has to stop being
+    flushable. On failure ``sys.stderr`` is detached, which is the whole reason
+    this is a function rather than an inline ``try``.
+
+    Losing the message is an acceptable trade. Losing the verdict is not.
+    """
+    try:
+        sys.stderr.write(message)
+        sys.stderr.flush()
+    except Exception:
+        with contextlib.suppress(Exception):
+            sys.stderr = None
+
+
+def _exit(code: int) -> None:
+    """Exit with ``code``, making sure interpreter shutdown cannot change it.
+
+    **The other half of `OPS-15`.** :func:`_say` detaches a stderr it failed to
+    write, but a run that never NEEDS to report never calls it - and a benign
+    command is exactly that run. The stream stays attached and unflushable,
+    CPython's shutdown flush raises, and the process exits 120 instead of 0.
+    Measured on ``ls -la`` with a broken stderr, after the ``_say`` fix had
+    already corrected both blocking paths.
+
+    Exit 120 is not a fail-open - only exit 2 blocks - so this half is noise
+    rather than a hole. It is still a gate reporting failure on every command
+    it was perfectly happy with, which is how a guard gets switched off.
+
+    Both streams are checked: nothing here writes to stdout, but a broken
+    stdout fails the same shutdown flush and produces the same 120.
+    """
+    for name in ("stdout", "stderr"):
+        stream = getattr(sys, name, None)
+        if stream is None:
+            continue
+        try:
+            stream.flush()
+        except Exception:
+            with contextlib.suppress(Exception):
+                setattr(sys, name, None)
+    sys.exit(code)
+
+
 def _block(reason: str) -> None:
-    sys.stderr.write(f"BLOCKED by tools/precommit_gate.py: {reason}\n")
-    sys.exit(2)
+    _say(f"BLOCKED by tools/precommit_gate.py: {reason}\n")
+    _exit(2)
 
 
 def main() -> int:
@@ -96,9 +161,9 @@ def main() -> int:
 
 if __name__ == "__main__":
     try:
-        sys.exit(main())
+        _exit(main())
     except SystemExit:
         raise
     except Exception as exc:  # a gate must never wedge the session
-        sys.stderr.write(f"precommit_gate soft-failed, allowing: {exc}\n")
-        sys.exit(0)
+        _say(f"precommit_gate soft-failed, allowing: {exc}\n")
+        _exit(0)
