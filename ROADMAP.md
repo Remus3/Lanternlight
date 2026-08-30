@@ -2496,7 +2496,7 @@ Nothing binds a port yet, so this guards an allocation rather than a service.
 That is the point - the moment a service is built is the moment a stray constant
 becomes expensive, and a guard added then arrives after the mistake.
 
-## OPS-13. Nothing guards the source register's completeness - CLOSED 2026-08-29b
+## OPS-13. Source register completeness - REFUTED, then RE-CLOSED 2026-08-29c
 
 Opened 2026-08-29 by item 8b, as its own item rather than a note inside that
 item, because a caveat buried in a closed item is invisible to the next session.
@@ -2505,23 +2505,45 @@ Closed by ledger `LL-0080`. The guard is `tests/test_source_register.py`,
 owned by the **safety** lane - see `ops/lanes.py`, which answers the
 ownership question this item deliberately left open.
 
-**The numbers below were a hypothesis and the shipped checker refutes them.
-Re-derived at merge time, 2026-08-29b: 303 host-shaped tokens in `docs/`,
-227 denylisted, 76 real external sources checked** - not 78/15/63. The
-difference is the extractor, not the register: this one matches ANY dotted
-token whose final label is 2-24 letters, so it also catches `README.md`,
-`state.py` and the `TS.*` gameplay tags, which the wrap's narrower pattern
-never saw. That is the deliberate direction of the error - a broader net
-has fewer blind spots and a bigger denylist, and blindness is the failure
-this item exists to prevent. Do not 'fix' the count back to 63.
+**THE FIRST CLOSURE WAS REFUTED. A three-lens adversarial pass on `af70a73`
+found a LIVE false negative**, and `LL-0081` records the repair. The guard
+asked `host in section`, a bare substring test, so `grandwiki.com` - cited
+standalone in `docs/ECOSYSTEM.md` section 8 and carrying no register row -
+passed on the strength of the neighbouring `mistfallhunter.grandwiki.com`
+row. Under the same defect `x.com` passed inside `gamingpromax.com` and
+`t.co` inside `grindnstrat.com`, which are the two most plausible
+first-party sources a future session would reach for. Presence now requires
+a host BOUNDARY, and `grandwiki.com` has a row of its own.
 
-**The denylist was adversarially probed, not just asserted.** It is the
-trusted surface, so a real source hidden in it would be `LL-0079` wearing
-the other hat. Measured: 0 of its 227 members are uncited dead weight, and
-only 3 have a final label that is a real public TLD - `Game.Net.Online`
-(an Unreal gameplay tag), `TS.AI` (a log-line category prefix) and
-`v1.7.1.dev` (a version string). None is a source. Re-run that probe after
-any bulk addition to `KNOWN_NON_HOSTS`.
+**The counts, re-derived after the repair. Every earlier figure in this item
+was wrong at least once, so re-measure rather than cite:** 305 host-shaped
+tokens in `docs/`, 234 denylisted, 71 surviving tokens, and **63 DISTINCT
+external sources** once 8 case/`www.` duplicates collapse. Only that last
+number is stable - the first three move every time a ledger entry names a
+new file, which is precisely how the previous closure's figures went stale
+inside a single commit. The item
+originally filed 78/15/63 and the first closure filed 303/227/76; the 76 was
+an overcount that counted duplicates and five of this repository's OWN
+documents as external sources. The extractor is deliberately broad - it
+matches any dotted token whose final label is 2-24 letters - because a
+broader net has fewer blind spots at the cost of a bigger denylist, and
+blindness is the failure this item exists to prevent.
+
+**The denylist was adversarially probed, and THE PROBE ITSELF WAS WRONG THE
+FIRST TIME - which is the most reusable lesson in this item.** The denylist
+is the trusted surface, so a real source hidden in it would be `LL-0079`
+wearing the other hat. The first probe screened members by whether their
+final label was a 'real public TLD' - using a HAND-WRITTEN list of TLDs. That
+list omitted `.md` (Moldova) and `.py` (Paraguay), so it reported 3
+candidates when the true figure is 60-plus. **A hardcoded TLD allowlist, in
+the audit written to guard against a hardcoded TLD allowlist.**
+
+What survives re-derivation: 0 of the 232 members are uncited dead weight,
+which is evidence the list came from measurement rather than guesswork, and
+every `.md`/`.py` member resolves to a repository filename or module path
+cited by other documents. No member is an external source. **Do not re-run
+the filed probe as if its number were a baseline** - screen by reading the
+members, not by matching a TLD list you wrote yourself.
 
 The register in `docs/ECOSYSTEM.md` was proven complete by a checker that lived
 in a session scratchpad and is now gone. The research lane wrote it there
@@ -2568,6 +2590,29 @@ research-lane document but must live in `tests/`, which research does not own.
 doc-completeness check, not a redaction check, and nobody has decided whether
 that stretches the mandate. Read `ops/lanes.py` for who owns a path, not this
 paragraph.
+
+## OPS-15. `precommit_gate._block` fails OPEN when stderr is unusable - READY
+
+Found 2026-08-29c by the adversarial pass on `af70a73`, filed rather than
+fixed because it is not what that pass was reviewing and it predates the
+change under review. **It is not caused by the `pythonw.exe` switch** - both
+interpreters behave identically here, which was measured across 14 cases.
+
+`tools/precommit_gate.py` writes the reason to `sys.stderr` and only THEN
+calls `sys.exit(2)`. If that write raises - a closed, null or non-writable
+stderr - the outer `except Exception` handler writes to stderr again, raises
+again, and the process exits 1 or 120. **A PreToolUse exit that is not 2 does
+not block**, so a gate that cannot report its reason silently permits the
+commit it was trying to stop. Measured in two constructed shapes; not
+observed in the live runner, which does capture output.
+
+The fix is ordering, not logic: decide, exit non-zero, and treat the message
+as best-effort. A guard whose failure mode is fail-open is the one shape this
+repository's safety lane exists to refuse.
+
+**Acceptance:** a test that runs the gate on a blocking payload with stderr
+made unwritable and asserts the exit code is still 2, proven non-vacuous by
+restoring the current ordering and watching it go red.
 
 ## OPS-14. C: hit 100% mid-session, then recovered with nothing deleted - OPEN
 
