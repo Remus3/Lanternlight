@@ -1156,6 +1156,30 @@ breakpoint), Vitality (Maximum Energy, prevents one Energy Overdraft), Elusive
 (damage while Health is above a threshold), Smiting (Critical Hits restore Energy
 and reduce cooldowns).
 
+**UPDATED 2026-08-30d: three of those are no longer qualitative, and the guides
+were RIGHT.** `docs/AFFIXES.md` now carries full first-party ladders read off the
+client, with exact percentages:
+
+- **`Seeker`** - "Hitting an enemy increases Movement Speed for 3s", +1.5% per
+  level, and a stack cap of 2 from Lv. 4. The guide description matches.
+- **`Fervid`** - "When Health is above 70%, increase Physical Damage and Magic
+  Damage", +1.8% per level, with Skill Energy Cost Reduction from Lv. 5. The
+  guide's "above a threshold" is now a number.
+- **`Vitality`** - "Increases Maximum Energy. Upon reaching a certain level,
+  when entering a state of Energy Overdraft, you become immune to that specific
+  instance." The guide's phrasing was very close to verbatim.
+
+`Elusive` gains a MECHANISM and nothing more: the character attribute sheet
+carries a stat literally named `Dodge Energy Cost Reduction`, which makes the
+guide claim possible without confirming it. `Fervor`, `Valor` and `Smiting`
+remain unread on the client.
+
+**The pattern is worth more than the three confirmations.** This document's
+standing posture toward T4 guide vocabulary was doubt, and C14 already records
+one place that doubt was wrong. Where the client has been checked, the guides
+have so far been accurate about NAMES and about the SHAPE of effects, and wrong
+only about magnitudes they never had.
+
 A wiki claims Bellring shared an official beginner Dagger loadout in Discord.
 **Treat as wiki-attributed-to-official, not confirmed official** - the Discord
 post could not be reached. This is the same shape as the Mercenary fabrication
@@ -1661,8 +1685,11 @@ ranged ally rescue.
 
 - **Burst** (increases execution and Wither-detonation damage) is the only affix
   name independently corroborated by two separate sources.
-- Single-sourced affix names: Seeker (movement speed on hit), Aegis and Stoic
-  (defensive), Fervid, Tenacious (max health and healing efficiency).
+- Single-sourced affix names: Aegis and Stoic (defensive), Tenacious (max health
+  and healing efficiency). **`Seeker` and `Fervid` were on this list and are
+  removed 2026-08-30d** - both now have complete first-party ladders read off
+  the client and quoted in `docs/AFFIXES.md`, so neither is single-sourced any
+  longer.
 - **Greatsword Specialization** - a talent adding an extra skill socket to the
   Greatsword loadout at the cost of a socket on the Polearm and Shield loadout.
   Two sources give near-identical wording, which is itself a copying signature

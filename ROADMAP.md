@@ -2235,11 +2235,15 @@ the number 5 from the GAME rather than from a memory of the screen.** The
 duration". This item chases an icon that climbs to 5. The icon may simply be the
 Volley arrow COUNT and not a stacking buff at all.
 
-Treat that numeric coincidence with suspicion rather than relief - it is a match
-between a remembered maximum and a stated maximum, and nothing observed ties the
-icon to Volley. Note also that Volley is bounded by a DURATION while this item
-reports the icon climbing per HIT, which is a behavioural difference worth
-testing.
+**That candidate got WEAKER the same day it was raised, and the reason matters
+more than the candidate.** `Sky Piercer` also states 5 - its arrow can "pierce
+5 units". **Two unrelated skills in one kit both state 5**, so matching this
+item's climbing icon on that number discriminates nothing at all. The candidate
+survives only on the Volley MECHANIC, never on its maximum.
+
+Note also that Volley is bounded by a DURATION while this item reports the icon
+climbing per HIT, which is a behavioural difference worth testing - and that
+nothing observed ties the on-screen icon to Volley in the first place.
 
 **So the item now needs TWO runs, not one, and they are different tests.**
 
@@ -2772,6 +2776,20 @@ method and not a hopeful one.
 `1230304` carrying it, so it is one tooltip hover with a full-screen capture
 running.
 
+**A THIRD ROUTE was found 2026-08-30c and it is cheaper than either, because it
+needs no deliberate action at all.** Equip an item whose affix cfgId the log
+carries, with the **`Affixes` panel OPEN** across the equip, and the affix that
+appears NAMES that id. It has never fired for a precise reason: of 23
+single-slot equip events across three logs, exactly one involves a known-affix
+item during a full-screen capture, and the panel is closed on both sides of it.
+**The recipe is one sentence - keep the `Affixes` panel open while equipping** -
+and it turns ordinary gear changes into id bindings. Recorded as `RES-26`.
+
+**A fourth surface exists and is unexplored: WINE.** The log carries
+`wines[{id:1, affixes:[208,211]}]`, so wine carries affixes too, and `Victory
+Wine` is brewed from `Malt`. A wine screen showing an affix beside a wine id
+would bind ids the same way.
+
 **Acceptance:** for each id bound, a new row in `docs/OBSERVED_IDS.md` naming
 the id, the name, and the method, plus the frame filename and the UTC log
 timestamp it was joined to. A binding read off an ICON rather than a ROW LABEL
@@ -2830,6 +2848,62 @@ is precisely the sourcing error that `LL-0079`, `LL-0081` and `CLASSES.md` C14
 all record - the answer was not hard to get, it was being sought in the wrong
 place.
 
+## 13. Page-2 talent NODE TEXT - READY, and the item it replaces was DEAD ON ARRIVAL
+
+Opened 2026-08-30d, **rewritten the same day after a refutation pass.** Ledger
+`LL-0093` and `LL-0097`.
+
+**The item this replaces asked for page two of the talent tree to be captured.
+That was already done, three weeks earlier.** `docs/OBSERVED_IDS.md` has carried
+a cluster table with an explicit `Page` column since 2026-08-09, listing all six
+page-two clusters with gates, plus a second table of the NODE NAMES inside them.
+Frame `f0160_22.29.45` shows page two and matches that table exactly.
+
+**An item asking a future session to re-derive what is already on disk is the
+precise failure this project's continuity design exists to prevent**, and it was
+filed by the session that had read that file's headings an hour earlier. Left
+here in corrected form rather than deleted, because the shape of the mistake is
+the useful part.
+
+**What is genuinely missing** is the node TOOLTIP TEXT for page-two clusters.
+`OBSERVED_IDS` records node NAMES - `Steady Stealth`, `Cold Infusion`,
+`Gyldenmist Tolerance` and the rest - but not what any of them does. Page-one
+nodes have four such texts quoted in `docs/AFFIXES.md`; page two has none.
+
+**Acceptance:** the effect text of at least one page-two node, quoted verbatim
+with its frame named, written up beside the page-one tooltips. `Gyldenmist
+Tolerance` is the highest-value single node - `docs/FINDINGS.md` records it as a
+plausible player-facing name for the shrinking-circle mechanic and explicitly
+refuses to write the binding down until something observed connects them. Its
+tooltip would connect them or refute the guess.
+
+**Before working this item, open `docs/OBSERVED_IDS.md` first.** That is the
+whole lesson of the version this replaces.
+
+## 14. The item-borne affix is NOT known to travel with the item type - OPEN
+
+Opened 2026-08-30d. Ledger `LL-0096`, which withdraws the claim that it does.
+
+The log shows 8 affixed item cfgIds each mapping to exactly ONE affix triple,
+stable across three logs and a client patch, with the field literally named
+`fixed` set `true`. That looked like "the affix is a property of the item TYPE".
+
+**Two instances of an `Oil-soaked Wooden Bow` carry DIFFERENT affixes** -
+`Seeker` in one frame and `Ranged` in another, same base stats, different
+durability. One character owning one instance of each type produces the log's
+pattern whether the affix is fixed or rolled, so the log cannot distinguish the
+two models and the UI says they differ.
+
+**The honest limit:** the two bows are matched by display NAME and base stats,
+not by `cfgId`, and two cfgIds could share a name. The log carries no `exEquip`
+for either, so this cannot be closed from disk.
+
+**Acceptance:** two instances of one item type, both with their `cfgId` visible
+in the log AND their affix visible on screen at the same wall clock. If their
+affixes differ, the roll is per-instance and `fixed:true` means something else -
+which is itself worth knowing, because Emberforge would otherwise treat an
+item's affix as derivable from its type.
+
 ## Ordering note
 
 **Items 2b, 2c, 2d, item 7's shipped-code half and item 3 are CLOSED as of
@@ -2848,8 +2922,14 @@ question, the headshot mechanism, and whether the ~1.3x per pace is real.
 **The next item depends on whether the client is open.**
 
 - **Client open:** 7b's remaining threads are all cheap and all need it. Fold
-  in items 1, 4b, 5, 6 and **11**, which also need the client and none of which
-  deserves its own session. **Arm the wide-shot poller before the first run** -
+  in items 1, 4b, 5, 6, **11** and **13**, which also need the client and none
+  of which deserves its own session. **Item 11's cheapest route needs no
+  deliberate action at all**, only that the `Affixes` panel be left OPEN while
+  equipping anything. **Item 13 needs one node tooltip on talent page two** -
+  and note that page two ITSELF has been recorded since 2026-08-09; a version of
+  item 13 that asked for it to be captured was filed and withdrawn on
+  2026-08-30d, which is why that item now opens by telling you to read
+  `docs/OBSERVED_IDS.md` first. **Arm the wide-shot poller before the first run** -
   the first sweep of 2026-08-25 had to be re-run because its distances were
   inferred from clock order rather than recorded (`docs/FINDINGS.md` 11.10).
   **Make that poller FULL-SCREEN, not a crop.** Item 11 lost two affix

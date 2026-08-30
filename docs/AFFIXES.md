@@ -651,11 +651,17 @@ the stability finding stronger rather than weaker: six of the eight are observed
 on both sides of a client update carrying the identical affix triple. A
 per-instance random roll has no reason to survive a patch unchanged.
 
-**INFERENCE, and it is the one this document most wants to be careful about:
+**INFERENCE, WITHDRAWN 2026-08-30d - see the tooltip section below.** It read:
 the item-borne affix looks like a property of the item TYPE rather than a
-per-instance random roll.** Three independent things point the same way - the
-strict one-to-one item-to-affix mapping, its stability across four days, and the
-field being literally named `fixed` and being `true` on all 68 observations.
+per-instance random roll, on three independent grounds - the strict one-to-one
+item-to-affix mapping, its stability across four days, and the field being
+literally named `fixed` and `true` on all 68 observations.
+
+**Two instances of one item name were later found carrying DIFFERENT affixes**,
+which is exactly the test the paragraph below this one named as missing. The
+MEASUREMENTS in this section all stand; only the inference drawn from them is
+withdrawn. One character owning one instance of each type produces this pattern
+whether the affix is fixed or rolled, so the log cannot discriminate.
 
 **This is the first-party evidence for what DevNote #6 and Dev Team FAQ #2 said**
 and what `docs/CLASSES.md` C14 had to correct itself about. Those notes say gems
@@ -775,13 +781,18 @@ reason.
 
 ### The affix vocabulary now known, from all sources
 
-Union of the Auction House catalogue, the `f1290` loadout panel, and the affixes
-named inside gem tooltips: **22 distinct affix names.**
+Union of the Auction House catalogue, the `f1290` loadout panel, the affixes
+named inside gem tooltips, and one read off a weapon tooltip later the same day:
+**23 distinct affix names.**
 
-`Brotherhood`, `Burst`, `Curse`, `Distant Ward`, `Eloquence`, `Elusive`,
-`Fervid`, `Fervor`, `Focused`, `Ranged`, `Resilience`, `Seamless`, `Seeker`,
-`Skypiercing`, `Smiting`, `Spirit Shield`, `Strife`, `Unyielding`, `Valor`,
-`Vitality`, `Wealth`, `Wrath`.
+`Blessing`, `Brotherhood`, `Burst`, `Curse`, `Distant Ward`, `Eloquence`,
+`Elusive`, `Fervid`, `Fervor`, `Focused`, `Ranged`, `Resilience`, `Seamless`,
+`Seeker`, `Skypiercing`, `Smiting`, `Spirit Shield`, `Strife`, `Unyielding`,
+`Valor`, `Vitality`, `Wealth`, `Wrath`.
+
+**The count was 22 for part of 2026-08-30 and is corrected here rather than
+overwritten silently.** `Blessing` was read off a `Fang-Piercer Dagger` in the
+tooltip pass below, after this section was written.
 
 Ten of these were unknown to this document before 2026-08-30, and none of them
 appears anywhere in the launch-window wiki cluster's affix lists.
@@ -1266,14 +1277,35 @@ observed on this screen.
 Read from `f0000_22.23.53` in `C:\ll-captures\2026-08-25b\talents\`, 164 frames
 at 2560x1440 that no session had opened before 2026-08-30.
 
-### The screen has TWO pages, which was not recorded anywhere
+### The screen has TWO pages - RECORDED SINCE 2026-08-09, and this section claimed otherwise
 
-Two page indicators sit at the bottom, the first filled, and a `D` key prompt
-with a right arrow sits at the right edge. **So the talent tree is paged and
-every prior reading of it covered page one only.** `docs/OBSERVED_IDS.md`
-describes the Blackarrow talent tree as "complete for a level-2 character"; that
-completeness claim is about page one and should be read that way until page two
-is captured.
+**WITHDRAWN. The heading here read "which was not recorded anywhere" and the body
+said "every prior reading of it covered page one only" and that page two was
+uncaptured. All of that is FALSE**, and it is the rediscovery failure this
+project's whole continuity design exists to prevent.
+
+`docs/OBSERVED_IDS.md` has carried a talent-cluster table with an explicit
+**`Page` column** since **2026-08-09** - commit `bfda016` - listing all six
+page-two clusters with their unlock levels, and a further table of the NODE
+NAMES inside them. `Mighty Archer`, which this document also called unrecorded,
+is in that same table.
+
+The frame `f0160_22.29.45` in this very capture shows page two, and every
+cluster and gate on it matches that table exactly: `Hunter's Arrow
+Enhancement 1` (Lv. 6), `Bomb Engineering` (Lv. 9), `Predator's Stealth`
+(Lv. 10), `Woodling Expert` (Lv. 10), `Hunter's Arrow Enhancement 2` (Lv. 12),
+`Way of Gylden Hunt` (Lv. 12).
+
+**What this frame actually contributes is corroboration, not discovery** - a
+three-week-old table re-measured on a later capture and found correct. That is
+worth having and it is a much smaller claim.
+
+**How it happened, recorded because the mechanism is the useful part.** The
+author read the TALENTS screen, saw two page dots, and wrote "not recorded
+anywhere" without opening `docs/OBSERVED_IDS.md` - the file this same lane owns
+and had read the section headings of earlier in the same session. An absence was
+asserted from memory rather than checked, which is the third instance of that
+exact failure in one day.
 
 ### Six clusters on page one, with their gates
 
@@ -1292,13 +1324,14 @@ TRANSCRIPTION:
 `docs/AFFIXES.md` records from the 2026-08-30 `TALENTS` frame, four days later
 and one level higher. Two captures, same gates.
 
-`Mighty Archer` is a cluster name this project had not recorded.
+`Mighty Archer` was ALREADY RECORDED - `docs/OBSERVED_IDS.md` has it with a
+Lv. 5 gate. An earlier version of this line called it new; that is withdrawn.
 
 ### A talent tooltip, quoted
 
 The frame has a node tooltip open. Verbatim:
 
-> **`Unstoppable Edge`.** `Sky Piercer`'s `Physical Damage` is partially
+> **`Unstoppable Edge`**, frame `f0000_22.23.53`. `Sky Piercer`'s `Physical Damage` is partially
 > converted to `True Damage`.
 
 The tooltip offers an `Activate` action, and the character has **1 Talent
@@ -1539,7 +1572,9 @@ slots the table does.
 for the first, an accessory column for the second - and stay unconfirmed by a
 second surface.
 
-**The sum rule now has four independent confirmations** and holds on every row
+**The sum rule now has SIX independent confirmations** - four rows on the
+`Affix Details` table plus two per-affix `Level Distribution` rows - and holds
+on every row
 of every surface examined.
 
 ### An affix appearing LIVE on an equip
@@ -1589,10 +1624,15 @@ position.
 So the item route agrees with the trade-filter route that `211` is `Ranged` -
 now three independent confirmations of that binding.
 
-**Two different bows, different rarities, same item-borne affix.** That is UI
-evidence for what the log says with `"fixed":true` - the affix travels with the
-item TYPE rather than being rolled per instance. Two bows is not a proof; it is
-a second surface agreeing with the first.
+**Two different bows, different rarities, same item-borne affix.** This was
+offered as UI evidence that the affix travels with the item TYPE rather than
+being rolled per instance.
+
+**THAT READING IS WITHDRAWN - see the tooltip section below.** A second
+`Oil-soaked Wooden Bow` carries `Seeker` where this one carries `Ranged`, so
+two instances of one item name disagree. The OBSERVATION here stands - these two
+bows do share an affix - but it is no longer evidence for the type-level model,
+because a per-instance roll produces coincidences too.
 
 ### The character ATTRIBUTE sheet, which nothing had recorded
 
@@ -1657,8 +1697,14 @@ item-borne affix travels with the item TYPE.
 
 **`f0130_22.28.38` shows an `Oil-soaked Wooden Bow` carrying `Seeker` Lv.1.**
 Same item name, same base stats - `23 Attack`, `+2.00% Physical Damage` - and a
-different affix. The two differ in durability, 63% against 94%, so they are
-different instances rather than one item read twice.
+different affix. The two differ in durability, 63% against 94%.
+
+**That durability gap is NOT proof of two instances, and an earlier version of
+this line said it was.** Durability rose between the two readings, which a
+REPAIR explains as readily as a second item. Either way the conclusion holds -
+if it is one item, its affix CHANGED, which refutes the type-level model just as
+firmly as two instances disagreeing would. The reason is corrected; the finding
+is not.
 
 **So two instances of the same-named item carry DIFFERENT affixes, and the
 "affix travels with the item type" reading is refuted as stated.** This is
@@ -1700,15 +1746,21 @@ separates vendor sources from activity sources. This is the surface `RES-2`
 needs, which asks how arrows are acquired - no arrow tooltip was captured, so no
 arrow's Source is read here.
 
-### THREE SKILL TOOLTIPS, quoted
+### THREE SKILL TOOLTIPS, quoted - with their frames named
 
-> **`Rapid Arrows`** - enters `Volley` mode, hold to rapidly fire **up to 5
-> arrows** for a certain duration. Dodging removes Volley.
+**An earlier version of this section cited NO frame for any of these**, which
+breaks the method paragraph at the top of this document - the same omission it
+was written to shame, and one already recorded as a method defect earlier today.
+The frames are named here.
 
-> **`Sky Piercer`** - fully draw the bow and fire a powerful arrow in a straight
+> **`Rapid Arrows`**, frame `f0059_22.26.04` - enters `Volley` mode, hold to
+> rapidly fire **up to 5 arrows** for a certain duration. Dodging removes
+> Volley.
+
+> **`Sky Piercer`**, frame `f0050_22.25.45` - fully draw the bow and fire a powerful arrow in a straight
 > line toward the crosshairs. The arrow can `pierce` **5 units**.
 
-> **`Scattershot`** - fire **7 arrows** forward simultaneously, `knocking them
+> **`Scattershot`**, frame `f0056_22.25.58` - fire **7 arrows** forward simultaneously, `knocking them
 > back`. **Scattershot has a shorter `base cooldown` in trio mode.**
 
 **THE NUMBER 5 IS NOT DISTINCTIVE, and that weakens a candidate this document
@@ -1727,17 +1779,17 @@ VALUES are published survives intact.
 
 ### FOUR TALENT TOOLTIPS, quoted, and one answers a blocked item
 
-> **`Unstoppable Edge`.** `Sky Piercer`'s `Physical Damage` is partially
+> **`Unstoppable Edge`**, frame `f0000_22.23.53`. `Sky Piercer`'s `Physical Damage` is partially
 > converted to `True Damage`.
 
-> **`Powerful Scattershot`.** After `Scattershot` knocks back enemies, if they
+> **`Powerful Scattershot`**, frame `f0023_22.24.44`. After `Scattershot` knocks back enemies, if they
 > stop due to obstruction, they will be `Stunned`. The greater the impact force
 > when enemies hit obstacles, the longer the `Stun` duration.
 
-> **`Lightning Spread`.** Increases the chaining range of the lightning
+> **`Lightning Spread`**, frame `f0039_22.25.20`. Increases the chaining range of the lightning
 > generated by a fully drawn `Lightning Arrow`.
 
-> **`Dodge Power Shot`.** **Changes `roll` into `dodge`** and unlocks Dodge
+> **`Dodge Power Shot`**, frame `f0044_22.25.32`. **Changes `roll` into `dodge`** and unlocks Dodge
 > Power Shot: shoot immediately after `dodging`, consuming additional `Energy`
 > to quickly fire the currently loaded quick-charge arrow. Quick-charge arrows
 > can activate all special effects of fully drawn arrows but have a lower
@@ -1762,8 +1814,11 @@ term in both, which makes it a real engine quantity rather than tooltip prose.
 The cluster occluded in the first reading is `Archer's Arrow Enhancement 2`,
 `Unlocks at Lv. 11.` So page one is: `Swift Shot` (Lv. 8), `Nimble Evade`
 (Lv. 7), `Battle Hardened`, `Archer's Arrow Enhancement 1`,
-`Archer's Arrow Enhancement 2` (Lv. 11), and `Mighty Archer`. Page two remains
-uncaptured.
+`Archer's Arrow Enhancement 2` (Lv. 11), and `Mighty Archer`.
+
+**Page two is NOT uncaptured** - an earlier version of this line said it was.
+`f0160_22.29.45` shows it, and `docs/OBSERVED_IDS.md` has held its clusters and
+node names since 2026-08-09.
 
 ### The COMBAT BAG preset system, which nothing had recorded
 
