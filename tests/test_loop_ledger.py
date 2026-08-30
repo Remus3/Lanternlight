@@ -250,3 +250,75 @@ class TestTheDefaultTargetIsTheRealLedger:
         book = ledger.default_ledger_path()
         assert book.is_file()
         assert ledger.ENTRIES_MARKER in book.read_text(encoding="utf-8")
+
+
+class TestThePreservationCheckIsReachable:
+    """`OPS-10`. The self-check was decoration, and this is what makes it real.
+
+    Measured before the fix, not assumed: deleting the ``raise`` from
+    ``append_entry`` left this module's whole suite green. The behavioural tests
+    cover the OUTCOME - entries survive an append - and nothing forced the
+    assertion path, because the composed text ended with ``preserved`` by
+    construction for every possible input. `LL-0042` recorded that check as
+    covered; it was not.
+
+    The decision recorded here, since `OPS-10` asked for one: **keep the check
+    and make it provable**, rather than deleting it or letting it keep an
+    unearned claim of coverage. What it really guards is a future edit to the
+    composition, so the composition was given a name - ``ledger._compose`` - and
+    these tests substitute a broken one. That is the only way a check on an
+    invariant that currently cannot break can be shown to fire at all.
+    """
+
+    def test_a_composer_that_drops_the_tail_is_refused(self, tmp_path, monkeypatch):
+        book = _book(tmp_path)
+        ledger.append_entry(_entry("LL-0001"), book)
+        before = book.read_text(encoding="utf-8")
+
+        monkeypatch.setattr(
+            ledger,
+            "_compose",
+            lambda head, block, preserved: head + "\n\n" + block + "\n",
+        )
+        with pytest.raises(AssertionError) as caught:
+            ledger.append_entry(_entry("LL-0002"), book)
+
+        assert "ALTERED existing content" in str(caught.value)
+        assert book.read_text(encoding="utf-8") == before, (
+            "the check raised but the file was written anyway - it must refuse "
+            "BEFORE the write, not after"
+        )
+
+    def test_a_composer_that_truncates_one_byte_is_refused(self, tmp_path, monkeypatch):
+        """One byte is enough. The promise is byte-exact, not approximate."""
+        book = _book(tmp_path)
+        ledger.append_entry(_entry("LL-0001"), book)
+        before = book.read_text(encoding="utf-8")
+
+        monkeypatch.setattr(
+            ledger,
+            "_compose",
+            lambda head, block, preserved: head + "\n\n" + block + "\n\n" + preserved[:-1],
+        )
+        with pytest.raises(AssertionError):
+            ledger.append_entry(_entry("LL-0002"), book)
+        assert book.read_text(encoding="utf-8") == before
+
+    def test_the_real_composer_still_satisfies_the_check(self, tmp_path):
+        """The positive control - the shipped composer must not trip its own guard."""
+        book = _book(tmp_path)
+        ledger.append_entry(_entry("LL-0001"), book)
+        ledger.append_entry(_entry("LL-0002"), book)
+        text = book.read_text(encoding="utf-8")
+        assert "### LL-0001" in text
+        assert "### LL-0002" in text
+
+    def test_compose_is_a_pure_concatenation(self):
+        """It must stay a pure function of its three arguments.
+
+        If it ever branches on anything else, the preservation check above
+        stops meaning what it says.
+        """
+        assert ledger._compose("H", "B", "P") == "H\n\nB\n\nP"
+        assert ledger._compose("H", "B", "P").endswith("P")
+        assert ledger._compose("", "", "") == "\n\n\n\n"

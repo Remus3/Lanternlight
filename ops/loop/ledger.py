@@ -152,6 +152,30 @@ def render_entry(entry: LedgerEntry) -> str:
     return "\n".join(lines)
 
 
+def _compose(head: str, block: str, preserved: str) -> str:
+    """Compose the updated ledger text: header, new entry, then everything else.
+
+    **Extracted for `OPS-10`, and the extraction is the whole point.** The
+    preservation check in :func:`append_entry` guards the one promise this
+    module makes - that every byte already below the marker survives an append.
+    While the composition was an inline expression, that check could not fail
+    for any input: the result ended with ``preserved`` by construction. Deleting
+    the ``raise`` left the suite green, so the guard was decoration, and
+    `LL-0042` over-claimed that it was covered.
+
+    A defensive check with no reachable trigger is worth keeping only if it can
+    be proven to fire, because the risk it actually covers is a FUTURE edit to
+    this composition rather than any input. Giving the composition a name is
+    what makes that provable: a test substitutes a composer that drops the tail
+    and asserts the append is refused with the target untouched. See
+    `TestThePreservationCheckIsReachable`.
+
+    Keep this a pure function of its three arguments. If it grows a branch on
+    anything else, the check above stops meaning what it says.
+    """
+    return head + "\n\n" + block + "\n\n" + preserved
+
+
 def append_entry(entry: LedgerEntry, path: Path | None = None) -> Path:
     """Insert ``entry`` at the top of the ledger, atomically.
 
@@ -184,13 +208,18 @@ def append_entry(entry: LedgerEntry, path: Path | None = None) -> Path:
     head = original[:split_at]
     preserved = original[split_at:].lstrip("\n")
 
-    updated = head + "\n\n" + block + "\n\n" + preserved
+    updated = _compose(head, block, preserved)
 
     # The one promise this module makes, checked before anything is written:
     # every byte that was already below the marker is still there, unchanged.
     if not updated.endswith(preserved):
         raise AssertionError(
-            "ledger append would have altered existing content; refusing to write"
+            f"{target}: ledger append would have ALTERED existing content; "
+            "refusing to write. The composed text does not end with the "
+            f"{len(preserved)} bytes that were already below the marker, so "
+            "an append would have truncated or rewritten existing entries. "
+            "This file is append-only; fix the composition, do not relax "
+            "this check."
         )
 
     target.parent.mkdir(parents=True, exist_ok=True)

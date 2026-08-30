@@ -24,7 +24,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "C:/Users/Administrator/AppData/Local/Programs/Python/Python314/python.exe C:/Lanternlight/tools/precommit_gate.py"
+            "command": "C:/Users/Administrator/AppData/Local/Programs/Python/Python314/pythonw.exe C:/Lanternlight/tools/precommit_gate.py"
           }
         ]
       }
@@ -35,7 +35,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "C:/Users/Administrator/AppData/Local/Programs/Python/Python314/python.exe C:/Lanternlight/tools/ascii_check.py"
+            "command": "C:/Users/Administrator/AppData/Local/Programs/Python/Python314/pythonw.exe C:/Lanternlight/tools/ascii_check.py"
           }
         ]
       }
