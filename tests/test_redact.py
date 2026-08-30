@@ -2310,3 +2310,76 @@ def test_the_module_records_the_device_id_decision():
     doc = redact_module.__doc__ or ""
     assert "DEVICE_ID" in doc
     assert "USER_UNIQUE_ID" in doc
+
+
+# --------------------------------------------------------------------------
+# a device MODEL string, added 2026-08-30 at the operator's direction
+# --------------------------------------------------------------------------
+#
+# The measured field is numeric and ``LONG_ID`` has always caught it - see
+# ``LL-0090``, which withdraws a claim that it leaked. What is added here is
+# coverage of the shape that was WRONGLY reported as present: a non-numeric
+# value under a bare ``device`` key. It is unobserved, so this is a deliberate
+# widening on safety grounds rather than a measured rule, and the module
+# docstring says so.
+#
+# Built by concatenation like every other fixture here, so no test file line
+# reads as a device string on its own.
+FAKE_DEVICE_MODEL = "SM" + "G991B" + "Android" + "13"
+
+
+def test_a_non_numeric_device_value_is_masked():
+    # THE FAILING TEST. Before the DEVICE rule this returns no label at all,
+    # because every device rule in the module required a long DIGIT run.
+    text = _kj("device", FAKE_DEVICE_MODEL)
+    assert "DEVICE" in _labels_of(text)
+    assert FAKE_DEVICE_MODEL not in redact(text)
+
+
+def test_the_measured_numeric_device_value_is_still_masked():
+    # The regression guard. The real field is a 19-digit run; whatever the new
+    # rule does, that must not stop being caught.
+    text = _kj("device", FAKE_DEVICE_ID)
+    assert FAKE_DEVICE_ID not in redact(text)
+
+
+def test_the_device_rule_does_not_fire_on_engine_log_noise():
+    # The over-fire guard, and the reason the rule is scoped to the JSON form.
+    # All three shapes are real lines from the game's own engine logging and
+    # none of them names a person: a memory handle, a hardware model, and a
+    # short audio device id.
+    handle = "Device=" + "0000000015A3E640"
+    model = "DeviceModel: " + "Generic"
+    audio = "DeviceId=" + "0x15"
+    for noise in (handle, model, audio):
+        assert redact(noise) == noise, noise
+        assert "DEVICE" not in _labels_of(noise), noise
+
+
+def test_the_device_rule_leaves_ordinary_prose_alone():
+    # These rules run over every tracked file, so a rule loose enough to fire on
+    # prose blocks every commit. This repository's own ledger discusses the
+    # device field in English.
+    prose = "roleInfo carries a device field that iter_sensitive returns no label for"
+    assert redact(prose) == prose
+    assert "DEVICE" not in _labels_of(prose)
+
+
+def test_the_device_label_reaches_the_repository_scan():
+    assert "DEVICE" in ALL_LABELS
+    assert "DEVICE" in FILE_SCAN_LABELS
+
+
+def test_the_device_rule_is_refused_by_assert_clean():
+    text = _kj("device", FAKE_DEVICE_MODEL)
+    with pytest.raises(RedactionError):
+        assert_clean(text)
+
+
+def test_the_module_records_the_device_widening_as_a_decision():
+    # This rule is NOT a renaming, unlike DEVICE_ID. It covers a shape nothing
+    # has emitted, which breaks the module's measured-only discipline on
+    # purpose, so the docstring has to say so rather than let a later reader
+    # assume it rests on data.
+    doc = redact_module.__doc__ or ""
+    assert "unobserved" in doc.lower()

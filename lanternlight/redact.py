@@ -221,6 +221,24 @@ Limits, stated rather than hidden:
   ``LONG_ID``'s own floor. The limit is the one :data:`_ID_VALUE` already
   states: a value under either key written as fewer than 15 digits, or as a
   UUID or a hex blob, is named by neither rule and caught by neither.
+- **``DEVICE`` is a deliberate widening, not a measured rule, and it is the one
+  rule in this module that does not rest on data.** Added 2026-08-30 at the
+  operator's direction. The measured ``device`` field holds a 19-digit run that
+  ``LONG_ID`` has always caught - ``LL-0090`` withdraws a claim that it leaked,
+  and records that the claim came from testing the guard against a FABRICATED
+  alphabetic input whose shape occurs nowhere in any log. This rule covers that
+  unobserved non-numeric shape anyway, because this module prefers
+  over-redaction to under-redaction and a device model names a person's
+  hardware. Scoped to the JSON form - the key in quotes, a colon, then a
+  quoted value - which is DEFANGED here rather than written literally,
+  because this rule scans this file too and fires on its own example. The
+  engine, by contrast, writes
+  ``Device=<memory handle>``, ``DeviceModel: <hardware string>`` and a short
+  ``DeviceId=<audio id>``, none of which names anyone, and these rules run over
+  every tracked file where the word also appears in ordinary prose. The quotes
+  are the discriminator. Stated limit, so nobody assumes more coverage than
+  exists: a non-numeric device value written WITHOUT the JSON quoting is caught
+  by neither this rule nor ``LONG_ID``.
 - **The encoded pass reads standard base64, hex and wide characters only.** The
   URL-safe base64 alphabet is not accepted, because ``_`` separates every
   snake_case identifier in this repository and admitting it would fuse ordinary
@@ -827,6 +845,33 @@ RULES: tuple[Rule, ...] = (
             "useruniqueid",
         ),
         "<USER_UNIQUE_ID>",
+    ),
+    # A device MODEL under a bare ``device`` key, in the JSON form only.
+    #
+    # NOT a renaming, unlike DEVICE_ID above, and NOT measured. The real field
+    # holds a 19-digit run that ``LONG_ID`` has always caught - ``LL-0090``
+    # withdraws a claim that it leaked. This rule covers the NON-NUMERIC value
+    # that claim wrongly described, which is unobserved in every log on this
+    # machine. It is a deliberate widening on safety grounds, taken at the
+    # operator's direction, and the module docstring records it as such.
+    #
+    # Scoped to the JSON form for a measured reason. The engine writes
+    # ``Device=<memory handle>``, ``DeviceModel: <hardware string>`` and a
+    # short ``DeviceId=<audio id>``, none of which names a person, and a bare
+    # key=value rule masks all three. These rules also run over every tracked
+    # file, and this repository's own ledger discusses the device field in
+    # English prose, which a loose rule would rewrite on every commit. The
+    # quotes are what separate telemetry from both.
+    #
+    # The key alternation cannot match inside ``device_id``, because the
+    # closing quote has to follow immediately, so this rule and the one above
+    # do not collide.
+    Rule(
+        label="DEVICE",
+        pattern=re.compile(
+            r'(?P<key>"(?:device|Device)")(?P<sep>[ \t]*:[ \t]*")(?P<value>[^"\n]+)'
+        ),
+        replacement=r"\g<key>\g<sep><DEVICE>",
     ),
     # Bare 32-char hex: an EOS ProductUserId with no key in sight.
     Rule(
