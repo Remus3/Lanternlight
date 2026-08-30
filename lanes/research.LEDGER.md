@@ -11,6 +11,28 @@ The integrator folds these entries into `docs/LEDGER.md` on `main`, with
 
 <!-- LANE ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0095 - 2026-08-30 - Swept the unread captures - three complete affix ladders, a template refuted by the third, the character attribute sheet, and an item Source taxonomy
+
+**Evidence:**
+- python -m pytest -> '1338 passed in 24.30s', observed this run in the research worktree
+- python -m ruff check . -> 'All checks passed!', observed this run
+- 0 non-ASCII lines in docs/AFFIXES.md
+- 188 frames reduced to 75 distinct states by 16x16 average-hash grouping at Hamming distance 12; every distinct SCREEN TYPE opened and read directly
+- frames read: f0000, f0059, f0079, f0092, f0104, f0117, f0119, f0128, f0141 in talents; f0134 in reanchor; f2093 and f2104 in the 2026-08-30 capture
+
+A TEMPLATE WAS ONE EDIT FROM BEING PUBLISHED AND THE THIRD LADDER BREAKS IT. Ranged and Fervid agree on all three properties - primary exactly rate*level, secondary unlocking at Lv.5, ladder 7 levels long. Seeker breaks all three at once: 5 levels, secondary at Lv.4, and Lv.3 and Lv.4 both read +4.5% so the primary is not linear. Two ladders agreeing was a hypothesis. What survives is weaker and true: an affix has a primary that scales and MAY gain a secondary clause, and neither ladder length nor unlock level nor linearity is shared.
+TWO NEW COMPLETE LADDERS quoted with exact percentages - Fervid at 1.8 percent per level with Skill Energy Cost Reduction from Lv.5, and Seeker at 1.5 percent per level with a stack cap of 2 from Lv.4.
+THE CONDITIONAL GATE IS A FAMILY, and the conditions differ in kind: distance over 5 meters for Ranged and Distant Ward, Health above 70 percent for Fervid, on-hit for 3s for Seeker. More published durations and thresholds, so the blanket claim that this game publishes no durations is false for affixes by a widening margin.
+THE SLOT ATTRIBUTIONS CAN NOW BE NAMED for two affixes, because each affix's own Level Distribution row agrees with the Affix Details table. The earlier hedge is lifted only where two surfaces agree; Fervor and Wealth stay single-surface. The sum rule now has four independent confirmations.
+AN AFFIX APPEARING LIVE: the Affixes panel goes from four entries to five between two frames and the log names the cause - item 1330304 equipped to slot 2, the glove. So item 1330304 grants Elusive Lv.1. Whether that is the item's own affix or a socketed gem is NOT determined, and no affix id is bound because the log never carries this item's exEquip.
+A THIRD BINDING ROUTE identified and specified, recorded as RES-26. It has never fired for a precise reason: of 23 single-slot equip events, exactly one involves a known-affix item during a full-screen capture, and the Affixes panel is CLOSED on both sides of it. The recipe is one sentence - keep the panel open while equipping.
+211 = Ranged RE-CONFIRMED BY A THIRD METHOD. A side-by-side comparison shows Deathclaw Hunter, which the log gives affix cfgId 211, carrying Ranged Lv.1 in the gem-less position. Three independent confirmations of that binding now.
+TWO DIFFERENT BOWS, DIFFERENT RARITIES, SAME ITEM-BORNE AFFIX - a Legendary and a Rare both carry Ranged Lv.1. UI evidence for what the log says with fixed:true. Two bows is a second surface agreeing, not a proof.
+THE CHARACTER ATTRIBUTE SHEET, which nothing had recorded and which CLASSES.md lists under what nobody knows. Eleven named attributes with exact values, including Max Dodge 250 and Max Stagger 100 - dodge and stagger are metered resources separate from Energy, which bears on RES-3. A Damage section sits below and was scrolled off in every frame examined.
+A GUIDE CLAIM GAINS A MECHANISM AND ONLY THAT. Guides say Elusive reduces dodge energy cost; a stat named Dodge Energy Cost Reduction exists. That makes the claim mechanically possible and does not confirm it - nothing read connects Elusive to that stat.
+ITEMS STATE THEIR SOURCE. An item tooltip carries a Source block - Auction, Brandrgarde Exploration, Explore the Hallowgrove - which is the surface RES-2 needs, since that item asks how arrows are acquired. No arrow tooltip was captured, so no arrow Source is read.
+COVERAGE STATED HONESTLY: every distinct screen type in both captures was read. The long tail of single-frame item-tooltip hovers was sampled rather than exhausted, so an individual item name or Source list may remain unread. No screen type is unaccounted for.
+
 ### LL-0094 - 2026-08-30 - The SKILLS screen carries a first-party '5' that ROADMAP item 10 needs, and the arrow-slot keys RES-8 was blocked on
 
 **Evidence:**
