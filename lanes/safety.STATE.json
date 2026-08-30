@@ -1,4 +1,7 @@
 {
+  "claimed_paths": [
+    "tests/test_precommit_gate.py"
+  ],
   "lane_id": "safety",
   "open_items": [
     {
@@ -77,5 +80,5 @@
   "resume_note": "NAME_FIELD re-armed after a P0 self-inflicted defect - redact() had disarmed it. Next is still the 2b fixture against SAF-8, SAF-9, SAF-11 and SAF-12, plus SAF-13 on the unmeasured type tokens",
   "schema": 1,
   "sessions": 2,
-  "updated": "2026-08-12T01:12:46+00:00"
+  "updated": "2026-08-30T05:07:57+00:00"
 }
