@@ -11,6 +11,26 @@ The integrator folds these entries into `docs/LEDGER.md` on `main`, with
 
 <!-- LANE ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0092 - 2026-08-30 - Adversarial review of the DEVICE rule found a BLOCKING defect - the rule broke the module's own redact-to-assert_clean contract. Fixed test-first; four further gaps recorded as stated limits
+
+**Evidence:**
+- python -m pytest -> '1338 passed in 24.82s', observed this run = 1327 baseline + 11 tests
+- python -m ruff check . -> 'All checks passed!', observed this run
+- RED FIRST: three assertions failed before the fix - assert_clean refusing redact's own output, stronger placeholders being downgraded, and the lookahead being absent from the value pattern
+- MUTATION on the new lookahead: removing it from _DEVICE_VALUE drove THREE guards red. The mutation was applied only after asserting the anchor matched exactly once
+- an earlier attempt at that same mutation was REFUSED by its own anchor assertion, which is the trap CLAUDE.md names - the suite showed green because nothing had been mutated
+- restored from a sha256-verified copy and the restored hash compared against the pre-mutation value
+- coverage UNCHANGED by the fix: DEVICE still fires exactly 4 times across the three logs and 0 times in the tracked tree
+- contract re-verified directly: redact() output now passes assert_clean(), and <PERSONA>, <STEAMID64>, <LONG_ID> and <DEVICE_ID> under a device key all survive untouched
+
+BLOCKING DEFECT, found by an independent reviewer and confirmed by re-derivation: the value pattern was a bare character class with no placeholder lookahead, so it matched <DEVICE> itself. assert_clean REFUSED redact's own output - the contract every other rule in this module honours. No leak, fail-closed, but DEVICE is in FILE_SCAN_LABELS, so it would have armed a permanent tests/test_no_pii.py failure the first time anyone committed a redacted device excerpt.
+SAME ROOT, second symptom: a value already masked by a STRONGER rule was re-masked as a device. <PERSONA> and <STEAMID64> under a device key both became <DEVICE>. That leaks nothing and destroys the record of WHAT was masked, which is what a reviewer of a committed fixture actually reads.
+TEXT IDEMPOTENCE SURVIVED BY ACCIDENT and hid the defect. The replacement is a fixed point, so redact(redact(x)) == redact(x) held while the DETECTOR was broken. An idempotence test alone would have passed and certified nothing - the contract test is the one that catches it.
+THE LOOKAHEAD IS LIVE HERE, unlike the one this module deliberately does NOT have on the cdkey pattern. That one was removed because its value cannot match < or >, making the guard unreachable, and the module records that a guard which cannot fire is not made real by a test that cannot fail. A test now pins the distinction so nobody deletes this one by analogy.
+A GUARD THAT WAS NEAR-DECORATION, also found by the reviewer: the prose test stayed GREEN under the very widening it was meant to catch, because its sample prose contained no separator. Strengthened with prose carrying a colon and an equals sign.
+FOUR FURTHER GAPS, none a measured leak, all now enumerated in the module docstring rather than left implicit: the escaped-JSON nesting, alternative key casings, single-quoted keys, and partial masking of a value containing an escaped quote or newline. The docstring previously stated only ONE limit, which understated the rule's reach.
+PROCESS NOTE: the review was requested by the operator instead of a merge, and it changed the outcome. The rule as first written would have gone to main with a broken contract.
+
 ### LL-0091 - 2026-08-30 - DEVICE rule added at the operator's direction - a deliberate widening for an UNOBSERVED shape, written test-first and proven non-vacuous by two mutations
 
 **Evidence:**
