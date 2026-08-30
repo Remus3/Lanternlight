@@ -2199,6 +2199,23 @@ Suite 1282 passed / 1282 collected, ruff clean. Baseline 1277.
 
 ## 10. The stack buff - measure it AT THE CEILING - READY, needs the client
 
+**READ [`docs/AFFIXES.md`](docs/AFFIXES.md) BEFORE WORKING THIS ITEM - 2026-08-30
+moved the ground under it.** Three things were read off the game's own UI that
+this item did not have. (1) `Focus Fire`'s tooltip is now quoted exactly:
+"Rapid Arrows increase the Damage Multiplier with each hit on the same enemy" -
+so the thing that climbs is a named `Damage Multiplier`. (2) A THIRD candidate
+exists that this item never considered: the `Ranged` weapon AFFIX grants a
+TEMPORARY damage increase gated on distance greater than 5 metres, which is
+neither a talent nor a base mechanic. (3) `Focus Fire` is currently ALLOCATED
+while the operator reports the buff no longer appearing at all - so something
+here is wrong and the item cannot be worked as written.
+
+The good news: the target-switch test below now DISCRIMINATES, which it could
+not before. `Focus Fire` is scoped to one enemy; the `Ranged` affix is scoped
+to distance and does not care about the target. One alternating run separates
+them. **Record the weapon's affix set with every run from now on** - no
+previous run recorded it, so no previous run can be re-attributed.
+
 Opened 2026-08-26. **The highest-value open question this project has**, because
 it may mean an existing headline finding is an artifact.
 
