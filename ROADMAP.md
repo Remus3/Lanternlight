@@ -2228,10 +2228,31 @@ neither a talent nor a base mechanic. (3) `Focus Fire` is currently ALLOCATED
 while the operator reports the buff no longer appearing at all - so something
 here is wrong and the item cannot be worked as written.
 
-The good news: the target-switch test below now DISCRIMINATES, which it could
-not before. `Focus Fire` is scoped to one enemy; the `Ranged` affix is scoped
-to distance and does not care about the target. One alternating run separates
-them. **Record the weapon's affix set with every run from now on** - no
+**(4) A FOURTH candidate, added 2026-08-30b, and it is the first one carrying
+the number 5 from the GAME rather than from a memory of the screen.** The
+`SKILLS` screen states that `Rapid Arrows` enters a mode called `Volley`
+"allowing you to hold to rapidly fire **up to 5 arrows** for a certain
+duration". This item chases an icon that climbs to 5. The icon may simply be the
+Volley arrow COUNT and not a stacking buff at all.
+
+Treat that numeric coincidence with suspicion rather than relief - it is a match
+between a remembered maximum and a stated maximum, and nothing observed ties the
+icon to Volley. Note also that Volley is bounded by a DURATION while this item
+reports the icon climbing per HIT, which is a behavioural difference worth
+testing.
+
+**So the item now needs TWO runs, not one, and they are different tests.**
+
+1. **Target-switch**, which separates `Focus Fire` from the `Ranged` affix.
+   `Focus Fire` is scoped to one enemy; the affix is scoped to distance and does
+   not care about the target. Ten hits alternating between two enemies.
+2. **Fire-and-stop**, which separates a Volley COUNTER from a per-hit STACK.
+   Fire `Rapid Arrows`, then stop without dodging, and watch the icon. A
+   duration counter decays on its own; a per-hit stack does not.
+
+These are not exclusive candidates - a Volley counter and a per-hit multiplier
+could both be on screen at once, which is itself a reason to run both tests
+rather than stopping at the first explanation that fits. **Record the weapon's affix set with every run from now on** - no
 previous run recorded it, so no previous run can be re-attributed.
 
 Opened 2026-08-26. **The highest-value open question this project has**, because

@@ -84,6 +84,22 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0094 - 2026-08-30 - The SKILLS screen carries a first-party '5' that ROADMAP item 10 needs, and the arrow-slot keys RES-8 was blocked on
+
+**Evidence:**
+- python -m pytest -> '1338 passed in 25.35s', observed this run in the research worktree
+- python -m ruff check . -> 'All checks passed!', observed this run
+- 0 non-ASCII lines in docs/AFFIXES.md
+- frame read directly: f0059_22.26.04 in the 2026-08-25b talents capture, 2560x1440, never opened before
+
+QUOTED: Rapid Arrows enters a mode the game calls Volley, allowing you to hold to rapidly fire UP TO 5 ARROWS for a certain duration. Dodging removes Volley, and shooting during it does not reduce Movement Speed.
+A FOURTH CANDIDATE for ROADMAP item 10's climbing icon, and the first carrying the number 5 from the game itself - the icon may be the Volley arrow COUNT rather than a stacking damage buff.
+IT IS NOT A RESOLUTION, and the coincidence of the number is the kind of evidence this project has been burned by four times today. Nothing ties the on-screen icon to Volley; the match is between a remembered maximum of 5 and a stated maximum of 5. Volley is bounded by a DURATION while item 10 reports the icon climbing per hit, and those behave differently. And Focus Fire is scoped to the same skill, so the candidates are not exclusive.
+A CHEAP DISCRIMINATOR EXISTS and is now specified: fire Rapid Arrows then STOP without dodging. A duration counter decays on its own; a per-hit stack does not. That is a different test from item 10's target-switch, which separates Focus Fire from the Ranged affix.
+RES-8 NARROWED from two questions to one. The screen shows the arrow slots keyed Z, X, C left to right. What remains is only whether destSlot indexes that row from zero - nothing observed says it does, and one capture of an arrow equipped to the Z slot closes it. Recorded as RES-25.
+TWO ARROW FAMILIES named - Archer's Arrow and Hunter's Arrow, five slots each, ten arrow types visible against the four ammoIds observed in the log. NO id is bound to any arrow name: the screen carries names and the log carries ids, and no frame carries both. A count that constrains the id space, not a binding.
+NEW NOUNS: Volley; Brandrgarde, a faction or place in the flavour text; and Deathclaw Hunter Eric, after whom the bow this project reads affixes off is evidently named - recorded as a naming link with no mechanical claim.
+
 ### LL-0093 - 2026-08-30 - 188 full-screen frames nobody had ever opened - the game STATES the affix aggregation rule in a table, and the talent tree has a second page
 
 **Evidence:**
