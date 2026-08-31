@@ -1254,6 +1254,24 @@ and a written note of what each interval is for.
 **Do not** re-implement the copying. The one thing this item adds is that
 arming it is not something a session has to remember.
 
+**IT STILL HAS TO BE ARMED, and on 2026-08-30 it was not.** The client was
+launched at `21:11` with no watcher running. The game truncates on launch, so
+the 4.45 MB log this session had just mined - the sole source for `LL-0099`'s
+ability bindings and the PvP death - was rotated to
+`MistfallHunter-backup-2026.08.30-06.24.23.log` and had **zero** archived
+copies. The 2026-08-26 `01.27.09` backup that existed earlier in the same
+session was already gone from that directory, so the game keeps only a couple.
+
+The evidence was **rescued rather than lost**: the rotated log is now archived
+under `C:/ll-captures/2026-08-30/logs/`, verified byte-identical by sha256 with
+both digests asserted non-empty first. Nothing in the game's own directory was
+moved or deleted.
+
+**The lesson is not "archive harder", it is that a closed item can still fail
+open.** This one is MET and tested, and it protected nothing during a session
+where nobody invoked it. An unattended loop cannot arm a watcher for a client
+launch it does not know about.
+
 **MET 2026-08-25b by `lanternlight/armwatch.py`**, 19 tests in
 `tests/test_armwatch.py`, suite 1225 -> 1244. Not one byte of copying was
 reimplemented: the module builds a four-surface plan and hands it to
@@ -1566,7 +1584,7 @@ window drops. A reader that wants complete combat needs both surfaces. And a
 new monsterId, **99021**, appears only as the source that killed the operator -
 a range no other observation has touched.
 
-### THREE MORE ABILITY BINDINGS, and a new id range - 2026-08-31, client `1.0.15`
+### THREE MORE ABILITY BINDINGS, and a new id range - 2026-08-30, client `1.0.15`
 
 The live log carries a second death payload, and it binds three ids at once.
 Read straight out of the death-statistics line (the label is Chinese and is not
@@ -2349,7 +2367,7 @@ more than the candidate.** `Sky Piercer` also states 5 - its arrow can "pierce
 item's climbing icon on that number discriminates nothing at all. The candidate
 survives only on the Volley MECHANIC, never on its maximum.
 
-**(5) A FIFTH candidate, added 2026-08-31, and it is the first one that is
+**(5) A FIFTH candidate, added 2026-08-30, and it is the first one that is
 actually a STACKING BUFF.** The `Fervor` affix ladder, read off
 `f0980_00.52.15` and quoted in `docs/AFFIXES.md`, states: after hitting an
 enemy, increase `Physical Damage` and `Magic Damage` for 3s, **"stacking up to
@@ -2886,24 +2904,36 @@ different capture would have prevented:
   that omitted nine directories.
 - `214` occurs once in the whole corpus, inside `[212,211,214]`, in that same
   uncaptured window, and has never been seen on an item.
-- `101` and `209` are **not covered by any capture at all**, at any
-  resolution. CORRECTED 2026-08-30e, and this is the SECOND correction to this
-  same line. It first blamed a 500x310 crop (refuted); it then claimed a
-  1280x720 capture covered "both their timestamps" but held no usable tooltip.
-  That is also false. Both ids ride on equipped items in `exEquip` payloads at
-  **three** wall clocks, not two - local `2026-08-25` `18:37:02`, `18:38:16` and
-  `21:29:30` - and the earliest capture of that day begins at `18:40:30`, so two
-  of the three PRECEDE every frame on disk by 2 to 3.5 minutes and the third
-  falls in the dead gap between `panel2` (ends `20:34:50`) and `talents`
-  (begins `22:23:53`).
-  **The practical difference matters:** the previous wording invites a future
-  session to re-examine existing frames for these two ids. There is nothing
-  there to find. Both corrections failed the same way - coverage was ASSERTED
-  without deriving the event timestamps and comparing them to the capture
-  windows, which is a five-minute check.
+- `101` and `209` ARE covered by a **1280x720 full-scene** capture at their
+  tooltip timestamps, and are still unrecoverable because **no usable tooltip
+  was on screen** in any covering frame. This is the ORIGINAL diagnosis and it
+  is correct. See `docs/AFFIXES.md` for the per-id table.
 
-There are EIGHT full-scene capture sets, three at 2560x1440 - the claim that
-only one exists was false and is withdrawn. No game video exists on the machine.
+  **A "correction" to this line on 2026-08-30 was ITSELF WRONG and is
+  withdrawn.** It claimed the two ids are "not covered by any capture at all"
+  and cited three wall clocks - `18:37:02`, `18:38:16`, `21:29:30` - none of
+  which any capture covers. Those three are real, but they are **`exEquip`
+  inventory-snapshot events**, the wrong event family. The events that matter
+  are the tooltip opens, `TS.UI: cfgid ==`, and they land at local `19:54:03`
+  for item `3030403` (affix `209`) and `19:54:35` for item `1430301` (affix
+  `101`) - both **inside** the `25/scene` window of `19:32:34` to `20:12:34`.
+  Re-derived by walking every line mentioning either item id across the three
+  distinct log sessions and bucketing by event kind.
+
+  **HOW THE WRONG CORRECTION HAPPENED, because it is a NEW failure mode.** The
+  two earlier versions of this line asserted coverage without deriving any
+  timestamps. The third derived timestamps carefully - **for the wrong event
+  type** - and never checked which event family the claim it was overturning
+  referred to. A measurement can be exact and still answer a different question
+  than the one asked. **Before overturning a recorded claim, establish what it
+  was measuring**; re-deriving from a pattern of your own choosing measures your
+  pattern, which is the same defect as an empty grep wearing better clothes.
+
+There are EIGHT full-scene capture sets **within `C:/ll-captures`**, three at
+2560x1440 - the claim that only one exists was false and is withdrawn. **A
+NINTH sits outside that tree**, at `~/.lanternlight/frames` (2026-08-09,
+2560x1440, 218 PNGs), invisible to a walk of `C:/ll-captures`; it is the only
+set holding talent page-two hovers. No game video exists on the machine.
 The binding constraint is not resolution alone: a tooltip has to be open, held
 long enough to land in a frame, and identifiable as the right item.
 
@@ -3098,18 +3128,18 @@ question, the headshot mechanism, and whether the ~1.3x per pace is real.
   in items 1, 4b, 5, 6, **11** and **13**, which also need the client and none
   of which deserves its own session. **Item 11's cheapest route needs no
   deliberate action at all**, only that the `Affixes` panel be left OPEN while
-  equipping anything. **Item 13 needs one node tooltip on talent page two** -
-  and note that page two ITSELF has been recorded since 2026-08-09; a version of
-  item 13 that asked for it to be captured was filed and withdrawn on
-  2026-08-30d, which is why that item now opens by telling you to read
-  `docs/OBSERVED_IDS.md` first. **Arm the wide-shot poller before the first run** -
+  equipping anything. **Item 13 is CLOSED** - all 16 page-two node tooltips are
+  recorded in `docs/OBSERVED_IDS.md`, each frame-cited, so do not fold it into a
+  client session. **Arm the wide-shot poller before the first run** -
   the first sweep of 2026-08-25 had to be re-run because its distances were
   inferred from clock order rather than recorded (`docs/FINDINGS.md` 11.10).
-  **Make that poller FULL-SCREEN, not a crop.** Item 11 lost two affix
-  bindings that were sitting inside a running capture, because the capture was
-  a 500x310 HUD rectangle cropped for the damage-meter work. A full-screen
-  poller costs disk and nothing else, and it turns ordinary menu use into
-  evidence.
+  **Make that poller FULL-SCREEN, not a crop** - though note the reason is NOT
+  the one this paragraph used to give. It blamed a 500x310 HUD crop, and that
+  cause was refuted: `101` and `209` sat inside a 1280x720 FULL-SCENE capture
+  and are lost anyway, because no usable tooltip was on screen at the covering
+  frames. Full-screen is necessary and NOT sufficient - the tooltip has to be
+  open and held. A full-screen poller still costs disk and nothing else, and it
+  turns ordinary menu use into evidence.
 
 **Item 12 is a caveat on everything above, not a task to schedule.** The client
 moved from `1.0.14` to `1.0.15` between 2026-08-26 and 2026-08-30, so any

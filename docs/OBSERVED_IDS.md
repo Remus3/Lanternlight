@@ -205,8 +205,12 @@ that treats `holding-` as always naming an item will mis-handle it.
   log**, so each is a strict PREFIX of the next. Proven, not assumed: all ten
   are byte prefixes of the live log and of each other, with zero divergence.
 
-**The machine holds 18 MistfallHunter logs, 13 distinct hashes, and THREE
-distinct sessions.** The three are the 2026-08-25 backup at `01.27.09`, the
+**As of 2026-08-30 21:00 the machine held 18 MistfallHunter logs, 13 distinct
+hashes, and THREE distinct sessions** - and that count is a MOVING TARGET, which
+is the more durable half of this finding. The client was launched again at
+`21:11` the same evening; the game truncated its log, rotated the old one to a
+backup, and created a fourth session. **Date any corpus count and re-derive it
+rather than citing this one.** The three are the 2026-08-25 backup at `01.27.09`, the
 2026-08-25 backup at `04.45.02`, and the current live log; the first appears in
 **four** places and the second in **three**. A naive glob-and-count inflated
 `holding-` events from 757 to 2,438 - a factor of 3.22 - by counting the same
@@ -503,7 +507,7 @@ also appears in an established-outlet list in `docs/CLASSES.md`, and a T3 name
 presented as a frame reading is the restating-one-source trap this repo warns
 about.
 
-**FLAG CLEARED 2026-08-31.** `f1650_01.06.27` in the 2026-08-30 capture renders
+**FLAG CLEARED 2026-08-30.** `f1650_01.06.27` in the 2026-08-30 capture renders
 the tooltip. Verbatim:
 
 > **`Steel Arrow`** (`Bow`) - Fine steel arrows deal `Physical Damage` on hit
