@@ -1498,6 +1498,28 @@ Kept visible rather than edited away, because the overstatement is instructive:
   `nameId: 0` still most likely means **unset**. Closing this needs a second
   distinct `skillNameId` seen also as a `nameId`.
 
+**Acceptance, added 2026-08-30 - this item had none, which made it permanently
+ineligible for the unattended loop.** Every cycle skips items with no acceptance
+criterion, so an item marked READY and high value was never once picked up. That
+is an ops defect in the roadmap, not in the item.
+
+Close it with **either**:
+
+- a `nameId` other than `0` observed inside a save's `DamageCollectonDataSet`,
+  which would settle whether that field is ever populated on that surface; **or**
+- a second distinct `skillNameId` value seen also as a `nameId`, which is what
+  the paragraph above asks for.
+
+**The second route is BLOCKED ON A FRESH LOG, and the reason is measured.**
+`skillNameId` occurs **zero** times across all 18 MistfallHunter logs on this
+machine - the 12.7 MB log that carried `6130017` was truncated away by the
+game's launch truncation (item 4c). No probe of the existing corpus can close
+it. Recorded so nobody runs that search again.
+
+**What the log CAN already do is bind abilities**, and item 7a now carries six
+such bindings rather than three. The save's window remains the surface with no
+attribution; the log remains the surface that has it.
+
 ## 7a. The log carries what the save's window does not - MEASURED 2026-08-11
 
 The log's `[DamageCollectionComponent]: jsonString:` emits the **same structure**
