@@ -1092,7 +1092,9 @@ times.
 
 **WHAT WAS WRONG, and the mistake underneath it.** The first version of this
 section said "Only ONE capture on this machine is full-screen". That is FALSE:
-there are **eight** full-scene capture sets, three of them at 2560x1440. It also
+there are **eight** full-scene capture sets **within `C:/ll-captures`**, three of
+them at 2560x1440 - plus a NINTH outside that tree at `~/.lanternlight/frames`,
+which a walk of `C:/ll-captures` cannot see. It also
 listed five capture windows when there are **fourteen** capture directories, and
 it blamed the `101` and `209` failure on the capture being a 500x310 crop - when
 a 1280x720 FULL-SCENE capture covered both timestamps.
@@ -1933,7 +1935,7 @@ from an upscaled crop:
 |---|---|---|---|---|
 | `Fervid` | 7 | 2 | Lv.2 | 7, recorded independently |
 | `Ranged` | 7 | 2 | Lv.2 | 7, recorded independently |
-| `Fervor` | 7 | 2 | Lv.2 | UNREAD |
+| `Fervor` | 7 | 2 | Lv.2 | **7, READ 2026-08-30 - see below** |
 | `Wealth` | 5 | 1 | Lv.1 | 5, read off the same frame |
 
 **Two readings, each confirmed on the frame that also carries its check.** Total
@@ -1949,6 +1951,12 @@ be read off the panel without opening a single tooltip, which turns one
 screenshot of the `Affixes` list into a length for every affix on it. It
 PREDICTS `Fervor` at 7 levels; that is a prediction, not a reading, and one
 tooltip settles it.
+
+**THE PREDICTION WAS THEN TESTED AND HELD.** `Fervor`'s ladder was read off
+`f0980_00.52.15` and is **seven levels**, panel border visible below `Lv. 7`.
+See "Mining the 2026-08-30 capture" below. A prediction recorded before its
+reading is worth more than a pattern fitted after one, which is why the wording
+above is left standing rather than edited to sound confident in hindsight.
 
 ### The attribute sheet's lower half, which was scrolled off in every earlier frame
 
@@ -1984,7 +1992,7 @@ label read off one frame should be confirmed on a neighbour.
 `Energy` values on these frames are identical to those already in this document
 from `f0079`. Only the three lower sections are new.
 
-## Mining the 2026-08-30 capture - 2026-08-31 pass
+## Mining the 2026-08-30 capture - 2026-08-30 pass
 
 2172 frames at `C:/ll-captures/2026-08-30/frames/`, largely unopened. 186 were
 read. The screen map is in the session scratch; what follows is what it settled.
@@ -2098,7 +2106,7 @@ list are wholly or partly answered and are marked so rather than deleted.
 2. **A gem slotting screen** - socket tiers, what a Peridot is, and whether tier
    gates level. Still open: the inlay rule names a socket LEVEL and no socket
    level has been observed on any frame.
-3. **`Fervor`'s ladder** - ANSWERED 2026-08-31 and quoted above. Seven levels,
+3. **`Fervor`'s ladder** - ANSWERED 2026-08-30 and quoted above. Seven levels,
    as the segment rule predicted. Replaced by: read `Elusive`, `Smiting` or
    `Curse`, each predicted at **5 levels** by the same rule.
 4. **The `Focus Fire` talent tooltip** - ANSWERED 2026-08-30 and quoted above.

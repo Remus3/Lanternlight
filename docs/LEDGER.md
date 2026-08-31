@@ -84,6 +84,25 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0100 - 2026-08-30 - WITHDRAWN - the 101/209 capture-coverage correction in LL-0098 and LL-0099 was itself wrong, and measured the wrong event family
+
+**Evidence:**
+- python -m pytest -> '1338 passed', exit 0, run as its own command
+- python -m ruff check . -> 'All checks passed!', exit 0, run as its own command
+- walked every line mentioning item cfgId 1430301 or 3030403 across the three distinct log sessions, bucketed by event kind
+- item 3030403 (affix 209): TS.UI 'cfgid ==' tooltip event at local 2026-08-25 19:54:03
+- item 1430301 (affix 101): TS.UI 'cfgid ==' tooltip event at local 2026-08-25 19:54:35
+- the 25/scene capture window is local 19:32:34 to 20:12:34, so BOTH tooltip events fall inside it
+- the three timestamps cited in the withdrawn claim - 18:37:02, 18:38:16, 21:29:30 - are real but are exEquip inventory snapshots, not tooltip opens
+
+THIS ENTRY CORRECTS LL-0098 AND LL-0099. Both stated that affix ids 101 and 209 are 'not covered by any capture at all' and that a future session should not re-search existing frames for them. THAT IS FALSE. The ORIGINAL diagnosis in ROADMAP 11 and `docs/AFFIXES.md` was right: a 1280x720 full-scene capture DOES cover both ids at their tooltip timestamps, and they are unrecoverable because no usable tooltip was on screen in the covering frames.
+WHAT WENT WRONG, and it is a NEW failure mode rather than the old one. The two earlier versions of that ROADMAP line asserted coverage without deriving any timestamps at all. The third - mine - derived timestamps carefully, FOR THE WRONG EVENT FAMILY. It searched only the exEquip affix objects, found three wall clocks, checked those against the capture windows correctly, and published the result as a refutation of a claim that was never about those events.
+THE TRANSFERABLE RULE: BEFORE OVERTURNING A RECORDED CLAIM, ESTABLISH WHAT IT WAS MEASURING. A measurement can be exact and still answer a different question than the one asked. Re-deriving from a pattern of your own choosing measures your pattern - the same defect as an empty grep, wearing better clothes. The repo already carried 'an empty grep is a claim about your pattern'; this is that rule applied to a NON-empty grep, which is harder to notice because the numbers look like evidence.
+WHY IT SURVIVED THREE REFUTATION PASSES. Two independent refuters checked the arithmetic, the timestamps and the capture windows, and all of it was correct - so the claim was CONFIRMED twice. Neither refuter was asked whether the event family was the right one, because the brief they were given already embedded the wrong framing. AN ADVERSARIAL PASS INHERITS THE FRAME OF THE QUESTION IT IS HANDED. The error was caught only by the wrap refutation, which was asked a different question - find surviving text that contradicts what this session published - and found the ORIGINAL, CORRECT text still standing in `docs/AFFIXES.md`. A contradiction between two documents was the signal; neither document alone would have exposed it.
+THE CONTRADICTION WAS ALMOST RESOLVED THE WRONG WAY. The wrap refutation reported the surviving AFFIXES text as a STALE RECITAL to be deleted. Deleting it would have destroyed the only correct record of this fact and left the wrong claim standing alone and unchallenged. It was resolved by measuring instead of by tidying. WHEN TWO RECORDS DISAGREE, MEASURE - DO NOT ASSUME THE NEWER ONE WON.
+ALSO CORRECTED IN THIS PASS, all found by the wrap refutation: the ROADMAP 'Ordering note' still told a future session to fold in item 13, which was closed earlier the same day, and still blamed the 101/209 failure on a 500x310 crop, a cause refuted a session earlier. Five occurrences of the date 2026-08-31 were normalised to the repo's local-date convention. The affix-bar table still listed Fervor's ladder as UNREAD forty lines above the section printing it. And the 'eight full-scene capture sets' count is now qualified everywhere it is recited as being SCOPED to C:/ll-captures, with the ninth set outside that tree named.
+NOT CORRECTED, because it is correct: the exEquip timestamps themselves, the log-corpus dedup (18 files, 13 distinct hashes, three sessions), the nine actor types, the Fervor ladder, the Steel Arrow tooltip, the six ability bindings and the PvP death all stand as published and were each independently re-derived.
+
 ### LL-0099 - 2026-08-30 - Item 5's archive route is exhausted, and mining the unread capture confirmed a prediction, cleared a sourcing flag and found a PvP death
 
 **Evidence:**
