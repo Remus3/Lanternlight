@@ -84,6 +84,43 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0101 - 2026-08-31 - Cycle 29 found the client CLOSED so every priority item is blocked - the session watcher was still unarmed, and the pre-push refutation killed five claims in this very entry
+
+**Evidence:**
+- python -m pytest -> '1338 passed', exit 0, run as its own command
+- python -m ruff check . -> 'All checks passed!', exit 0, run as its own command
+- collect count 1338, summed per file from --collect-only, measured BEFORE the edits; no drop
+- ops.merge_gate.verify(claimed_paths=['ROADMAP.md','docs/LEDGER.md'], baseline=1338) -> OK
+- MistfallHunter process count 0 by two different probes, and the live log's last write is 2026-08-30 21:11:46 with nothing since
+- live log sha256 296547c5..., 235,864 bytes; before arming, that hash had ZERO archived copies
+- after arming: C:/ll-captures/2026-08-31/logs/20260831-170906_235864_MistfallHunter.log, sha256 identical
+- corpus re-derived 2026-08-31 17:09 local: 22 MistfallHunter .log files, 14 distinct content hashes, FOUR sessions by their own 'Log file open' lines
+
+THE CLIENT IS CLOSED AND THAT BLOCKS EVERY PRIORITY ITEM. Items 11, 5 and 6 each need it, and so does the standing prediction on `Elusive`, `Smiting` and `Curse`. Not asserted from memory: the `Ordering note` independently already says "there is no fully specified client-closed task left". Nothing was credited and ITEM 11 REMAINS IN FLIGHT.
+
+THE WATCHER WAS STILL UNARMED, and the successor log was single-copy. The 2026-08-30 wrap rescued the ROTATED backup and stopped there; the `21:11` launch had already begun a SUCCESSOR log, which sat in exactly one place until this cycle armed `lanternlight.armwatch`. RESCUING THE LOG YOU JUST MINED IS NOT THE SAME AS LEAVING THE WATCHER ARMED FOR THE ONE BEING WRITTEN NEXT. The rescued log is a 21-second launch-and-quit (UTC 02.11.22 to 02.11.43) with no gameplay events, so the archiving was cheap insurance rather than a windfall - written down that way so it is not overclaimed, and so the next session does not spend a pass re-mining it.
+
+A WATCHER IS RUNNING RIGHT NOW AND THAT IS RECORDED, not left for someone to discover. PID 34116, `--dest-root C:/ll-captures/2026-08-31`, started 17:09:06 local, the only one on the machine. Stop it with `taskkill /F /PID 34116`. Its dest-root is a DATE directory that does not roll over. THE HAZARD THIS CREATES: ROADMAP 4c tells the next session to arm the watcher, and doing so blindly would point a SECOND watcher at the same four sources while OPS-14, this machine's disk reaching 100 percent, is still open. That item now says check first.
+
+THE PRE-PUSH REFUTATION KILLED FIVE CLAIMS IN THIS ENTRY, and it is the reason to keep running it before the push rather than after. All five were in text already written and all five are corrected above, not deleted:
+1. "Both ROADMAP.md and AFFIXES.md say it takes one hover" - FALSE. `Elusive`, `Smiting` and `Curse` occur ZERO times in `ROADMAP.md`. Only `docs/AFFIXES.md` says it, plus the directive in `ops/runtime/loop_state.json`. Citing two-document agreement that does not exist is the LL-0100 failure exactly, committed inside the entry congratulating itself for avoiding it.
+2. `DamageCollecton` - A TOKEN THAT CANNOT MATCH A LOG. It occurs zero times in all 22 logs because it is the SAVE property spelling (`lanternlight/damage.py`); the log spells it `DamageCollection`. The absence claim was VACUOUS. Re-run with the right token, the conclusion survives - the new log has zero of those too - but a zero from that token was a claim about the token.
+3. "The next launch destroys it" - OVERSTATED, and forbidden by this repo's own `docs/FINDINGS.md` 11.12, which says what decides whether a launch leaves a backup is unmeasured and no rule may be written from n=1. Measured since: the `21:11` launch DID leave a backup, created at `21:11:19` holding only pre-launch content. That is a second instance, not a rule. Archive anyway.
+4. "It failed open a SECOND time" - OVERSTATED. No launch occurred between the wrap and cycle 29, so nothing was at risk in that window. It is the SAME gap persisting, and one fix closes both descriptions.
+5. "No frame on disk can settle it" - UNSUPPORTED as phrased. It follows from `f1300` being the PREDICTOR (bar segment counts) and not the TEST (the ladder rows), but 18,965 capture frames exist and this cycle swept none of them. Recorded as an inference, which is what it is.
+
+A FALSE ALARM RAISED AND KILLED BEFORE IT REACHED ANYTHING DURABLE. The first archive probe globbed `MistfallHunter*.log` and returned ZERO archived logs, which would have contradicted LL-0099 and looked like a deletion event. The archive renames every snapshot to `<stamp>_<size>_<name>`, so no archived file starts with that prefix. AN EMPTY GREP IS A CLAIM ABOUT YOUR PATTERN - hit in its literal form against a naming convention this project designed itself.
+
+THE FOUR UNBOUND AFFIX IDS ARE NOT IN THE NEW LOG, and the search suggesting they might be was refuted in the same pass rather than published. Bare tokens `101`, `212` and `214` all occur, and each is incidental: the version string `1.3.101`, the millisecond fields `:212]` and `:214]`, and `214us`. A NON-EMPTY GREP FOR A BARE NUMBER IS NOT EVIDENCE OF AN ID.
+
+WHAT THE CONTINUITY DESIGN GOT RIGHT, recorded because the failures usually get all the attention. The wrap's directive said in terms that `armwatch` "MUST BE ARMED and was not", and this cycle armed it because that sentence was read off disk by a session that shared no context with the one that wrote it. The mechanism fired; only the arming had not.
+
+ANY CORPUS COUNT DATED EARLIER THAN THIS ENTRY IS STALE, and four surviving ones are now re-dated rather than left to rot: two `skillNameId` lines and item 5's archive-route probe in `ROADMAP.md`, and the "three distinct sessions" line in `docs/OBSERVED_IDS.md`. Every conclusion survives re-derivation across all four sessions - `skillNameId` 0, `class-11` 0, `BP_Preview_C_` 0 - only the denominators moved.
+
+ITEM 4c CARRIED A HEADER/NOTE CONTRADICTION AND IT IS RESOLVED BY MEASUREMENT, not by tidying. The header said CLOSED; the `Ordering note` said "arming its watcher automatically, is not". Finding the watcher unarmed and a log single-copy settles it for the note, so the header now names the split and the remaining half has an acceptance criterion it never had. WHEN TWO RECORDS DISAGREE, MEASURE - the LL-0100 rule, applied to a contradiction inside ONE document.
+
+NOTHING WAS DONE TO THE GAME OR ITS DIRECTORY. The watcher copies out and never writes to the source, the client was not running and was not started, and no game process was touched in any way.
+
 ### LL-0100 - 2026-08-30 - WITHDRAWN - the 101/209 capture-coverage correction in LL-0098 and LL-0099 was itself wrong, and measured the wrong event family
 
 **Evidence:**
