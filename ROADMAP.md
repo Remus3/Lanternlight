@@ -2756,10 +2756,21 @@ different capture would have prevented:
   that omitted nine directories.
 - `214` occurs once in the whole corpus, inside `[212,211,214]`, in that same
   uncaptured window, and has never been seen on an item.
-- `101` and `209` are covered by a **1280x720 full-scene** capture at both
-  their timestamps, and are still unrecoverable because **no usable tooltip was
-  on screen** in any covering frame. The original diagnosis - that the capture
-  was a 500x310 crop - was FALSE and was corrected after a refutation pass.
+- `101` and `209` are **not covered by any capture at all**, at any
+  resolution. CORRECTED 2026-08-30e, and this is the SECOND correction to this
+  same line. It first blamed a 500x310 crop (refuted); it then claimed a
+  1280x720 capture covered "both their timestamps" but held no usable tooltip.
+  That is also false. Both ids ride on equipped items in `exEquip` payloads at
+  **three** wall clocks, not two - local `2026-08-25` `18:37:02`, `18:38:16` and
+  `21:29:30` - and the earliest capture of that day begins at `18:40:30`, so two
+  of the three PRECEDE every frame on disk by 2 to 3.5 minutes and the third
+  falls in the dead gap between `panel2` (ends `20:34:50`) and `talents`
+  (begins `22:23:53`).
+  **The practical difference matters:** the previous wording invites a future
+  session to re-examine existing frames for these two ids. There is nothing
+  there to find. Both corrections failed the same way - coverage was ASSERTED
+  without deriving the event timestamps and comparing them to the capture
+  windows, which is a five-minute check.
 
 There are EIGHT full-scene capture sets, three at 2560x1440 - the claim that
 only one exists was false and is withdrawn. No game video exists on the machine.
@@ -2848,37 +2859,69 @@ is precisely the sourcing error that `LL-0079`, `LL-0081` and `CLASSES.md` C14
 all record - the answer was not hard to get, it was being sought in the wrong
 place.
 
-## 13. Page-2 talent NODE TEXT - READY, and the item it replaces was DEAD ON ARRIVAL
+## 13. Page-2 talent NODE TEXT - CLOSED 2026-08-30e, and its OWN premise was false
 
-Opened 2026-08-30d, **rewritten the same day after a refutation pass.** Ledger
-`LL-0093` and `LL-0097`.
+Opened 2026-08-30d, rewritten the same day, **closed and corrected 2026-08-30e.**
+Ledger `LL-0093`, `LL-0097`, `LL-0098`.
 
-**The item this replaces asked for page two of the talent tree to be captured.
-That was already done, three weeks earlier.** `docs/OBSERVED_IDS.md` has carried
-a cluster table with an explicit `Page` column since 2026-08-09, listing all six
-page-two clusters with gates, plus a second table of the NODE NAMES inside them.
-Frame `f0160_22.29.45` shows page two and matches that table exactly.
+**Delivered: all 16 page-two node tooltips**, verbatim with a frame named for
+each, in `docs/OBSERVED_IDS.md` under "Page-two node tooltips". The acceptance
+criterion asked for one. `Gyldenmist Tolerance`, named here as the highest-value
+single node, reads off `f0101_16.05.00`:
 
-**An item asking a future session to re-derive what is already on disk is the
-precise failure this project's continuity design exists to prevent**, and it was
-filed by the session that had read that file's headings an hour earlier. Left
-here in corrected form rather than deleted, because the shape of the mistake is
-the useful part.
+> Increases resistance to the `Gyldenmist`, slowing the rate of `Gyldening`.
 
-**What is genuinely missing** is the node TOOLTIP TEXT for page-two clusters.
-`OBSERVED_IDS` records node NAMES - `Steady Stealth`, `Cold Infusion`,
-`Gyldenmist Tolerance` and the rest - but not what any of them does. Page-one
-nodes have four such texts quoted in `docs/AFFIXES.md`; page two has none.
+It did **not** settle the `PlayzoneData` question - see `docs/FINDINGS.md`
+10.9.1. The talent text is purely temporal, the zone fields are purely spatial,
+and no log joins them. The binding stays refused, which is the outcome this item
+said it would accept.
 
-**Acceptance:** the effect text of at least one page-two node, quoted verbatim
-with its frame named, written up beside the page-one tooltips. `Gyldenmist
-Tolerance` is the highest-value single node - `docs/FINDINGS.md` records it as a
-plausible player-facing name for the shrinking-circle mechanic and explicitly
-refuses to write the binding down until something observed connects them. Its
-tooltip would connect them or refute the guess.
+### THIS ITEM'S OWN PREMISE WAS FALSE, and that is the part worth keeping
 
-**Before working this item, open `docs/OBSERVED_IDS.md` first.** That is the
-whole lesson of the version this replaces.
+This item said: "`OBSERVED_IDS` records node NAMES - `Steady Stealth`,
+`Cold Infusion`, `Gyldenmist Tolerance` and the rest - **but not what any of
+them does**."
+
+**It records what two of them do**, and has since 2026-08-09.
+
+Note which sentence is quoted, because the item's next line - "page one has four
+such texts quoted in `docs/AFFIXES.md`; page two has none" - is TRUE as scoped:
+`AFFIXES.md` really does carry four page-one texts and zero page-two ones. The
+false claim is the one about `OBSERVED_IDS`, the file the item told its reader to
+open first. **Quoting the defensible sentence instead of the false one would have
+made this correction look like a quibble**, and a first draft of this rewrite did
+exactly that. `Crippling Pain` (Bomb Engineering, Lv. 9) and
+`Swift Exit` (Woodling Expert, Lv. 10) have been quoted in
+`docs/OBSERVED_IDS.md` since **2026-08-09**, in the starred list two tables
+below the cluster table this item cites as its evidence.
+
+**This item WAS the correction to a rediscovery failure about this same screen**
+and it shipped a rediscovery failure of the same shape, one table lower in the
+same file. The previous version asked a future session to capture page two,
+which was three weeks on disk. This version asked for tooltip text that was
+partly on disk too. The refutation pass that caught the first one checked the
+cluster table and the node-name table and stopped one table short.
+
+**The transferable rule, which is now narrower and harder than "open the file":**
+grep for the CLAIM, not for the section you remember. Both failures were by
+authors who had the right file open. Reading a file's headings is not reading
+the file, and neither is checking the one table that your claim happens to cite.
+
+**Also corrected here:** the two 2026-08-09 quotes carried NO FRAME. Both are
+now attributed - `f0081_16.04.16` and `f0090_16.04.36` - by locating them in the
+capture, which makes every talent tooltip in the repo frame-cited.
+
+**A capture fact that was never written down and cost a slice:** the 2026-08-09
+frames live at `~/.lanternlight/frames/`, **outside `C:/ll-captures/`**. It is a
+2560x1440 full-scene set of 218 PNGs - 217 in the `f`-series plus one
+`skills_` frame - and it is the ONLY set holding page-two
+hovers. A sweep that walks `C:/ll-captures` alone will never see it, and one
+did not.
+
+**Settled in passing:** a LOCKED node still renders its full tooltip on hover.
+The 2026-08-09 character is Level 2 with every page-two cluster gated at Lv. 6
+or above, and all 16 tooltips render anyway. The level-5 capture yields no
+page-two text not because locked nodes are mute but because nobody hovered them.
 
 ## 14. The item-borne affix is NOT known to travel with the item type - OPEN
 

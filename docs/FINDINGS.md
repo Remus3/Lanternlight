@@ -979,11 +979,129 @@ Two things follow and neither is asserted beyond the evidence. First, this is
 the first first-party evidence in this project of a zone-pressure mechanic at
 all; `docs/OBSERVED_IDS.md` records a Blackarrow talent named **Gyldenmist
 Tolerance**, and a mist that must be tolerated is a plausible player-facing name
-for this - **plausible, and unbound**. Nothing observed connects the talent to
-these fields. Second, in the sampled generation the damage circle and the safe
-circle share the same centre and the same radius to the bit, so this capture
-caught the zone before it began to move. **Whether the circles ever diverge is
-unmeasured**, and a run watched to completion is what would show it.
+for this - **plausible, and unbound**. Second, in the sampled generation the
+damage circle and the safe circle share the same centre and the same radius to
+the bit, so this capture caught the zone before it began to move.
+
+#### 10.9.1 The talent's tooltip is now MEASURED - and it still does not bind
+
+Read 2026-08-30 off frame `f0101_16.05.00` in the 2026-08-09 capture, verbatim:
+
+> **`Gyldenmist Tolerance`** - Increases resistance to the `Gyldenmist`,
+> slowing the rate of `Gyldening`.
+
+Both `Gyldenmist` and `Gyldening` render as highlighted keyword terms, which in
+this UI marks them as game nouns rather than prose.
+
+**The guess is better specified and still refused.** The tooltip establishes a
+resistible affliction that accumulates at a RATE over time. It contains **no
+spatial term at all** - no circle, no zone, no radius, no safe area. The
+`PlayzoneData` fields are the exact complement: purely spatial, with no
+affliction term. The two records describe things that would fit together and
+share not one token.
+
+**A corpus test was run and it came back negative.** Across all three logs,
+`Gylden` occurs 3 to 4 times and never once in a Playzone line. The only
+`Gylden` strings in any log are a costume appearance entry for a cosmetic called
+`Gyldening Horn` (costume id `1000009`, emitted by `setCostumeAppearanceList`)
+and a granted arrow ability, `GA_DA_InspectGyldenJar_C`. Neither is the zone.
+
+**A redaction note, because the shape matters more than this instance.** The
+costume line is emitted in the log's keyed display-name form - a label ending in
+the word name, a doubled equals sign, then the value - which is the same shape
+that carries the operator's persona elsewhere in the same file.
+`lanternlight/redact.py` refuses to certify a quote written that way and it
+refused this one, correctly: the rule keys on the shape, not on whether the
+value happens to be a game noun.
+
+**It then refused the sentence explaining the refusal**, because that sentence
+had spelled the template out literally. That is the rule working, not a bug in
+it, and it is why this paragraph describes the form in words instead. **Do not
+write that keyed shape into a doc even to talk ABOUT it** - a public repo does
+not need a worked example of the pattern that leaks the real thing, and a doc
+containing one trips this project's own backstop from then on.
+
+**Weigh that negative honestly: it is weak.** `AStkPlayzone` carries a studio
+prefix and is plainly an internal class name, and engine identifiers routinely
+differ from player-facing nouns - this same game calls its currency
+`Gyldenblod` on screen while the zone code says `SafeCircle`. The absence of a
+shared token is therefore consistent with the binding being true. It simply is
+not evidence FOR it, and this file does not write down a binding that nothing
+observed supports.
+
+**What would bind it:** a run watched from outside the safe circle with the
+resulting debuff visible on the HUD, or any field naming the affliction. Until
+then `Gyldenmist Tolerance` stays a talent about an unlocated mist.
+
+#### 10.9.2 The LOG carries the zone too, live - and it never shrank
+
+`PlayzoneData` was known only from the save. The log carries the same mechanic
+as replicated actor events, which nothing had recorded:
+
+| Token | Kind |
+|---|---|
+| `AStkPlayzone` | the actor class |
+| `BP_Playzone_C_1` | the placed blueprint instance |
+| `PlayzoneComponent` | a pawn component; 93 lines say `player state is ready`, and 3 more - one per log - are a Puerts bind of `module/Character/PlayzoneComponent`, so part of the zone logic is a scripted module |
+| `InitPlayzoneInfo` | init event, carries `stageNum`, `roundNumb`, `Steps` |
+| `OnRep_SafeCircleInfo` | the replication event carrying radius and origin |
+| `playzoneCom` | a **separate HUD surface**, `TS.UI: MainHUD`, carrying a `corrosion event` counter |
+
+**Every recorded session emits exactly two SafeCircle updates and no more** - but
+the zone is not therefore inert, see the corrosion events below. An init at
+`SafeCircle Radius -1.000000` - an uninitialised sentinel, not a measured zero -
+then one `OnRep_SafeCircleInfo` to:
+
+- `Radius 25597.265625`, `PrvRadius -1.000000`
+- `Origin X=-1997.146 Y=-5288.619`, `PrevOrigin X=0.000 Y=0.000`
+- `stageNum 2`, `roundNumb 1`, `Steps 1`
+
+**Those values are byte-identical in all three logs and ACROSS THE CLIENT
+PATCH** - `1.0.14` and `1.0.15` produce the same radius and the same origin to
+six decimal places. Under `ROADMAP` item 12 this is a value checked across a
+patch boundary and found unmoved, which this project had no example of.
+
+**Why the circles have never been seen to diverge.** The zone emits ONE radius
+in a session and never updates it again: three runs of roughly 11, 19 and 22
+minutes each ended with `EndPlay ... CurStageIndex 0, Reason 1`, still at
+`Steps 1`, with `stageNum 2` declared at init. **No recorded session advanced
+the zone past its first step**, so no log on this machine shows a radius shrink.
+
+**CORRECTED before publication - the zone DID apply pressure once, and a first
+draft of this section said it never did.** One of the three logs carries two
+`TS.UI: MainHUD playzoneCom corrosion event N` lines, `N` reaching **2**:
+
+| Event | UTC |
+|---|---|
+| `InitPlayzoneInfo` | `02.56.21:926` |
+| `OnRep_SafeCircleInfo`, radius set | `02.56.22:484` |
+| `corrosion event 1` | `03.18.01:443` |
+| `corrosion event 2` | `03.18.10:455` |
+| `EndPlay` | `03.18.14:970` |
+
+So corrosion begins **21m39s** after the zone initialises, the second event lands
+**9.0s** after the first, and the run ends **4.5s** later. The other two logs
+carry zero corrosion events - and they are the two SHORTER runs, at roughly 19
+and 11 minutes, both ending before the 21m39s mark. That is consistent with a
+timer the short runs never reached, and it is not proof of one: a single
+occurrence cannot separate a timer from a position, and nothing here says the
+player was outside the circle.
+
+**`corrosion` is the closest thing on disk to observable zone pressure**, and it
+is a COUNTER, not a radius. It also gives the zone a third non-`Gylden` name -
+`Playzone`, `SafeCircle`, `corrosion` - which does not settle 10.9.1 either way.
+
+**The transferable defect: one mechanic, two log surfaces, and I characterised
+it from one.** The radius lives on the actor (`LogStk: AStkPlayzone`); the
+corrosion counter lives on the HUD (`TS.UI: MainHUD`). A grep written against
+the actor class returns a complete-looking picture and silently omits the half
+that answers the question being asked. **A mechanic is not characterised until
+you have looked for its OTHER emitters.** An adversarial pass found this; the
+authoring pass did not.
+
+**What is still unmeasured:** whether the safe circle ever shrinks. Item 10.9's
+"a run watched to completion" remains the right experiment and none of the three
+archived runs is one.
 
 ### 10.10 The save counts a bot kill as a player kill - a second surface for 9.3.2
 
@@ -1099,8 +1217,15 @@ Named so they are not later mistaken for absent:
 - Which frame the three-integer key is expressed in, and the physical unit of
   either it or `Translation` (10.6).
 - Whether the damage circle and the safe circle ever diverge (10.9).
-- Whether `Gyldenmist Tolerance` names the `PlayzoneData` mechanic. Suggestive,
-  unbound, and not to be written down as a binding (10.9).
+- Whether `Gyldenmist Tolerance` names the `PlayzoneData` mechanic. Its tooltip
+  is now measured and it did NOT settle this - the talent text is purely
+  temporal and the zone fields are purely spatial, and no log joins them.
+  Suggestive, still unbound, still not to be written down as a binding (10.9.1).
+- Whether the safe circle ever shrinks. No archived run reaches `Steps 2`, so
+  this cannot be answered from disk at all (10.9.2).
+- What a `corrosion event` is, and whether its counter is driven by elapsed time
+  or by standing outside the safe circle. One session reached 2; two reached
+  zero, and both were shorter than the first event's 21m39s mark (10.9.2).
 - What `MatchID 11112` selects. It is constant across the run and matches the
   solo-explore ids in LL-0022, and nothing observed says what the number means.
 
