@@ -111,8 +111,9 @@ Probed 2026-08-30 to see whether `ROADMAP` item 5 (the Sorcerer single-weapon
 question) could be closed from bytes already on disk. **It cannot**, and the
 negative is recorded here so nobody runs this probe twice.
 
-Across every archived log, measured on the **three distinct sessions** (see the
-corpus trap below):
+Across every archived log, measured on the **three distinct sessions** then
+known, and RE-DERIVED 2026-08-31 across all **four** (22 files, 14 distinct
+hashes) with every count unchanged (see the corpus trap below):
 
 | Probe | Result |
 |---|---|
@@ -215,6 +216,13 @@ rather than citing this one.** The three are the 2026-08-25 backup at `01.27.09`
 **four** places and the second in **three**. A naive glob-and-count inflated
 `holding-` events from 757 to 2,438 - a factor of 3.22 - by counting the same
 bytes repeatedly.
+
+**Re-derived 2026-08-31 17:09 local: 22 MistfallHunter `.log` files, 14 distinct
+content hashes, FOUR distinct sessions** - opened at `08/25 18:34:46`,
+`08/25 21:28:59`, `08/30 00:20:37` and `08/30 21:11:19`, taken from each log's
+own `Log file open` line rather than from its filename. The fourth is a
+21-second launch-and-quit carrying no gameplay events. Dated for the same
+reason the paragraph above is.
 
 **This paragraph shipped its own wrong count and an adversarial pass caught
 it.** It first said "fifteen `.log` files", because the walk that produced it

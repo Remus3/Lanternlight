@@ -1219,7 +1219,8 @@ and the refusal gate are all measured and working.
   permanently. **Two of the three guards protect the REDACTION itself**, so it
   cannot erode when the fixture is next regenerated.
 
-## 4c. Archive the log and the market cache on every session - CLOSED 2026-08-25b
+## 4c. Archive the log and the market cache on every session - ENTRY POINT
+CLOSED 2026-08-25b, AUTOMATIC ARMING OPEN
 
 Opened 2026-08-25 after measuring that the 6.1 MB log from 2026-08-09 no longer
 exists. The game **truncates its log on launch** - after the launch that
@@ -1271,6 +1272,71 @@ moved or deleted.
 open.** This one is MET and tested, and it protected nothing during a session
 where nobody invoked it. An unattended loop cannot arm a watcher for a client
 launch it does not know about.
+
+**IT WAS STILL UNARMED AT CYCLE 29, and the successor log was single-copy.**
+Measured 2026-08-31. The `21:11` launch of 2026-08-30 truncated the live log and
+started a **successor**, and nothing was armed for it afterwards. So at the start
+of cycle 29 that successor - `235,864` bytes, sha256 `296547c5...` - existed in
+exactly ONE place, the live file. Arming `lanternlight.armwatch` archived it
+byte-identical to `C:/ll-captures/2026-08-31/logs/`. **Rescuing the log you just
+mined is not the same as leaving the watcher armed for the one being written
+next.**
+
+**This is the SAME gap persisting, not a second incident** - an earlier draft of
+this paragraph called it a second failure and that is withdrawn. No launch
+occurred between the 2026-08-30 wrap and cycle 29, so nothing was actually at
+risk in that window, and one fix closes both descriptions. What DID work is the
+written record: the wrap's directive in `ops/runtime/loop_state.json` says in
+terms that `armwatch` "MUST BE ARMED and was not", and cycle 29 armed it because
+that sentence was read. **The continuity mechanism fired; only the arming did
+not.**
+
+**A backup is a windfall and this item already says so - do not restate it as a
+rule.** An earlier draft here said the next launch "destroys" the live file.
+`docs/FINDINGS.md` 11.12 forbids exactly that: what decides whether a launch
+leaves a backup is unmeasured, so no rule may be written from `n=1` in either
+direction. Measured since: the 2026-08-30 `21:11` launch DID leave one -
+`MistfallHunter-backup-2026.08.30-06.24.23.log`, created at `21:11:19`, the
+launch instant, holding only pre-launch content - which is a second instance of
+the 2026-08-25 observation, not a rule. The live file also still carries its
+original `2026-08-09 08:18:56` creation time. **Archive anyway**, because the
+windfall is unmeasured in both directions.
+
+That successor turned out to be a **21-second launch-and-quit** (UTC `02.11.22`
+to `02.11.43`) carrying zero `affix`, `exEquip`, `cfgid` tooltip,
+`setClassGender`, `holding-`, `EnterBattle` and `DamageCollection` events, so
+nothing of measurement value would have been lost. **Note the spelling** - the
+log spells it `DamageCollection` while the SAVE property is
+`DamageCollectonDataSet` (`lanternlight/damage.py`), and a first draft of this
+line searched the save spelling against a log, where it can never match. A zero
+from that token is a claim about the token. Recorded so the next session does
+not spend a pass re-mining this log.
+
+**A WATCHER IS RUNNING RIGHT NOW - check before arming another.** Cycle 29 left
+`python -m lanternlight.armwatch --dest-root C:/ll-captures/2026-08-31` running
+as **PID 34116** since `17:09:06` local, and it is the only one. Before arming,
+list them: `Get-CimInstance Win32_Process -Filter "Name like '%python%'"` and
+match the command line against `armwatch`. **Arming a second one points two
+watchers at the same four sources**, doubling snapshot traffic while `OPS-14`
+(this machine's disk reaching 100 percent) is still OPEN. To stop it, use
+`taskkill /F /PID 34116`, which is this repository's only sanctioned way to end
+a process - see the authoring rules in `CLAUDE.md`. Its `--dest-root` is a DATE
+directory that does NOT roll over, so a launch after midnight still archives
+into `2026-08-31/` until someone re-arms it.
+
+**The remaining half of this item is AUTOMATIC arming, and it is genuinely
+open** even though the header long read only CLOSED. The `Ordering note` has
+said so all along - "item 4c, arming its watcher automatically, is not" - and
+this item's own acceptance already says the one thing it adds is that arming is
+not something a session has to remember, which is the half that was never met.
+Cycle 29 measured which reading is right by finding the watcher unarmed and a
+log single-copy. **Acceptance for the remaining half:** arming happens without a
+session choosing to do it, either a loop cycle that arms at start and records
+the PID and dest-root, or a scheduled task inside this project's own namespace,
+plus a test that a session which never invokes the entry point still ends with
+the live log archived. It must refuse to start a second watcher when one is
+already running, and must resolve its own date directory rather than inheriting
+a stale one.
 
 **MET 2026-08-25b by `lanternlight/armwatch.py`**, 19 tests in
 `tests/test_armwatch.py`, suite 1225 -> 1244. Not one byte of copying was
@@ -1362,7 +1428,9 @@ this.
 whole log corpus was searched for anything that could close this from disk and
 it carries nothing: **zero** `class-11` occurrences, **zero** 5-digit
 creation-preview `holding-` ids, and **zero** `BP_Preview_C_` creation-preview
-actors, measured across the three distinct sessions. The 2026-08-09 creation
+actors, measured across the three distinct sessions known then - and RE-DERIVED
+2026-08-31 across all FOUR sessions (22 log files, 14 distinct hashes), still
+zero, zero and zero. The 2026-08-09 creation
 walk that produced the recorded ids is gone, because the game truncates its log
 on launch (item 4c). See `docs/OBSERVED_IDS.md`, "The archived logs hold NO
 creation walk".
@@ -1529,8 +1597,9 @@ Close it with **either**:
   the paragraph above asks for.
 
 **The second route is BLOCKED ON A FRESH LOG, and the reason is measured.**
-`skillNameId` occurs **zero** times across all 18 MistfallHunter logs on this
-machine - the 12.7 MB log that carried `6130017` was truncated away by the
+`skillNameId` occurs **zero** times across every MistfallHunter log on this
+machine - 18 when this line was written, re-derived 2026-08-31 across 22 files,
+14 distinct hashes and four sessions, still zero - the 12.7 MB log that carried `6130017` was truncated away by the
 game's launch truncation (item 4c). No probe of the existing corpus can close
 it. Recorded so nobody runs that search again.
 
@@ -1652,8 +1721,9 @@ KEYS before trusting a decode.
 recorded `613xxxx` also sits in.
 
 **This does NOT close item 7's open thread.** That asks for a second distinct
-`skillNameId` seen also as a `nameId`. **`skillNameId` occurs ZERO times in all
-18 logs on this machine** - the 12.7 MB log that carried `6130017` was truncated
+`skillNameId` seen also as a `nameId`. **`skillNameId` occurs ZERO times in every
+log on this machine**, re-derived 2026-08-31 across 22 files and four sessions
+(18 when this was written) - the 12.7 MB log that carried `6130017` was truncated
 away, so the thread cannot be closed from the current corpus at all. Recorded so
 nobody re-runs that probe.
 
