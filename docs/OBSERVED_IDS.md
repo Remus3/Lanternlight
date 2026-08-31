@@ -105,6 +105,126 @@ Note the id space is NOT class-ordered: Withered Knight sits at 304xx alongside
 Mercenary, while the middle four sit at 305xx. Do not infer class from an id
 range.
 
+### The archived logs hold NO creation walk - a measured negative for ROADMAP 5
+
+Probed 2026-08-30 to see whether `ROADMAP` item 5 (the Sorcerer single-weapon
+question) could be closed from bytes already on disk. **It cannot**, and the
+negative is recorded here so nobody runs this probe twice.
+
+Across every archived log, measured on the **three distinct sessions** (see the
+corpus trap below):
+
+| Probe | Result |
+|---|---|
+| `class-11` (Sorcerer) occurrences | **0** |
+| 5-digit `holding-` ids, the creation-preview space | **0** |
+| `BP_Preview_C_` creation-preview actors | **0** |
+| `holding-` events in total | 757 |
+
+The 5-digit creation-preview ids in the table above were captured on 2026-08-09,
+and **the game truncates its log on launch** (item 4c), so that log is gone. No
+surviving log contains a character-creation walk at all.
+
+**The SAVE route is exhausted too**, so both surfaces are closed. Decoding every
+persistent save type with `lanternlight/gvas.py` shows none of them carries a
+class id at all:
+
+| Save | Top-level keys |
+|---|---|
+| `CampData_<roleId>` | `LevelModeMap` |
+| `Deck` | `DeckDefaultOpenPage` |
+| `EnhancedInputUserSettings` | `CurrentProfileIdentifierString` |
+| `LoginOptions` | `AccountName`, `SDKType`, `SelectedServer` |
+| `Notice` | `readedActivityBulletinId`, `readedGameBulletinId` |
+| `Scav` | `bIsMaskReward` |
+| `UserSettings_v1` | 16 graphics and audio settings |
+
+Character creation is previewed, not persisted, so nothing about a class the
+operator did not commit to reaches a save. Item 5 needs the deliberate re-walk
+its acceptance criterion already describes; there is no shortcut through the
+archive.
+
+**Already known, restated only so the next reader does not re-derive it:**
+`LoginOptions` carries `AccountName` and is a PII surface. It is covered by
+`ADR-004`, by `docs/FINDINGS.md`, and by the redactor's `ACCOUNT_NAME` rule,
+which keys on four spellings of that field. No `.sav` is tracked in this
+repository.
+
+### `server_refreshKnightFeature` is emitted by NINE actor types, not two
+
+This section previously named two - `BP_Preview_C_` for creation and
+`BP_Adventurer_C_` for the live character. Seven more emit the same line, and
+knowing which actor produced a row is what makes the row interpretable.
+
+| Actor | classes seen | count | Reading |
+|---|---|---|---|
+| `BP_UIPreview_C_` | 12 | 195 | operator's own character, generic UI preview |
+| `BP_Adventure_Bot_C_` | 10, 12, 14, 15 | 196 | **bots** - the log names them as such |
+| `BP_RecomPreview_C_` | 12 | 125 | operator's own, recommendation surface |
+| `BP_CampAdventurer_C_` | 12 | 53 | operator's own, in camp |
+| `BP_PremiumShopPreview_C_` | 12 | 53 | operator's own, shop preview |
+| `BP_AppearancePreview_C_` | 12 | 51 | operator's own, appearance surface |
+| `BP_Adventurer_C_` | 12, 13, 15 | 51 | live adventurers in a run |
+| `BP_EquipPackPreview_C_` | 12 | 31 | operator's own, equip-pack preview |
+| `BP_RankPreview_C_` | 12 | 2 | operator's own, rank surface |
+
+**The actor type partitions the population, and that is the useful part.**
+**MEASURED:** all seven newly recorded types carry **class-12 only**, and only
+`BP_Adventure_Bot_C_` and `BP_Adventurer_C_` ever carry another class.
+**INFERRED, and it is only an inference:** that those seven are therefore UI
+renderings of the operator's own character. The type names support it, but
+class-12 is Blackarrow and *another* Blackarrow player is also class-12, so the
+class alone cannot separate "the operator" from "some Blackarrow". What is safe
+to rely on is the measured half - do not count these rows as sightings of
+another CLASS.
+
+`BP_CampAdventurer_C_` is new to `docs/`, but not to this repository: it is
+already referenced in `tests/test_logparse.py`. The novelty claim here is scoped
+to the documentation, and the codebase knew about it first.
+
+**A class seen ONLY on a bot is not evidence a player of that class was
+present.** On `server_refreshKnightFeature` lines, class 10 appears 130 times
+and class 14 appears 47 times, and every one of both is a bot. Widening to the
+whole corpus, class 10 appears 358 times - the extra 228 are on
+`refreshGelJarPart`, `refreshBellPart` and `refreshArmorParts`, and those are
+bots too, so the reading survives the widening. **State which line family a
+count covers**: the 130 is scoped to one line type and reads as a corpus total
+if that scope is dropped. Any future count of "classes observed in play" has to
+read the actor prefix or it will be wrong.
+
+**`holding-0` is a real state, seen 77 times** - an empty or unset weapon slot.
+It is a measured empty, distinguishable from an unmeasured one, and a parser
+that treats `holding-` as always naming an item will mis-handle it.
+
+### THE CORPUS TRAP - a `*.log` glob triple-counts
+
+`C:/ll-captures/2026-08-30/logs/` looks like twelve logs. It is not.
+
+- Two of its files are byte-identical **copies** of the two 2026-08-25 backups.
+- The other ten are **incremental five-minute snapshots of ONE growing live
+  log**, so each is a strict PREFIX of the next. Proven, not assumed: all ten
+  are byte prefixes of the live log and of each other, with zero divergence.
+
+**The machine holds 18 MistfallHunter logs, 13 distinct hashes, and THREE
+distinct sessions.** The three are the 2026-08-25 backup at `01.27.09`, the
+2026-08-25 backup at `04.45.02`, and the current live log; the first appears in
+**four** places and the second in **three**. A naive glob-and-count inflated
+`holding-` events from 757 to 2,438 - a factor of 3.22 - by counting the same
+bytes repeatedly.
+
+**This paragraph shipped its own wrong count and an adversarial pass caught
+it.** It first said "fifteen `.log` files", because the walk that produced it
+missed `C:/ll-captures/2026-08-25/logs/` entirely and both backups sitting in
+`%LOCALAPPDATA%/MistfallHunter/Saved/Logs/`. A section arguing that filed counts
+inflate, filing an inflated count, is the anti-pattern demonstrating itself.
+**Count by walking, then deduplicate by content hash** - and walk every log
+location, not the two you happen to remember.
+
+**Any corpus statistic in this repo must name which logs it counted.** The three
+distinct sessions are the 2026-08-25 backup, the 2026-08-25 live log, and the
+current live log. Deduplicate by content hash before counting anything.
+
+
 ## Weapon-stance toggle probe - NOT YET RUN
 
 Step 4 of the capture plan (hold on one class, cycle the stance toggle, watch
@@ -377,10 +497,51 @@ inferred. At level 2: **2 of 5 Archer's Arrows owned, 3 locked; 0 of 5 Hunter's
 Arrows, all locked.**
 
 Owned: **Steel Arrow** and **Concussive Arrow**. Only the Concussive Arrow
-tooltip is displayed in the capture - **"Steel Arrow" is operator-attested, not
-read off a frame.** Flagged because that name also appears in an established-
-outlet list in `docs/CLASSES.md`, and a T3 name presented as a frame reading is
-the restating-one-source trap this repo warns about.
+tooltip was displayed in the 2026-08-09 capture, so **"Steel Arrow" was
+operator-attested, not read off a frame** - flagged at the time because that name
+also appears in an established-outlet list in `docs/CLASSES.md`, and a T3 name
+presented as a frame reading is the restating-one-source trap this repo warns
+about.
+
+**FLAG CLEARED 2026-08-31.** `f1650_01.06.27` in the 2026-08-30 capture renders
+the tooltip. Verbatim:
+
+> **`Steel Arrow`** (`Bow`) - Fine steel arrows deal `Physical Damage` on hit
+> and can `pierce` one unit.
+
+A lore paragraph follows it, naming a smithy, a master smith and an apprentice;
+it carries no mechanical content and is not reproduced here.
+
+**`pierce` is a COUNTED mechanic shared across skills.** `Steel Arrow` pierces
+**one** unit; `Sky Piercer`, quoted elsewhere in this repo, pierces **5**. Same
+verb, same units, different magnitude - so pierce-count is a real engine
+quantity Emberforge can carry, not tooltip prose.
+
+**The same frame updates the loadout at Level 5**, against the Level 2 reading
+above: all three arrow slots `Z`, `X`, `C` are now unlocked.
+
+**The arrow rows render THREE visual states, not two, and a first draft of this
+paragraph said "all 5 Hunter's Arrows are still locked" - which the frame
+refutes.** Measured by counting pixels above a luminance sum of 420 in an 80 px
+box on each slot:
+
+| Row | s1 | s2 | s3 | s4 | s5 |
+|---|---|---|---|---|---|
+| Archer's | 184 | 117 | 192 | **0** | 355 |
+| Hunter's | **0** | 338 | **0** | **0** | **0** |
+
+A slot showing a padlock has **exactly zero** bright pixels. So **four** of the
+five Hunter's slots are locked, not five, and `Hunter's` slot 2 renders a bright
+icon with no padlock - the same state as `Archer's` slot 5.
+
+**This project has no word for that third state and does not invent one.** It is
+neither the gold-bordered equipped state nor the padlocked state. Whether it
+means unlocked-but-unequipped, previewable, or something else is **unmeasured**.
+The claim that "the Hunter's family remains entirely unavailable" is withdrawn.
+
+**Worth keeping as method:** the wrong version came from reading the row by eye
+off a rendered frame, and the correction came from counting pixels. For a
+count of near-identical tiles, measure - do not look.
 
 **Archer's Arrows are charge-based, not consumable stock.** Operator-attested:
 they apply a special effect to the next nocked arrow, start at 3 uses, may be
