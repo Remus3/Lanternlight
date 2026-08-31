@@ -1873,6 +1873,117 @@ a compass with bearings, and two resource bars beneath the crosshair.
 - New nouns: `Victory Wine`, `Corroded Soldiers`, `Dmitrheim`, `Master Vronn`,
   `Scattershot`, `Stun`, `Lightning Arrow`, `Volley`, `True Damage`.
 
+## The unread captures, finished - 2026-08-30e
+
+`LL-0097` recorded two frames as still unread and named what each should hold.
+One delivered and one did not, and the miss is recorded first because an
+expectation that failed is the more useful half.
+
+### WITHDRAWN - `talents/f0083` does NOT hold a Splatter Arrow tooltip
+
+`LL-0097` said a fourth skill tooltip for `Splatter Arrow` sat unread in
+`2026-08-25b/talents/f0083`. **It does not.** `f0083_22.26.56` is the
+`WAREHOUSE` screen, and so are its neighbours `f0082` and `f0084`. There is no
+skill tooltip of any kind on any of the three, cut off or otherwise. Opened
+directly and confirmed by two independent readers.
+
+**`Splatter Arrow` remains unquoted**, and the "fourth skill tooltip" is still
+owed. Note the shape: the ledger entry naming this frame was written by the same
+pass that swept the capture, so the miss is not a stale record going bad - it
+was wrong when filed. A frame number remembered from a sweep is a hypothesis.
+
+### The FOURTH complete affix ladder - `Wealth`, and it has NO secondary
+
+Read off `f0115_22.54.46` in `2026-08-25b/reanchor/`, the frame `LL-0097` named.
+This one delivered.
+
+> **Effect.** Increase the amount of `Gyldenblod` from PvE in dungeons.
+
+| Level | Effect |
+|---|---|
+| Lv. 1 | Amount of Gyldenblod dropped +10%. |
+| Lv. 2 | Amount of Gyldenblod dropped +20%. |
+| Lv. 3 | Amount of Gyldenblod dropped +30%. |
+| Lv. 4 | Amount of Gyldenblod dropped +40%. |
+| Lv. 5 | Amount of Gyldenblod dropped +50%. |
+
+**It breaks the surviving pattern in a fourth new way.** `Seeker` already
+refuted shared ladder length, shared unlock level and linearity. `Wealth` refutes
+something those three left standing: that a ladder HAS a secondary clause at
+all. It has none - the tooltip renders `Effect`, `Level Distribution` and
+`Affix Level` and **no unlock line whatsoever**. That is a measured absence on a
+complete, uncut panel, not a field that scrolled off.
+
+**Its gate is a different KIND of gate.** `Fervid` gates on a combat state
+(`Health` above 70%) and `Seeker` on a combat event (hitting an enemy).
+`Wealth` gates on CONTENT - "from PvE in dungeons" - inside the Effect sentence
+rather than in the ladder. An affix condition is not always a combat condition,
+which matters to Emberforge because a content gate cannot be evaluated from a
+combat state at all.
+
+**A rendering detail worth not normalising:** the ladder rows read `Lv. 1` with
+a space while the side panel reads `Lv.1` without one, both on this one frame.
+
+### The affix BAR encodes ladder length and current level - read it without a tooltip
+
+Counted directly off the `Affixes` panel on `f0115_22.54.46`, then re-counted
+from an upscaled crop:
+
+| Affix | Bar segments | Gold segments | Panel level | Ladder length |
+|---|---|---|---|---|
+| `Fervid` | 7 | 2 | Lv.2 | 7, recorded independently |
+| `Ranged` | 7 | 2 | Lv.2 | 7, recorded independently |
+| `Fervor` | 7 | 2 | Lv.2 | UNREAD |
+| `Wealth` | 5 | 1 | Lv.1 | 5, read off the same frame |
+
+**Two readings, each confirmed on the frame that also carries its check.** Total
+segments equal the ladder length in all three cases where the length is known by
+other means. Gold segments equal the affix level in all four rows.
+
+**The obvious objection is refuted on the same frame.** Three affixes at Lv.2 all
+showing 7 could mean the bar is a fixed 7-wide widget rather than a ladder
+length - `Wealth` showing 5 on the same panel rules that out.
+
+**This is worth having because it is free.** Ladder length and current level can
+be read off the panel without opening a single tooltip, which turns one
+screenshot of the `Affixes` list into a length for every affix on it. It
+PREDICTS `Fervor` at 7 levels; that is a prediction, not a reading, and one
+tooltip settles it.
+
+### The attribute sheet's lower half, which was scrolled off in every earlier frame
+
+The section above records `Basic` and `Energy` from `f0079_22.26.47` and says a
+`Damage` section "sits below and was scrolled off in every frame examined".
+`f0084_22.26.58` is scrolled one notch further and carries the rest, completing
+the sheet at **five sections**:
+
+| Damage | | Survival | | Speed | |
+|---|---|---|---|---|---|
+| `Physical Damage` | +6.60% | `Physical Resistance` | +2.50% | `Movement Speed` | +0.00% |
+| `Magic Damage` | +3.60% | `Magic Resistance` | +2.00% | `Skill Cooldown Speed` | +0.00% |
+| `Critical Damage` | +25.00% | `Critical Damage Resistance` | +2.00% | | |
+| `Defense Penetration` | +0.00% | `Healing Done` | +0.00% | | |
+
+`Physical Damage` and `Magic Damage` render green with an up-chevron; the rest
+render plain. On this loadout those two are the only attributes the gear has
+moved, which is consistent with the affixes equipped and is the panel marking
+a delta rather than a total.
+
+**Note the unit split, because it is a parsing trap.** This panel uses
+two-decimal percentages (`+0.00%`) while the affix ladders use whole numbers
+(`+10%`), so a reader normalising one to the other will silently corrupt the
+other.
+
+**A marquee trap, found by reading two adjacent frames.** The `Pip's Pouch`
+label is a SCROLLING marquee: `f0083` renders `limit per slot:1500` and `f0084`
+renders `alue limit per 1500` - the same label, mid-scroll, at 2-second spacing.
+A single frame of it can look like a complete string and be a fragment. Any
+label read off one frame should be confirmed on a neighbour.
+
+**Not a new finding, and recorded so nobody files it as one:** the `Basic` and
+`Energy` values on these frames are identical to those already in this document
+from `f0079`. Only the three lower sections are new.
+
 ## What to capture next, in priority order
 
 Each is one hover in a menu and yields a whole ladder, so the ratio of effort to
@@ -1895,7 +2006,9 @@ list are wholly or partly answered and are marked so rather than deleted.
    level has been observed on any frame.
 3. **`Fervor`'s ladder** - PARTLY ANSWERED. `Fervor` is confirmed present, is
    gem-delivered by `Warspirit Moonstone`, and appears in the Auction House
-   catalogue. Its seven-level ladder is still unread.
+   catalogue. Its ladder is still unread. Its bar on `f0115_22.54.46` shows
+   **7 segments**, which by the segment rule above PREDICTS a 7-level ladder -
+   one tooltip confirms or refutes it, and either outcome is worth the hover.
 4. **The `Focus Fire` talent tooltip** - ANSWERED 2026-08-30 and quoted above.
    Left here because the remaining half - whether the climbing buff icon is
    `Focus Fire` or the `Ranged` affix - needs the target-switch test, not

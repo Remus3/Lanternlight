@@ -84,6 +84,32 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0098 - 2026-08-30 - ROADMAP 13 CLOSED with all 16 page-two tooltips - and the item's own premise was a third rediscovery failure
+
+**Evidence:**
+- python -m pytest -> '1338 passed in 25.71s', exit code 0, run as its own command (not piped)
+- python -m ruff check . -> 'All checks passed!', exit code 0, run as its own command
+- collect count re-summed per file -> 1338, no drop from the baseline measured before dispatching
+- ops.merge_gate.verify(baseline=1338) -> OK (1338 tests collected)
+- `lanternlight/redact.py` assert_clean() over all 384 added diff lines -> PASSED
+- tests/test_no_pii.py and tests/test_ascii_hygiene.py -> exit 0; git status shows four modified .md and zero binaries
+- 16 page-two tooltips in docs/OBSERVED_IDS.md, each frame-cited; I opened f0101, f0067, f0081, f0090 myself and an independent refuter opened all 16 and found zero transcription or attribution errors
+- node census cross-checked two ways: the name table lists 3+2+2+2+3+4=16 and f0160_22.29.45 renders exactly 16 icons in that same per-cluster shape
+
+DELIVERED: the effect text of every page-two talent node, verbatim with its frame. Gyldenmist Tolerance, f0101_16.05.00: 'Increases resistance to the Gyldenmist, slowing the rate of Gyldening.'
+IT DID NOT BIND. FINDINGS 10.9.1 keeps the refusal: the talent text is purely temporal, the PlayzoneData fields purely spatial, and across three logs Gylden never co-occurs with a zone token. The negative is weak on purpose - engine names routinely differ from player-facing ones - so it is recorded as no evidence either way, not as a refutation.
+THE THIRD REDISCOVERY FAILURE IN TWO DAYS, and this one was inside the correction to the second. ROADMAP 13 said OBSERVED_IDS records page-two node names 'but not what any of them does'. It records what two of them do - Crippling Pain and Swift Exit - and has since 2026-08-09, in the starred list two tables below the cluster table the item cites as its evidence. Verified by git log -S: commit b4d4888, 2026-08-09, 173 commits back.
+THE RULE IS NOW NARROWER THAN 'OPEN THE FILE'. All three failures were by authors with the right file open. Grep for the CLAIM, not for the section you remember - checking the one table your claim happens to cite is not checking the claim.
+ROADMAP 11 CORRECTED FOR THE SECOND TIME on the same line. Affix ids 101 and 209 ride on equipped items at THREE wall clocks (local 2026-08-25 18:37:02, 18:38:16, 21:29:30), not two, and NO capture covers any of them - two precede the day's earliest frame by 2 to 3.5 minutes. The line first blamed a crop, then blamed an absent tooltip inside covering frames. Both were coverage ASSERTED without deriving the timestamps. The old wording invited a future session to re-search frames holding nothing.
+LL-0097 REFUTED: talents/f0083 does NOT hold a Splatter Arrow tooltip. It is the WAREHOUSE screen, as are f0082 and f0084. Confirmed by two independent readers. The fourth skill tooltip is still owed. The entry was wrong when filed, by the same pass that swept the capture - a frame number remembered from a sweep is a hypothesis.
+LL-0097's other half DELIVERED: reanchor/f0115 carries a complete Wealth ladder, 5 levels, linear +10 percent per level, and it is the first ladder observed with NO secondary clause at all - a measured absence on an uncut panel. Its gate is a CONTENT gate ('from PvE in dungeons'), not a combat-state gate, which Emberforge cannot evaluate from combat state.
+FREE READING RULE: the Affixes panel bar encodes ladder length in total segments and current level in gold segments. 7/7/7/5 and 2/2/2/1 on one frame, agreeing with Fervid and Ranged at 7 levels recorded independently and with Wealth's own 5-row ladder on that same frame. A fixed-width-widget explanation is refuted by Wealth showing 5 on the same panel. Predicts Fervor at 7.
+THE ZONE HAS A SECOND LOG SURFACE AND THE FIRST DRAFT MISSED IT. The safe circle radius (25597.265625) is emitted once per session and never changes, identical across three logs AND across the 1.0.14 to 1.0.15 patch - the project's first value checked across a patch boundary and found unmoved. But one session logs 'TS.UI: MainHUD playzoneCom corrosion event' reaching 2, at 21m39s after init, 9.0s apart, 4.5s before EndPlay. The radius lives on the actor and the corrosion counter on the HUD, so a grep against the actor class returns a complete-looking picture that omits the half answering the question. A MECHANIC IS NOT CHARACTERISED UNTIL YOU LOOK FOR ITS OTHER EMITTERS.
+TWO CAPTURE-WALK TRAPS, both hit this session. A *.png glob misses 2708 frames because wide, wide2, scene, scene_early and reanchor_small/wide are JPG. A depth-1 walk misses 640 more because reanchor_small nests its frames in subdirectories. The recorded 'eight full-scene sets, three at 2560x1440' is correct but SCOPED to C:/ll-captures and silently omits a ninth - ~/.lanternlight/frames, 2026-08-09, 2560x1440 - which is the only set holding page-two hovers.
+SETTLED IN PASSING: a LOCKED talent node still renders its full tooltip on hover. The 2026-08-09 character is Level 2 with every page-two cluster gated at Lv. 6 or above and all 16 render. The level-5 capture yields no page-two text because nobody hovered there, not because locked nodes are mute.
+A REDACTOR LESSON THAT IS NOT A DEFECT. assert_clean is a LOG-TEXT gate; the repo-file gate is tests/test_no_pii.py, which excludes IPV4 by design because version strings are dotted quads. Running assert_clean over whole prose docs raises on four PRE-EXISTING false positives at byte-identical offsets in HEAD, all on the English word 'name'. A defect was nearly filed against the redactor; the design is correct and already documented in the test's own docstring. It did catch one real thing on the diff - a quoted keyed display-name template - which is rewritten, because a public repo does not need a worked example of the shape that leaks the real thing.
+PROCESS THAT WORKED: the refutation ran BEFORE the commit and found four defects in text already written, two of them factually wrong sentences in FINDINGS 10.9.2. All four are fixed above. Agreement was never treated as evidence - the merger independently re-opened decisive frames and re-derived every count.
+
 ### LL-0097 - 2026-08-30 - Wrap refutation caught the REDISCOVERY failure - four false first-party claims and a roadmap item asking for what had been on disk for three weeks
 
 **Evidence:**

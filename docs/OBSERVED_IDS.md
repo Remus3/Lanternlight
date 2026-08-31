@@ -459,9 +459,63 @@ Pursuit Mark's stack cap went unnoticed long enough to be denied in print.
   damage dealt. The swarm detonation deals Critical Damage, with a portion
   converted to True Damage.
 - **Crippling Pain** - Enemies damaged by Impact Grenade have reduced Movement
-  Speed for a period of time.
+  Speed for a period of time. Frame `f0081_16.04.16`.
 - **Swift Exit** - Allows you to learn the spawn location of the Smuggler
-  Woodling and Soul Ferry in advance.
+  Woodling and Soul Ferry in advance. Frame `f0090_16.04.36`.
+
+### Page-two node tooltips - ALL 16, 2026-08-09 capture, read 2026-08-30
+
+**Read this before filing any item that says page two lacks tooltip text.** Two
+of these - `Crippling Pain` and `Swift Exit` - have been in the starred list
+directly above since 2026-08-09. A `ROADMAP` item nevertheless stated that
+"page one has four such texts quoted and page two has none", and that item was
+itself the correction to an earlier rediscovery failure about this same screen.
+The claim was false when written. The remaining 14 texts below are new.
+
+Every node was hovered in the `2026-08-09` capture at
+`C:/Users/Administrator/.lanternlight/frames/`, which is a **2560x1440
+full-scene set outside `C:/ll-captures/`** and is therefore invisible to a walk
+of that tree. It holds 218 PNGs: 217 in the `f`-series, `f0000_16.01.15` to
+`f0216_16.09.16`, plus one `skills_16.54.16` taken 45 minutes later. The character is **Level 2** and every page-two cluster is locked,
+which settles a question the level-5 capture could not: **a locked node still
+renders its full tooltip on hover.** `LAlt` pins it open (already recorded under
+UI facts).
+
+| Cluster | Node | Effect, verbatim from the tooltip | Frame |
+|---|---|---|---|
+| Hunter's Arrow Enhancement 1 | Power Infusion | Increases the effective range of Featherlight Arrows. | `f0064_16.03.38` |
+| Hunter's Arrow Enhancement 1 | Laceration | Enemies hit by Barbed Arrow are Stunned for a period of time if they reach the maximum number of dodge uses before the Barbed Arrow effect ends. | `f0067_16.03.44` |
+| Hunter's Arrow Enhancement 1 | Shockwave | After Sonic Arrow hits terrain, it emits sound waves multiple times over a period of time. This effect will not trigger if it hits players or monsters. | `f0069_16.03.49` |
+| Hunter's Arrow Enhancement 2 | Neurotoxin | After Paralysis Arrow expires, it leaves an aftereffect that reduces the enemy's Skill Cooldown Speed for a period of time. | `f0071_16.03.53` |
+| Hunter's Arrow Enhancement 2 | Lingering | Increases the poison duration and total Damage Multiplier of Spore Arrow, but reduces the Damage Multiplier per second. | `f0073_16.03.58` |
+| Predator's Stealth | Steady Stealth | Attacks received during Shadow Step's Stealth no longer remove Stealth. | `f0076_16.04.04` |
+| Predator's Stealth | Heightened Senses | Increases the number of uses for Predator's Senses and reduces its base cooldown. | `f0080_16.04.13` |
+| Bomb Engineering | Crippling Pain | Enemies damaged by Impact Grenade have reduced Movement Speed for a period of time. | `f0081_16.04.16` |
+| Bomb Engineering | Cold Infusion | Frostblight Bomb reduces the Movement Speed of enemies entering the blast area during the delayed explosion phase for a period of time. | `f0084_16.04.22` |
+| Woodling Expert | Woodling Bane | Greatly increases damage dealt to Returner Woodlings. | `f0088_16.04.31` |
+| Woodling Expert | Swift Exit | Allows you to learn the spawn location of the Smuggler Woodling and Soul Ferry in advance. | `f0090_16.04.36` |
+| Woodling Expert | Regular | Woodling merchants will offer you a discount during matches. | `f0093_16.04.42` |
+| Way of Gylden Hunt | Death Sense | Allows you to sense the corpses of other Gyldhunters. | `f0095_16.04.47` |
+| Way of Gylden Hunt | Greed is Good | Increases Gyldenblod gained. | `f0099_16.04.56` |
+| Way of Gylden Hunt | Gyldenmist Tolerance | Increases resistance to the Gyldenmist, slowing the rate of Gyldening. | `f0101_16.05.00` |
+| Way of Gylden Hunt | Monster Hunter | Increases damage dealt to monsters but reduces damage dealt to Gyldhunters. | `f0105_16.05.09` |
+
+**The census is complete and the completeness is checked, not assumed.** The
+node-name table above lists 3+2+2+2+3+4 = 16 nodes across the six page-two
+clusters, and frame `f0160_22.29.45` from the separate level-5 capture renders
+exactly 16 node icons on page two, counted per cluster in the same 3/2/2/2/3/4
+shape. Two independent surfaces, same count.
+
+**`Gyldening` and `Woodling merchants` and `Spore Arrow` are new game nouns.**
+Every other noun in the table was already recorded elsewhere in `docs/`. The
+game's own spelling is `Gyldhunters`, not `Gyldenhunters`, agreeing with
+`docs/AFFIXES.md`.
+
+**No magnitude appears anywhere in these 16 texts.** Not one duration, radius,
+percentage or stack cap - only "a period of time", "greatly", "reduces". That
+extends the pattern every other talent tooltip in this file already shows, and
+it is the reason Emberforge cannot derive talent effects from tooltip text.
+
 
 ### What this corroborates, and what it opens
 
