@@ -1340,6 +1340,19 @@ a deliberate re-walk of the Sorcerer creation screen that surfaces none, written
 up as a measured negative with the walk described. A wiki claim does not close
 this.
 
+**THE ARCHIVE ROUTE IS EXHAUSTED - probed 2026-08-30, do not repeat it.** The
+whole log corpus was searched for anything that could close this from disk and
+it carries nothing: **zero** `class-11` occurrences, **zero** 5-digit
+creation-preview `holding-` ids, and **zero** `BP_Preview_C_` creation-preview
+actors, measured across the three distinct sessions. The 2026-08-09 creation
+walk that produced the recorded ids is gone, because the game truncates its log
+on launch (item 4c). See `docs/OBSERVED_IDS.md`, "The archived logs hold NO
+creation walk".
+
+**So this item needs the client and nothing else will do.** It is otherwise
+cheap - one pass over the Sorcerer creation screen with the frame poller
+running. Worth pairing with item 6, whose acceptance needs the same screen.
+
 ## 6. Weapon-stance toggle probe - OPEN, did not produce a result
 
 Step 4 of the original capture plan - hold on one class, cycle the stance
@@ -1530,6 +1543,79 @@ carries it.
 window drops. A reader that wants complete combat needs both surfaces. And a
 new monsterId, **99021**, appears only as the source that killed the operator -
 a range no other observation has touched.
+
+### THREE MORE ABILITY BINDINGS, and a new id range - 2026-08-31, client `1.0.15`
+
+The live log carries a second death payload, and it binds three ids at once.
+Read straight out of the death-statistics line (the label is Chinese and is not
+reproduced here; match on `damageChildList`, not on the label):
+
+| nameId | `Key` | `iconPath` leaf | damageValue |
+|---|---|---|---|
+| 6150251 | `LightAttack` | `T_UI_Icon_Skill_914` | 384.573104858 |
+| 6152203 | `SpearFlurry` | `T_UI_Icon_Skill_917` | 384.007812500 |
+| 6152206 | `ShieldImpact` | `T_UI_Icon_Skill_919` | 61.545669556 |
+
+`sourceType: 0`, `bDeathCauser: true`, `totalDamage: 830.1265869140625`, and
+`monsterId` **absent** rather than null.
+
+**Internally consistent, which is a check worth running:** the three children sum
+to `totalDamage` **bit-exactly** in IEEE754, not merely to the last displayed
+digit. A payload that did not sum would mean the child list is a sample rather
+than a decomposition, so this is the cheap check that a death payload is
+complete.
+
+**THIRD-PARTY PII LIVES IN THIS PAYLOAD, and the redactor was tested against the
+real bytes.** The same object carries the KILLER's 19-digit `roleId`, 16-digit
+`onlineUserId`, a short `name` and a 15-character `onlineDisplayName`, plus
+`appearanceStr` and `gender`. `CLAUDE.md` puts third-party players in scope, not
+only the operator. **Checked, and the guard holds:** `lanternlight/redact.py`
+masks all four identity fields plus `appearanceStr` on the real line, and
+`assert_clean` then certifies the result. Only `onlineChannel`, a single digit,
+survives.
+
+Recorded as **checked and clean rather than filed as a gap**, deliberately -
+`LL-0090` withdrew a redaction-gap claim that had been raised against a
+FABRICATED input. This one was derived from the measured bytes, which is the
+only test that means anything here.
+
+**`iconPath` is a field nothing had recorded**, and it is the first surface
+joining an ability id to a rendered ASSET name. `615xxxx` is also a **new range**
+beside the recorded `613xxxx` (player ability) and `625xxxx` (monster source).
+
+**THE SOURCE IS IDENTIFIED, and a first draft of this section said it could not
+be.** That draft reasoned that the Keys `SpearFlurry` and `ShieldImpact` cannot
+belong to the operator's bow class, offered "another player killed the operator"
+as an inference, and then declared that **"nothing observed separates"** that
+reading from a broader `sourceType`. **The payload separates it, and the field
+was in the line the section had already decoded:**
+
+| Field | Value | Reading |
+|---|---|---|
+| `classId` | **15** | `Withered Knight` - bound in `docs/OBSERVED_IDS.md` |
+| `damagePlayerType` | 0 | a second source-kind flag, semantics unmeasured |
+| `sourceType` | 0 | player is the source, per the rule above |
+
+The operator is `class-12`, Blackarrow. The killer is `class-15`. **So this is a
+PvP death, the project's first recorded, and `615xxxx` is a Withered Knight
+ability range** - matching a spear-and-shield kit rather than a bow.
+
+**HOW THE ERROR HAPPENED, because the shape recurs.** The decode script pulled a
+hand-picked list of fields, printed them, and the output was then treated as the
+whole record. The payload actually carries thirteen top-level keys. **A selective
+extractor's output is a claim about the extractor**, exactly as an empty grep is
+a claim about the pattern - and this one was used to assert an absence. Dump the
+KEYS before trusting a decode.
+
+**Still unmeasured:** what `damagePlayerType` distinguishes, and whether
+`615xxxx` is Withered-Knight-specific or a shared player-ability range that the
+recorded `613xxxx` also sits in.
+
+**This does NOT close item 7's open thread.** That asks for a second distinct
+`skillNameId` seen also as a `nameId`. **`skillNameId` occurs ZERO times in all
+18 logs on this machine** - the 12.7 MB log that carried `6130017` was truncated
+away, so the thread cannot be closed from the current corpus at all. Recorded so
+nobody re-runs that probe.
 
 **SAFETY, routed to the safety lane:** the log line adjacent to these payloads
 carries the operator's persona in a bare `name:` field, and the kill-history
@@ -2240,6 +2326,28 @@ more than the candidate.** `Sky Piercer` also states 5 - its arrow can "pierce
 5 units". **Two unrelated skills in one kit both state 5**, so matching this
 item's climbing icon on that number discriminates nothing at all. The candidate
 survives only on the Volley MECHANIC, never on its maximum.
+
+**(5) A FIFTH candidate, added 2026-08-31, and it is the first one that is
+actually a STACKING BUFF.** The `Fervor` affix ladder, read off
+`f0980_00.52.15` and quoted in `docs/AFFIXES.md`, states: after hitting an
+enemy, increase `Physical Damage` and `Magic Damage` for 3s, **"stacking up to
+5 times"**.
+
+**Why this one is different in kind, not just another 5.** The four candidates
+above are an arrow count, a pierce count and a duration-bounded fire mode; none
+of them is a buff that stacks. This item describes an ICON THAT CLIMBS TO 5,
+which is what a stack counter looks like. `Fervor` is a stack counter with a cap
+of 5 and a 3-second window, stated by the game.
+
+**It also makes the number even less discriminating**, which is the honest half:
+three separate things in reach of this character now state 5. **The candidate
+rests on the stacking MECHANIC and on the 3s window, never on the number.**
+
+**The distinguishing test is cheap and it is the same target-switch run this
+item already needs:** `Fervor` is affix-borne, so it should be present only
+while an item or gem granting it is equipped, and it decays 3s after the last
+hit. `Focus Fire` is talent-borne and per-target. Unequipping the `Fervor`
+source and re-running is a clean separation that needs no new measurement rig.
 
 Note also that Volley is bounded by a DURATION while this item reports the icon
 climbing per HIT, which is a behavioural difference worth testing - and that

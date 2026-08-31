@@ -1984,6 +1984,100 @@ label read off one frame should be confirmed on a neighbour.
 `Energy` values on these frames are identical to those already in this document
 from `f0079`. Only the three lower sections are new.
 
+## Mining the 2026-08-30 capture - 2026-08-31 pass
+
+2172 frames at `C:/ll-captures/2026-08-30/frames/`, largely unopened. 186 were
+read. The screen map is in the session scratch; what follows is what it settled.
+
+### `Fervor`'s ladder - the SEVEN-LEVEL prediction was made, then CONFIRMED
+
+The bar rule above predicted 7 levels from a 7-segment bar. Read off
+`f0980_00.52.15`, and the panel's bottom border sits below `Lv. 7`, so the list
+is complete rather than clipped:
+
+> **Effect.** After hitting an enemy, increase `Physical Damage` and
+> `Magic Damage` for 3s, **stacking up to 5 times**. Upon reaching the required
+> level, when the number of stacks is greater than or equal to 3, increase
+> `Defense Penetration`.
+
+| Level | Physical Damage | Magic Damage | Defense Penetration |
+|---|---|---|---|
+| Lv. 1 | +0.4% | +0.4% | - |
+| Lv. 2 | +0.8% | +0.8% | - |
+| Lv. 3 | +1.2% | +1.2% | - |
+| Lv. 4 | +1.6% | +1.6% | - |
+| Lv. 5 | +2% | +2% | +2.5% |
+| Lv. 6 | +2.4% | +2.4% | +2.5% |
+| Lv. 7 | +2.8% | +2.8% | +2.5% |
+
+**This is a prediction that was recorded BEFORE the reading and then held**,
+which is a different and stronger kind of evidence than a pattern fitted after
+the fact. It also restores the shape `Seeker` broke, without restoring the
+template: `Fervor` matches `Ranged` and `Fervid` in ladder length (7), in linear
+primary scaling (0.4% per level) and in a secondary that unlocks at Lv. 5 and
+stays flat (+2.5%). Four ladders now: three of one shape, one of another. **The
+shape is a family, not a law** - `Seeker` at 5 levels and `Wealth` at 5 with no
+secondary are still counterexamples.
+
+**`Fervor` and `Fervid` are DIFFERENT affixes** with different icons and
+different ladders. They appear adjacent in the panel and the names differ by two
+letters. Do not merge them.
+
+### The bar's segment count VARIES BY AFFIX - the rule is not a constant width
+
+`f1300_00.58.54` renders nine affixes at once and the bars are not all the same:
+
+| Bar | Segments | Affixes |
+|---|---|---|
+| 187 px | 7 | `Fervid`, `Ranged`, `Focused`, `Skypiercing`, `Valor`, `Wrath` |
+| 134 px | 5 | `Elusive`, `Smiting`, `Curse` |
+
+Same 26.7-26.8 px pitch in both, so the difference is segment COUNT, not scale.
+
+**Those three numbers were published wrong first and an adversarial pass
+corrected them** - 193, 140 and 27.6-28.0. All three came from measuring to the
+bar's left edge from the ICON's right edge rather than from the bar's own start,
+a six-pixel offset that inflates every width and the pitch derived from them.
+The bar is a crisp rectangle with no antialiasing to argue about. **The segment
+counts and the affix assignment were right**, so the conclusion never moved -
+but a derived number that nobody re-measures is how a wrong constant enters a
+build engine.
+That rules out the obvious objection to the rule - a fixed-width widget - on a
+single frame, and it means the 7 that predicted `Fervor` carried real
+information.
+
+**A standing prediction, recorded before the reading as the `Fervor` one was:**
+`Elusive`, `Smiting` and `Curse` each have a **5-level** ladder. One hover on
+any of them confirms or refutes it, and a refutation is worth as much here.
+
+### `Splatter Arrow` is NOT in this capture - a measured negative
+
+Ledger `LL-0097` claimed it sat in `talents/f0083`; that was refuted earlier
+today. It is not in the 2026-08-30 capture either. The `SKILLS` screen appears
+in exactly **8** frames (`f0510`, `f0516`, `f0517`, `f0518`, `f1187`, `f1188`,
+`f1278`, `f1650`) and all eight were read. No skill of that name renders.
+
+**Why the capture cannot answer it:** the 7-tab camp skill grid renders **icons
+only** - names appear solely in the right-hand detail panel - and in all four
+7-tab frames the operator was tabbing through, so the panel never left its
+default selection. The in-field panel names only the six EQUIPPED weapon skills:
+`Steel Arrow`, `Concussive Arrow`, `Lightning Arrow`, `Scattershot`,
+`Rapid Arrows`, `Sky Piercer`. **`Splatter Arrow` remains unquoted** and needs a
+capture where the operator hovers it.
+
+### A socket TIER is rendered; a socket LEVEL still is not
+
+`f1733_01.08.04` shows `Tier II Peridot Slot - Empty` and `Tier I Moonstone Slot
+- Empty` - Roman numerals, which misread as `Tier 0` and `Tier 1` at contact-sheet
+resolution. `Moonstone Slot` is new; `Peridot Slot` and `Tier II` were already
+recorded.
+
+The gem rule quoted elsewhere in this document - a gem's level cannot exceed the
+level of the target equipment socket - therefore names a socket LEVEL that
+**still appears on no frame in this capture**. Tier is not level. That
+observation stays open exactly as recorded.
+
+
 ## What to capture next, in priority order
 
 Each is one hover in a menu and yields a whole ladder, so the ratio of effort to
@@ -2004,11 +2098,9 @@ list are wholly or partly answered and are marked so rather than deleted.
 2. **A gem slotting screen** - socket tiers, what a Peridot is, and whether tier
    gates level. Still open: the inlay rule names a socket LEVEL and no socket
    level has been observed on any frame.
-3. **`Fervor`'s ladder** - PARTLY ANSWERED. `Fervor` is confirmed present, is
-   gem-delivered by `Warspirit Moonstone`, and appears in the Auction House
-   catalogue. Its ladder is still unread. Its bar on `f0115_22.54.46` shows
-   **7 segments**, which by the segment rule above PREDICTS a 7-level ladder -
-   one tooltip confirms or refutes it, and either outcome is worth the hover.
+3. **`Fervor`'s ladder** - ANSWERED 2026-08-31 and quoted above. Seven levels,
+   as the segment rule predicted. Replaced by: read `Elusive`, `Smiting` or
+   `Curse`, each predicted at **5 levels** by the same rule.
 4. **The `Focus Fire` talent tooltip** - ANSWERED 2026-08-30 and quoted above.
    Left here because the remaining half - whether the climbing buff icon is
    `Focus Fire` or the `Ranged` affix - needs the target-switch test, not

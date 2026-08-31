@@ -84,6 +84,30 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0099 - 2026-08-30 - Item 5's archive route is exhausted, and mining the unread capture confirmed a prediction, cleared a sourcing flag and found a PvP death
+
+**Evidence:**
+- python -m pytest -> '1338 passed in 23.87s', exit 0, run as its own command
+- python -m ruff check . -> 'All checks passed!', exit 0, run as its own command
+- collect count 1338, no drop from the baseline measured before dispatching; merge gate OK
+- `lanternlight/redact.py` assert_clean() over all 373 added diff lines -> PASSED; 0 long digit runs; 0 non-ASCII bytes in all three files
+- ROADMAP 5 probe: class-11 = 0, 5-digit creation-preview holding ids = 0, BP_Preview_C_ actors = 0, across the three distinct log sessions
+- every persistent save type decoded with `lanternlight/gvas.py`: none carries a class id
+- Fervor ladder read off f0980_00.52.15 by me and re-read by an independent refuter; panel bottom border verified below Lv. 7, so not clipped
+- arrow-slot states measured by pixel count, not by eye: padlocked slots have exactly 0 bright pixels, Hunter's slot 2 has 338
+
+ROADMAP 5 CANNOT BE CLOSED FROM DISK and now says so. Both surfaces are exhausted: no archived log contains a character-creation walk (the 2026-08-09 one was truncated away by the game's launch truncation, item 4c), and no persistent save carries a class id at all. The item needs the client and nothing else will do.
+THE CORPUS TRAP, which invalidates any count taken by globbing logs. C:/ll-captures/2026-08-30/logs/ looks like twelve logs but holds two duplicate backups plus TEN INCREMENTAL PREFIX SNAPSHOTS of one growing live log. The machine holds 18 MistfallHunter logs, 13 distinct hashes, THREE distinct sessions. A naive glob inflated holding- events from 757 to 2438. Deduplicate by content hash and name which logs a statistic covers.
+THAT SECTION SHIPPED ITS OWN WRONG COUNT. It first said 'fifteen .log files' because the walk missed a whole directory and the live log's own backups. A section arguing that filed counts inflate, filing an inflated count, is the anti-pattern demonstrating itself. Caught by the refutation, before the commit.
+server_refreshKnightFeature is emitted by NINE actor types, not the two recorded. The actor prefix partitions the population: all seven newly recorded types carry class-12 only, and only BP_Adventure_Bot_C_ and BP_Adventurer_C_ ever carry another class. A CLASS SEEN ONLY ON A BOT IS NOT EVIDENCE A PLAYER OF THAT CLASS WAS PRESENT - every class-10 and class-14 sighting in the corpus is a bot. holding-0 is a measured empty state, 77 occurrences.
+A PREDICTION WAS RECORDED AND THEN HELD. The affix-bar segment rule predicted Fervor at 7 levels; f0980_00.52.15 shows exactly 7, with the panel's bottom border below Lv. 7 so the list is not clipped. That is stronger evidence than a pattern fitted after the fact. The rule is also not a fixed-width widget: f1300 renders 7-segment bars for six affixes and 5-segment bars for three others at the same pitch. NEW STANDING PREDICTION, recorded before the reading: Elusive, Smiting and Curse each have 5-level ladders.
+A SOURCING FLAG IS CLEARED. docs/OBSERVED_IDS.md had flagged 'Steel Arrow' as operator-attested rather than read off a frame, because the name also appears in a T3 guide list and that is the restating-one-source trap. f1650_01.06.27 renders the tooltip. It also pins pierce as a COUNTED engine quantity - Steel Arrow pierces 1 unit, Sky Piercer 5.
+THREE ABILITY BINDINGS IN A NEW 615xxxx RANGE, with iconPath, a field nothing had recorded, joining an ability id to a shipped asset name. The children sum to totalDamage bit-exactly in IEEE754, which is the cheap check that a death payload is a decomposition rather than a sample.
+THE PROJECT'S FIRST RECORDED PvP DEATH - and a first draft said it could not be identified. That draft inferred 'another player killed the operator' and then declared that NOTHING OBSERVED SEPARATED that from a broader sourceType. The payload carries classId 15, Withered Knight, in the very line the section had already decoded. THE CAUSE: a decode script pulled a hand-picked field list and its output was treated as the whole record. A SELECTIVE EXTRACTOR'S OUTPUT IS A CLAIM ABOUT THE EXTRACTOR, exactly as an empty grep is a claim about the pattern. Dump the keys before trusting a decode.
+THIRD-PARTY PII CHECKED AND CLEAN, not filed as a gap. The death payload carries the KILLER's roleId, onlineUserId, name and onlineDisplayName. The redactor masks all four plus appearanceStr on the real line and assert_clean then certifies it. Recorded as checked rather than as a defect deliberately - LL-0090 withdrew a redaction-gap claim raised against a FABRICATED input, and this test was derived from the measured bytes.
+SPLATTER ARROW IS STILL OWED, and the negative is now well-founded rather than assumed. The SKILLS screen appears in exactly 8 of the 2172 frames, all read, with the set confirmed by two orthogonal detectors. The camp skill grid renders ICONS ONLY - names appear solely in the detail panel - so no capture can yield the tooltip unless the operator hovers it.
+THREE MEASUREMENT DEFECTS CAUGHT BY THE REFUTATION, all in text already written. Bar widths were 193/140 px at 27.6-28.0 pitch and are 187/134 at 26.7-26.8, measured from the icon's edge instead of the bar's. 'All 5 Hunter's Arrows are still locked' is false - four padlocks, and a THIRD visual state exists that this project has no word for and does not invent one. And the classId omission above. FOR A COUNT OF NEAR-IDENTICAL TILES, MEASURE - DO NOT LOOK: the wrong version came from reading a row by eye, the correction from counting pixels.
+
 ### LL-0098 - 2026-08-30 - ROADMAP 13 CLOSED with all 16 page-two tooltips - and the item's own premise was a third rediscovery failure
 
 **Evidence:**
