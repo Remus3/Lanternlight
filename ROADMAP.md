@@ -1324,7 +1324,7 @@ Captured at level 5; full write-up in `docs/OBSERVED_IDS.md`.
   `dodge`. The Dodge nodes remain the only source on the latter and still do not
   say.
 
-## 5. Sorcerer single-weapon question - OPEN
+## 5. Sorcerer single-weapon question - OPEN, needs the client
 
 Four classes surfaced two weapon config ids in character creation, two surfaced
 one (`docs/OBSERVED_IDS.md`). Blackarrow's single id independently corroborates
