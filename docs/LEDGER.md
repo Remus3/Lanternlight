@@ -84,6 +84,23 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0102 - 2026-08-31 - The watcher armed in LL-0101 is STOPPED, because a date dest-root that never rolls over mislabels the archive rather than missing it
+
+**Evidence:**
+- python -m pytest -> '1338 passed', exit 0, run as its own command
+- python -m ruff check . -> 'All checks passed!', exit 0, run as its own command
+- taskkill /F /PID 34116 -> 'SUCCESS: The process with PID 34116 has been terminated.'
+- verified after: zero armwatch processes on the machine, and PID 34116 no longer resolves
+- the snapshots it already wrote are untouched: the rescued log still has its archived copy under C:/ll-captures/2026-08-31/logs/
+
+THIS SUPERSEDES ONE FACT IN LL-0101, which recorded PID 34116 as running. That was true when written and is now false. The ledger is append-only, so it is corrected here rather than edited there - a future session hunting for PID 34116 on the strength of that entry should stop at this one.
+
+THE REASON IS THE DEST-ROOT, and it is a sharper failure than "the watcher stops". `--dest-root` is a DATE directory resolved once at arm time and never re-resolved, so a watcher left running past midnight keeps writing into `2026-08-31/` while a reader assumes that directory covers the day it is named for. A MISLABELLED ARCHIVE IS WORSE THAN AN ABSENT ONE - an absent one is visible, and this project has already been bitten by a corpus whose directory names implied a coverage its contents did not have (LL-0099's ten prefix snapshots). Stopping it leaves the gap honest.
+
+WHAT IS NOW OWED: arming again at the next session with TODAY's date. That is recorded in ROADMAP 4c, whose remaining-half acceptance already requires the automatic version to resolve its own date directory rather than inheriting a stale one - this incident is the concrete case that requirement was written for.
+
+A TRAP EARNED THIS PASS: `taskkill /F /PID <pid>` FAILS FROM GIT BASH. MSYS path translation rewrites the `/F` switch into `F:/`, and taskkill rejects it with "Invalid argument/option - 'F:/'". Run it from PowerShell, or double the slashes as `//F //PID`. The repo already carried "MSYS /tmp is invisible to Windows python"; this is the same translation layer breaking a SWITCH rather than a path, which is harder to spot because the error names a drive letter that appears nowhere in the command typed.
+
 ### LL-0101 - 2026-08-31 - Cycle 29 found the client CLOSED so every priority item is blocked - the session watcher was still unarmed, and the pre-push refutation killed five claims in this very entry
 
 **Evidence:**

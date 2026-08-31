@@ -1312,17 +1312,24 @@ line searched the save spelling against a log, where it can never match. A zero
 from that token is a claim about the token. Recorded so the next session does
 not spend a pass re-mining this log.
 
-**A WATCHER IS RUNNING RIGHT NOW - check before arming another.** Cycle 29 left
-`python -m lanternlight.armwatch --dest-root C:/ll-captures/2026-08-31` running
-as **PID 34116** since `17:09:06` local, and it is the only one. Before arming,
-list them: `Get-CimInstance Win32_Process -Filter "Name like '%python%'"` and
-match the command line against `armwatch`. **Arming a second one points two
-watchers at the same four sources**, doubling snapshot traffic while `OPS-14`
-(this machine's disk reaching 100 percent) is still OPEN. To stop it, use
-`taskkill /F /PID 34116`, which is this repository's only sanctioned way to end
-a process - see the authoring rules in `CLAUDE.md`. Its `--dest-root` is a DATE
-directory that does NOT roll over, so a launch after midnight still archives
-into `2026-08-31/` until someone re-arms it.
+**NO WATCHER IS RUNNING - it was armed and then deliberately stopped.** Cycle 29
+armed `lanternlight.armwatch` at `17:09:06` local as PID 34116, which is what
+rescued the successor log, and the operator stopped it the same evening because
+**`--dest-root` is a DATE directory that does NOT roll over**. A watcher left
+running past midnight keeps archiving into `2026-08-31/` while claiming to cover
+the current day, which is a silently mislabelled archive rather than a missing
+one - the worse of the two failures. Verified stopped: zero `armwatch` processes
+on the machine.
+
+**So arming is owed again at the next session, with TODAY's date**, and the
+snapshots already written are unaffected. Before arming, check whether one is
+already running - `Get-CimInstance Win32_Process -Filter "Name like '%python%'"`
+matched against `armwatch` - because **a second watcher points two pollers at the
+same four sources**, doubling snapshot traffic while `OPS-14` (this machine's
+disk reaching 100 percent) is still OPEN. To end one, use `taskkill /F /PID
+<pid>`, this repository's only sanctioned way to end a process. **From Git Bash
+that command fails**: MSYS rewrites `/F` into `F:/` and `taskkill` rejects it.
+Run it from PowerShell, or use `//F //PID`.
 
 **The remaining half of this item is AUTOMATIC arming, and it is genuinely
 open** even though the header long read only CLOSED. The `Ordering note` has
