@@ -35,6 +35,53 @@ command:
 **Pass the BASE, never a dated path.** `--dest-base C:/ll-captures`. Handing it
 `C:/ll-captures/<today>` is the exact defect `LL-0102` stopped a watcher over.
 
+## Cycle 32 - item 14 CLOSED, and a NEW JOIN KEY that binds affix 209
+
+**Item 14 is CLOSED - its premise was refuted, not its acceptance met.** The two
+`Oil-soaked Wooden Bow` readings were never two instances of one type. They are
+**two different cfgIds** held at once in adjacent slots with distinct instance
+ids: `3030403` carrying affix `(209,1,true)` rendering `Seeker`, and `3030404`
+carrying `(211,1,true)` rendering `Ranged`. Same display name, same base stats.
+`LL-0096`'s own stated honest limit - "two cfgIds could share a name" - is
+exactly what happened, so its refutation is withdrawn and **the type-to-affix
+mapping SURVIVES**. The narrower lesson stands: **a display NAME does not
+identify a type**, so never bind on a rendered name.
+
+**THE DURABILITY JOIN - the reusable part, use it.** Item records carry a
+durability integer and the tooltip renders it as a percentage of
+`900 + (third cfgId digit) * 100` (exact at tiers 1,2,3,4,6). **So a frame can
+be matched to a log record with NO wall-clock coincidence at all.** That matters
+because the wall-clock join has a hard ceiling - only **8%** of tooltip cfgId
+events have any frame within two seconds, and re-measuring with 6x more frames
+did not move it, because the constraint is capture time-coverage.
+
+**`209 = Seeker` is bound by it**, and the argument is elimination rather than
+durability: the frame shows a Rare Bow and Arrow carrying `Seeker`; the log's
+affixed weapons are `3030403` (209), `3030404` (211), `3060404` (211); `211 =
+Ranged` is confirmed three ways and the frame does not show `Ranged`. Durability
+corroborates, 97% against 1166/1200. **The method was positive-controlled
+first** - the same join on the 94% reading returns `3030404`, whose 211 = Ranged
+is already known correct.
+
+**Item 11 drops to three unbound ids: `101`, `212`, `214`** - and now has a
+CLIENT-FREE route. `101` sits on `1430301` at 98% and 100%; `212` on `1230304`
+at 94%, 98%, 100%. **Prefer a distinctive percentage** - 97 picked out one
+weapon, 100 is shared by many and 98 by those two. `214` has no durability
+record and is unreachable this way.
+
+**An operational rule worth more than the rate it replaced:** the tooltip-to-cfgId
+join by world is **CampMap 1690/1690 = 100%**, Whitewoods_Day 0/1246, Training
+0/59. Not lossy - total in CampMap, absent everywhere else.
+
+**Two of my own claims were withdrawn before publication.** (1) `Value = base x
+durability, base 46` was fitted on TWO points - and two points exactly determine
+a line, so proportional versus affine had zero degrees of freedom. A third
+reading killed it; base 45 under ceiling fits all three. (2) "The tooltip join is
+70% incomplete" was right in number and wrong in diagnosis - see the world rule
+above. **n=2 IS NOT A TEST OF A TWO-PARAMETER LAW.**
+
+Ledger `LL-0107`.
+
 ## Cycle 31 - item 7, route 1 EXHAUSTED and a new surface found
 
 **Item 7 is NOT credited.** Both acceptance routes now need fresh gameplay.
