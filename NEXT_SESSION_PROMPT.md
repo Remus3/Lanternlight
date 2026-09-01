@@ -132,11 +132,26 @@ a backup at all is **unmeasured**: one did, an entire earlier session had none.
 
 ## NEXT: it depends on whether the client is open - CHECK THAT FIRST
 
-**Client CLOSED -> item `4d` is CLOSED, so pick the next ROADMAP item that has
-an acceptance criterion and needs no client.** Do NOT re-do `4d`: arming is
-wired into `/loop`, `/continue` and `docs/HEADLESS.md` 4a, the destination rolls
-over per pass, and `ledger LL-0104` records the evidence. If nothing
-client-free is left, say so plainly and stop rather than inventing work.
+**Client CLOSED -> items `4d` and `7` are both done as far as disk allows.**
+
+`4d` is CLOSED (`LL-0104`). Do NOT re-do it: arming is wired into `/loop`,
+`/continue` and `docs/HEADLESS.md` 4a, and the destination rolls over per pass.
+
+**Item `7` is NOT credited but route 1 is EXHAUSTED - do not re-run that
+search** (`LL-0106`). No non-zero `nameId` exists anywhere: 424 JSON readings
+across 353 saves plus 10 events on a third, lowercase-`nameid` log surface found
+later. Route 2 needs a SECOND distinct `SkillNameId`; the corpus holds exactly
+one, `6130017`, in 139 save generations. Both routes now need fresh gameplay.
+
+**Next client-free candidate: item `14`** - two instances of one item type with
+their `cfgId` in the log AND their affix on screen at the same wall clock. That
+is the frame-to-log join this project is already good at, against 19,000 frames
+and 25 logs already on disk. Item `12` is the other candidate: re-measure the
+10.35-per-hit floor on client `1.0.15` and say whether it moved.
+
+**One surface is left unexplored and its direction is UNSETTLED** - the 10
+verbose `nameid` events in `7`. Do not resolve the direction by adjacency; both
+readings already have partial support and the line carries no `sourceType`.
 
 Two things `4d` disclosed and did NOT fix, if you want them: the real
 detached-spawn helper has no test, and the no-termination guard matches call
