@@ -1311,7 +1311,14 @@ line searched the save spelling against a log, where it can never match. A zero
 from that token is a claim about the token. Recorded so the next session does
 not spend a pass re-mining this log.
 
-**NO WATCHER IS RUNNING - it was armed and then deliberately stopped.** Cycle 29
+**SUPERSEDED 2026-09-01 by `4d` / `LL-0104` - everything in the rest of this
+section is the state as of cycle 29 and three of its statements are now FALSE.**
+A watcher IS running; arming is no longer owed; and `armwatch.py` now DOES carry
+date logic. Do not act on the instructions below - use `4d`. They are kept
+because they are the reasoning that produced `4d`, not because they are current.
+
+**As of cycle 29 (2026-08-31): no watcher was running - it was armed and then
+deliberately stopped.** Cycle 29
 armed `lanternlight.armwatch` at `17:09:06` local as PID 34116, which is what
 rescued the successor log, and the operator stopped it the same evening because
 **`--dest-root` is a DATE directory that does NOT roll over**. A watcher left
@@ -1320,23 +1327,26 @@ the current day, which is a silently mislabelled archive rather than a missing
 one - the worse of the two failures. Verified stopped: zero `armwatch` processes
 on the machine.
 
-**So arming is owed again at the next session, with TODAY's date**, and the
-snapshots already written are unaffected. Before arming, check whether one is
-already running - `Get-CimInstance Win32_Process -Filter "Name like '%python%'"`
-matched against `armwatch` - because **a second watcher points two pollers at the
+**So arming was owed again at the next session** - and `4d` has since done it,
+with a destination derived per pass instead of a literal dated path, so the
+instruction that used to stand here ("arm with TODAY's date") is exactly the
+shape `4d` removed. **Arm with `--dest-base C:/ll-captures` and let it derive
+the day**; never hand it a dated path. Before arming, check whether one is
+already running - `ensure_armed` now does that check itself and refuses -
+because **a second watcher points two pollers at the
 same four sources**, doubling snapshot traffic while `OPS-14` (this machine's
 disk reaching 100 percent) is still OPEN. To end one, use `taskkill /F /PID
 <pid>`, this repository's only sanctioned way to end a process. **From Git Bash
 that command fails**: MSYS rewrites `/F` into `F:/` and `taskkill` rejects it.
 Run it from PowerShell, or use `//F //PID`.
 
-**The remaining half - AUTOMATIC arming - is now item `4d`, and parking it here
+**The remaining half - AUTOMATIC arming - became item `4d`, and parking it here
 was a mistake.** `4c` sits in the loop's `completed` list, and
 `ops/loop/state.py` says in terms that a cold session reads `completed` to learn
 what to skip and that nothing un-completes an item. An acceptance criterion
-written inside a completed item is unreachable work. It also corrects how an
-earlier draft of this paragraph described the mechanism: there is **no
-date-resolution code in `armwatch.py`** to re-resolve. See `4d`.
+written inside a completed item is unreachable work. The claim that there was
+**no date-resolution code in `armwatch.py`** was true when written and was the
+right correction at the time; `4d` has since ADDED that code. See `4d`.
 
 **MET 2026-08-25b by `lanternlight/armwatch.py`**, 19 tests in
 `tests/test_armwatch.py`, suite 1225 -> 1244. Not one byte of copying was
@@ -1368,11 +1378,12 @@ session's log as well as preserving the current one. It also makes the open
 question in 11.12 - what decides whether a launch leaves a backup - answer
 itself over enough launches, with nobody running an experiment.
 
-## 4d. Arm the session watcher AUTOMATICALLY - OPEN, needs NO client
+## 4d. Arm the session watcher AUTOMATICALLY - CLOSED 2026-09-01
 
-Opened 2026-08-31, ledger `LL-0103`. **Split out of `4c` because `4c` is in the
-loop's `completed` list**, so an acceptance criterion parked there is work no
-cold session will ever pick up. This item exists to give that work an id.
+Opened 2026-08-31, ledger `LL-0103`. Closed 2026-09-01, ledger `LL-0104`.
+**Split out of `4c` because `4c` is in the loop's `completed` list**, so an
+acceptance criterion parked there is work no cold session will ever pick up.
+This item existed to give that work an id.
 
 `4c` shipped the entry point and it is genuinely met -
 `python -m lanternlight.armwatch --dest-root <path>` arms all four surfaces.
@@ -1381,30 +1392,158 @@ session has to remember". Two sessions running proved it was: 2026-08-30
 launched the client with nothing armed, and 2026-08-31 found the successor log
 still single-copy.
 
-**The staleness is in the ARGUMENT, not in any resolution code**, correcting
-`LL-0102` and an earlier draft of `4c`. `lanternlight/armwatch.py` contains **no
-date logic at all**: `--dest-root` is `required=True` and `session_plan` raises
-when it is `None`. Nothing resolves a date, so there is nothing to re-resolve -
-the session passes a literal path, and a watcher left running past midnight
-keeps writing to the literal path it was handed. **Do not go looking for
-resolution code; there is none to fix.**
+**The staleness was in the ARGUMENT, not in any resolution code**, correcting
+`LL-0102` and an earlier draft of `4c`. `lanternlight/armwatch.py` contained no
+date logic at all. It does now, because this item added it - but the correction
+stands as the record of why the previous session should not have been sent
+hunting for code that did not exist.
 
-**Acceptance:** arming happens without a session choosing to do it - either a
-loop cycle that arms at start and records the PID and dest-root where a later
-session can read them, or a scheduled task inside this project's own namespace.
-Plus all three of:
-- a test that a session which never invokes the entry point still ends with the
-  live log archived,
-- a refusal to start a second watcher when one is already running, since two
-  pollers on the same four sources double the snapshot traffic while `OPS-14`
-  is open,
-- a destination derived per run rather than passed once, so an archive directory
-  never claims to cover a day it does not.
+### What shipped
 
-**Measure the cost before building it.** `C:/ll-captures` is already **9.87 GB**
-across 19,162 files (measured 2026-08-31, see `OPS-14`). An always-armed watcher
-only grows that, so the automatic version needs a measured growth rate, not just
-a correctness proof.
+- `ops/loop/watch.py`, the arming supervisor. `ensure_armed(dest_base)` is
+  idempotent: it starts a DETACHED watcher and records its pid and dated
+  destination in `ops/runtime/armwatch.json`, or - when the recorded pid is
+  still alive - **refuses and spawns nothing**. A record whose pid is dead is
+  stale and is re-armed, and the two cases are reported as different facts
+  rather than both as "armed". `session_armed(...)` is the context manager a
+  cycle wraps itself in.
+- `lanternlight/armwatch.py` gained `--dest-base`, which derives
+  `<base>/<local date>` from the clock **on every pass** and retargets the
+  running watchers when the day changes. `--dest-root` keeps its literal
+  meaning; exactly one of the two is required.
+
+**Nothing here kills anything.** Liveness is `guard.pid_is_alive`, which uses
+`OpenProcess` plus `GetExitCodeProcess` on Windows, because `os.kill(pid, 0)`
+there maps onto `TerminateProcess` - the conventional POSIX existence probe
+would kill the process it is asking about.
+
+### Acceptance, with the evidence observed 2026-09-01
+
+- **Arming without a session choosing to do it - met in the documented
+  start-up step, and see the stated limit below.** Every document that tells a
+  session how to start - `.claude/commands/loop.md`, `.claude/commands/
+  continue.md` and [`docs/HEADLESS.md`](docs/HEADLESS.md) section 4a - now
+  arms as part of starting, and
+  `test_every_session_entry_document_still_wires_the_arming` pins all three so
+  the wiring cannot vanish in a later edit without going red. Verified live: a real
+  detached `python -m lanternlight.armwatch --dest-base C:/ll-captures` was
+  running as pid 17568 within seconds of the call, and it had archived 13
+  files including all three log generations and `AvgPrice_937566.ini`.
+- **A session that never invokes the entry point still ends with the live log
+  archived.** The test named in that criterion exists and is called
+  `test_a_session_that_never_invokes_the_entry_point_still_archives_the_live_log`,
+  in `tests/test_loop_watch.py`. It drives a session body that touches
+  no watcher of any kind, through the real `SaveWatcher`, and asserts both the
+  archived bytes and the record a LATER session reads. **What it does not
+  prove**, stated because the test name is stronger than the test: the test
+  itself calls `session_armed`, so it shows that a session BODY need not know
+  about the watcher - not that an unwired session gets armed by magic. The
+  wiring is what the session-entry documents and their pinning test cover, and
+  the limit below says where that stops.
+- **A refusal to start a second watcher.** Verified live, not only in a test: a
+  second `ensure_armed` call returned `armed=False` naming pid 17568, and the
+  machine still held exactly one armwatch process.
+- **A destination derived per run, not passed once.** Two different tiers of
+  evidence, kept apart on purpose. OBSERVED LIVE: the running watcher derived
+  `C:/ll-captures/2026-09-01` from the clock, with only a base passed to it.
+  DRIVEN IN A HARNESS, not observed in the wild: the midnight rollover, using
+  an injected clock against real files on disk - an UNCHANGED source produced
+  no duplicate and no day-2 content at all, while a source changed after
+  midnight was captured into `2026-09-02/`. **No watcher has yet been observed
+  crossing a real midnight**, and that is the one part of this item resting on
+  a harness rather than an observation.
+
+### The stated limit - what "cannot skip" does and does not mean
+
+**`guard.released()` does not arm, and nothing in code forces a session to.**
+The lock is a lock; taking it and arming are two calls, and a cycle that writes
+only the first still runs unwatched. An earlier draft of this item claimed
+arming was "bolted to the one step a cycle cannot skip" - that was
+**overclaimed and is withdrawn**, found by the pre-push refutation.
+
+What is actually true is weaker and worth stating exactly, because a reader who
+believes the stronger version will not check: arming is now the documented
+default in every session-entry path rather than a separate thing to remember,
+and a test pins those documents. The gain is one of SALIENCE plus a regression
+guard, not of mechanism. Making the lock itself arm was considered and
+rejected: `ops/loop/guard.py` would then spawn a real watcher from inside every
+test that takes a lock, and a lock module that starts background processes is a
+worse trade than an honest limit.
+
+### Measured cost, 2026-09-01 - the item asked for a rate, not just a proof
+
+**The size of `C:/ll-captures` does not answer this question**, because that
+tree has two producers and the watcher is the small one. Scoping it is the
+whole measurement.
+
+**How "watcher output" is defined here, because the first attempt got it
+wrong.** Every snapshot `savewatch` writes is named `<stamp>_<size>_<name>`, so
+the scope is *files matching that convention*, not files under a directory
+whose name I recognised. The first pass filtered on directory names
+(`logs`, `savegames`, `savedroot`, `standalonelevel`) and silently missed
+`2026-08-25/saved-root` - 7 files, an older hyphenated spelling of the same
+surface - which is `AN EMPTY GREP IS A CLAIM ABOUT YOUR PATTERN` in its
+positive form: a NON-empty match that was still measuring the pattern rather
+than the thing. Found by the pre-push refutation.
+
+Measured after this session armed its own watcher:
+
+| scope | files | size |
+|---|---|---|
+| `C:/ll-captures` total | 19,175 | 9.884 GB |
+| of which watcher snapshots, whole tree | 405 | **122.66 MB** (1.21 percent) |
+| of which in the five dated session roots | 133 | 97.23 MB |
+| of which frame captures | the remainder | about 9.76 GB |
+
+Per armed session-day, dated roots only: 9.59 MB (`2026-08-25`), 20.28 MB
+(`2026-08-25b`), 42.54 MB (`2026-08-30`), 12.42 MB (`2026-08-31`), 12.42 MB
+(`2026-09-01`). **Worst observed 42.54 MB.** Those five sum to 97.23 MB, which
+is the dated-roots row exactly - a check worth doing, because an earlier
+version of this table listed per-day figures that summed to more than the total
+printed above them. The remaining 25.43 MB sits in `C:/ll-captures/saves`, an
+earlier destination predating the dated layout.
+
+The cost scales with GAME ACTIVITY, not with armed duration, because
+`savewatch` only copies a CHANGED generation. An arming pays a one-off startup
+cost for whatever is present - today's was 13 files and 13,019,536 bytes,
+12.42 MB - and then copies nothing at all while the sources are idle. So the
+worst observed day repeated every day for a year is about 15 GB against
+159.1 GB free, and a year of idle days is about zero. **The disk pressure
+`OPS-14` tracks is the frame poller, not this watcher.**
+
+**A 4.43 GB/yr defect was designed out rather than shipped and documented.**
+The first cut rebuilt each watcher at rollover, which forgets the
+`(name, size, mtime_ns)` identities it has captured and therefore re-copies
+every unchanged file into every new dated directory - one full startup pass per
+day. Measured today that is 13,019,536 bytes, so 12.42 MB/day, about **4.43 GB
+a year, roughly 37x the entire 122.66 MB the watchers have produced in total to
+date**, with `OPS-14` open. The rollover now RETARGETS the running watcher
+instead, so the seen-set survives midnight. An unchanged 5 MB log is not a new
+fact just because midnight passed.
+
+**That ratio was first published as "9.84 MB/day, 3.51 GB/yr, 45x" and is
+corrected twice over**, both times by the pre-push refutation. The original
+numerator counted only the 3 files in `Saved/Logs/` against a denominator
+covering every surface - asymmetric, and it UNDERSTATED the defect. The
+denominator was then itself too small, for the `saved-root` reason above. Both
+halves now count the same thing on the same definition.
+
+**The caveat that buys, stated rather than left implied:** a dated directory
+now holds what CHANGED that day, not everything that existed that day. A day
+whose sources never changed is empty or absent, and reconstructing a surface's
+full state on such a day means reading back to the earlier directory that last
+captured it.
+
+### Why a loop cycle and not a scheduled task
+
+The acceptance allowed either. A scheduled task was rejected on three counts:
+it is machine state living outside the repo, so a fresh clone silently does not
+have it and `CLAUDE.md`'s fresh-clone section could not make it true; this
+project shares no scheduled-task namespace with its siblings and adding one is
+an operator-level change to the machine rather than to Lanternlight; and the
+loop already has a mandatory start-up step - taking the single-instance lock -
+which is the natural place to hang an unavoidable side effect. Arming now rides
+on the step a cycle cannot skip.
 
 ## 4b. Ammo-family and talent measurement - READY, cheap, needs the client
 
@@ -2985,6 +3124,30 @@ permanently**. The capture evidence **must not be pruned in response** - the `LL
 neighbourhood records that those directories are the only record behind several
 published claims. A full-drive scan to find the real consumer **timed out at 10
 minutes and was abandoned** rather than left half-finished.
+
+**WHICH PRODUCER, measured 2026-09-01 while closing `4d`.** The tree has two
+and they are nothing like each other in size. Counting watcher output by the
+snapshot naming convention `<stamp>_<size>_<name>` rather than by directory
+name - the distinction matters, see `4d` - the whole tree is 19,175 files and
+9.884 GB, of which **405 files and 122.66 MB, 1.21 percent, are watcher
+snapshots**. Essentially all the rest is frame captures: `2026-08-30` alone
+holds 2,172 frames totalling 7,025 MB against 42.54 MB of watcher output the
+same day. **So an always-armed watcher is not what threatens this disk, and
+pruning to reclaim space would mean pruning FRAMES**, which is exactly what the
+`LL-0016` neighbourhood says must not happen.
+
+**Every figure above is post-arming.** Immediately BEFORE this session armed
+its own watcher the tree was 19,162 files, byte-identical to the 2026-08-31
+measurement - which was itself the evidence that no watcher had been running in
+between, as `LL-0102` recorded. The session then added exactly 13 files and
+13,019,536 bytes, so any capture-tree count quoted without an as-of moment is
+stale the moment it is written, and this item has now been bitten by that
+twice.
+
+`C:` on 2026-09-01 is **83.3 percent used with 159.1 GB free**, against 83.0
+percent and 161.6 GB the day before. That 2.5 GB went somewhere OTHER than
+`C:/ll-captures`, which did not grow at all - a small data point for the open
+question below, and not an answer to it.
 
 **Why it matters beyond tidiness:** the STOP CONDITIONS in
 [`docs/HEADLESS.md`](docs/HEADLESS.md) assume a writable disk. An unattended

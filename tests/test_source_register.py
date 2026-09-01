@@ -185,6 +185,7 @@ KNOWN_NON_HOSTS = frozenset(
         "anchors.place",
         "anchors.py",
         "ant.dir.cursortouch.windows",
+        "armwatch.json",
         "armwatch.py",
         "avgprice.py",
         "bottle-0.13.4.data",
@@ -260,6 +261,7 @@ KNOWN_NON_HOSTS = frozenset(
         "ops.lanes.REPO",
         "ops.lanes.owner",
         "ops.loop",
+        "ops.loop.watch",
         "ops.merge",
         "opss.LEDGER.md",
         "overlay.anchors",
@@ -330,6 +332,8 @@ KNOWN_NON_HOSTS = frozenset(
         "version.txt",
         "victimPlayerState.name",
         "walker.py",
+        "watch.py",
+        "watch.session",
         "window.py",
     }
 )

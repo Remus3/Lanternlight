@@ -42,11 +42,15 @@ Modules
     never kills anything.
 ``ledger``
     Append-only writer for ``docs/LEDGER.md``.
+``watch``
+    Arms the session watcher at the start of a cycle and records the pid and
+    dated destination where a LATER session can read them. It only ever
+    refuses to start a second watcher; like ``guard`` it never kills anything.
 
 Operator documentation for running unattended, including the stop conditions
 the loop must never violate, is in ``docs/HEADLESS.md``.
 """
 
-from ops.loop import guard, ledger, state
+from ops.loop import guard, ledger, state, watch
 
-__all__ = ["guard", "ledger", "state"]
+__all__ = ["guard", "ledger", "state", "watch"]
