@@ -35,6 +35,38 @@ command:
 **Pass the BASE, never a dated path.** `--dest-base C:/ll-captures`. Handing it
 `C:/ll-captures/<today>` is the exact defect `LL-0102` stopped a watcher over.
 
+## Cycle 31 - item 7, route 1 EXHAUSTED and a new surface found
+
+**Item 7 is NOT credited.** Both acceptance routes now need fresh gameplay.
+
+- **Route 1 is exhausted.** 353 saves scanned, zero parse failures. `nameId` is
+  `0` and `Key` empty on all **424** readings. The damage field lives in ONE
+  save type; the other seven (90 files) never carry it. Two instruments agreed -
+  the repo reader and a regex over the raw JSON - and a refutation using a third
+  method agreed again. **Do not run this search again.**
+- **Route 2 still blocked**, but the recorded reason was wrong. `skillNameId` is
+  zero across 25 logs, yet **139 save generations carry `SkillNameId` = 6130017**
+  nested under `LeaderRankScoreData`. The corpus HAS the field; what it lacks is a
+  **second distinct value**. "No probe of the existing corpus can close it" was a
+  log-scoped claim in corpus-scoped clothes.
+- **A THIRD SPELLING EXISTS: `nameid`, all lowercase**, in a non-JSON
+  `DamageCollectionComponent` line neither known spelling matches. 44 raw
+  occurrences -> **10 distinct events**, 7 damage values, 8 `insId` values.
+  `nameid` is 0 here too, so route 1 is unaffected - but the surface is real and
+  my draft's "nothing further can be extracted from disk" would have buried it.
+- **Its direction is UNSETTLED and recorded that way.** A refuter read it as the
+  operator's outgoing bow hits; 2 of 7 sit beside a hit-indicator bind and a bow
+  ability End, while 2 of 7 sit beside a `BeDamaged` cue and a monster combo. The
+  line carries **no `sourceType`**, the field 7a calls the direction flag. Both
+  readings are adjacency arguments. Do not resolve it by picking one.
+- **Determinism corroborated independently.** The sequence `16.99298095703125`,
+  `16.0489501953125`, `75.52435302734375` occurs **twice** against different
+  monster instances, gaps 1.079/0.278 s then 1.083/0.284 s - agreeing to ~5 ms.
+  Different surface and different encounter from item 7's original evidence.
+  n=2; not a constant.
+
+Ledger `LL-0106`.
+
 ## What the refutations changed, which is a lot
 
 Two passes, deliberately given DIFFERENT questions. Both were needed.

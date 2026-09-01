@@ -1634,7 +1634,7 @@ change joined to the toggle input, or a documented negative stating what was
 tried and over how many attempts. Note item 1 may answer this incidentally - the
 toggle may be more legible in a raid than on the creation screen.
 
-## 7. Emberforge is NOT blocked - the save records damage - READY, high value
+## 7. Emberforge is NOT blocked - the save records damage - OPEN, both routes BLOCKED on fresh gameplay
 
 Opened 2026-08-11. This item exists because the "deliberately not on this list"
 section at the bottom of this file was **wrong**, and it was wrong in the
@@ -1776,9 +1776,179 @@ Close it with **either**:
 **The second route is BLOCKED ON A FRESH LOG, and the reason is measured.**
 `skillNameId` occurs **zero** times across every MistfallHunter log on this
 machine - 18 when this line was written, re-derived 2026-08-31 across 22 files,
-14 distinct hashes and four sessions, still zero - the 12.7 MB log that carried `6130017` was truncated away by the
-game's launch truncation (item 4c). No probe of the existing corpus can close
-it. Recorded so nobody runs that search again.
+14 distinct hashes and four sessions, and re-derived again **2026-09-01 across
+25 log files, still zero** - the 12.7 MB log that carried `6130017` was
+truncated away by the game's launch truncation (item 4c). No probe of the
+existing corpus can close it. Recorded so nobody runs that search again.
+
+### ROUTE 1 IS EXHAUSTED - measured 2026-09-01 across the COMPLETE save corpus
+
+**Do not run this search again.** It has now been run to completion over every
+save on this machine and the answer is a definitive NO.
+
+- **353 `.sav` files** scanned across `C:/ll-captures` and the live `Saved/`
+  tree, **zero parse failures**.
+- **The damage field is confined to ONE save type.** Only
+  `StandaloneSlot_<roleId>.sav` carries `DamageCollectonDataSet`. The seven
+  other save types - `CampData_<id>.sav` (26 files), `Deck.sav` (17),
+  `Scav.sav` (14), `UserSettings_v1.sav` (9),
+  `EnhancedInputUserSettings.sav` (8), `LoginOptions.sav` (8), `Notice.sav`
+  (8), **90 files in total** - do not carry it in a single instance. No other
+  save surface is worth searching, which is a result rather than an absence of
+  one.
+- Of the **263** transient generations: **1 ABSENT, 10 present-and-EMPTY, 252
+  carrying records.** That empty ten is finer than this item previously
+  recorded and it matters - "the game had not written the field yet" and "the
+  game wrote an empty window" stay distinguishable, exactly as the measurement
+  doctrine requires.
+- **424 child hit readings. `nameId` is `0` on all 424 and `Key` is empty on
+  all 424.** No non-zero value exists anywhere.
+
+**Two independent instruments, because a broken search and a true negative are
+indistinguishable.** The repo's own reader was one. The other was a regex over
+the **raw JSON text** of every payload, which bypasses `DamageHit` entirely and
+found 424 occurrences of `"nameId"` carrying the single distinct token `0`.
+
+**The instrument was proved non-vacuous BEFORE the negative was believed.** The
+same pass re-derived every headline figure this item already carried, and all
+of them matched: 262 generations carrying the field, 21 distinct hits,
+1020.344 s span, 9 monster instances, the same 8 monsterIds, total damage
+1284.835785, range 9.745483 to 137.517426, and **both** the 278 top-level and
+424 child counts that this item once confused for each other. A search that
+reproduces eight filed numbers is reading the data.
+
+**Three new constants**, each measured over the whole corpus: `sourceType` is
+**1 on all 278** entries, `bDeathCauser` is **False on all 278**, and
+`bChildDeathCauser` is **False on all 424**. The second and third independently
+confirm item 7a's recorded claim that the save's rolling window **drops the
+killing blow** - the save has never captured a death-causing record.
+
+### The two surfaces do not overlap - but the claim is narrower than it first looked
+
+Measured the same day over the log corpus, 25 files:
+
+- The **save** corpus is **100 percent `sourceType: 1`** - by item 7a's reading,
+  damage the operator TOOK.
+- The log's **JSON** payloads are **100 percent `sourceType: 0`**.
+
+**An earlier draft of this line said "the log corpus is 100 percent
+`sourceType: 0`" and that was too broad**, caught by the pre-push refutation. It
+holds for the twelve JSON payload occurrences only. The verbose per-hit lines
+described below carry **no `sourceType` field at all**, so they are neither, and
+a claim about "the log corpus" that was measured on one emission shape does not
+cover the other.
+
+What survives is narrower and still useful: **no damage value on the log side
+matches any damage value in the save corpus**, and the two sets of events are 17
+days apart - the save run is 2026-08-09 17:28 to 17:45 UTC, the verbose log
+events are 2026-08-26. So no wall-clock join between the surfaces is available
+**for the events currently on disk**. A future capture in which both surfaces
+cover the same encounter is what would make the join possible.
+
+**What the log corpus actually holds right now, deduplicated.** `nameId` values
+`6150251`, `6152203` and `6152206` with Keys `LightAttack`, `SpearFlurry` and
+`ShieldImpact` - which is item 7a's 2026-08-30 table, re-derived. They appear 12
+times each, but that is **ONE distinct payload duplicated across 12 archived
+copies** of a growing log, so it is **n=1**, not n=12. Counting the raw
+occurrences would have inflated a single observation twelvefold - the byte-prefix
+trap this repo already recorded for session counts, hit again on a different
+quantity.
+
+**7a's three original bindings are absent from the LOGS but `6130017` is NOT
+absent from disk**, and an earlier draft of this paragraph got that wrong.
+`6130017` (`NormalArrow`), `6130007` (`ExplosionArrow`) and `6250000`
+(`MonsterDamage`) occur nowhere in the 25 logs, which is consistent with this
+item's record that the 12.7 MB log carrying them was truncated away. But
+**`6130017` is re-derivable from the SAVES today**: 139 of the 263 generations
+carry the token `SkillNameId` and the int32 `6130017` (bytes `61895d00`)
+together, nested under the top-level `LeaderRankScoreData` property. Already
+filed at `docs/FINDINGS.md`.
+
+That matters for how route 2 is stated. **"No probe of the existing corpus can
+close it" is a LOG-scoped claim wearing corpus-scoped clothes.** The corpus does
+contain a `SkillNameId`; what it does not contain is a **SECOND DISTINCT** one -
+139 generations carry exactly one value. Route 2 is still blocked, and the
+correct reason is the missing second value, not a missing field.
+
+The one thing that genuinely **cannot** be re-checked is the conclusion "the log
+populates the same attribution the save blanks, for the same event class": the
+only `sourceType: 1` log payload was in the truncated log. That remains a
+recorded observation rather than a re-measured one, and is flagged rather than
+repeated as though it were fresh.
+
+### A THIRD SPELLING, and a per-hit log surface nobody had enumerated
+
+**This section exists because an earlier draft of the one below it said
+"nothing further can be extracted from disk". That was FALSE**, and the
+pre-push refutation found the counter-example. Route 1's negative is unaffected;
+the framing around it was suppressing a real surface.
+
+`[DamageCollectionComponent]` emits a second, **non-JSON** line whose field is
+spelled **`nameid`, all lowercase** - a THIRD spelling, neither the save's
+`DamageCollecton` nor the log's `DamageCollection`. A search built on the two
+known spellings walks straight past it.
+
+Measured 2026-09-01: **44 raw occurrences across 8 archived logs**, which
+deduplicate by their own log timestamp to **10 distinct hit events** carrying
+**7 distinct damage values** against **8 distinct `insId` values**. The raw 44
+would have inflated 10 events fourfold - the byte-prefix trap again, since the
+archived logs are prefixes of one another.
+
+Every event carries `nameid: 0`, `instigator: true`, and
+`causer: BP_HermitSprites_C`. **So route 1 fails here too** - this surface adds
+no non-zero `nameid`. What it adds is `insId`, which distinguishes individual
+monster instances, and seven damage numbers that were not previously enumerated.
+
+**THE DIRECTION OF THIS SURFACE IS CONTESTED AND IS NOT SETTLED HERE.** The
+refutation pass that found it read these as the operator's outgoing bow hits.
+The surrounding lines do not support that confidently, and they do not support
+the opposite confidently either:
+
+- **For outgoing:** 2 of 7 in the largest log sit immediately before a
+  `HitIndicator` view-cell bind and a bow `GA_Aimingattack End`, with
+  ammunition-index updates just before.
+- **For incoming:** 2 of 7 sit beside `GameplayCue.Damage.BeDamaged` and an
+  Adventurer `Hit.Light` line, with a monster combo ability active.
+- **Decisive field absent:** the verbose line carries **no `sourceType`**, which
+  is the field item 7a identifies as the direction flag. Neither reading is
+  decidable from this surface alone.
+
+Both readings are adjacency arguments, which is the weak method this repo has
+already been bitten by. It is recorded as UNSETTLED rather than resolved in
+either direction, and what would settle it is a capture where the same value
+appears on a surface that does carry `sourceType`.
+
+**A determinism result that does NOT depend on the direction.** The three-value
+sequence `16.99298095703125`, `16.0489501953125`, `75.52435302734375` occurs
+**twice**, against different monster instances each time:
+
+| occurrence | timestamps (UTC) | gaps | insIds |
+|---|---|---|---|
+| first | `04.03.27:692`, `04.03.28:771`, `04.03.29:049` | 1.079 s, 0.278 s | 466, then 469 twice |
+| second | `04.06.25:024`, `04.06.26:107`, `04.06.26:391` | 1.083 s, 0.284 s | 536, then 541 twice |
+
+Same three values, same order, same structure - one instance then a second
+instance hit twice - and gaps agreeing to about 5 ms. This **independently
+corroborates item 7's "damage is DETERMINISTIC, not rolled"** on a different
+emission surface and a different encounter from the one that produced it. It is
+n=2 sequences and should not be called a constant, the same hedge item 7 already
+applies to its own 1.5 s interval.
+
+### What this item now needs
+
+Both acceptance routes require **fresh gameplay**. Route 1 is exhausted; route 2
+needs a second distinct `SkillNameId`, and the corpus holds exactly one.
+
+When the client is next open, the cheapest thing that would move this item is a
+capture in which **both** surfaces cover the **same** event class - concretely, a
+run where the operator DEALS damage while `StandaloneSlot_<roleId>.sav` exists,
+so the save's window and the log's `DamageCollectionComponent` payload describe
+the same hits. That is what would let the two surfaces be joined at all, and it
+is a precondition for either acceptance route rather than a third route.
+
+Note the constraint already recorded above: a dungeon run is **not** a guarantee
+that the transient save is written at all, and what selects the two behaviours is
+unmeasured.
 
 **What the log CAN already do is bind abilities**, and item 7a now carries six
 such bindings rather than three. The save's window remains the surface with no
