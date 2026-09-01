@@ -84,6 +84,28 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0103 - 2026-08-31 - The wrap refutation found the session that fixed stale records had left both hand-off documents two sessions stale and parked an acceptance criterion inside a completed item
+
+**Evidence:**
+- python -m pytest -> '1338 passed in 27.47s', exit 0, run as its own command
+- python -m ruff check . -> 'All checks passed!', exit 0, run as its own command
+- loading the loop state via `ops/loop/state.py` -> '4c' in completed is True, so the acceptance criterion written inside 4c was unreachable work
+- lanternlight/armwatch.py has NO date logic: grep for date|today|strftime|datetime returns nothing, and --dest-root is required=True
+- C:/ll-captures re-measured 2026-08-31: 9.87 GB across 19,162 files, against the 2.96 GB across 16,941 that OPS-14 recites
+- C: is 83.0 percent used with 161.6 GB free
+- WAKEUP_NOTES.md newest entry was 'Wrap 2026-08-29b' citing suite 1302; NEXT_SESSION_PROMPT.md cited 1302 and 'the ledger runs to LL-0079'
+- README.md is CRLF (161 CRLF, 0 LF); ROADMAP.md, docs/LEDGER.md, docs/ARCHITECTURE.md, WAKEUP_NOTES.md and NEXT_SESSION_PROMPT.md are pure LF
+- ops/runtime/loop_state.json 'updated' read 22:40:00Z while its mtime was 23:35:53Z, because it was hand-edited rather than written through the atomic writer in `ops/loop/state.py`
+
+THE SESSION THAT CORRECTED STALE RECORDS LEFT STALER ONES BEHIND, and that is the finding. LL-0101 and LL-0102 re-dated four corpus counts and congratulated themselves for it. Meanwhile `WAKEUP_NOTES.md` - which `README.md` lists as the session hand-off and `docs/LEDGER.md` itself calls the first file a cold session reads - still ended at 2026-08-29b, and `NEXT_SESSION_PROMPT.md` still told a reader the suite was 1302 and the ledger ended at LL-0079, 23 entries back. A cold session following those files would have believed the suite count, skipped everything the last two sessions learned, read the Ordering note, concluded there was nothing to do with the client closed, and stopped. FIXING THE RECORDS YOU HAPPENED TO OPEN IS NOT THE SAME AS FIXING THE RECORDS A COLD SESSION ACTUALLY READS.
+A FIFTH STALE CORPUS COUNT SAT EIGHTEEN LINES BELOW THE FOUR THAT WERE FIXED, in the same section of the same file, asserting in the present tense that there are three distinct sessions. It survived because the earlier pass grepped for the counts it remembered rather than for the claim. The refuter's own first grep for it also returned nothing, because the sentence wraps mid-phrase - an empty grep is a claim about your pattern, demonstrated twice in one section.
+THE WORST DEFECT WAS AN ACCEPTANCE CRITERION IN A GRAVE. LL-0101 gave item 4c's remaining half - automatic arming - a proper acceptance criterion, and wrote it INSIDE 4c. But `4c` is in the loop's `completed` list, and `ops/loop/state.py` says in terms that a cold session reads `completed` to learn what to skip and that nothing un-completes an item. The work was specified and simultaneously made unreachable. It is now item `4d` with its own id. AN ACCEPTANCE CRITERION PARKED IN A COMPLETED ITEM IS NOT WORK, IT IS A COMMENT.
+THE SAME COMMIT CREATED THE CONTRADICTION IT CLAIMED TO RESOLVE. It cited the Ordering note's 'there is no fully specified client-closed task left' as independent corroboration that everything was blocked - and then, 1900 lines earlier, wrote a fully specified client-closed task. The corroborating sentence was invalidated by the commit that leaned on it. Both halves of the Ordering note are now reconciled and name `4d`.
+A MECHANISM DESCRIPTION THAT SENDS THE NEXT AUTHOR HUNTING FOR CODE THAT DOES NOT EXIST. LL-0102 and ROADMAP called the dest-root 'a DATE directory resolved once at arm time and never re-resolved'. `armwatch.py` has no date logic at all - `--dest-root` is required and the caller passes a literal path. The operational conclusion was right and the mechanism was invented. Corrected in `4d`; LL-0102 stands as written because the ledger is append-only, and this entry is its correction.
+OPS-14's EXCULPATORY NUMBER HAD GONE STALE BY 3.3x while being used to forbid pruning the captures. It said 2.96 GB across 16,941 files; it is 9.87 GB across 19,162. The ruling-out survives - 9.87 GB cannot fill a 953 GB drive - but it now rests on a number measured today, and the growth rate is itself an argument for measuring `4d` before arming a watcher permanently. A DECLINE REASON GOES STALE FASTER THAN THE COUNT DOES.
+TRAPS EARNED. (1) `taskkill /F /PID` FAILS FROM GIT BASH: MSYS rewrites the `/F` switch into `F:/` and the error names a drive letter absent from the command typed. Use PowerShell or `//F //PID`. (2) `README.md` is CRLF while every other document touched here is LF, so a single write convention corrupts one of them - check per file, because `read_text` hides it. (3) A CONTENT-HASH DEDUPE OF THE LOG CORPUS STILL OVER-COUNTS SESSIONS: ten archived files are byte prefixes of one growing log, carrying ten distinct hashes for one session. Count by each log's own `Log file open` line.
+WHAT SURVIVED THE AUDIT UNCHANGED, recorded so it is not re-litigated: every hash, byte count, timestamp, token count and process fact from the two commits was independently re-derived and matched, including the four re-dated counts recomputed per session rather than per hash. The anti-cheat boundary is clean and both commits are docs-only.
+
 ### LL-0102 - 2026-08-31 - The watcher armed in LL-0101 is STOPPED, because a date dest-root that never rolls over mislabels the archive rather than missing it
 
 **Evidence:**

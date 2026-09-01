@@ -1219,8 +1219,7 @@ and the refusal gate are all measured and working.
   permanently. **Two of the three guards protect the REDACTION itself**, so it
   cannot erode when the fixture is next regenerated.
 
-## 4c. Archive the log and the market cache on every session - ENTRY POINT
-CLOSED 2026-08-25b, AUTOMATIC ARMING OPEN
+## 4c. Archive the log and the market cache on every session - CLOSED 2026-08-25b, successor 4d OPEN
 
 Opened 2026-08-25 after measuring that the 6.1 MB log from 2026-08-09 no longer
 exists. The game **truncates its log on launch** - after the launch that
@@ -1331,19 +1330,13 @@ disk reaching 100 percent) is still OPEN. To end one, use `taskkill /F /PID
 that command fails**: MSYS rewrites `/F` into `F:/` and `taskkill` rejects it.
 Run it from PowerShell, or use `//F //PID`.
 
-**The remaining half of this item is AUTOMATIC arming, and it is genuinely
-open** even though the header long read only CLOSED. The `Ordering note` has
-said so all along - "item 4c, arming its watcher automatically, is not" - and
-this item's own acceptance already says the one thing it adds is that arming is
-not something a session has to remember, which is the half that was never met.
-Cycle 29 measured which reading is right by finding the watcher unarmed and a
-log single-copy. **Acceptance for the remaining half:** arming happens without a
-session choosing to do it, either a loop cycle that arms at start and records
-the PID and dest-root, or a scheduled task inside this project's own namespace,
-plus a test that a session which never invokes the entry point still ends with
-the live log archived. It must refuse to start a second watcher when one is
-already running, and must resolve its own date directory rather than inheriting
-a stale one.
+**The remaining half - AUTOMATIC arming - is now item `4d`, and parking it here
+was a mistake.** `4c` sits in the loop's `completed` list, and
+`ops/loop/state.py` says in terms that a cold session reads `completed` to learn
+what to skip and that nothing un-completes an item. An acceptance criterion
+written inside a completed item is unreachable work. It also corrects how an
+earlier draft of this paragraph described the mechanism: there is **no
+date-resolution code in `armwatch.py`** to re-resolve. See `4d`.
 
 **MET 2026-08-25b by `lanternlight/armwatch.py`**, 19 tests in
 `tests/test_armwatch.py`, suite 1225 -> 1244. Not one byte of copying was
@@ -1374,6 +1367,44 @@ this session, which means arming at session start now recovers the PREVIOUS
 session's log as well as preserving the current one. It also makes the open
 question in 11.12 - what decides whether a launch leaves a backup - answer
 itself over enough launches, with nobody running an experiment.
+
+## 4d. Arm the session watcher AUTOMATICALLY - OPEN, needs NO client
+
+Opened 2026-08-31, ledger `LL-0103`. **Split out of `4c` because `4c` is in the
+loop's `completed` list**, so an acceptance criterion parked there is work no
+cold session will ever pick up. This item exists to give that work an id.
+
+`4c` shipped the entry point and it is genuinely met -
+`python -m lanternlight.armwatch --dest-root <path>` arms all four surfaces.
+What was never met is `4c`'s own stated aim, that "arming it is not something a
+session has to remember". Two sessions running proved it was: 2026-08-30
+launched the client with nothing armed, and 2026-08-31 found the successor log
+still single-copy.
+
+**The staleness is in the ARGUMENT, not in any resolution code**, correcting
+`LL-0102` and an earlier draft of `4c`. `lanternlight/armwatch.py` contains **no
+date logic at all**: `--dest-root` is `required=True` and `session_plan` raises
+when it is `None`. Nothing resolves a date, so there is nothing to re-resolve -
+the session passes a literal path, and a watcher left running past midnight
+keeps writing to the literal path it was handed. **Do not go looking for
+resolution code; there is none to fix.**
+
+**Acceptance:** arming happens without a session choosing to do it - either a
+loop cycle that arms at start and records the PID and dest-root where a later
+session can read them, or a scheduled task inside this project's own namespace.
+Plus all three of:
+- a test that a session which never invokes the entry point still ends with the
+  live log archived,
+- a refusal to start a second watcher when one is already running, since two
+  pollers on the same four sources double the snapshot traffic while `OPS-14`
+  is open,
+- a destination derived per run rather than passed once, so an archive directory
+  never claims to cover a day it does not.
+
+**Measure the cost before building it.** `C:/ll-captures` is already **9.87 GB**
+across 19,162 files (measured 2026-08-31, see `OPS-14`). An always-armed watcher
+only grows that, so the automatic version needs a measured growth rate, not just
+a correctness proof.
 
 ## 4b. Ammo-family and talent measurement - READY, cheap, needs the client
 
@@ -2943,9 +2974,14 @@ What was observed, in order:
 - Minutes later, with **nothing deleted by the session**, `Get-PSDrive C`
   reported **120 GB free**.
 
-**What was ruled out, so nobody repeats it:** `C:/ll-captures` is **2.96 GB
-across 16941 files** and `C:/ll-worktrees` is **0.02 GB**. The capture evidence
-is not the cause and **must not be pruned in response** - the `LL-0016`
+**What was ruled out, so nobody repeats it - RE-MEASURED 2026-08-31 because the
+filed figure had gone stale by 3.3x.** `C:/ll-captures` is now **9.87 GB across
+19,162 files**; it was **2.96 GB across 16,941** when this item was filed. `C:`
+is 83.0 percent used with 161.6 GB free. The captures still cannot explain a
+953 GB drive reaching 100 percent, so the ruling-out survives - but it now rests
+on a number measured today rather than one recited from a fortnight ago, and the
+**growth rate is itself a reason to measure `4d` before arming a watcher
+permanently**. The capture evidence **must not be pruned in response** - the `LL-0016`
 neighbourhood records that those directories are the only record behind several
 published claims. A full-drive scan to find the real consumer **timed out at 10
 minutes and was abandoned** rather than left half-finished.
@@ -3232,7 +3268,12 @@ being built on rather than assumed to still hold.
   **`OPS-15` closed 2026-08-30** (ledger `LL-0082`), and item **7c's**
   fresh-clone gap closed the same day (`LL-0083`), leaving only 7c's WHITE
   row - which is blocked on a capture, not on a session. **So there is no
-  fully specified client-closed task left.** The best client-closed work is
+  fully specified client-closed task left.** **That ceased to be true on
+  2026-08-31:** item **`4d`** - arm the session watcher automatically - is fully
+  specified, is pure code and tests, and needs no client at all. It was split out
+  of `4c` precisely because `4c` is in the loop's `completed` list and work
+  parked there is invisible. **`4d` is the client-closed task to pick up.** The
+  other client-closed work is
   now reading more first-party data off the game's own menus into
   [`docs/AFFIXES.md`](docs/AFFIXES.md), which needs the operator in a menu
   but not in combat - and item 10 still supersedes everything the moment the
@@ -3267,7 +3308,8 @@ roster in `ops/lanes.py` disagreed. What actually worked was a split - ingest
 built the artifact, safety owned the detectors and held the veto. Read the
 roster, not this file, for who owns a path.
 
-Item 4 is closed; item 4c, arming its watcher automatically, is not. Item 3 is closed.
+Item 4 is closed. `4c`'s entry point is closed; arming it AUTOMATICALLY is now
+item `4d`, which is OPEN and needs no client. Item 3 is closed.
 
 Each lane now carries its own queue in `lanes/<lane_id>.STATE.json`, so the
 right way to pick work is to read the state file of the lane that owns the

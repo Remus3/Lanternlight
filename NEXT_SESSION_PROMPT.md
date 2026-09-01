@@ -36,35 +36,48 @@ A fresh clone runs zero git hooks until that first command runs. The tracked
 
 ## Where the last session left it
 
-**Suite 1302 passed / 1302 collected, ruff clean**, measured on a clean tree -
-that is your merge-gate baseline, and re-measure it yourself before dispatching
-work rather than trusting this line. **Use `python -m pytest --collect-only`
-WITHOUT `-q`**: `pytest.ini` addopts already carries `-q`, so the form printed
-in `CLAUDE.md` becomes `-qq` and gives per-file counts with no total.
+**Suite 1338 passed / 1338 collected, ruff clean**, measured on a clean tree -
+that is your merge-gate baseline, and **re-measure it yourself before
+dispatching work** rather than trusting this line. **Use
+`python -m pytest --collect-only` WITHOUT `-q`**: `pytest.ini` addopts already
+carries `-q`, so the form printed in `CLAUDE.md` becomes `-qq` and gives
+per-file counts with no total - sum them.
 
-The ledger runs to **`LL-0079`**. Read **`LL-0079`** before anything else from
-the last session: it records that a completeness guard which had been correctly
-proven non-vacuous was still blind to an entire TLD, and reported `62 of 62, 0
-missing` while a cited source was absent. **A guard proven non-vacuous is not a
-guard proven correct.** Read **`LL-0064`**, **`LL-0074`** and
-**`LL-0075`** first, then `LL-0066` and `LL-0067`.
+The ledger runs to **`LL-0103`**. Read, in this order:
 
-- **`LL-0064`** is an independent four-agent refutation pass that **overturns
-  claims earlier entries make** - reading LL-0056 through LL-0063 without it
-  leaves you believing things that were withdrawn.
-- **`LL-0075`** is the wrap refutation. It records that a commit here left
-  HEAD **red** under a message claiming "Docs only", and that a claim in
-  `LL-0071` about the capture was a false negative. Read it before trusting
-  anything else from this session.
-- **`LL-0074`** is the end of the 7c white-row chain and supersedes the
-  intermediate conclusions in `LL-0071`, `LL-0072` and `LL-0073`. Those three
-  contradict each other on purpose, each correcting the last; only the last one
-  is current.
-- **`LL-0066`** closes OPS-8 and records that **the mechanism OPS-8 itself had
-  on file was wrong about the dominant case**, found only by re-measuring before
-  fixing. **`LL-0067`** is its refutation: it could not overturn the claim, but
-  found the fix had **opened a PII hole**, hiding git-TRACKED files from the
-  guard.
+- **`LL-0100`** - it WITHDRAWS a correction that was itself wrong, about affix
+  ids `101` and `209`. Its rule is the most reusable thing on file: **before
+  overturning a recorded claim, establish what it was MEASURING.** A measurement
+  can be exact and still answer a different question. Two refutation passes
+  CONFIRMED the wrong claim because each inherited the framing of the brief it
+  was handed.
+- **`LL-0103`** - the wrap refutation of 2026-08-31. It found that the session
+  correcting stale records had itself left both hand-off documents two sessions
+  stale, a fifth stale corpus count next to the four it had just fixed, and an
+  acceptance criterion parked inside an item the loop had already marked
+  completed, where nothing would ever read it.
+- **`LL-0101`** and **`LL-0102`** - the 2026-08-31 session. `LL-0101` lists five
+  of its own claims that a refutation killed before it landed; `LL-0102` records
+  that the watcher armed in `LL-0101` was deliberately stopped.
+- **`LL-0097`** through **`LL-0099`** - the 2026-08-30 session, which has no
+  wrap entry in `WAKEUP_NOTES.md`. `LL-0097` is the REDISCOVERY failure: a
+  roadmap item was opened asking for what had been on disk for three weeks.
+
+**The client is CLOSED.** It was launched at 21:11 on 2026-08-30 and quit 21
+seconds later. Nothing has run it since.
+
+**No watcher is armed.** `lanternlight.armwatch` must be invoked by hand and was
+stopped at the end of the last session. If you intend to do anything while the
+client runs, arm it FIRST, with TODAY's date:
+
+```
+python -m lanternlight.armwatch --dest-root C:/ll-captures/<today>
+```
+
+Check first that one is not already running - match `armwatch` against
+`Get-CimInstance Win32_Process -Filter "Name like '%python%'"` - because two
+pollers on the same four sources double the snapshot traffic while `OPS-14` is
+open.
 
 ## Two machine-level things that were repaired, not in this repo
 
@@ -106,7 +119,30 @@ working directory** rather than trusting you to remember. It watches the
 PREVIOUS session as well as preserving the current one. Whether a launch leaves
 a backup at all is **unmeasured**: one did, an entire earlier session had none.
 
-## NEXT: ROADMAP item 10 - the stack buff, measured AT THE CEILING
+## NEXT: it depends on whether the client is open - CHECK THAT FIRST
+
+**Client CLOSED -> item `4d`, arm the session watcher automatically.** It needs
+no client, it is fully specified, and it exists because the acceptance criterion
+was previously written inside `4c`, which the loop has already marked completed
+and therefore skips forever. `armwatch.py` has **no date logic at all** -
+`--dest-root` is required and takes a literal path - so do not go looking for
+resolution code to fix. See `ROADMAP.md` item 4d for the full acceptance.
+
+**Client OPEN -> item 10 below, then 11, 5 and 6.** Item **11** is IN FLIGHT and
+uncredited: four affix ids remain (`101`, `209`, `212`, `214`), and its cheapest
+route needs no deliberate action at all - **keep the `Affixes` panel OPEN while
+equipping anything**, with a FULL-SCREEN capture running. `212` is cheapest of
+all, since the operator still holds item `1230304`. **One affix per cycle**: a
+pair yields a set, not an assignment. Items **5 and 6** pair on one pass over
+the Sorcerer creation screen; 5's archive route is proven exhausted.
+
+Also owed the moment the client is open, both one hover each: the **Splatter
+Arrow** tooltip (the camp skill grid renders ICONS ONLY, so no capture yields it
+unless the operator hovers), and **one** of `Elusive`, `Smiting` or `Curse` to
+settle the standing prediction that each has a FIVE-level ladder. **Record the
+result either way** - a refutation is worth as much as a confirmation.
+
+## Item 10 - the stack buff, measured AT THE CEILING
 
 **This is the highest-value open question, because an existing headline finding
 may be an artifact.**

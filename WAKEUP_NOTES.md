@@ -5,6 +5,65 @@ fidelity and archive older ones rather than deleting them.
 
 ---
 
+# Wrap 2026-08-31 - client closed, a log rescued, an unreachable item given an id, and a refutation that rewrote most of the session
+
+Suite **1338 passed / 1338 collected**, ruff clean, clean tree. Ledger
+`LL-0101`, `LL-0102`, `LL-0103`. Client **closed** all session.
+
+**There is no wrap entry for 2026-08-30.** That session's record lives only in
+the ledger, `LL-0097` through `LL-0100`. Read **`LL-0100`** first: it withdraws
+a correction that was itself wrong, and its rule - *before overturning a
+recorded claim, establish what it was measuring* - is the most reusable thing
+either session produced.
+
+## What happened
+
+The client was closed (launched 21:11 on 2026-08-30, quit 21 seconds later), so
+ROADMAP **11, 5 and 6 are all blocked** and none was credited. **Item 11 is
+still in flight.** The standing prediction on `Elusive`, `Smiting` and `Curse`
+is blocked too - it needs one hover, and `f1300` is the predictor, not the test.
+
+Armed `lanternlight.armwatch`, which had never been armed, and it rescued the
+successor log the 21:11 launch had started - single-copy until then. That log is
+a 21-second launch-and-quit with no gameplay events, so the archiving was cheap
+insurance rather than a windfall. **Do not re-mine it.** The watcher was then
+stopped: `--dest-root` is a literal path with no date logic, so one left running
+past midnight keeps writing into a directory named for the wrong day, and a
+mislabelled archive is worse than an absent one.
+
+## What the refutations changed, which is most of it
+
+Two adversarial passes ran, each before its own push:
+
+- Five claims in `LL-0101` were false or unsupported and were killed **before**
+  it landed - among them a two-document agreement that does not exist, and an
+  absence proved with `DamageCollecton`, a token that can never match a log
+  because it is the SAVE property spelling.
+- The wrap pass found this session had left **both hand-off documents two
+  sessions stale**, a **fifth** stale corpus count eighteen lines below the four
+  it had just re-dated, a live contradiction between item `4c` and the Ordering
+  note, and - worst - an acceptance criterion written **inside `4c`**, which is
+  in the loop's `completed` list, so no cold session would ever have picked it
+  up.
+
+That last one is now item **`4d`**, with its own id. It needs **no client**, and
+it is the client-closed task to pick up.
+
+## Traps earned this session
+
+- **`taskkill /F /PID` fails from Git Bash.** MSYS rewrites the `/F` switch into
+  `F:/` and the error names a drive letter that appears nowhere in what you
+  typed. Use PowerShell, or `//F //PID`.
+- **`README.md` is CRLF**; `ROADMAP.md`, `docs/LEDGER.md`,
+  `docs/ARCHITECTURE.md` and this file are **LF**. Check per file before
+  writing, because `read_text` hides it.
+- **A content-hash dedupe of the log corpus still over-counts sessions.** Ten
+  archived files are byte prefixes of one growing log, so they carry ten
+  distinct hashes and are one session. Count by each log's `Log file open` line.
+- **An acceptance criterion parked in a completed item is unreachable work.**
+  `ops/loop/state.py` says a cold session reads `completed` to learn what to
+  skip and nothing un-completes an item.
+
 # Wrap 2026-08-29b - the source register, and a guard that was proven non-vacuous and still blind
 
 Suite **1302 passed / 1302 collected**, ruff clean, clean tree. Ledger
