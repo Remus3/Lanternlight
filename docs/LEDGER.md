@@ -84,6 +84,31 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0108 - 2026-09-01 - 212 = Fervor, bound by SLOT ATTRIBUTION on a second Affix Details panel no session had opened - and a bare set difference would have published the wrong name
+
+**Evidence:**
+- python -m pytest -> '1390 passed', exit 0, run as its own command immediately before commit
+- python -m ruff check . -> 'All checks passed!', exit 0, run as its own command
+- exactly TWO Affix Details window-open events exist in the whole corpus and BOTH have full-scene frame coverage: local 22:28:10 and 22:54:52
+- f0119_22.28.15 read at native resolution: Fervid Lv.2 pants+boots, Fervor Lv.2 helm+chest, Seeker Lv.1 weapon, Wealth Lv.1 necklace
+- f0124_22.54.52 read at native resolution, NEVER opened before: Fervid Lv.2 pants+boots, Ranged Lv.2 weapon+gloves, Fervor Lv.2 weapon+chest, Wealth Lv.1 necklace
+- equipped set at local 22:53:30 is [1130308, 1230304, 1360303, 1430303, 1530303, 1630103, 1720201] in slot order; at 22:28:56 it is the same with 1330304 at gloves
+- brace-balanced parse: 1230304 is slot 1 with item-borne affix 212 and NO gem; 1430303 is slot 3 and 1530303 slot 4, both affix 208; 1360303 is slot 2, affix 211; 1630103 is slot 5 with gem 224110 and no item-borne affix
+- f0134_22.55.00 renders Fervor Lv.1 in the Deathclaw Hunter's Peridot gem row, and that item carries gem 223106 in the log
+- f0073_22.26.34 renders Rover Hood, Rare Head, with Fervor Lv.1 in its gem row; that item is 1130308 at the helm slot, which carries gem 223106
+- s01222_19.54.35 read: warehouse, a slot highlighted, NO tooltip - the recorded claim for the 101 event stands exactly as written
+
+212 = Fervor, AND IT IS CONFIRMED TWICE ON TWO DIFFERENT LOADOUTS. The Affix Details screen prints a per-slot count per affix, and the second cfgId digit gives the slot, so a row attributes to a specific equipped item. On BOTH panels the CHEST slot contributes a Fervor, and on both the chest item is 1230304, which carries item-borne affix 212 and has no gem. Every other row on both panels is independently accounted for.
+A BARE SET DIFFERENCE WOULD HAVE PUBLISHED THE WRONG NAME, AND MY FIRST PASS DID PICK IT. Counting affix INSTANCES rather than slots leaves {212, gem 223106, gem 224110} mapping onto {Fervor, Fervor, Wealth}, and TWO assignments satisfy the counts equally well. I had written 212 = Wealth and was reasoning toward publishing it. Only the per-slot counts break the tie, because they pin each contribution to a named slot and the log independently says which item sits in it. AN AGGREGATE THAT BALANCES IS NOT A BINDING - a conservation check confirms that nothing is missing, never which name goes where.
+THE SECOND PANEL HAD NEVER BEEN OPENED BY ANY SESSION, and it was found by listing the window-open events rather than by looking where frames were expected. There are exactly two openings of that screen in the entire corpus and both are frame-covered - a two-of-two hit rate on a surface nobody had enumerated. THE CHEAPEST SWEEP IS OVER THE EVENT THAT OPENS A SCREEN, NOT OVER THE FRAMES THAT MIGHT SHOW IT.
+A SEPARATE ID SPACE FELL OUT: GEMS. gem 223106 grants Fervor and gem 224110 grants Wealth. A gem contributes to the character exactly as an item-borne affix does, which is why one slot can carry two counts - the weapon column on the second panel shows both Ranged and Fervor, being its item-borne 211 plus its gem. The gem ids are NOT affix ids and must not be filed in the same table.
+THE SECOND cfgId DIGIT IS THE EQUIPMENT SLOT: 11 helm, 12 chest, 13 gloves, 14 pants, 15 boots, 16 necklace, 17 ring, 30 weapon. POSITIVE-CONTROLLED rather than asserted: Fervid Lv.2 lands on the pants and boots columns, and the log independently puts affix 208 on 1430303 at slot 3 and 1530303 at slot 4. Two surfaces, the same two slots, neither fitted to the other.
+209 = Seeker IS CONFIRMED A THIRD INDEPENDENT WAY. Yesterday's binding rested on elimination plus a durability corroboration. The first panel attributes Seeker Lv.1 to the weapon column while the log has 3030403, affix 209, in a weapon slot at that moment. A binding that survives three unrelated methods is as settled as this project's evidence gets.
+101 AND 214 REMAIN, AND EACH IS NOW BLOCKED FOR A MEASURED REASON. 101 sits on 1430301 at the PANTS slot, which was held by 1430303 during both panel openings, so the panel route cannot see it. Its tooltip route fails more sharply than the recorded 'no tooltip was on screen': at its only frame-covered event the hover lasted 262 ms before the next item was hovered, against a capture running at about 1 frame per second. THE CAPTURE CADENCE, NOT THE RESOLUTION, IS WHAT LOSES IT - which is a different fix from the full-screen rule this project already adopted. 214 has no exEquip record, no durability record and appears on neither panel; it is known only from trade-filter requests and nothing on disk can reach it.
+THE RECORDED CLAIM FOR THE 101 FRAME STANDS EXACTLY AS WRITTEN, and I checked rather than assumed. s01222_19.54.35 shows the warehouse with a slot highlighted and no tooltip, which is what docs/AFFIXES.md says. Having overturned a neighbouring generalisation yesterday, the temptation was to expect this one to fall too. It did not.
+NOTHING WAS DONE TO THE GAME OR ITS DIRECTORY, the client was closed throughout, and no raw log excerpt is committed. The operator's persona appears in plain text beside the records used here and was kept out of every committed file, along with the 19-digit item instance ids.
+ITEM 11 IS NOT CREDITED. Two affix ids remain unbound and both now have a measured blocker. It stays in flight.
+
 ### LL-0107 - 2026-09-01 - Item 14 CLOSED - its premise is refuted, the two bows are two TYPES sharing a name - and the refutation found a DURABILITY join that binds affix 209 = Seeker, an id three documents called unrecoverable from disk
 
 **Evidence:**

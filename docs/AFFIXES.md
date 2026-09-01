@@ -1584,9 +1584,53 @@ slots the table does.
 | `Fervid` | Lv.2 | pants 1, boots 1 |
 | `Seeker` | Lv.1 | weapon 1 |
 
-`Fervor` Lv.2 and `Wealth` Lv.1 are read from the table only - helm and chest
-for the first, an accessory column for the second - and stay unconfirmed by a
-second surface.
+`Fervor` Lv.2 and `Wealth` Lv.1 were read from the table only - helm and chest
+for the first, an accessory column for the second.
+
+**BOTH ARE NOW CONFIRMED, 2026-09-01, by a SECOND `Affix Details` panel that no
+session had opened.** There are exactly two openings of that screen in the whole
+corpus and both have full-scene coverage; the second is `f0124_22.54.52` in
+`reanchor`, found by listing the window-open events rather than by looking where
+frames were expected. It carries a different loadout:
+
+| affix | level | slots carrying a count |
+|---|---|---|
+| `Fervid` | Lv.2 | pants 1, boots 1 |
+| `Ranged` | Lv.2 | weapon 1, gloves 1 |
+| `Fervor` | Lv.2 | weapon 1, chest 1 |
+| `Wealth` | Lv.1 | necklace 1 |
+
+**Every row reconciles against the log's equipped set at `22:53:30`**, which is
+`[1130308, 1230304, 1360303, 1430303, 1530303, 1630103, 1720201]` in slot order:
+`Fervid` is affix 208 on pants `1430303` and boots `1530303`; `Ranged` is affix
+211 on the weapon `3060404` and on gloves `1360303`; `Wealth` is the necklace
+`1630103`, which has no item-borne affix and one gem; and one `Fervor` is that
+weapon's gem, rendered as `Fervor` Lv.1 in its Peridot row on
+`f0134_22.55.00`.
+
+### `212 = Fervor` - and a bare set difference would have got it WRONG
+
+**The chest slot contributes a `Fervor` on BOTH panels**, and on both the chest
+item is `1230304`, which carries item-borne affix `212` and **has no gem**.
+Nothing else can supply it. So `212 = Fervor`.
+
+**The near-miss is the instructive part.** Counting affix INSTANCES rather than
+slots leaves `{212, gem 223106, gem 224110}` mapping onto
+`{Fervor, Fervor, Wealth}`, and two assignments satisfy the counts equally:
+`212 = Fervor` with both gems Fervor-and-Wealth, or `212 = Wealth` with the
+gems the other way round. A first pass took the second and would have published
+`212 = Wealth`. **Only the per-slot counts break the tie**, because they pin
+each contribution to a named equipment slot and the log independently says
+which item is in it. AN AGGREGATE THAT BALANCES IS NOT A BINDING.
+
+**Two gem ids fall out as a separate id space:** `223106` grants `Fervor` and
+`224110` grants `Wealth`. A gem contributes to the character exactly as an
+item-borne affix does, so one slot can carry two counts - which is why the
+weapon column shows both `Ranged` and `Fervor` on the second panel.
+
+**`209 = Seeker` is confirmed a THIRD independent way here**: the first panel
+attributes `Seeker` Lv.1 to the weapon column, and the log has `3030403`, affix
+`209`, in a weapon slot at that moment.
 
 **The sum rule now has SIX independent confirmations** - four rows on the
 `Affix Details` table plus two per-affix `Level Distribution` rows - and holds
