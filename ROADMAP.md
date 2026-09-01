@@ -3746,8 +3746,9 @@ at durability 1400 and 2 at 0**, in every session on both clients - 20 spawns in
 the 2026-08-25 session, 16 on 2026-08-25b, 4 on `1.0.15`.
 
 **That "unchanged" is about the STANDARD bot and the 10.35 session had a second
-kind.** A single `classId` **12** bot spawned at local 18:38:27 with 8 items at
-durability 1100 - the only non-class-10 bot in the corpus, and the room's own
+kind.** A single `classId` **12** bot spawned at local 18:38:27 with 8 items -
+**6 at durability 1100 and 2 at 0**, the necklace and ring, exactly as on every
+other actor. It is the only non-class-10 bot in the corpus, and the room's own
 `Weapon Archetype: Blackarrow` setting predicts exactly that. So section 11's
 runs had at least two candidate targets on the floor and the log does not say
 which was shot. It does not overturn 10.35; it means that measurement's TARGET

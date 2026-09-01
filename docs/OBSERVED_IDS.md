@@ -1050,7 +1050,8 @@ document had written the configuration down.
 
 - `Weapon Archetype: Blackarrow` predicts a **`classId` 12** bot. Exactly one
   non-class-10 bot exists in the whole corpus - a `classId` 12 bot spawned at
-  local 18:38:27, in this session, with 8 items at durability 1100. Every other
+  local 18:38:27, in this session, with 8 items - 6 at durability 1100 and 2 at
+  0, the necklace and ring. Every other
   bot in every session is `classId` 10. **The consequence is a limit, not only
   a confirmation:** section 11's runs therefore had at least two candidate
   targets on the field and the log does not say which one was shot.

@@ -84,6 +84,26 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0111 - 2026-09-01 - CORRECTS LL-0110 - a wrong durability shipped in four documents by the very mistake that entry advertises as caught, and three of its evidence numbers do not reproduce
+
+**Evidence:**
+- python -m pytest -> '1390 passed', exit 0, run as its own command after the corrections
+- python -m ruff check . -> 'All checks passed!', exit 0
+- classId 12 bot at local 18:38:27 re-parsed from its roleInfo payload: 8 items, durability histogram {1100: 6, 0: 2}, the two zeros being necklace 1620101 and ring 1720101
+- git show cc47938 piped through a count of added non-header lines -> 1242, not the 795 LL-0110 records
+- docs/FINDINGS.md is 150,860 bytes at cc47938 and 128,729 at ad0aa0b, so LL-0110's '148,798 bytes' names neither
+- server_EquipArmors lines carrying 1430301 in the 2026-08-25 log -> 47 total: 46 with one identical seven-slot array plus one helm-off variant at 19:54:04
+- non-vacuity RE-PROVED against the tree that actually ships: docs/FINDINGS.md at 150,904 bytes, sha256 32213a94..., a fake host appended, test_source_register went RED naming it, restored to the identical byte count and hash
+- grep over all tracked Markdown outside the append-only ledger -> zero surviving occurrences of '8 items at durability 1100'
+
+THE SUBSTANTIVE ERROR: the classId 12 training bot is 6 items at durability 1100 and 2 at 0, not '8 items at durability 1100'. That figure shipped in ROADMAP.md, WAKEUP_NOTES.md, docs/FINDINGS.md and docs/OBSERVED_IDS.md, all as lines ADDED by cc47938.
+IT IS THE EXACT DEFECT THE SAME COMMIT ADVERTISES AS CAUGHT, one paragraph away. LL-0110 records that a truthiness test dropped the zero-durability items from the class-10 bot's histogram, and docs/FINDINGS.md carries a block quote explaining that a truthiness test is not a presence test. The fix was applied to the class-10 bot and NOT to the class-12 bot described immediately below it. Worse, the correct decomposition had already been derived during the session and was then not written down - the arithmetic was done and the sentence was written from memory. FIXING AN INSTANCE IS NOT FIXING THE CLASS: when a defect is found, re-run the corrected measurement over every actor the document describes, not just the one that surfaced it.
+THREE OF LL-0110's EVIDENCE NUMBERS DO NOT REPRODUCE, and the substance behind each survives. '795 added diff lines' was measured on an intermediate tree; the shipped commit adds 1242, and redact.assert_clean passes over all 1242 with zero non-ASCII, zero IPv4, zero email and no digit run of 8 or more except the two client Build Dates. 'Restored byte-exact at 148,798 bytes' likewise named an intermediate tree, so the vacuity proof it cites was run against something other than what shipped - it has now been re-run against the shipping tree and is recorded above with its hash. And '46 server_EquipArmors payloads' should be 47 lines carrying the item, of which 46 share one array; ROADMAP.md stated this correctly and the ledger did not.
+THE PATTERN ACROSS ALL FOUR IS ONE PATTERN: a number measured at one moment and quoted at a later one, after the thing it described had changed. A count is only true of the tree it was taken from, and a wrap edits the tree after the count. RE-MEASURE EVERY FIGURE IN AN ACCEPTANCE RECORD IMMEDIATELY BEFORE WRITING IT, not during the work it describes.
+WHAT LL-0110 GOT RIGHT AND IS NOT WITHDRAWN, all independently re-derived from primary data by the final pass: the log dedup to 4 maximal contents and the 6.25x and 3.5x inflation ratios; nine of nine equipment slots differing with level 3 against 5; the class-10 bot at 7 items at 1400 and 2 at 0, identical across all 40 spawns; spawn counts 20, 16 and 4; both training windows and 355 of 2172 frames with max gap 3 s in A and 2 s in B; f0462_18.47.18 being a 1280x720 JPEG and the only copy on disk; the crop-origin sweep 2/33/61/37/2 with zero cross-offset disagreements; the 20/7/42/55 digit tally and all 55 four-digit frames refused; VALUE_WINDOW clipping a four-digit value; the radius; the panel-opening counts 5/1/0 and 0/2/0; the three Status.Talent tokens and the 32000 binding; and 18,965 images machine-wide. The anti-cheat boundary is clean, with the patterns positive-controlled.
+ITEMS 7, 11 AND 12 REMAIN OPEN AND UNCREDITED. Item 12's backward comparison stays closed as impossible and its forward acceptance stays open.
+THREE ADVERSARIAL PASSES RAN THIS CYCLE AND THE THIRD WAS THE ONE THAT MATTERED, because it was the only one pointed at the COMMITTED tree rather than at a working tree the session then edited underneath it. The first two ran before the corrections they prompted; every defect recorded here survived them and was invisible until something re-read what had actually shipped. A REFUTATION OF A TREE THAT NO LONGER EXISTS CERTIFIES NOTHING.
+
 ### LL-0110 - 2026-09-01 - Item 12 ANSWERED from disk - its acceptance can NEVER be met because the baseline was character level 3 - and the data it needed was never missing
 
 **Evidence:**

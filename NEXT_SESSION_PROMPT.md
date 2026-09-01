@@ -36,6 +36,16 @@ A fresh clone runs zero git hooks until that first command runs. The tracked
 
 ## Where the last session left it
 
+**Cycle 34 worked item 12 and closed its backward half as IMPOSSIBLE.** The
+item asked for the 10.35-per-hit floor to be re-measured on client `1.0.15`.
+That can never be done - 10.35 was measured at character **level 3**, the
+character has been level 5 since 2026-08-25, and levelling does not reverse.
+**Do not re-attempt it.** The data it needed was never missing either: a
+`1.0.15` training capture had been on disk since 2026-08-30 and was read. Item
+12 stays OPEN under a REPLACED, forward acceptance that needs the client.
+**Items 7, 11 and 12 are all open and uncredited.** Full detail in `LL-0110`
+and `docs/FINDINGS.md` section 16.
+
 **Suite 1390 passed / 1390 collected, ruff clean**, measured on a clean tree -
 that is your merge-gate baseline, and **re-measure it yourself before
 dispatching work** rather than trusting this line. **Use
@@ -43,7 +53,7 @@ dispatching work** rather than trusting this line. **Use
 carries `-q`, so the form printed in `CLAUDE.md` becomes `-qq` and gives
 per-file counts with no total - sum them.
 
-The ledger runs to **`LL-0110`**, 110 entries. **The line above said `LL-0104`
+The ledger runs to **`LL-0111`**, 111 entries. **The line above said `LL-0104`
 until 2026-09-01c and was five entries stale** - the exact defect `LL-0103`
 recorded against these same two hand-off documents. Check the tail of
 `docs/LEDGER.md` yourself rather than trusting this number.
@@ -54,6 +64,16 @@ Read, in this order:
   that **cannot ever be performed**: its baseline was character level 3 and the
   character is level 5. The data it needed was on disk the whole time. Its
   acceptance has been REPLACED with a forward one.
+- **`LL-0111`** - the correction to `LL-0110`, and read it immediately after.
+  A wrong durability shipped in FOUR documents **by the very mistake `LL-0110`
+  advertises as caught**, one paragraph away from the block quote explaining
+  it, and three of that entry's evidence numbers were measured on an
+  intermediate tree and do not reproduce against what shipped. Its rule:
+  **re-measure every figure in an acceptance record immediately before writing
+  it**, because a wrap edits the tree after the count was taken. And: three
+  adversarial passes ran that cycle, but only the third was pointed at the
+  COMMITTED tree - **a refutation of a tree that no longer exists certifies
+  nothing.**
 
 - **`LL-0100`** - it WITHDRAWS a correction that was itself wrong, about affix
   ids `101` and `209`. Its rule is the most reusable thing on file: **before
