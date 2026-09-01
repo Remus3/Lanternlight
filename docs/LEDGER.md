@@ -84,6 +84,26 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0113 - 2026-09-01 - CORRECTS LL-0112 - the width-gate evidence was scoped to ONE capture and written as universal, and the number that actually carries the gate is a different one
+
+**Evidence:**
+- python -m pytest -> '1411 passed', exit 0, run as its own command after the corrections
+- python -m ruff check . -> 'All checks passed!', exit 0
+- the COMMITTED tree at 6074631 verified in a fresh git clone rather than in the working tree: '1411 passed', ruff clean, and core.hooksPath empty in the clone exactly as CLAUDE.md predicts
+- runs of width 14-23 on the 6,439-frame 2026-08-25 capture, by window: VALUE 18, HITS 309, whole band unwindowed 743
+- the widest run that ever CLASSIFIES as a digit anywhere in that capture: 13px, a '4' at x51-63 of p04331
+- runs exceeding MAX_GLYPH_WIDTH 18 on that capture: 277, and the old-against-new consumer diff over the same 6,439 frames shows 0 disagreeing readings
+- leftmost lit column inside HITS_WINDOW on the 2026-08-25 capture: x193, the window's own first column
+- f0537 value-field runs: (54,65) (69,78) (82,92) for a true 618, so the failing glyph at x69-78 is the MIDDLE digit
+
+LL-0112's EVIDENCE LINE 'merged runs 24-27px, NOTHING in 14-23' IS WITHDRAWN AS WRITTEN. It is true of the 1.0.15 capture and false of the 6,439-frame capture the module is regression-tested against, where 18 value-window runs and 309 hit-window runs land in that interval. The same sentence shipped in lanternlight/vision_meter.py and in ROADMAP.md, and both are corrected in place; the ledger is append-only so it is corrected here.
+THE CONCLUSION SURVIVES AND ITS REAL SUPPORT IS A DIFFERENT NUMBER. The gate is sound not because the interval is empty but because THE WIDEST RUN THAT EVER CLASSIFIES AS A DIGIT IS 13px, so a gate at 18 sits 5px above the widest real glyph. 277 runs on that capture exceed 18 and reach the splitter, and none produced a wrong number. A count that rules an interval empty and a count of what the interval CONTAINS are different claims, and only the second one was ever load-bearing.
+THE SAME DEFECT A SECOND TIME IN THE SAME COMMIT: 'no value run ever reaches x>=193, and the hit count starts at x199, so 84 columns of guaranteed-empty gap separate the two fields - widening cannot collide.' Also measured on 1.0.15 only. On the 2026-08-25 capture the leftmost lit column inside HITS_WINDOW is x193, the window's first column, so the region is not empty. The fields cannot collide because they are read through SEPARATE windows and the value window ends at 120 - a bound, not an emptiness. Both instances are the same error: A MEASUREMENT TAKEN ON ONE CAPTURE AND STATED AS A PROPERTY OF THE HUD.
+A THIRD, SMALLER ERROR: three refusing frames were described as failing on their 'leading glyph'. True of f0527 at x54-66 and f0581 at x55-64, false of f0537, whose failing glyph is the MIDDLE digit at x69-78 - the '1' of 618. The merger's own measurement had printed x69-78 correctly earlier in the session and the prose was then written from memory, which is the LL-0111 failure repeating one cycle later.
+AN ADVERSARIAL NUMBER THAT DID NOT REPRODUCE, AND BOTH FIGURES ARE RIGHT. The refuting pass reported 326 runs in 14-23; re-measuring gave 18. Neither is wrong: it counted BOTH fields, 18 value plus 309 hits, and the merger counted the value field alone. This is LL-0110's rule again - an exact measurement of a different question looks exactly like a refutation - and the fix was to publish the CRITERION beside each number rather than to pick a winner. The agent's substantive finding stood in full; only its scope needed naming.
+WHAT THE FINAL PASS CONFIRMED, pointed at the committed tree as LL-0111 requires: 124 panel-up frames giving 118 readings and 6 refusals with ZERO disagreements, the refusal set frame for frame, zero wrong numbers across 2,172 plus 6,439 frames, an exhaustive brute force of the grouping rule, all 231 panel-down frames still refusing, and every guard load-bearing under mutation. It also found two latent gaps that never fired and are now recorded rather than fixed: a split piece is not re-checked against the width gate or recursively split, and the separator predicate is looser than the comma population it documents - it fires on any sub-6px run sitting low in the band, 384 times on the older capture, and none reached a number only because the grouping rule rejected them. Both are defence-in-depth gaps behind guards that did hold, so they are ROADMAP items rather than a hot fix.
+THE PROCESS LESSON, since this is the second consecutive cycle with the same shape. LL-0111 said to re-measure every figure immediately before writing it. That was done for the acceptance figures and NOT for the supporting ones - the population bounds were carried from a slice report written ninety minutes earlier against a different capture. RE-MEASURING THE HEADLINE NUMBER IS NOT RE-MEASURING THE EVIDENCE, and a supporting number is exactly where a scope silently drops.
+
 ### LL-0112 - 2026-09-01 - Item 7c's orange pair CLOSED at 118 of 124 with ZERO disagreements - and the item's own prescribed third fix was wrong, refuted by a positive control
 
 **Evidence:**

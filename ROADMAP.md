@@ -1361,8 +1361,13 @@ this item prescribed**, and that prescription is withdrawn below.
    four-digit value spans x54-115, so the old window dropped the last digit and
    clipped the third. Measured bounds: the full value extent across all 124
    panel-up frames is x53-115, no value run ever reaches x>=193, and the hit
-   count starts at x199 - 84 columns of guaranteed-empty gap, so widening cannot
-   collide with the other field.
+   count starts at x199. **A first draft called that "84 columns of
+   guaranteed-empty gap, so widening cannot collide" and that is over-stated:**
+   the gap belongs to the 1.0.15 capture, not to the HUD, and on the 2026-08-25
+   capture the leftmost lit column inside `HITS_WINDOW` is x193, the window's
+   own first column. The fields cannot collide because they are read through
+   SEPARATE windows and the value window ends at 120 - not because the region
+   between them is empty.
 2. **A thousands separator rule**, keyed on the run's FIRST INKED ROW.
 3. **A merged-run splitter**, gated on a new `MAX_GLYPH_WIDTH` of 18.
 
@@ -1403,9 +1408,21 @@ spills a column right. The design margin is exactly one column.
 | definitely ONE glyph, hit count | 10-12 |
 | definitely TWO glyphs | 24-27 |
 
-Nothing at all lands in 14-23. Splitting on an interior gap ALONE would be
-unsafe: **12 definitely-single glyphs carry an interior blank column of their
-own, 11 of them the digit `0`**, whose hollow centre looks exactly like a join.
+Nothing at all lands in 14-23 **on the 1.0.15 capture**.
+
+**A first draft of that sentence dropped the scope and is corrected here.** On
+the 6,439-frame 2026-08-25 capture, 18 runs in the value window and 309 in the
+hit window DO land in 14-23. The gate is still sound, and the number that
+carries it is a different one: **the widest run that ever CLASSIFIES as a digit
+anywhere in that capture is 13px**, a `4` at x51-63 of `p04331`, so a gate at 18
+sits 5px above the widest real glyph. 277 runs there exceed 18 and go to the
+splitter, and the consumer diff below shows none of them produced a wrong
+number. State the criterion beside the number: 8-13 is the width of a run that
+IS a digit, not the width of every run that exists.
+
+Splitting on an interior gap ALONE would be unsafe: **12 definitely-single
+glyphs carry an interior blank column of their own, 11 of them the digit `0`**,
+whose hollow centre looks exactly like a join.
 `MAX_GLYPH_WIDTH` of 18 is the middle of the measured gap, and both directions
 of a mis-set gate fail safe - too low splits a real glyph into halves that score
 as nothing, too high leaves a pair merged, and both end in a refusal.
@@ -1434,9 +1451,9 @@ None is a segmentation failure:
 | `f0661` | 9 / 1 | **ZERO orange pixels anywhere in the band** |
 | `f0469` | 0 / 0 | panel sliding IN, misregistered by 2px |
 | `f0470` | 0 / 0 | same |
-| `f0527` | 261 / 6 | dithered, leading glyph 0.122 |
-| `f0537` | 618 / 13 | dithered, glyph 0.164 |
-| `f0581` | 1834 / 38 | smeared, leading glyph 0.165 |
+| `f0527` | 261 / 6 | dithered, leading glyph at x54-66, 0.122 |
+| `f0537` | 618 / 13 | dithered, MIDDLE digit at x69-78, 0.164 |
+| `f0581` | 1834 / 38 | smeared, leading glyph at x55-64, 0.165 |
 
 **"All 124" was never achievable.** `f0661` carries no ink at all in the row
 band - the transcription itself flags it not legible and a human read it at 8x
@@ -1507,6 +1524,30 @@ restored byte-exact by sha256 after every one.
   disagreements, the 6,439-frame reference capture still shows zero changed
   readings, and the y-offset sweep at 388-392 still shows zero disagreements at
   every offset.
+- **Two DEFENCE-IN-DEPTH gaps, found by the final adversarial pass, recorded
+  rather than hot-fixed because neither has ever fired.** Both were re-measured
+  by the merger before being written down.
+
+  1. **A split piece is not re-checked against the width gate, and never
+     recursively split.** On the 2026-08-25 capture, **9** pieces come back from
+     `_split_merged` still wider than `MAX_GLYPH_WIDTH`. Nothing catches that;
+     only the distance thresholds stand behind it, and they do hold - the
+     closest template distance among those 9 is **0.1489** against an
+     `ACCEPT_DISTANCE` of 0.115, so all 9 refuse. **Acceptance:** either the
+     splitter re-checks its pieces and refuses a still-over-wide one by name, or
+     a test pins that those 9 refuse for the reason claimed - and the
+     6,439-frame consumer diff still shows zero changed readings.
+  2. **`_is_separator` is looser than the comma population it documents.** The
+     docstring describes a comma at width 3-4 and first inked row 19-20. The
+     predicate accepts ANY sub-6px run with first row >= 12 and height <= 10, and
+     on the 2026-08-25 capture it fires **384** times - at widths 1, 2, 3, 4 and
+     5, and at first rows spread across 12-26. None ever reached a number, and
+     the only reason is that `_regroup` rejects every malformed grouping, which
+     is one guard rather than two. **Acceptance:** tighten the predicate to the
+     measured population, or state the looser bounds in the docstring as
+     deliberate - and either way keep the 124-frame set at ZERO disagreements
+     and the 6,439-frame diff at zero changed readings.
+
 - **A four-digit committed fixture, BLOCKED on operator approval.** The
   `LL-0083` precedent is that capture-derived pixels enter this public repo only
   on the operator's explicit approval. A clone can currently verify a successful

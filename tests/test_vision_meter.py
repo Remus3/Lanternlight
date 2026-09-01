@@ -581,9 +581,12 @@ class TestTheFullScreenCapture:
           match, which is a different fix with a different risk. ROADMAP 7c
           carries it as an open item rather than this module carrying it now.
         - ``f0527``, ``f0537`` and ``f0581`` are dithered or smeared transition
-          frames whose leading glyph scores 0.122 to 0.165 against an accept
-          bound of 0.115. Two of the three are within 0.007 of accepting, which
-          is exactly the band the two-threshold design exists to refuse.
+          frames with a glyph scoring 0.122 to 0.165 against an accept bound of
+          0.115. It is the LEADING glyph on ``f0527`` (x54-66) and ``f0581``
+          (x55-64); on ``f0537`` it is the MIDDLE digit at x69-78, the ``1`` of
+          618, whose runs are (54,65) (69,78) (82,92). Two of the three are
+          within 0.007 of accepting, which is exactly the band the
+          two-threshold design exists to refuse.
         """
         _require_fullscreen()
         expected = {
