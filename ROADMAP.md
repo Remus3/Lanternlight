@@ -3334,9 +3334,62 @@ is an operator action rather than a session action.
 
 Opened 2026-08-30. Ledger `LL-0085` and `LL-0086`.
 
-**Four are already bound** - `201 = Valor`, `208 = Fervid`, `211 = Ranged` by
-the wall-clock join, and **`209 = Seeker`** added 2026-09-01 by a DIFFERENT
-method described below. **Three remain: `101`, `212`, `214`.**
+**Five are already bound** - `201 = Valor`, `208 = Fervid`, `211 = Ranged` by
+the wall-clock join, **`209 = Seeker`** and **`212 = Fervor`** added 2026-09-01
+by two different methods described below. **Two remain: `101` and `214`**, and
+each is now blocked for a MEASURED reason rather than an assumed one.
+
+### `212 = Fervor`, by SLOT ATTRIBUTION on the `Affix Details` panel
+
+**The strongest binding this item has produced, because it is confirmed twice on
+two different loadouts.** The `Affix Details` screen prints one row per active
+affix with a per-slot count, and the second cfgId digit gives the slot (see
+`docs/OBSERVED_IDS.md`), so a row can be attributed to a specific equipped item.
+
+**There are exactly TWO openings of that screen in the entire corpus and both
+have full-scene frame coverage.** The first, `f0119_22.28.15`, was already
+transcribed. **The second, `f0124_22.54.52` in `reanchor`, had never been
+opened by any session** - found by listing the window-open events rather than by
+looking where frames were expected.
+
+| panel | rows and the slots carrying them |
+|---|---|
+| `f0119_22.28.15` | `Fervid` Lv.2 pants+boots, `Fervor` Lv.2 **helm+chest**, `Seeker` Lv.1 weapon, `Wealth` Lv.1 necklace |
+| `f0124_22.54.52` | `Fervid` Lv.2 pants+boots, `Ranged` Lv.2 weapon+gloves, `Fervor` Lv.2 **weapon+chest**, `Wealth` Lv.1 necklace |
+
+**In both, the CHEST slot contributes a `Fervor`, and in both the chest item is
+`1230304`, which carries item-borne affix `212` and has NO gem.** Every other
+row on both panels is independently accounted for, so nothing else can be
+supplying it.
+
+**Every row reconciles, which is what makes this more than a set difference:**
+`Fervid` is affix 208 on `1430303` (pants) and `1530303` (boots); `Ranged` is
+affix 211 on the weapon `3060404` and on `1360303` at gloves; `Seeker` is affix
+`209` on the weapon `3030403`, **confirming that binding a third independent
+way**; `Wealth` is the necklace `1630103`, which has no item-borne affix and
+carries gem `224110`; and the second `Fervor` source is gem `223106`, rendered
+in the gem row of two separate item tooltips.
+
+**A BARE SET DIFFERENCE WOULD HAVE GOT THIS WRONG, and nearly did.** Counting
+only affix instances leaves `{212, gem 223106, gem 224110}` mapping onto
+`{Fervor, Fervor, Wealth}` with two consistent assignments, and the first draft
+of this section picked the wrong one - `212 = Wealth`. **The per-slot counts are
+what disambiguate it**, and they are the reason this panel is worth more than
+any tooltip.
+
+### `101` and `214` - why each is blocked, measured rather than assumed
+
+- **`101`** sits on item `1430301`, the PANTS slot. It was never equipped during
+  either panel opening - `1430303` held that slot both times - so the panel
+  route cannot reach it. Its tooltip route fails for a sharper reason than
+  "no tooltip was on screen": at its only frame-covered event, `19:54:35`, the
+  hover lasted **262 ms** before the next item was hovered, against a capture
+  running at about **1 frame per second**. `s01222_19.54.35` shows the warehouse
+  with a slot highlighted and no tooltip, exactly as recorded. **The capture
+  cadence, not the capture resolution, is what loses it.**
+- **`214`** has no `exEquip` record, no durability record and appears on neither
+  panel. It is known only from trade-filter requests. **Nothing on disk can
+  reach it**, and that is now a measured statement rather than an inference.
 
 ### THE DURABILITY JOIN - added 2026-09-01, ledger `LL-0107`
 

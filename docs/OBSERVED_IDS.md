@@ -1301,8 +1301,39 @@ this file is the authority for engine ids.
 | 208 | **`Fervid`** | `affixIds[]`, `affixes[].cfgId` | pixel-joined by set difference, 2026-08-30 |
 | 209 | **`Seeker`** | `affixes[].cfgId` | durability-joined by elimination, 2026-09-01 |
 | 211 | **`Ranged`** | `affixIds[]`, `affixes[].cfgId` | pixel-joined, 2026-08-30 |
-| 212 | UNBOUND | `affixIds[]`, `affixes[].cfgId` | - |
+| 212 | **`Fervor`** | `affixIds[]`, `affixes[].cfgId` | slot-attributed on TWO loadouts, 2026-09-01 |
 | 214 | UNBOUND | `affixIds[]` | - |
+
+**Two GEM ids are bound as a side effect, and they are a SEPARATE id space from
+the affix ids above.** A gem sits in the `gem` array inside an item's `exEquip` object and
+contributes its affix to the character exactly as an item-borne affix does, so
+the `Affix Details` per-slot counts cover both.
+
+| gem cfgId | affix it grants | how established |
+|---|---|---|
+| 223106 | `Fervor` | rendered in the gem row of two item tooltips, and the only Fervor source at the helm and weapon slots on the two panels |
+| 224110 | `Wealth` | the only affix source at the necklace slot on BOTH panels, on an item with no item-borne affix |
+
+### The second cfgId digit is the EQUIPMENT SLOT
+
+Derived 2026-09-01 from the `Affix Details` per-slot counts cross-checked
+against `server_EquipArmors` payloads, which list armour in slot order:
+
+| cfgId prefix | slot index | panel column |
+|---|---|---|
+| `11xxxxx` | 0 | helm |
+| `12xxxxx` | 1 | chest |
+| `13xxxxx` | 2 | gloves |
+| `14xxxxx` | 3 | pants |
+| `15xxxxx` | 4 | boots |
+| `16xxxxx` | 5 | necklace |
+| `17xxxxx` | 6 | ring |
+| `30xxxxx` | 10, 11 | weapon |
+
+**Positive control:** `Fervid` Lv.2 lands on the pants and boots columns, and
+the log independently puts affix 208 on `1430303` (slot 3) and `1530303`
+(slot 4). Two surfaces, same two slots, without either being fitted to the
+other.
 
 **Method for the three bound rows**, same wall-clock join that bound the class
 ids: the client emits `[TradeCtrl] request Trade Goods {...,"affixIds":[N],...}`
