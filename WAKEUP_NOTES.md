@@ -35,6 +35,49 @@ command:
 **Pass the BASE, never a dated path.** `--dest-base C:/ll-captures`. Handing it
 `C:/ll-captures/<today>` is the exact defect `LL-0102` stopped a watcher over.
 
+## Cycle 33 - affix 212 = Fervor, and a panel nobody had opened
+
+**`212 = Fervor`**, bound by SLOT ATTRIBUTION and confirmed on TWO loadouts.
+Item 11 is down to **`101` and `214`**, each now blocked for a measured reason.
+
+**The `Affix Details` screen is the best affix surface in the corpus.** It prints
+a per-slot count per active affix, and **the second cfgId digit is the equipment
+slot** (11 helm, 12 chest, 13 gloves, 14 pants, 15 boots, 16 necklace, 17 ring,
+30 weapon), so a row attributes to a specific equipped item. There are exactly
+**two** openings of it in the whole corpus and **both** are frame-covered -
+`f0119_22.28.15`, already transcribed, and **`f0124_22.54.52` in `reanchor`,
+which no session had ever opened.** It was found by listing the WINDOW-OPEN
+EVENTS, not by hunting frames. **The cheapest sweep is over the event that opens
+a screen, not over the frames that might show it.**
+
+On both panels the CHEST slot contributes a `Fervor`, and on both the chest item
+is `1230304` - item-borne affix `212`, no gem. Every other row reconciles
+independently against the equipped set.
+
+**A BARE SET DIFFERENCE WOULD HAVE PUBLISHED THE WRONG NAME, and my first pass
+picked it.** Counting affix INSTANCES leaves `{212, gem 223106, gem 224110}`
+mapping onto `{Fervor, Fervor, Wealth}` with TWO equally valid assignments; I had
+written `212 = Wealth`. Only the per-slot counts break the tie. **AN AGGREGATE
+THAT BALANCES IS NOT A BINDING** - a conservation check says nothing is missing,
+never which name goes where.
+
+**A separate id space fell out: GEMS.** `223106` grants `Fervor`, `224110`
+grants `Wealth`. A gem contributes exactly as an item-borne affix does, which is
+why the weapon column carries two counts on the second panel. **Gem ids are not
+affix ids** and must not be filed in the same table.
+
+**`209 = Seeker` is now confirmed THREE independent ways** - elimination,
+durability, and the first panel's weapon-column attribution.
+
+**Why `101` and `214` are stuck**, measured not assumed: `101`'s item `1430301`
+sits at the PANTS slot, held by `1430303` during both panels; and its tooltip
+hover lasted **262 ms** against a **1 fps** capture. **The capture CADENCE loses
+it, not the resolution** - a different fix from the full-screen rule already
+adopted. `214` has no exEquip record, no durability record, and appears on
+neither panel.
+
+Ledger `LL-0108`.
+
 ## Cycle 32 - item 14 CLOSED, and a NEW JOIN KEY that binds affix 209
 
 **Item 14 is CLOSED - its premise was refuted, not its acceptance met.** The two
