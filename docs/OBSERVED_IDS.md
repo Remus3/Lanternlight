@@ -1314,7 +1314,14 @@ the `Affix Details` per-slot counts cover both.
 | 223106 | `Fervor` | rendered in the gem row of two item tooltips, and the only Fervor source at the helm and weapon slots on the two panels |
 | 224110 | `Wealth` | the only affix source at the necklace slot on BOTH panels, on an item with no item-borne affix |
 
-### The second cfgId digit is the EQUIPMENT SLOT
+### For ARMOUR, the second cfgId digit is the EQUIPMENT SLOT
+
+**Scoped to `1xxxxxx` armour, and the scope is load-bearing.** An earlier
+heading said "the second cfgId digit is the equipment slot" without it, which
+the table below contradicts on its own last row: weapons are `30xxxxx` at slots
+10 and 11, second digit `0`. The gem ids recorded two sections above
+(`223106`, `224110`) have second digit `2` and are not a slot at all. Corrected
+at the wrap.
 
 Derived 2026-09-01 from the `Affix Details` per-slot counts cross-checked
 against `server_EquipArmors` payloads, which list armour in slot order:
@@ -1330,9 +1337,12 @@ against `server_EquipArmors` payloads, which list armour in slot order:
 | `17xxxxx` | 6 | ring |
 | `30xxxxx` | 10, 11 | weapon |
 
-**Positive control:** `Fervid` Lv.2 lands on the pants and boots columns, and
-the log independently puts affix 208 on `1430303` (slot 3) and `1530303`
-(slot 4). Two surfaces, same two slots, without either being fitted to the
+**Positive control, and it is far stronger than the two items first cited.**
+Across **917** `server_EquipArmors` payload lines carrying a full seven-slot
+armour array, every non-empty entry has second digit equal to its slot index
+plus one - **zero violations**. Separately, `Fervid` Lv.2 lands on the pants and
+boots columns while the log independently puts affix 208 on `1430303` (slot 3)
+and `1530303` (slot 4): two surfaces, the same two slots, neither fitted to the
 other.
 
 **Method for the three bound rows**, same wall-clock join that bound the class

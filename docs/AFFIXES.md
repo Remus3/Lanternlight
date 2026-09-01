@@ -1608,8 +1608,13 @@ frames were expected. It carries a different loadout:
 `Fervid` is affix 208 on pants `1430303` and boots `1530303`; `Ranged` is affix
 211 on the weapon `3060404` and on gloves `1360303`; `Wealth` is the necklace
 `1630103`, which has no item-borne affix and one gem; and one `Fervor` is that
-weapon's gem, rendered as `Fervor` Lv.1 in its Peridot row on
-`f0134_22.55.00`.
+weapon's gem, rendered as a `Fervor` Lv.1 row on `f0134_22.55.00`.
+
+**That row is NOT the Peridot slot**, and an earlier draft of this sentence said
+it was. On that frame the `Tier II Peridot Slot` reads **Empty**; the `Fervor`
+row sits separately with a **teal** icon, which this document's own gem taxonomy
+calls a `Moonstone` rather than a `Peridot`. The log agrees - `3060404` carries
+one empty socket and gem `223106`. Corrected at the wrap.
 
 ### `212 = Fervor` - and a bare set difference would have got it WRONG
 

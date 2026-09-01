@@ -41,8 +41,8 @@ command:
 Item 11 is down to **`101` and `214`**, each now blocked for a measured reason.
 
 **The `Affix Details` screen is the best affix surface in the corpus.** It prints
-a per-slot count per active affix, and **the second cfgId digit is the equipment
-slot** (11 helm, 12 chest, 13 gloves, 14 pants, 15 boots, 16 necklace, 17 ring,
+a per-slot count per active affix, and **for ARMOUR (`1xxxxxx`) the second cfgId
+digit is the equipment slot**, second digit 1 to 7 meaning slots 0 to 6 (11 helm, 12 chest, 13 gloves, 14 pants, 15 boots, 16 necklace, 17 ring,
 30 weapon), so a row attributes to a specific equipped item. There are exactly
 **two** openings of it in the whole corpus and **both** are frame-covered -
 `f0119_22.28.15`, already transcribed, and **`f0124_22.54.52` in `reanchor`,
@@ -92,11 +92,19 @@ identify a type**, so never bind on a rendered name.
 
 **THE DURABILITY JOIN - the reusable part, use it.** Item records carry a
 durability integer and the tooltip renders it as a percentage of
-`900 + (third cfgId digit) * 100` (exact at tiers 1,2,3,4,6). **So a frame can
+`900 + (third cfgId digit) * 100` (exact at **every tier 1 to 6**). **So a frame can
 be matched to a log record with NO wall-clock coincidence at all.** That matters
-because the wall-clock join has a hard ceiling - only **8%** of tooltip cfgId
-events have any frame within two seconds, and re-measuring with 6x more frames
-did not move it, because the constraint is capture time-coverage.
+because the wall-clock join is only partly covered - **about 39%** of distinct
+tooltip cfgId events have a frame within two seconds (326 of 838, measured over
+all 18,680 timestamped frames and the 4 maximal logs).
+
+> **CORRECTED at the wrap.** This first read "only **8%** ... and re-measuring
+> with 6x more frames did not move it". **Both halves were false.** The 8% came
+> from a frame index whose pattern matched `f` and `p` filenames but not `s`,
+> silently dropping the 2,683-frame `scene` sets - the SAME omission that hid a
+> deciding frame earlier the same day, repeating inside the measurement written
+> to warn about it. The join is roughly 4x better than that figure said, and
+> telling a cold session otherwise is a wrong "do not look here".
 
 **`209 = Seeker` is bound by it**, and the argument is elimination rather than
 durability: the frame shows a Rare Bow and Arrow carrying `Seeker`; the log's
@@ -106,15 +114,23 @@ corroborates, 97% against 1166/1200. **The method was positive-controlled
 first** - the same join on the 94% reading returns `3030404`, whose 211 = Ranged
 is already known correct.
 
-**Item 11 drops to three unbound ids: `101`, `212`, `214`** - and now has a
+**Item 11 drops to three unbound ids: `101`, `212`, `214`**
+> **SUPERSEDED later the same day:** `212 = Fervor` was bound in cycle 33. **Two
+> remain, `101` and `214`.** Read the newest entry at the top for current state.
+
+- and now has a
 CLIENT-FREE route. `101` sits on `1430301` at 98% and 100%; `212` on `1230304`
 at 94%, 98%, 100%. **Prefer a distinctive percentage** - 97 picked out one
 weapon, 100 is shared by many and 98 by those two. `214` has no durability
 record and is unreachable this way.
 
 **An operational rule worth more than the rate it replaced:** the tooltip-to-cfgId
-join by world is **CampMap 1690/1690 = 100%**, Whitewoods_Day 0/1246, Training
-0/59. Not lossy - total in CampMap, absent everywhere else.
+join by world is **CampMap 863/863 = 100%**, Whitewoods_Day 0/379, Training
+0/20, counted over the **4 maximal logs** rather than the 14 distinct
+contents. Not lossy - total in CampMap, absent everywhere else. **The ratio is
+what matters and it survives; the raw counts first published (1690/1246/59) were
+byte-prefix inflated**, which is the trap the same day's ledger entry warns
+about.
 
 **Two of my own claims were withdrawn before publication.** (1) `Value = base x
 durability, base 46` was fitted on TWO points - and two points exactly determine

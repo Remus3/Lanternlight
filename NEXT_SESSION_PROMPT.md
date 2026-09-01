@@ -187,8 +187,8 @@ uncredited: **TWO affix ids remain, `101` and `214`** - `209 = Seeker` and
 `212 = Fervor` were bound 2026-09-01 (`LL-0107`, `LL-0108`).
 
 **The best surface is the `Affix Details` screen, not a tooltip.** It prints a
-per-slot count per active affix, and the second cfgId digit is the equipment
-slot, so a row attributes to a specific equipped item. **Open it after every
+per-slot count per active affix, and for ARMOUR (`1xxxxxx`) the second cfgId
+digit is the equipment slot, so a row attributes to a specific equipped item. **Open it after every
 gear change.** For `101`, item `1430301` must be EQUIPPED at the pants slot when
 you do - it never was during either panel already on disk. **Capture FASTER as
 well as full-screen**: `101`'s tooltip route died to a 262 ms hover against a
