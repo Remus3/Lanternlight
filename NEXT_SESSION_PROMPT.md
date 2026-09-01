@@ -43,7 +43,17 @@ dispatching work** rather than trusting this line. **Use
 carries `-q`, so the form printed in `CLAUDE.md` becomes `-qq` and gives
 per-file counts with no total - sum them.
 
-The ledger runs to **`LL-0104`**. Read, in this order:
+The ledger runs to **`LL-0110`**, 110 entries. **The line above said `LL-0104`
+until 2026-09-01c and was five entries stale** - the exact defect `LL-0103`
+recorded against these same two hand-off documents. Check the tail of
+`docs/LEDGER.md` yourself rather than trusting this number.
+
+Read, in this order:
+
+- **`LL-0110`** - 2026-09-01c, item `12`. The item asked for a re-measurement
+  that **cannot ever be performed**: its baseline was character level 3 and the
+  character is level 5. The data it needed was on disk the whole time. Its
+  acceptance has been REPLACED with a forward one.
 
 - **`LL-0100`** - it WITHDRAWS a correction that was itself wrong, about affix
   ids `101` and `209`. Its rule is the most reusable thing on file: **before
@@ -154,9 +164,29 @@ corpus are already read. `101`'s item was never equipped during either, and its
 tooltip lasted 262 ms against a 1 fps capture; `214` has no record of any kind.
 **Item 11 needs the client now.**
 
-**Next client-free item: `12`** - re-measure the 10.35-per-hit floor on client
-`1.0.15` and say plainly whether it moved. The `2026-08-30/frames` set is a
-`1.0.15` session, so check there before concluding it needs the client.
+**Item `12` is WORKED and its backward half is CLOSED as impossible**
+(`LL-0110`). Do not re-attempt it. The `2026-08-30/frames` set WAS a `1.0.15`
+training session - two windows, 355 in-window frames, meter legible in 124 - and
+it was read. The display model, the bot and the safe-circle radius all cross the
+patch boundary unchanged. **What cannot be done is the comparison itself:** 10.35
+was measured at character **level 3**, the character is level 5, and levelling
+does not reverse. Item 12's acceptance is now a FORWARD one - capture a `1.0.15`
+baseline whose configuration is recorded at the same wall clock as its meter
+run - and that needs the client.
+
+**The client-free item is now `7c`**, and it has two concrete measured jobs
+waiting in its ROADMAP section: teach `vision_meter` the thousands separator,
+because as shipped it **refuses every value at or above 1000** and a long run is
+exactly the run that crosses 1000; and record that it fits a full-screen
+2560x1440 frame unmodified at crop origin `(2058, 390)`. **Do NOT lower
+`MIN_GLYPH_WIDTH`** - that converts a safe refusal into a silent truncation.
+
+**Before ANY configuration question, use the log, not pixels.**
+`TS.Dungeon: [DungeonPlayerState]OnCustomInfoReady roleInfo` fires within a
+second of every `TrainingGround` `LoadMap` and carries the full equipped set
+with affixes, gems and durability, plus talents, class, level and exp. Two
+extractor traps, both hit this session: the gem key is **`gem`** singular, and a
+**missing `slot` key means slot 0**, the helm.
 
 Historic, kept because the method is reusable: `209` was bound by a DURABILITY
 join. Use the **durability join**: item records
@@ -167,11 +197,18 @@ wall-clock coincidence. `101` sits on `1430301` at 98% and 100%; `212` on
 many items and 98 by those two. `214` has no durability record and is
 unreachable this way.
 
-**Index every frame-naming convention before filtering** - there are at least
-three (`f0000_HH.MM.SS`, `p00000_HH.MM.SS.mmm`, `s00000_HH.MM.SS` with a jpg
-extension), and missing the third is what hid the deciding frame for a whole
-pass. Item `12` remains the other candidate: re-measure the 10.35-per-hit floor
-on client `1.0.15` and say whether it moved.
+**Index every frame-naming convention before filtering.** Enumerated from the
+filesystem 2026-09-01c: **18,965 images machine-wide across 28 distinct filename
+shapes, of which SIX are timestamped** - `fNNNN_HH.MM.SS` in both `.png` and
+`.jpg`, `pNNNNN_HH.MM.SS.mmm`, `sNNNNN_HH.MM.SS` in `.jpg` with and without
+milliseconds, and a single `skills_HH.MM.SS.png`. Missing one hid a deciding
+frame for a whole pass and produced a figure wrong by 4x.
+
+**`LL-0109`'s "FIVE conventions, 18,680 of 18,747" is correct and SCOPED to
+`C:/ll-captures`.** Machine-wide it is 18,898 of 18,965; the 218-frame
+difference is `~/.lanternlight/frames`, the 2026-08-09 set, and the sixth
+convention lives inside it. Recite that figure with its scope or it reads as a
+machine-wide count.
 
 **One surface is left unexplored and its direction is UNSETTLED** - the 10
 verbose `nameid` events in `7`. Do not resolve the direction by adjacency; both

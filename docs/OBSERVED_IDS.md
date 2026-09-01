@@ -1016,6 +1016,71 @@ id=0` appears once per arrow (63 times), and
 value of that id has been observed, so nothing here binds an ammo family - it
 is the first sight of the distinction ROADMAP 4b is about, and no more.
 
+### The `Training Room Settings` panel FIELDS - read 2026-09-01, first recording
+
+Two rows in the table above record this panel's ENGINE names,
+`WBP_Level_Room_Setting` and `PracticeRoomSettingView_C`. Nothing in this
+project had ever recorded what the panel CONTAINS.
+
+**Method: rendered text read off `f0462_18.47.18`** - which is **1280x720
+JPEG**, the only copy on disk, and NOT a full-resolution frame; the panel's text
+is large enough to read at that size, and a draft of this line called it
+full-resolution without checking -
+local wall clock 18:47:18 - inside the same `1.0.14` session whose
+training-ground `LoadMap` is the 23:38:16 UTC row above, and between runs 5 and
+6 of `docs/FINDINGS.md` section 11.
+
+TRANSCRIPTION, `TRAINING ROOM SETTINGS` -> `Bot Settings`:
+
+| field | value shown | log correlate |
+|---|---|---|
+| `Weapon Archetype` | `Blackarrow` | predicts a `classId` 12 bot - positive-controlled below |
+| `Difficulty` | `Difficulty 1` | **NONE. UNMAPPED** |
+| `Equipment Rarity` | `Common Equipment` | predicts a bot with no affixes and no gems - positive-controlled below |
+
+The same panel carries an `Add Bot` button plus `Restore All Players' Status`,
+`Clear Bots`, `Stop Bot AI` and `Resume Bot AI`.
+
+**These three fields configure the TARGET, so they are parameters of every
+damage number this room has ever produced.** Section 11's ten-point curve and
+every later sweep were fired at a bot built to this configuration, and no
+document had written the configuration down.
+
+**Two of the three are positive-controlled against the log.**
+
+- `Weapon Archetype: Blackarrow` predicts a **`classId` 12** bot. Exactly one
+  non-class-10 bot exists in the whole corpus - a `classId` 12 bot spawned at
+  local 18:38:27, in this session, with 8 items at durability 1100. Every other
+  bot in every session is `classId` 10. **The consequence is a limit, not only
+  a confirmation:** section 11's runs therefore had at least two candidate
+  targets on the field and the log does not say which one was shot.
+- `Equipment Rarity: Common Equipment` predicts a bot with **zero affixes and
+  zero gems**, and every bot record in the corpus has zero of both.
+
+**`Difficulty 1` has NO log correlate.** It is recorded as UNMAPPED - an
+observation whose meaning is not yet reachable from text - and specifically not
+as a missing field or as a default. The panel names a difficulty axis the log
+does not expose, which is a different fact from the dungeon-side finding that
+the word `difficulty` occurs zero times in a dungeon log.
+
+**The panel is NOT open in any `1.0.15` frame** - a scanned negative rather than
+an absence of looking. The detector was calibrated at 303 gold pixels on the
+known-open panel against 0 on a no-panel control, and its median across the
+`1.0.15` training window is 0. So the settings above are recorded for `1.0.14`
+and are NOT known to have been re-read after the patch.
+
+**The LOG settles it exhaustively, where the frame scan could only speak for the
+355 frames it read.** The panel announces itself as
+`TS.UI: Verbose: [WindowHandle] open WBP_Level_Room_Setting`, and counted over
+all four maximal logs it opens **5 times in the 2026-08-25 session** - local
+18:38:24, 18:45:30, 18:46:52, 19:06:21, 19:29:58 - **once on 2026-08-25b** at
+23:10:01, and **zero times on `1.0.15`**.
+
+The 18:46:52 opening is why `f0462_18.47.18` carries the panel: 26 seconds
+later, still up. **Enumerate the window-open EVENT, then pull the frame** - the
+same route that found the second `Affix Details` panel in `LL-0108`, and it
+costs one grep against 18,965 frames.
+
 ## Dungeon run - 2026-08-25b, on buildid 24813185
 
 Read live off the log while the operator played, and the run is the one written
@@ -1373,6 +1438,85 @@ rendered in the Auction House header at the same wall clock, so currency `101`
 is the currency the Auction House spends - **which this project has NOT bound to
 a name.** `docs/AFFIXES.md` records `Gyldenblod` as a game noun of unstated
 kind; nothing here connects the two and no connection is asserted.
+
+
+## The `OnCustomInfoReady roleInfo` surface - read 2026-09-01, and the talent id it binds
+
+Read during the ROADMAP item 12 pass, from archived `MistfallHunter` logs
+spanning clients `1.0.14` and `1.0.15`. No pixels are involved anywhere in this
+section.
+
+### The surface itself, and why a loadout baseline no longer needs pixels
+
+`OnCustomInfoReady roleInfo` is emitted **within a second of every
+`TrainingGround` `LoadMap`**, and it carries the **full equipped set** - each
+item's `cfgId`, its slot, its affixes, its gems and its durability - **plus the
+character's talents, class, level and exp**.
+
+**This refutes the standing position that a loadout baseline can only be
+pixels.** `docs/FINDINGS.md` 13.1 measured that the `.sav` files do not carry
+equipment, concluded that equipment is server-side, and from there concluded "a
+loadout baseline can only be pixels, and the equipment screen must ride in the
+same frame stream as the damage numbers". The save measurements stand and the
+server-side conclusion stands; the LAST step does not. The log states the
+loadout in text at the exact moment the training map loads. It was already
+present in the archived logs this project had on disk, so no new capture was
+needed to find it - only a look at the right line.
+
+### Two extractor traps in that payload, both measured
+
+**The key is `gem`, SINGULAR.** An extractor looking for `gems` returns nothing
+and will wrongly report a character as gem-free.
+
+**A MISSING `slot` key means slot 0, the helm.** It does not mean an unknown
+slot and it does not mean an absent item. Proved rather than assumed: a bot
+record in the SAME log carries an explicit `"slot": 0` for the same helm
+`cfgId`. An extractor that skips slot-less entries drops the helm from every
+player loadout it reads, silently.
+
+Both traps compound the warning recorded above that `slot` is not one namespace.
+Here the danger is the opposite one - not a `slot` value read in the wrong
+context, but a `slot` key that is not there at all.
+
+### `32000` is BOUND - `Status.Talent.Scout.Bow.ContinuouseShoot_FocusPoint`
+
+**Method: a one-element set difference on BOTH sides simultaneously, with a
+count control.** The same character, in two configurations:
+
+| configuration | talent ids | talent tags |
+|---|---|---|
+| `1.0.14` session A, character level 3 | `30008`, `30009` | `DrawEnhanced`, `HomingTarget` |
+| `1.0.14` session B and `1.0.15`, character level 5 | `32000`, `30008`, `30009` | `ContinuouseShoot_FocusPoint`, `DrawEnhanced`, `HomingTarget` |
+
+Between the two configurations the id list gains exactly one member and the tag
+set gains exactly one member. The counts agree on each side - 2 ids against 2
+tags at level 3, 3 against 3 at level 5 - so neither surface is reporting a
+subset of what is allocated. Exactly one assignment survives:
+
+    32000 = Status.Talent.Scout.Bow.ContinuouseShoot_FocusPoint
+
+**Corroborated independently.** `docs/FINDINGS.md` section 14 records the
+operator spending a talent point on `Focus Fire` between those two sessions -
+an attestation written for a different purpose, before this binding existed.
+
+**Why this is NOT the pattern ledger `LL-0108` refuted.** There, a bare set
+difference over affix INSTANCES was reasoning toward publishing `212 = Wealth`:
+the counts balanced, but they balanced equally well under TWO assignments, so
+the arithmetic was satisfied while the naming stayed free. An aggregate that
+balances is not a binding. Here the residual has size ONE on the id side AND
+size ONE on the tag side of the SAME step, with the totals controlled at 2/2
+and 3/3, which leaves one assignment rather than a set of them. Had either
+side's residual held two members, this would be the refuted pattern and the id
+would stay unbound - which is exactly the state the other two are in.
+
+**`30008` and `30009` remain UNBOUND.** Two ids against two tags,
+`Status.Talent.Scout.Bow.DrawEnhanced` and
+`Status.Talent.Scout.Bow.HomingTarget` - the full literals, which are the only
+forms that occur in the logs - both
+assignments consistent with everything observed, nothing separating them. The
+recipe that would bind them is unchanged and is recorded in
+[`AFFIXES.md`](AFFIXES.md): allocate ONE talent with a full-screen capture
+running and read the node name off the frame at that wall clock.
 
 
 ## Rule

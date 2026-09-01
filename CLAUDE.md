@@ -352,3 +352,15 @@ path is to re-implement from observed behaviour.
 - **Windows `write_text` turns LF into CRLF**, and `read_text` hides it. Byte
   counts lie. The `.githooks` scripts must stay LF or Git for Windows chokes on
   a CR in the shebang.
+- **`grep -iF` CRASHES on this machine and looks exactly like "no matches".**
+  Measured 2026-09-01c on GNU grep 3.0 under Git Bash: `grep -i` matches,
+  `grep -F` matches, and combining them aborts with SIGABRT and exit 134. Piped
+  through the `2>/dev/null` that most sweeps carry, the crash is invisible and
+  the empty output reads as a clean negative. Use `-i` or `-F`, never both. This
+  is the repo's "an empty grep is a claim about your pattern" rule with the
+  pattern exonerated - here it is a claim about the TOOL.
+- **A line-oriented grep is a claim about the file's line breaks.** Prose in
+  this repo is hard-wrapped near 80 columns, so a quoted sentence routinely
+  spans two lines and a single-line pattern misses it. Two withdrawal checks in
+  one session returned false clean bills this way. Search prose with a multiline
+  matcher, or on a whitespace-collapsed copy.
