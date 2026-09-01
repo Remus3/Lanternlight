@@ -115,8 +115,15 @@ NORMALISE_ROWS = (96, 121)
 #: adversarial pass that taught the reader the separator WITHOUT widening this
 #: read a true 2,000 as a confident 2,06. Measured over the 1.0.15 capture: the
 #: full value extent across all 124 panel-up frames is x53-115, no value run
-#: ever reaches x>=193, and the hit count starts at x199, so 84 columns of
-#: guaranteed-empty gap separate the two fields. Widening cannot collide.
+#: ever reaches x>=193, and the hit count starts at x199.
+#:
+#: **"84 columns of guaranteed-empty gap, so widening cannot collide" was
+#: written here and is WITHDRAWN as over-stated.** That gap is a property of
+#: the 1.0.15 capture, not of the HUD: on the 2026-08-25 capture the leftmost
+#: lit column inside ``HITS_WINDOW`` is x193, the window's own first column.
+#: The two fields are still read through SEPARATE windows and the value window
+#: ends at 120, so they cannot collide - but the reason is the window bound,
+#: not an empty region that some other capture might fill.
 VALUE_WINDOW = (40, 120)
 HITS_WINDOW = (193, 224)
 
@@ -140,7 +147,13 @@ REJECT_DISTANCE = 0.200
 #:
 #: That is uncomfortable but it fails SAFE: a glyph that drifts past either
 #: bound is refused, not guessed. Do not widen either constant to make a frame
-#: read; re-harvest the templates instead.
+#: read.
+#:
+#: **"re-harvest the templates instead" is the general remedy and it is NOT the
+#: remedy for the 1.0.15 refusals**, where it was tried as a diagnosis and
+#: refuted: the templates' own source capture produces refusals in the same
+#: 0.122-0.165 band, and the typeface is identical across both captures. Check
+#: segmentation before suspecting the templates.
 AMBIGUITY_MARGIN = 0.030
 
 #: Narrower than this and a column run is a fragment, not a digit.
@@ -154,10 +167,21 @@ MIN_GLYPH_WIDTH = 6
 #: one run - 19 such runs in the 1.0.15 capture, 18 of them with a ``4`` on the
 #: left whose crossbar spills a column right.
 #:
-#: **The width gate is the safety property, not the valley.** Measured: a run
-#: that is definitely one glyph is 8-13px in the value field and 10-12px in the
-#: hit count, a run that is definitely two is 24-27px, and NOTHING lands in
-#: 14-23. Splitting on an interior gap alone would be unsafe - 12
+#: **The width gate is the safety property, not the valley.** On the 1.0.15
+#: capture a run that is definitely one glyph is 8-13px in the value field and
+#: 10-12px in the hit count, and a run that is definitely two is 24-27px.
+#:
+#: **"and nothing lands in 14-23" was written here and is WITHDRAWN - it was
+#: true of ONE capture and stated as though universal.** On the 6,439-frame
+#: 2026-08-25 capture, 18 runs in the value window and 309 in the hit window do
+#: land in 14-23. The gate is nevertheless sound, and the number that carries it
+#: is a different one: **the widest run that ever CLASSIFIES as a digit
+#: anywhere in that capture is 13px** - a ``4`` at x51-63 of ``p04331`` - so
+#: the gate at 18 sits 5px above the widest real glyph and splits none of them.
+#: State the criterion beside the number: 8-13 is the width of a run that IS a
+#: digit, not the width of every run that exists.
+#:
+#: Splitting on an interior gap alone would be unsafe - 12
 #: definitely-single glyphs carry an interior blank column of their own, 11 of
 #: them the digit ``0``, whose hollow centre looks exactly like a join.
 #:
