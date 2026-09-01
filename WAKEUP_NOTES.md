@@ -81,10 +81,18 @@ over one surface is not a negative over the machine.
   2/2 and 3/3 count control, corroborated by `FINDINGS` 14's record of the
   operator spending a point on `Focus Fire`. `30008` and `30009` stay unbound.
 - **`vision_meter.read_panel` fits a full-screen 2560x1440 frame unmodified** at
-  crop origin `(2058, 390)`, and **refuses every value at or above 1000** - the
-  thousands comma is a 3 px run against `MIN_GLYPH_WIDTH` 6. All 55 four-digit
-  frames refused, none misread. It fails SAFE. **Do not lower that constant**;
-  re-harvest templates instead.
+  crop origin `(2058, 390)`. **The blind-at-1000 gap is CLOSED as of
+  2026-09-01d** - it now reads **118 of the 124 panel-up frames with ZERO
+  disagreements**, up from 61, and 54 of the 55 four-digit frames. `MIN_GLYPH_WIDTH`
+  was NOT lowered; the fix was a wider `VALUE_WINDOW`, a separator rule keyed on
+  the run's first inked row, and a splitter for merged runs.
+  **The "re-harvest templates instead" advice this note used to carry is
+  WITHDRAWN** - the templates were never the problem, the templates' own source
+  capture produces refusals in the same distance band, and the typeface is
+  identical across both captures. The cause was segmentation.
+  **The 6 remaining refusals are the module WORKING and must not be chased**:
+  turning off the accept band and the ambiguity margin reads 123 of 124 and
+  gets THREE of them wrong, including `3334` for a true `1834`.
 - **`101`'s blocker is now exact.** `1430301` is at pants for the whole
   2026-08-25 session - 47 `server_EquipArmors` payload lines carry it, 46 with
   one identical array plus a helm-off variant, 18:37:18 to

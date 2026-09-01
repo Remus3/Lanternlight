@@ -826,7 +826,7 @@ direction to the escape-then-camp switch this item measured. Neither
 observation is amended; the reading that fits both is a **level transition** in
 either direction, and it is n=1 on each side. `docs/FINDINGS.md` 12.2.
 
-## 7c. Read the training ground meter without a human reading it - PARTLY DONE 2026-08-27b, extended 2026-09-01c
+## 7c. Read the training ground meter without a human reading it - ORANGE PAIR DONE 2026-09-01d, white row still open
 
 Opened 2026-08-25, straight out of the session that measured 10.35. The meter
 is the only damage surface the training ground has, and every number in
@@ -1000,6 +1000,22 @@ second cited series, `55 109 164 219 275 330 386 441 496 552`, was "not in
 `panel/`". It is there, at `p01185` to `p01224`, and the reader reproduces it
 exactly - 55, 109, 164, 219, 275, 330, 386, 496, 552, with hit 8 simply not
 captured at that cadence. Both cited series are now pinned by tests.
+
+**AND THE "hit 8 not captured" HALF OF THAT IS ITSELF NOW WITHDRAWN, measured
+2026-09-01d.** 441 IS in the capture, at `p01216_19.02.51.472.png` and
+`p01217_19.02.52.028.png`, both reading `441 / 8 Hit` and sitting exactly
+between `386 / 7` at `p01211` and `496 / 9` at `p01219`. It was never absent - the
+reader of the day REFUSED those frames, because 441's `4` and `1` merge into one
+24px column run. Widening the value window and splitting merged runs made 121
+previously-refused frames of this capture readable and 441 is one of them, so
+the second series is now pinned COMPLETE at all ten values.
+
+**What that claim was measuring, before overturning it (`LL-0100`):** that the
+reader of 2026-08-27b could not produce 441 from any frame. That was TRUE of
+that reader. The error was generalising from "the reader cannot read it" to "it
+is not in the capture" - a claim about the INSTRUMENT written down as a claim
+about the DATA. This repo's own rule arriving from a new direction: an empty
+search is a claim about the search, and a refusal is a claim about the reader.
 
 The error is worth keeping: the scratch scan sampled every THIRD frame, found a
 different run that also starts at 55 (`55 110 166 221 ...`, about 55.6 per hit),
@@ -1246,6 +1262,10 @@ disagreeing ones**, re-run by the merger over all 124 against readings taken by
 eye first. That removes the assumption that this reader only ever works on a
 purpose-built crop.
 
+**SUPERSEDED 2026-09-01d - it is now 118 of 124.** The 61 below is the state
+BEFORE the window was widened and merged runs were split. See the CLOSED section
+at the end of this item; the zero-disagreement property is unchanged.
+
 **"124 panel-up" carries a CRITERION and the criterion is the whole
 disagreement.** It means *a human could read the live row*. An automated
 detector - orange ink in the module's own row band, or header NCC - finds
@@ -1311,9 +1331,16 @@ against every one of them:
 
 61 read, 61 agreeing with the human transcription, **zero disagreements**. The
 non-four-digit refusals are all glyph-distance refusals in the `0.135-0.165`
-band against an `ACCEPT_DISTANCE` of `0.115` - the signature of templates
-harvested from a different capture, and per the module's own doctrine the answer
-is re-harvesting rather than widening a constant.
+band against an `ACCEPT_DISTANCE` of `0.115`.
+
+**SUPERSEDED 2026-09-01d, and the sentence that followed here is WITHDRAWN.** It
+read that the band is "the signature of templates harvested from a different
+capture" and that the answer is re-harvesting. The distances are right and the
+inference is wrong - the templates' OWN source capture produces refusals in the
+same band, and the typeface is identical across both captures. The real cause is
+segmentation: merged runs and two misregistered frames. Full refutation with its
+positive control is in the CLOSED section at the end of this item. This table is
+the BEFORE state; it is now 118 read and 6 refused.
 
 **A detector warning, measured twice by two independent agents.** Do not build
 panel presence out of an ink count. A grey sky scored 2,835 neutral pixels in
@@ -1321,6 +1348,171 @@ the header band of a frame with no panel on it, and a gold-title pixel count
 ranked four panel-free frames above a frame that genuinely held the panel.
 Normalised cross-correlation on the header rectangle separates cleanly. **The
 control, not the ranking, is what makes such a scan mean anything.**
+
+### CLOSED for the orange pair 2026-09-01d - 118 of 124, ZERO disagreements
+
+Ledger `LL-0112`. The blind-at-1000 gap above is closed, and the fix was three
+things together as this item demanded - but **the third one is not the third one
+this item prescribed**, and that prescription is withdrawn below.
+
+**What shipped**, all in `lanternlight/vision_meter.py`:
+
+1. **`VALUE_WINDOW` (48, 92) -> (40, 120).** Mandatory, not merely enabling. A
+   four-digit value spans x54-115, so the old window dropped the last digit and
+   clipped the third. Measured bounds: the full value extent across all 124
+   panel-up frames is x53-115, no value run ever reaches x>=193, and the hit
+   count starts at x199 - 84 columns of guaranteed-empty gap, so widening cannot
+   collide with the other field.
+2. **A thousands separator rule**, keyed on the run's FIRST INKED ROW.
+3. **A merged-run splitter**, gated on a new `MAX_GLYPH_WIDTH` of 18.
+
+Plus a **grouping check**: digits are regrouped around any separator and a
+malformed grouping REFUSES. That catches the `2,06` truncation shape directly
+rather than relying on the window being right.
+
+**RE-HARVESTING WAS THE WRONG PRESCRIPTION AND IS WITHDRAWN.** This item said
+the sub-1000 refusals were "the signature of templates harvested from a
+different capture" and that the answer was re-harvesting. The DISTANCES it cited
+reproduce exactly - 0.1352 to 0.1644. Every inference from them fails:
+
+- **Positive control:** the ORIGINAL 2026-08-25 capture, the templates' own
+  source, produces accept-band refusals in the SAME 0.122-0.165 band on the
+  same 12px and 24-27px runs. A band that appears in the templates' own source
+  capture cannot be a signature of staleness.
+- **The typeface is identical across both captures** - value width 8/10/12,
+  height 17/18/19, pitch 11/13/15, baseline rows y100-101 and y117-118; hits
+  height exactly 18 in all 332 runs in both.
+- The new capture is if anything SAFER: max distance 0.0871 against 0.0925, and
+  tightest margin 0.0638 against 0.0318.
+
+Re-harvesting would also have risked poisoning the set with dithered transition
+frames. **The real third part was segmentation, not templates.**
+
+**The merge mechanism, measured.** `_column_runs` breaks on a gap of 3 or more
+because the widest intra-glyph gap is 1px. Two digits separated by exactly ONE
+blank column give `column - previous == 2`, which does not break, so the pair
+merges - **19 such runs**, 18 of them with a `4` on the left whose crossbar
+spills a column right. The design margin is exactly one column.
+
+**The width gate is the safety property, not the valley.** Measured over the
+1.0.15 capture:
+
+| population | width |
+|---|---|
+| definitely ONE glyph, value field | 8-13 |
+| definitely ONE glyph, hit count | 10-12 |
+| definitely TWO glyphs | 24-27 |
+
+Nothing at all lands in 14-23. Splitting on an interior gap ALONE would be
+unsafe: **12 definitely-single glyphs carry an interior blank column of their
+own, 11 of them the digit `0`**, whose hollow centre looks exactly like a join.
+`MAX_GLYPH_WIDTH` of 18 is the middle of the measured gap, and both directions
+of a mis-set gate fail safe - too low splits a real glyph into halves that score
+as nothing, too high leaves a pair merged, and both end in a refusal.
+
+**The result over the 124 panel-up frames at crop origin `(2058, 390)`:**
+
+| digits | frames | read | refused |
+|---|---|---|---|
+| 1 | 20 | 17 | 3 |
+| 2 | 7 | 7 | 0 |
+| 3 | 42 | 40 | 2 |
+| 4 | 55 | **54** | 1 |
+| **all** | **124** | **118** | **6** |
+
+**ZERO disagreements**, which is the property that had to survive. Up from 61
+read at the start of the cycle.
+
+### The acceptance said "all 124" and that is NOT met - here is every frame
+
+Six refuse, each pinned BY NAME in `tests/test_vision_meter.py` so that a
+seventh refusal fails the suite and so does one of the six starting to read.
+None is a segmentation failure:
+
+| frame | true | why it refuses |
+|---|---|---|
+| `f0661` | 9 / 1 | **ZERO orange pixels anywhere in the band** |
+| `f0469` | 0 / 0 | panel sliding IN, misregistered by 2px |
+| `f0470` | 0 / 0 | same |
+| `f0527` | 261 / 6 | dithered, leading glyph 0.122 |
+| `f0537` | 618 / 13 | dithered, glyph 0.164 |
+| `f0581` | 1834 / 38 | smeared, leading glyph 0.165 |
+
+**"All 124" was never achievable.** `f0661` carries no ink at all in the row
+band - the transcription itself flags it not legible and a human read it at 8x
+magnification. No window, template or threshold can extract a digit from zero
+pixels, and the refusal it raises is the required "panel is not up" behaviour.
+
+**THE OTHER FIVE ARE THE MODULE WORKING, AND THAT IS MEASURED RATHER THAN
+ASSERTED.** It would be easy to read them as a timid threshold and widen a
+constant until 124 of 124 came back. Disabling the accept band and the ambiguity
+margin does exactly that - the reader returns **123 of 124** - and **THREE are
+WRONG**:
+
+| frame | true | read with the guards off |
+|---|---|---|
+| `f0527` | 261 | 262 |
+| `f0537` | 618 | 633 |
+| `f0581` | 1834 | **3334** |
+
+The last is wrong in its LEADING digit, a 1500-unit error that would sit
+unremarked in a damage series. On `f0581` the two candidates tie at 0.165 to
+three decimals and the true digit is neither of them. **So the count that
+matters is not how many frames read - it is that none is misread**, and a test
+now fails if a future pass widens a constant to chase the remainder.
+
+### Regression: the consumer's output was diffed, not just the edited line
+
+Both module versions were run over all **6,439** frames of the 2026-08-25
+reference capture:
+
+| outcome | frames |
+|---|---|
+| identical reading | 3,122 |
+| both refused | 3,196 |
+| NEW reads where old refused | **121** |
+| OLD read where new refuses | **0** |
+| disagreeing readings | **0** |
+
+Monotone improvement - no reading changed value and no coverage was lost. The
+121 newly-readable frames have no transcription, so they were checked for
+TEMPORAL CONSISTENCY instead, the meter being monotonic within a run: **zero**
+are inconsistent with their nearest read neighbours. One of them is 441, which
+is how the withdrawal recorded earlier in this item was found.
+
+**Guards proven non-vacuous - seven mutations, and one found a defect in the new
+tests themselves.** Deleting the separator's row rule left the suite GREEN: the
+high-fragment test painted a run 19 rows tall, so the HEIGHT check refused it
+and the row rule was never exercised. A 7-row test - a comma's exact height,
+differing only in sitting high in the band - now goes red for that mutation. The
+other six kill the height rule, the grouping rule, the split gap-count rule, the
+width gate (8 tests, including the committed fixture), the window revert, and
+swapping two VALUE template labels (**77 disagreements**, which is what proves
+the zero-disagreement test is loud rather than decorative). The module was
+restored byte-exact by sha256 after every one.
+
+### What is left on this item
+
+- **The white Progress Record row**, unchanged and still blocked exactly as
+  described above - it needs a capture with longer stable stretches per record
+  value across at least ten distinct records.
+- **A registration search, OPTIONAL and NOT done.** `f0469` and `f0470` sit 2px
+  high because the panel is still sliding in. A +2px shift scores the glyph
+  0.0601 at margin 0.0910, so a search would recover both. It was not done
+  because searching for an alignment that makes a glyph match is a different fix
+  with a different risk profile - it multiplies scoring attempts and so erodes
+  the margin guarantee - and because this item deliberately measured that
+  vertical misalignment degrades to refusal and never to error. **Acceptance if
+  a future session takes it up:** the 124-frame set still shows ZERO
+  disagreements, the 6,439-frame reference capture still shows zero changed
+  readings, and the y-offset sweep at 388-392 still shows zero disagreements at
+  every offset.
+- **A four-digit committed fixture, BLOCKED on operator approval.** The
+  `LL-0083` precedent is that capture-derived pixels enter this public repo only
+  on the operator's explicit approval. A clone can currently verify a successful
+  three-digit read but not a four-digit one, so the separator and splitter paths
+  are clone-tested only against synthesised masks. Recorded as a decision gate
+  rather than committed unasked.
 
 ## 4c. Archive the log and the market cache on every session - CLOSED 2026-08-25b, successor 4d OPEN
 
