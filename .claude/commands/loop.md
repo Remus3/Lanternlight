@@ -33,13 +33,16 @@ output to notice that it was never really exercised.
 
 ## Before the first cycle
 
-Take the single-instance lock. Two loops would interleave commits and race each
-other's ledger appends.
+Take the single-instance lock AND arm the session watcher, in one step. Two
+loops would interleave commits and race each other's ledger appends; and a
+cycle that runs without a watcher armed is how the log of 2026-08-09 was lost
+and how 2026-08-30 launched the client with nothing watching.
 
 ```python
-from ops.loop import guard, state
+from ops.loop import guard, state, watch
 
-with guard.released() as lock:
+with guard.released() as lock, watch.session_armed("C:/ll-captures") as armed:
+    print(armed)
     ...  # every cycle runs inside here
 ```
 
@@ -48,6 +51,15 @@ with guard.released() as lock:
   and neither do you.
 - A lock left by a dead pid is reclaimed automatically. That is the crash-
   recovery path, not an error.
+- **Arming is written into this block deliberately** (`4d`), because every
+  version of "remember to arm it separately" has been forgotten at least once.
+  Note the honest limit: `guard.released()` does NOT itself arm, so a cycle
+  that writes only the lock line runs unwatched. Keep both. `armed.armed` is
+  False when a watcher was already running - that is a refusal, not an error,
+  and the cycle proceeds.
+- **Never start a second watcher and never stop the one you find.**
+  `ensure_armed` refuses on its own, and nothing in this project terminates a
+  process it did not start.
 
 ## Each cycle
 

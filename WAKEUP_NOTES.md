@@ -5,6 +5,99 @@ fidelity and archive older ones rather than deleting them.
 
 ---
 
+# Wrap 2026-09-01 - item 4d CLOSED, a watcher is RUNNING, and two refutations caught a red suite and two wrong cost figures
+
+Suite **1390 passed / 1390 collected**, ruff clean, merge gate OK against
+baseline 1338. Ledger `LL-0104`. Client **closed** all session. Cycle 30.
+
+**A WATCHER IS RUNNING RIGHT NOW - do not start a second.** Pid 17568,
+`python -m lanternlight.armwatch --dest-base C:/ll-captures`, started
+2026-09-01 07:50:14 local. Its pid and dated destination are recorded in
+`ops/runtime/armwatch.json`. `ensure_armed` checks that record and refuses on
+its own, so the safe move is simply to call it and read the result - it will
+tell you a watcher is already live. **Never stop the one you find.**
+
+## What happened
+
+Item `4d` is CLOSED. Arming no longer depends on a session remembering a
+command:
+
+- `ops/loop/watch.py` arms a DETACHED watcher, records pid and dated
+  destination where a later session reads them, and **refuses to start a
+  second** when the recorded pid is alive. It has no terminate path at all.
+- `lanternlight/armwatch.py` gained `--dest-base`, which derives
+  `<base>/<local date>` every pass and **retargets at midnight** rather than
+  rebuilding, so the seen-set survives and an unchanged file is not re-copied
+  into every new day.
+- Arming is wired into `/loop`, `/continue` and `docs/HEADLESS.md` 4a, and
+  `test_every_session_entry_document_still_wires_the_arming` pins all three.
+
+**Pass the BASE, never a dated path.** `--dest-base C:/ll-captures`. Handing it
+`C:/ll-captures/<today>` is the exact defect `LL-0102` stopped a watcher over.
+
+## What the refutations changed, which is a lot
+
+Two passes, deliberately given DIFFERENT questions. Both were needed.
+
+1. **The suite was RED while the ledger entry already claimed it green.** The
+   gates were run, then the docs were written, then the entry was appended
+   citing the earlier run - and the doc prose itself broke the source-register
+   test on 8 host-shaped tokens. It then went red a SECOND time on a different
+   token after a further doc edit. **A green result expires the moment you edit
+   anything, including prose. Run the gate immediately before committing.**
+2. **The headline claim was overclaimed and is withdrawn.** "Bolted to the one
+   step a cycle cannot skip" is false - the guard's `released()` does not arm,
+   so a cycle taking only the lock still runs unwatched. The honest claim is
+   salience plus a pinning test, and that is what the documents say now.
+3. **The cost figure was wrong twice, in opposite directions.** First an
+   asymmetric ratio that understated the defect; then a denominator built by
+   filtering DIRECTORY NAMES that missed `2026-08-25/saved-root`, an older
+   hyphenated spelling. Scope is now the snapshot naming convention itself.
+4. **`/continue` armed nothing** - only the loop path had been wired.
+5. Five documents still described the old behaviour, including item `4c` two
+   hundred lines above the new text in the same file.
+
+## Traps earned this session
+
+- **A green suite expires on a prose edit.** The source-register test reads
+  `docs/**/*.md` and treats `word.word` as a hostname. Cite code as a path in
+  backticks. Four genuine repo files were added to its non-host list after
+  looking at each; six other tokens were rewritten out of the prose instead.
+- **`TMPDIR` is UNSET in this Git Bash**, so `"$TMPDIR/<name>"` expands to
+  `/<name>` = `C:/Program Files/Git/<name>`. A stray script another session had
+  left there was executed that way. Quote it or check it is set.
+- **An exact measurement of the wrong setup looks exactly like a refutation.**
+  Two of my own rollover harnesses "refuted" a design that is correct: one
+  called the entry point twice (two armings, two empty seen-sets), one clamped
+  a two-tick clock so pass one already believed it was day two. Instrument the
+  clock and know how many times it is called - one at arming, one per pass.
+- `LL-0100`'s rule held five times. Three recorded claims were nearly corrected
+  falsely - the 22-vs-19 log count (scope), the CRLF question (my grep was
+  wrong, the binary read confirmed the record), and a backup "created at
+  21:11:19" whose NTFS CreationTime is exactly that while its NAME carries the
+  source log's UTC. All three stand as written.
+
+## Disclosed, not fixed
+
+- The real detached-spawn helper has **no test** - gutting it leaves the suite
+  green. Deliberate: exercising it would leave a live poller against the
+  operator's save directory after the suite exits.
+- The no-termination guard walks the AST for call NAMES, so a kill smuggled
+  through a subprocess argument list would pass it.
+- **No watcher has been observed crossing a REAL midnight.** The rollover is
+  driven by an injected clock against real files, which is not the same thing.
+
+## Still owed, both one hover each once the client is open
+
+The **Splatter Arrow** tooltip (the camp skill grid renders ICONS ONLY), and
+**one** of `Elusive`, `Smiting` or `Curse` to settle the standing five-level
+ladder prediction. Record the result either way - a refutation is worth as
+much. `f1300` is the PREDICTOR (bar segments), not the TEST (ladder rows), so
+no frame on disk settles it. **Item 11 is NOT credited** - the four affix ids
+`101`, `209`, `212`, `214` remain unbound.
+
+---
+
 # Wrap 2026-08-31 - client closed, a log rescued, an unreachable item given an id, and a refutation that rewrote most of the session
 
 Suite **1338 passed / 1338 collected**, ruff clean, clean tree. Ledger

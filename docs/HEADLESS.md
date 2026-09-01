@@ -115,14 +115,52 @@ owning pid.
 running process is unwanted is an operator decision, and an unattended loop is
 the worst possible thing to be making it.
 
-Usage:
+Usage - the lock and the session watcher are taken together, see below:
 
 ```python
-from ops.loop import guard
+from ops.loop import guard, watch
 
-with guard.released() as lock:
+with guard.released() as lock, watch.session_armed("C:/ll-captures") as armed:
+    print(armed)
     ...  # the lock is held here and released however the block exits
 ```
+
+### 4a. Arming the session watcher - `ops/loop/watch.py`
+
+The game empties `MistfallHunter.log` on launch, and the market cache empties
+itself unobserved. A cycle that runs with nothing armed is how the 6.1 MB log
+of 2026-08-09 was lost, and 2026-08-30 launched the client with nothing
+watching. Item `4d` closed that by making arming part of the documented
+start-up step of every session-entry path.
+
+**The limit, stated because a reader who believes otherwise will not check:**
+the guard does NOT arm. Taking the lock and arming are two calls, and a cycle
+that writes only the first still runs unwatched. What is enforced is that every
+document telling a session how to start says to arm, pinned by
+`test_every_session_entry_document_still_wires_the_arming`.
+
+`ensure_armed(dest_base)` starts a DETACHED watcher, so it outlives the
+cycle that armed it, and records its pid and dated destination in
+`ops/runtime/armwatch.json` where a LATER session can read them.
+
+- No record, or a record whose pid is dead: arm, and say which of the two it
+  was.
+- A record whose pid is **alive**: **refuse.** Nothing is spawned. Two pollers
+  on the same four sources double the snapshot traffic while `OPS-14` is open.
+- `armed=False` is a refusal, not an error. The cycle proceeds.
+
+**The destination is derived per pass, never passed once.** `--dest-base` gives
+the watcher a base and it appends the LOCAL date itself, retargeting when the
+day changes, so a watcher left running past midnight starts writing into the
+new day instead of mislabelling the old one. A MISLABELLED ARCHIVE IS WORSE
+THAN AN ABSENT ONE, because it gets believed. The rollover retargets the
+running watcher rather than rebuilding it, so the set of already-captured
+generations survives midnight and an unchanged file is not re-copied every day.
+
+**This never kills anything either.** Liveness goes through the guard module's
+`pid_is_alive` helper. There
+is no stop path, by design: the watcher is meant to outlive the session, and
+deciding a running process is unwanted is an operator decision.
 
 ---
 

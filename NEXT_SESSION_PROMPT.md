@@ -36,14 +36,14 @@ A fresh clone runs zero git hooks until that first command runs. The tracked
 
 ## Where the last session left it
 
-**Suite 1338 passed / 1338 collected, ruff clean**, measured on a clean tree -
+**Suite 1390 passed / 1390 collected, ruff clean**, measured on a clean tree -
 that is your merge-gate baseline, and **re-measure it yourself before
 dispatching work** rather than trusting this line. **Use
 `python -m pytest --collect-only` WITHOUT `-q`**: `pytest.ini` addopts already
 carries `-q`, so the form printed in `CLAUDE.md` becomes `-qq` and gives
 per-file counts with no total - sum them.
 
-The ledger runs to **`LL-0103`**. Read, in this order:
+The ledger runs to **`LL-0104`**. Read, in this order:
 
 - **`LL-0100`** - it WITHDRAWS a correction that was itself wrong, about affix
   ids `101` and `209`. Its rule is the most reusable thing on file: **before
@@ -51,6 +51,11 @@ The ledger runs to **`LL-0103`**. Read, in this order:
   can be exact and still answer a different question. Two refutation passes
   CONFIRMED the wrong claim because each inherited the framing of the brief it
   was handed.
+- **`LL-0104`** - 2026-09-01, item `4d`. Two refutation passes caught a suite
+  that had gone RED on the session's own doc prose while the entry already
+  claimed it green, a withdrawn headline overclaim, and a cost figure that was
+  wrong twice in opposite directions. **A green result expires the moment you
+  edit anything, including prose.**
 - **`LL-0103`** - the wrap refutation of 2026-08-31. It found that the session
   correcting stale records had itself left both hand-off documents two sessions
   stale, a fifth stale corpus count next to the four it had just fixed, and an
@@ -66,18 +71,24 @@ The ledger runs to **`LL-0103`**. Read, in this order:
 **The client is CLOSED.** It was launched at 21:11 on 2026-08-30 and quit 21
 seconds later. Nothing has run it since.
 
-**No watcher is armed.** `lanternlight.armwatch` must be invoked by hand and was
-stopped at the end of the last session. If you intend to do anything while the
-client runs, arm it FIRST, with TODAY's date:
+**A WATCHER MAY ALREADY BE RUNNING - check, do not assume, and never start a
+second.** As of 2026-09-01 07:50:14 local one was armed as pid 17568. Item `4d`
+made arming part of starting a session, so the right move is simply:
 
 ```
-python -m lanternlight.armwatch --dest-root C:/ll-captures/<today>
+python -c "from ops.loop import watch; print(watch.ensure_armed('C:/ll-captures'))"
 ```
 
-Check first that one is not already running - match `armwatch` against
-`Get-CimInstance Win32_Process -Filter "Name like '%python%'"` - because two
-pollers on the same four sources double the snapshot traffic while `OPS-14` is
-open.
+It reads `ops/runtime/armwatch.json`, checks whether the recorded pid is still
+alive, and **refuses on its own** if one is live - two pollers on the same four
+sources double the snapshot traffic while `OPS-14` is open. A result reporting
+`armed=False` is a refusal, not an error. **Never stop the watcher you find**;
+nothing in this project terminates a process it did not start.
+
+**Pass the BASE, never a dated path.** `C:/ll-captures`, not
+`C:/ll-captures/<today>`. The watcher derives the local date itself and
+retargets at midnight; handing it a literal dated path is the exact defect
+`LL-0102` stopped a watcher over.
 
 ## Two machine-level things that were repaired, not in this repo
 
@@ -105,13 +116,13 @@ tasklist | grep -qi mistfall && echo "CLIENT OPEN" || echo "client closed"; stat
 That is Bash, not PowerShell - `grep` and `stat` do not exist in this repo's
 default shell. Run it through the Bash tool.
 
-**Then arm capture, whatever the answer. It is one command now:**
+**Then make sure capture is armed, whatever the answer. One command:**
 
 ```
-python -m lanternlight.armwatch --dest-root C:/ll-captures/<today>
+python -c "from ops.loop import watch; print(watch.ensure_armed('C:/ll-captures'))"
 ```
 
-That is ROADMAP 4c, closed last session. It arms all four surfaces at intervals
+That is ROADMAP `4c` plus `4d`, both closed. It arms all four surfaces at intervals
 argued from measured triggers, and it **refuses a destination inside a git
 working directory** rather than trusting you to remember. It watches the
 `Logs/` DIRECTORY, not the log file, which is what catches a launch's
@@ -121,12 +132,16 @@ a backup at all is **unmeasured**: one did, an entire earlier session had none.
 
 ## NEXT: it depends on whether the client is open - CHECK THAT FIRST
 
-**Client CLOSED -> item `4d`, arm the session watcher automatically.** It needs
-no client, it is fully specified, and it exists because the acceptance criterion
-was previously written inside `4c`, which the loop has already marked completed
-and therefore skips forever. `armwatch.py` has **no date logic at all** -
-`--dest-root` is required and takes a literal path - so do not go looking for
-resolution code to fix. See `ROADMAP.md` item 4d for the full acceptance.
+**Client CLOSED -> item `4d` is CLOSED, so pick the next ROADMAP item that has
+an acceptance criterion and needs no client.** Do NOT re-do `4d`: arming is
+wired into `/loop`, `/continue` and `docs/HEADLESS.md` 4a, the destination rolls
+over per pass, and `ledger LL-0104` records the evidence. If nothing
+client-free is left, say so plainly and stop rather than inventing work.
+
+Two things `4d` disclosed and did NOT fix, if you want them: the real
+detached-spawn helper has no test, and the no-termination guard matches call
+NAMES only. Neither is a defect on its own; both are written down in `LL-0104`
+because the surrounding prose reads stronger than the guards are.
 
 **Client OPEN -> item 10 below, then 11, 5 and 6.** Item **11** is IN FLIGHT and
 uncredited: four affix ids remain (`101`, `209`, `212`, `214`), and its cheapest

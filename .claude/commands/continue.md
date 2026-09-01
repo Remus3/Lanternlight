@@ -11,6 +11,30 @@ work. It does not matter. Everything you need is in files.
 **Do not ask the operator anything.** They are playing Mistfall Hunter. A
 question is a failure of this command, not a use of it.
 
+## First, arm the session watcher
+
+Before reading anything else, arm it. The game empties `MistfallHunter.log` on
+launch and the market cache empties itself unobserved, so a session that runs
+unwatched can lose a surface it will never get back - that is how the 6.1 MB
+log of 2026-08-09 went. Item `4d`.
+
+```python
+from ops.loop import watch
+
+print(watch.session_armed)  # the arming entry point
+armed = watch.ensure_armed("C:/ll-captures")
+print(armed)
+```
+
+- `armed.armed` False means one was **already running**. That is a refusal, not
+  an error - carry on. **Never start a second** and **never stop the one you
+  find**; nothing in this project terminates a process it did not start.
+- The destination is derived per pass from the local date, so pass the BASE
+  (`C:/ll-captures`) and never a dated path - a literal dated path is what made
+  an archive claim to cover a day it did not (`LL-0102`).
+- The pid and dated destination are recorded in `ops/runtime/armwatch.json`
+  for whichever session comes next.
+
 ## Session shape (default, not an escalation)
 
 Every session here is **orchestrated, multi-agent, parallel, self-adjudicating

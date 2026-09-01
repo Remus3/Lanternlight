@@ -134,7 +134,8 @@ See [ADR-004](adr/ADR-004-redaction-is-mandatory.md).
 | `lanternlight.tail` (log tail) | **done, library only** | Follows the appending log; no service and nothing bound. ROADMAP item 3 |
 | `lanternlight.damage` | **done** | The rolling damage window, accumulated and deduplicated across generations. ROADMAP item 7 |
 | `lanternlight.savewatch` | **done** | Snapshots every generation of every save; refuses a destination inside a repo working directory |
-| `lanternlight.armwatch` | **done, must be armed by hand** | Builds the four-surface session plan (`SaveGames/`, `StandaloneLevel/`, `Saved/` root, `Logs/`) and hands it to `savewatch`. `--dest-root` is required and carries **no date logic** - the caller passes a literal path. Arming is still manual; ROADMAP item 4d |
+| `lanternlight.armwatch` | **done, armed from the session start-up step** | Builds the four-surface session plan (`SaveGames/`, `StandaloneLevel/`, `Saved/` root, `Logs/`) and hands it to `savewatch`. `--dest-base` derives `<base>/<local date>` on every pass and retargets the running watchers at midnight, so an archive directory never claims to cover a day it does not; `--dest-root` still takes a literal path and exactly one of the two is required. ROADMAP item 4d, closed 2026-09-01 |
+| `ops.loop.watch` | **done** | Arms a detached session watcher and records its pid and dated destination in `ops/runtime/armwatch.json` for a later session. Refuses to start a second when one is live; has no terminate path at all. ROADMAP item 4d |
 | `emberforge` | **empty** | The combat and build math engine. **It computes nothing.** No formulas are published anywhere, so there is nothing yet to encode |
 | `tests/` | early | Every feature starts with a failing test here |
 | `tools/` | **not built** | Operator-run probes. `probe_paks.py` currently lives in `scratchpad/` and is slated to move here |
