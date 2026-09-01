@@ -59,6 +59,15 @@ Two passes, deliberately given DIFFERENT questions. Both were needed.
 
 ## Traps earned this session
 
+- **A PROCESS PROBE MATCHES ITSELF.** Any `Get-CimInstance Win32_Process`
+  filtered on `CommandLine like '*armwatch*'` sees the shell running the query,
+  so it can never report zero and always over-counts by one. It fired twice
+  this session, and the second time it looked exactly like the two-watcher
+  condition `4d` prevents - the correct-looking response was a `taskkill`.
+  Nothing was terminated; the extra "process" was the probe. Constrain the
+  process NAME (`Name like 'python*'`), not the command-line pattern - a better
+  pattern still matches the probe. `ensure_armed` is immune: it reads the
+  recorded pid and asks whether that pid is alive. Ledger `LL-0105`.
 - **A green suite expires on a prose edit.** The source-register test reads
   `docs/**/*.md` and treats `word.word` as a hostname. Cite code as a path in
   backticks. Four genuine repo files were added to its non-host list after
