@@ -39,7 +39,7 @@ said were worth as much as an overturn:**
   `classId` 10, nine items, zero affixes, zero gems, **7 items at durability
   1400 and 2 at 0** (necklace and ring carry none). 20 spawns in 1.0.14 A, 16 in
   1.0.14 B, 4 in 1.0.15. **One exception, and it is in the 10.35 session:** a
-  single `classId` **12** bot at 18:38:27, 8 items at durability 1100 - the only
+  single `classId` **12** bot at 18:38:27, 8 items at 6 x 1100 and 2 x 0 - the only
   non-class-10 bot in the corpus, so section 11 had at least two candidate
   targets and the log does not say which was shot.
 - **the safe-circle radius** `25597.265625`, re-measured rather than cited.
@@ -86,7 +86,8 @@ over one surface is not a negative over the machine.
   frames refused, none misread. It fails SAFE. **Do not lower that constant**;
   re-harvest templates instead.
 - **`101`'s blocker is now exact.** `1430301` is at pants for the whole
-  2026-08-25 session - 46 `server_EquipArmors` payload lines, 18:37:18 to
+  2026-08-25 session - 47 `server_EquipArmors` payload lines carry it, 46 with
+  one identical array plus a helm-off variant, 18:37:18 to
   20:24:31 - and that session has **zero** `Affix Details` openings, while both
   openings that exist are in a session with different pants. The two facts are
   disjoint in time, so no capture change could have bridged them.

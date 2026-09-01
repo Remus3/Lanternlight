@@ -2711,7 +2711,8 @@ field differing across the patch**.
 > an adversarial pass re-deriving the histogram without the filter.
 
 **One exception, and it lands in the worst possible session.** In the 10.35
-session only, a **classId 12 bot at 18:38:27 with 8 items at durability 1100**.
+session only, a **classId 12 bot at 18:38:27 with 8 items - 6 at durability
+1100 and 2 at 0**, the necklace and ring again.
 It is the only non-class-10 bot in the corpus. So **section 11's runs had at
 least two candidate targets and the log does not say which one was shot.** That
 does not overturn 10.35 - it means section 11's target is one hypothesis short of
