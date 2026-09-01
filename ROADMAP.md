@@ -1524,9 +1524,18 @@ restored byte-exact by sha256 after every one.
   disagreements, the 6,439-frame reference capture still shows zero changed
   readings, and the y-offset sweep at 388-392 still shows zero disagreements at
   every offset.
-- **Two DEFENCE-IN-DEPTH gaps, found by the final adversarial pass, recorded
-  rather than hot-fixed because neither has ever fired.** Both were re-measured
-  by the merger before being written down.
+- ~~**Two DEFENCE-IN-DEPTH gaps, found by the final adversarial pass, recorded
+  rather than hot-fixed because neither has ever fired.**~~ **BOTH CLOSED
+  2026-09-01e** (ledger `LL-0115`). Neither was a bug: over 6,439 frames the
+  change is 0 changed readings, 0 lost and 0 gained, and only 10 frames shifted
+  which guard refuses them. The second gap's TIDY bound turned out to be a trap
+  - tightening the separator predicate to the comma population refuses a real
+  comma at crop origin y=391 and all 54 at y=392, because the comma's geometry
+  MOVES with the crop, so `SEPARATOR_MIN_ROW` and `SEPARATOR_MAX_HEIGHT` buy
+  crop tolerance rather than discrimination and were left alone. What was
+  actually missing was a height FLOOR (`SEPARATOR_MIN_HEIGHT` = 5), the one
+  property the rule never tested. The original wording is kept below for the
+  measurements it carries.
 
   1. **A split piece is not re-checked against the width gate, and never
      recursively split.** On the 2026-08-25 capture, **9** pieces come back from

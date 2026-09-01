@@ -745,6 +745,34 @@ class TestTheThousandsSeparator:
         with pytest.raises(Unreadable, match="fragment, not a digit"):
             vision_meter._read_field(image, vision_meter.VALUE_WINDOW, "value")
 
+    def test_a_one_or_two_pixel_SPECK_low_in_the_band_is_not_a_separator(self):
+        """A height FLOOR, which the rule had no test for at all.
+
+        The rule had a height ceiling and no floor, so a 1px speck sitting low
+        in the band passed as a thousands separator. Measured across both
+        captures: 354 runs fire the predicate without being a comma, and their
+        height histogram is 1x25, 2x27, 3x290, 4x6 - against a genuine comma
+        that is never shorter than 6. A floor removes 348 of the 354 and loses
+        none of the 85 real commas.
+
+        **The bound is 5, not 6, and the difference is crop tolerance.** The
+        comma's own geometry MOVES with the crop origin: over the 55 four-digit
+        frames it is height 6-7 at y=389, 6-8 at y=390, 8-9 at y=391 and 9 at
+        y=392. A floor at the observed minimum would have zero margin. This is
+        also why ``SEPARATOR_MIN_ROW`` and ``SEPARATOR_MAX_HEIGHT`` are NOT
+        tightened to the comma population: a bound of top>=19 with height 6-8
+        and width 3-4 looks tidy and rejects a real comma at y=391 and all 54
+        at y=392, destroying the measured property that every offset in
+        388-392 yields zero disagreements. Those two constants buy tolerance,
+        not discrimination.
+        """
+        for height in (1, 2, 3):
+            image = self._frame_with_blob(row0=20, row1=20 + height - 1)
+            with pytest.raises(Unreadable, match="fragment, not a digit"):
+                vision_meter._read_field(
+                    image, vision_meter.VALUE_WINDOW, "value"
+                )
+
     def test_a_SHORT_narrow_run_HIGH_in_the_band_is_still_a_fragment(self):
         """The row rule ISOLATED, and the first version of this suite missed it.
 
@@ -869,3 +897,64 @@ class TestSplittingAMergedRun:
         )
         with pytest.raises(Unreadable, match="interior gap"):
             vision_meter._split_merged(mask, 53, 76, "value")
+
+    def test_a_piece_that_is_STILL_too_wide_after_splitting_is_refused(self):
+        """The splitter must guarantee its own postcondition.
+
+        A 24-27px run is two glyphs. A 30-57px run is something else - three
+        merged glyphs, or scene bleed welding a row together - and splitting it
+        once leaves a piece that is still far too wide to be one digit. Nine
+        such pieces exist in the 2026-08-25 capture, 22 to 54px, and all nine
+        are currently refused by the DISTANCE threshold alone, at 0.1489
+        against an accept bound of 0.115.
+
+        That is one guard where the design intends two, and the distance
+        threshold is the guard most likely to move. The splitter now refuses a
+        piece it cannot vouch for, by name.
+        """
+        mask = self._mask(set(range(50, 74)) | set(range(75, 100)))
+        with pytest.raises(Unreadable, match="still wider than"):
+            vision_meter._split_merged(mask, 50, 99, "value")
+
+    def test_a_piece_too_NARROW_after_splitting_is_refused(self):
+        """The other half of the same postcondition."""
+        mask = self._mask(set(range(50, 53)) | set(range(54, 74)))
+        with pytest.raises(Unreadable, match="narrower than"):
+            vision_meter._split_merged(mask, 50, 73, "value")
+
+    #: The nine frames of the 2026-08-25 capture that produce an over-wide
+    #: piece, found by scanning column RUNS directly. Under the full
+    #: ``read_panel`` pipeline only six reach the splitter - the other three are
+    #: refused earlier, by the no-ink check, the fragment check and the bleed
+    #: ceiling. Both counts are exact and they answer different questions, so
+    #: the criterion is published beside each rather than one being picked.
+    OVERWIDE_PIECE_FRAMES = (
+        ("p02435_19.14.09.936.png", "still wider than"),
+        ("p02722_19.16.49.669.png", "still wider than"),
+        ("p03302_19.22.12.802.png", "still wider than"),
+        ("p03758_19.26.26.506.png", "panel is not up"),
+        ("p03763_19.26.29.270.png", "fragment, not a digit"),
+        ("p03827_19.27.04.914.png", "scene is bleeding"),
+        ("p05611_19.43.48.662.png", "still wider than"),
+        ("p05718_19.44.48.996.png", "still wider than"),
+        ("p06217_19.49.29.035.png", "still wider than"),
+    )
+
+    def test_every_overwide_frame_refuses_and_names_its_reason(self):
+        """All nine refuse; six of them at the new postcondition.
+
+        Before this guard existed, the six were caught by the DISTANCE
+        threshold alone at 0.1489 against an accept bound of 0.115. They still
+        refuse either way - the point is that they now refuse for a reason the
+        module can state, behind a guard that does not move when a distance
+        constant is retuned.
+        """
+        _require_capture()
+        for name, expected in self.OVERWIDE_PIECE_FRAMES:
+            frame = PANEL / name
+            assert frame.is_file(), f"cited frame missing: {frame}"
+            with pytest.raises(Unreadable) as caught:
+                read_panel(frame)
+            assert expected in str(caught.value), (
+                f"{name}: expected {expected!r}, got {str(caught.value)!r}"
+            )
