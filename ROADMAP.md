@@ -1542,8 +1542,14 @@ have it and `CLAUDE.md`'s fresh-clone section could not make it true; this
 project shares no scheduled-task namespace with its siblings and adding one is
 an operator-level change to the machine rather than to Lanternlight; and the
 loop already has a mandatory start-up step - taking the single-instance lock -
-which is the natural place to hang an unavoidable side effect. Arming now rides
-on the step a cycle cannot skip.
+which is the natural place to hang an unavoidable side effect.
+
+**This paragraph used to end "Arming now rides on the step a cycle cannot skip",
+and that sentence is WITHDRAWN** - see the stated limit above, which withdrew it
+90 lines earlier in this same item. `released()` in `ops/loop/guard.py` does not
+arm. Caught by the wrap refutation, and it is the defect `LL-0104` itself named -
+a stale sentence surviving a few hundred lines from the correction - recurring
+inside the item that named it.
 
 ## 4b. Ammo-family and talent measurement - READY, cheap, needs the client
 
@@ -3343,7 +3349,7 @@ each is now blocked for a MEASURED reason rather than an assumed one.
 
 **The strongest binding this item has produced, because it is confirmed twice on
 two different loadouts.** The `Affix Details` screen prints one row per active
-affix with a per-slot count, and the second cfgId digit gives the slot (see
+affix with a per-slot count, and for ARMOUR the second cfgId digit gives the slot (see
 `docs/OBSERVED_IDS.md`), so a row can be attributed to a specific equipped item.
 
 **There are exactly TWO openings of that screen in the entire corpus and both
@@ -3397,7 +3403,7 @@ any tooltip.
 that removes this item's hardest constraint. Item records carry
 `"durability":<int>`; the tooltip renders it as a percentage of a per-tier
 maximum, and **that maximum is `900 + (third cfgId digit) * 100`** - measured at
-tiers 1, 2, 3, 4 and 6 as 1000, 1100, 1200, 1300 and 1500, with every tier's
+every tier 1 to 6 as 1000, 1100, 1200, 1300, 1400 and 1500, with every tier's
 largest observed value landing exactly on it.
 
 So an on-screen `97%` on a tier-3 item means a logged durability of 1164 to
