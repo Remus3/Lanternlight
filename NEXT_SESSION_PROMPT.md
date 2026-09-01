@@ -183,12 +183,22 @@ NAMES only. Neither is a defect on its own; both are written down in `LL-0104`
 because the surrounding prose reads stronger than the guards are.
 
 **Client OPEN -> item 10 below, then 11, 5 and 6.** Item **11** is IN FLIGHT and
-uncredited: four affix ids remain (`101`, `209`, `212`, `214`), and its cheapest
-route needs no deliberate action at all - **keep the `Affixes` panel OPEN while
-equipping anything**, with a FULL-SCREEN capture running. `212` is cheapest of
-all, since the operator still holds item `1230304`. **One affix per cycle**: a
-pair yields a set, not an assignment. Items **5 and 6** pair on one pass over
-the Sorcerer creation screen; 5's archive route is proven exhausted.
+uncredited: **TWO affix ids remain, `101` and `214`** - `209 = Seeker` and
+`212 = Fervor` were bound 2026-09-01 (`LL-0107`, `LL-0108`).
+
+**The best surface is the `Affix Details` screen, not a tooltip.** It prints a
+per-slot count per active affix, and the second cfgId digit is the equipment
+slot, so a row attributes to a specific equipped item. **Open it after every
+gear change.** For `101`, item `1430301` must be EQUIPPED at the pants slot when
+you do - it never was during either panel already on disk. **Capture FASTER as
+well as full-screen**: `101`'s tooltip route died to a 262 ms hover against a
+1 fps capture, which is a cadence problem, not a resolution one. `214` needs the
+Auction House filter with one affix ticked alone.
+
+Still worth doing while equipping: **keep the `Affixes` panel OPEN**. **One
+affix per cycle** - a pair yields a set, not an assignment. Items **5 and 6**
+pair on one pass over the Sorcerer creation screen; 5's archive route is proven
+exhausted.
 
 Also owed the moment the client is open, both one hover each: the **Splatter
 Arrow** tooltip (the camp skill grid renders ICONS ONLY, so no capture yields it

@@ -3330,7 +3330,7 @@ and contracting by roughly 119 GB, or was this a one-off? Answering it needs a
 directory-level scan that survives longer than a 10-minute tool timeout, which
 is an operator action rather than a session action.
 
-## 11. Bind the remaining four affix ids - READY, needs the client AND a full-screen capture
+## 11. Bind the remaining affix ids - TWO LEFT (101, 214), both now need the client
 
 Opened 2026-08-30. Ledger `LL-0085` and `LL-0086`.
 

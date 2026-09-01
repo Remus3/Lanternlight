@@ -227,6 +227,11 @@ much. `f1300` is the PREDICTOR (bar segments), not the TEST (ladder rows), so
 no frame on disk settles it. **Item 11 is NOT credited** - the four affix ids
 `101`, `209`, `212`, `214` remain unbound.
 
+> **SUPERSEDED later the same day:** `209 = Seeker` and `212 = Fervor` were
+> bound in cycles 32 and 33. **Two remain, `101` and `214`.** This entry is left
+> as the record of where cycle 31 stood; read the newest entry at the top for
+> current state.
+
 ---
 
 # Wrap 2026-08-31 - client closed, a log rescued, an unreachable item given an id, and a refutation that rewrote most of the session
