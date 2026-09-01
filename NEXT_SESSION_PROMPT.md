@@ -36,6 +36,38 @@ A fresh clone runs zero git hooks until that first command runs. The tracked
 
 ## Where the last session left it
 
+**Cycle 35 closed item `7c`'s ORANGE PAIR** (ledger `LL-0112`, corrected by
+`LL-0113`). `vision_meter` went blind at 1000 because the thousands comma is a
+3px run against `MIN_GLYPH_WIDTH` 6. It now reads **118 of the 124** panel-up
+frames of `C:/ll-captures/2026-08-30/frames` at crop origin `(2058, 390)` with
+**ZERO disagreements**, up from 61, including 54 of the 55 four-digit frames.
+`MIN_GLYPH_WIDTH` was NOT lowered.
+
+**The item's own prescribed third fix was WRONG.** It said to re-harvest
+templates. Refuted by a positive control: the templates' OWN source capture
+produces refusals in the same 0.122-0.165 band, and the typeface is identical
+across both captures. The real cause was segmentation - two digits separated by
+one blank column merge, because `_column_runs` breaks only on a gap of 3 or
+more.
+
+**Do NOT try to close the last 6 refusals.** They are pinned by name in the
+tests with a measured reason each, and five are the module WORKING: turning off
+the accept band and the ambiguity margin reads 123 of 124 and gets THREE wrong,
+including `3334` for a true `1834`. A test fails deliberately if a constant is
+widened to chase them. The sixth, `f0661`, has zero orange pixels in the band
+and can never be read.
+
+**`LL-0113` corrected `LL-0112` one commit later, and the lesson is the live
+one.** Two supporting numbers were measured on ONE capture and written as
+universal - "nothing lands in 14-23" and "84 columns of guaranteed-empty gap".
+Both are false on the older 6,439-frame capture. The acceptance figures had been
+re-measured immediately before writing, exactly as `LL-0111` demands; the
+SUPPORTING figures had not. **Re-measuring the headline number is not
+re-measuring the evidence, and a supporting number is where a scope silently
+drops. State the CRITERION beside every number.**
+
+---
+
 **Cycle 34 worked item 12 and closed its backward half as IMPOSSIBLE.** The
 item asked for the 10.35-per-hit floor to be re-measured on client `1.0.15`.
 That can never be done - 10.35 was measured at character **level 3**, the
