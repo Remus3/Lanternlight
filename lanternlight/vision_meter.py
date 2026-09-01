@@ -228,20 +228,40 @@ SEPARATOR_MIN_ROW = 12
 SEPARATOR_MAX_HEIGHT = 10
 
 #: A comma has a MINIMUM height too, and the absence of this floor was the
-#: whole looseness in the rule.
+#: whole looseness in the rule: with a ceiling and no floor, a 1px speck
+#: sitting low in the band passed as a thousands separator.
 #:
-#: With a ceiling and no floor, a 1px speck sitting low in the band passed as a
-#: thousands separator. Measured over both captures: 354 runs fire the
-#: predicate without being a comma, at heights 1x25, 2x27, 3x290 and 4x6 -
-#: against a genuine comma that is never shorter than 6. This floor removes 348
-#: of the 354 and loses none of the 85 real commas.
+#: Measured over both captures, the non-comma runs that fire the predicate have
+#: heights 1x25, 2x27, 3x290, 4x6, 6x2, 7x2, 8x2 - **354, and they are NOT
+#: confined to 1-4.** Six of them sit at 6, 7 and 8, inside the genuine comma's
+#: own range, so no floor separates the populations cleanly and this one only
+#: removes the short tail.
 #:
-#: **5 rather than 6, because the observed minimum is not a bound.** The comma
-#: reaches height 9 at one crop offset and 6 at another, so a floor set at the
-#: minimum seen would have zero margin against the next capture. Note also that
-#: no INK-COUNT floor is safe here: a genuine comma at 9 lit pixels exists in
-#: the 2026-08-25 capture against a misfire population reaching 18.
-SEPARATOR_MIN_HEIGHT = 5
+#: **The bound is the comma's worst case across the tolerance band, and the
+#: first version of it was wrong.** That version was 5, justified by a table
+#: that swept y=389 to 392 and OMITTED y=388 - the single offset in the
+#: module's own advertised 388-392 band where the comma is shortest:
+#:
+#: | crop y | genuine comma height |
+#: |---|---|
+#: | 388 | **4** in 45 frames, 5 in 10 |
+#: | 389 | 6 in 54, 7 in 1 |
+#: | 390 | 6 in 1, 7 in 53, 8 in 1 |
+#: | 391 | 8 in 54, 9 in 1 |
+#: | 392 | 9 in 54 |
+#:
+#: So a floor of 5 refused 45 real commas at y=388 and 6 would have refused all
+#: 55. 4 is the largest floor that never refuses a genuine comma at any offset
+#: this module claims to tolerate, and it still removes 342 of the 354.
+#:
+#: **Margin is the wrong frame for this constant, which is why the first
+#: version reasoned itself into a worse answer.** Both directions fail safe -
+#: too high refuses a real comma, too low admits a misfire that ``_regroup``
+#: then rejects - so the rule is not "leave margin", it is "never refuse
+#: measured data". Note also that no INK-COUNT floor is safe at all: a genuine
+#: comma at 9 lit pixels exists in the 2026-08-25 capture against a misfire
+#: population reaching 18.
+SEPARATOR_MIN_HEIGHT = 4
 
 
 class Unreadable(Exception):
@@ -452,9 +472,16 @@ def _split_merged(mask, x0: int, x1: int, field: str) -> list[tuple[int, int]]:
     # for a run that is two glyphs; a 30-57px run is three merged glyphs or
     # scene bleed welding the row together, and one split leaves a piece still
     # far too wide to be a digit. Nine such pieces exist in the 2026-08-25
-    # capture, 22 to 54px, and before this check all nine were caught by the
-    # DISTANCE threshold alone - one guard where the design intends two, and the
-    # distance threshold is the guard most likely to move.
+    # capture, 22 to 54px.
+    #
+    # "All nine were caught by the DISTANCE threshold alone" was written here
+    # and is WITHDRAWN - it was never true. Under the full pipeline three of the
+    # nine never reach the classifier at all (no ink, a 5px fragment, and the
+    # bleed ceiling at 939 lit pixels), a fourth refuses at REJECT_DISTANCE
+    # rather than in the accept band, and for four more the accept-band refusal
+    # fires on the SIBLING piece. Six reach this postcondition. The point stands
+    # on the six: a distance threshold is the guard most likely to be retuned,
+    # and a splitter that cannot vouch for its own output should say so.
     for a, b in pieces:
         width = b - a + 1
         if width < MIN_GLYPH_WIDTH:

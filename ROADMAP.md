@@ -1537,8 +1537,11 @@ restored byte-exact by sha256 after every one.
   property the rule never tested. The original wording is kept below for the
   measurements it carries.
 
-  1. **A split piece is not re-checked against the width gate, and never
-     recursively split.** On the 2026-08-25 capture, **9** pieces come back from
+  1. ~~**A split piece is not re-checked against the width gate, and never
+     recursively split.**~~ CLOSED - and its "all nine were caught by the
+     DISTANCE threshold alone" is WITHDRAWN: three of the nine never reach the
+     classifier and a fourth refuses at the reject bound, so six were relying
+     on the distance threshold, not nine. On the 2026-08-25 capture, **9** pieces come back from
      `_split_merged` still wider than `MAX_GLYPH_WIDTH`. Nothing catches that;
      only the distance thresholds stand behind it, and they do hold - the
      closest template distance among those 9 is **0.1489** against an
@@ -1546,7 +1549,12 @@ restored byte-exact by sha256 after every one.
      splitter re-checks its pieces and refuses a still-over-wide one by name, or
      a test pins that those 9 refuse for the reason claimed - and the
      6,439-frame consumer diff still shows zero changed readings.
-  2. **`_is_separator` is looser than the comma population it documents.** The
+  2. ~~**`_is_separator` is looser than the comma population it documents.**~~
+     CLOSED - and this sub-item's "**None ever reached a number**" is FALSE and
+     withdrawn: 30 of those 384 firings are the genuine comma in a frame that
+     reads a four-digit value, which only became possible when the value window
+     was widened. Only 3 frames in 6,439 ever had `_regroup` as their sole
+     guard, and in all three the field held separators and no digits at all. The
      docstring describes a comma at width 3-4 and first inked row 19-20. The
      predicate accepts ANY sub-6px run with first row >= 12 and height <= 10, and
      on the 2026-08-25 capture it fires **384** times - at widths 1, 2, 3, 4 and
