@@ -84,6 +84,21 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0105 - 2026-09-01 - A process probe matched ITSELF and reported two watchers where one exists - the same self-match trap twice in one session, and the second time it nearly caused a wrong termination
+
+**Evidence:**
+- Get-CimInstance Win32_Process matched on CommandLine like '*lanternlight.armwatch*' -> 2 processes: pid 17568 and the probing pwsh itself
+- the same query re-run with Name like 'python*' added -> 1 process, pid 17568
+- that pid equals the one in ops/runtime/armwatch.json, so the record and reality agree
+- the probing shell's own command line contains the search string, because the pattern is an argument to the command doing the searching
+- post-push state re-verified: main e23f9fd matches origin/main, tree clean, loop state cycle 31 item 7 with 4d credited and 11 NOT credited
+
+AN EMPTY GREP IS A CLAIM ABOUT YOUR PATTERN - AND SO IS A PROCESS PROBE. This repo already carried the rule for greps and for a NON-empty grep over log ids. This is the same defect against the PROCESS TABLE: any query that passes its pattern on a command line is visible to itself, so it can never report zero and will always over-count by one. It fired TWICE in this session - once on the opening 'is the client running' check, where it was caught immediately, and once at the wrap, where it looked like the second-watcher condition item 4d exists to prevent.
+THE SECOND TIME IT NEARLY CAUSED A DESTRUCTIVE ACTION. The wrap read '2 armwatch processes' and the correct-looking response was to end the unrecorded one with taskkill. Investigating first showed the extra process was the probing shell. Nothing was terminated. THE RULE THAT SAVED IT is the same one that governs claims: measure what you think you are measuring BEFORE acting on it, and a probe that can see itself is not measuring the population you asked about.
+THE FIX IS TO CONSTRAIN THE PROCESS NAME, not to refine the command-line pattern: match Name like 'python*' AND the command line, or exclude the current process id. A better pattern still matches the probe; a name filter cannot.
+WHY THIS IS NOT A DEFECT IN 4d's REFUSAL: ensure_armed does not scan the process table at all. It reads the recorded pid and asks whether that pid is alive, which is immune to this entirely. The over-count existed only in the human-facing verification, which is exactly where a wrong reading turns into a wrong action.
+NOTHING WAS KILLED AND NOTHING NEEDED TO BE. Exactly one watcher runs, pid 17568, archiving into C:/ll-captures/2026-09-01, and it is the pid the record names.
+
 ### LL-0104 - 2026-09-01 - Item 4d CLOSED - arming is wired into every session-entry document and pinned by a test, the dated destination rolls over without re-copying, and two refutation passes caught a RED suite and two wrong cost figures that this entry had already published
 
 **Evidence:**
