@@ -750,19 +750,22 @@ class TestTheThousandsSeparator:
 
         The rule had a height ceiling and no floor, so a 1px speck sitting low
         in the band passed as a thousands separator. Measured across both
-        captures: 354 runs fire the predicate without being a comma, and their
-        height histogram is 1x25, 2x27, 3x290, 4x6 - against a genuine comma
-        that is never shorter than 6. A floor removes 348 of the 354 and loses
-        none of the 85 real commas.
+        captures, 354 runs fire the predicate without being a comma, at heights
+        1x25, 2x27, 3x290, 4x6, 6x2, 7x2, 8x2. **Six of them sit INSIDE the
+        genuine comma's range**, so no floor separates the populations cleanly;
+        this one removes the short tail, 342 of the 354.
 
-        **The bound is 5, not 6, and the difference is crop tolerance.** The
-        comma's own geometry MOVES with the crop origin: over the 55 four-digit
-        frames it is height 6-7 at y=389, 6-8 at y=390, 8-9 at y=391 and 9 at
-        y=392. A floor at the observed minimum would have zero margin. This is
-        also why ``SEPARATOR_MIN_ROW`` and ``SEPARATOR_MAX_HEIGHT`` are NOT
-        tightened to the comma population: a bound of top>=19 with height 6-8
-        and width 3-4 looks tidy and rejects a real comma at y=391 and all 54
-        at y=392, destroying the measured property that every offset in
+        **The bound is 4, and the first version of it was 5 on a table that
+        omitted an offset.** That table swept y=389 to 392 and left out y=388,
+        the one offset in this module's own advertised tolerance band where the
+        comma is shortest - height 4 in 45 of the 55 four-digit frames. A floor
+        of 5 therefore refused 45 real commas there and 6 would have refused all
+        55. See ``SEPARATOR_MIN_HEIGHT`` for the full per-offset table.
+
+        This is also why ``SEPARATOR_MIN_ROW`` and ``SEPARATOR_MAX_HEIGHT`` are
+        NOT tightened to the comma population: a bound of top>=19 with height
+        6-8 and width 3-4 looks tidy and rejects a real comma at y=391 and all
+        54 at y=392, destroying the measured property that every offset in
         388-392 yields zero disagreements. Those two constants buy tolerance,
         not discrimination.
         """
@@ -772,6 +775,31 @@ class TestTheThousandsSeparator:
                 vision_meter._read_field(
                     image, vision_meter.VALUE_WINDOW, "value"
                 )
+
+    def test_the_floor_accepts_the_comma_at_its_SHORTEST_measured_offset(self):
+        """The floor is pinned from ABOVE by the comma's own worst case.
+
+        ``LL-0116``. The first version of this floor was 5, justified by a
+        geometry table that swept y=389 to 392 and OMITTED y=388 - the one
+        offset in the module's own advertised 388-392 tolerance band where the
+        comma is shortest. At y=388 it is height 4 in 45 of the 55 four-digit
+        frames and height 5 in the other 10, so a floor of 5 refused 45 real
+        commas and a floor of 6 would refuse all 55.
+
+        Measured minimum across the whole band is 4, so the floor is 4: the
+        largest value that never refuses a genuine comma at any offset the
+        module claims to tolerate.
+        """
+        top = 22  # the comma's first inked row at y=388
+        for height in (4, 5):
+            mask = [
+                [top <= y <= top + height - 1 for _ in range(240)]
+                for y in range(27)
+            ]
+            assert vision_meter._is_separator(mask, 68, 70), (
+                f"a genuine comma of height {height} at row {top} - its measured "
+                "geometry at crop offset y=388 - was refused by the floor"
+            )
 
     def test_a_SHORT_narrow_run_HIGH_in_the_band_is_still_a_fragment(self):
         """The row rule ISOLATED, and the first version of this suite missed it.
@@ -904,9 +932,10 @@ class TestSplittingAMergedRun:
         A 24-27px run is two glyphs. A 30-57px run is something else - three
         merged glyphs, or scene bleed welding a row together - and splitting it
         once leaves a piece that is still far too wide to be one digit. Nine
-        such pieces exist in the 2026-08-25 capture, 22 to 54px, and all nine
-        are currently refused by the DISTANCE threshold alone, at 0.1489
-        against an accept bound of 0.115.
+        such pieces exist in the 2026-08-25 capture, 22 to 54px. Six reach this
+        postcondition; the other three refuse earlier, on no ink, a 5px
+        fragment and the bleed ceiling. Before this check the six were left to
+        the DISTANCE threshold, the guard most likely to be retuned.
 
         That is one guard where the design intends two, and the distance
         threshold is the guard most likely to move. The splitter now refuses a
