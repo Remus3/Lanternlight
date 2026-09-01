@@ -1278,6 +1278,18 @@ observation, nothing more.
 
 ### The numeric affix namespace
 
+**`209 = Seeker` was bound 2026-09-01 by a method that is not the wall-clock
+join** and is worth knowing about before reading the table below. Item records
+carry `"durability":<int>` and the tooltip renders it as a percentage of
+`900 + (third cfgId digit) * 100`, so a frame can be matched to a log record by
+durability with no wall-clock coincidence at all. The binding itself rests on
+elimination - the frame shows a `Rare Bow and Arrow` carrying `Seeker`, the
+log's affixed weapons are `3030403` (209), `3030404` (211) and `3060404` (211),
+and `211 = Ranged` is confirmed, so only `3030403` is left - with durability
+(97% on screen against 1166/1200 = 97.17% logged) as corroboration. Frame
+`s01223_19.54.36`, `25/scene`, 1280x720. See `ROADMAP.md` item 11 and ledger
+`LL-0107`.
+
 Seven ids observed across two surfaces and three logs. Full derivation, counts
 and per-log breakdown are in [`AFFIXES.md`](AFFIXES.md); recorded here because
 this file is the authority for engine ids.
@@ -1287,7 +1299,7 @@ this file is the authority for engine ids.
 | 101 | UNBOUND | `affixes[].cfgId` | - |
 | 201 | **`Valor`** | `affixIds[]` | pixel-joined, 2026-08-30 |
 | 208 | **`Fervid`** | `affixIds[]`, `affixes[].cfgId` | pixel-joined by set difference, 2026-08-30 |
-| 209 | UNBOUND | `affixes[].cfgId` | - |
+| 209 | **`Seeker`** | `affixes[].cfgId` | durability-joined by elimination, 2026-09-01 |
 | 211 | **`Ranged`** | `affixIds[]`, `affixes[].cfgId` | pixel-joined, 2026-08-30 |
 | 212 | UNBOUND | `affixIds[]`, `affixes[].cfgId` | - |
 | 214 | UNBOUND | `affixIds[]` | - |

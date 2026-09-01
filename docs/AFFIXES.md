@@ -1136,8 +1136,22 @@ full-scene capture. All four were opened and read:
 | 209 | 3030403 | 22:26:40 | `25b/talents` 2560x1440 | a context menu and an inventory-full toast, **no tooltip** |
 
 **So the conclusion holds and the reason is different from the one published.**
-`101` and `209` are not lost to a cropped capture - they are lost because **no
-usable tooltip was on screen** at any instant a full-scene capture was running.
+`101` and `209` are not lost to a cropped capture - at the four tooltip-EVENT
+timestamps above, no usable tooltip was on screen.
+
+**THE GENERALISATION OF THAT SENTENCE IS REFUTED, 2026-09-01, and `209` IS NOW
+BOUND.** The sentence used to end "at any instant a full-scene capture was
+running", and that is false. A usable tooltip for item `3030403` is on screen in
+frame `s01223_19.54.36` - **one second after** the 19:54:35 event this table
+checked, and 33 seconds after the 19:54:03 event for that same item. The narrow
+claim about the four event timestamps survives; the sweep's conclusion about all
+instants does not.
+
+**Why the sweep could not have found it by looking harder.** It selected frames
+at the timestamps of `cfgid ==` log events. A tooltip is rendered when the
+player HOVERS, and the log line fires on its own schedule, so frame-selection by
+event time looks in the wrong second. The fix is not a wider window - it is a
+different join key, and durability is one. See `209 = Seeker` below.
 
 **`212` and `214` fail for the originally stated reason, which does survive.**
 Their four trade-filter requests land at 22:43:54 to 22:44:11 local, between the
@@ -1721,8 +1735,24 @@ item type - one character owning one instance of each type produces exactly that
 pattern whether the affix is fixed or rolled.
 
 **The honest limit of the refutation:** the two bows are matched by display NAME
-and base stats, not by `cfgId`, and two different cfgIds could share a name. The
-log carries no `exEquip` for either, so this cannot be closed from disk.
+and base stats, not by `cfgId`, and two different cfgIds could share a name.
+
+**THAT LIMIT WAS THE ANSWER, AND THIS REFUTATION IS ITSELF WITHDRAWN,
+2026-09-01.** They ARE two different cfgIds sharing a name. The log records both
+held at once, in adjacent slots, with distinct 19-digit instance ids:
+`3030403` carries affix `(209, 1, true)` and rendered `Seeker`; `3030404`
+carries `(211, 1, true)` and rendered `Ranged`. Both display as `Oil-soaked
+Wooden Bow`, `Rare Bow and Arrow`, `23 Attack`, `+2.00% Physical Damage`.
+
+**So the type-to-affix mapping SURVIVES** and the "two instances of one type
+disagree" evidence never existed. What the episode does establish is narrower
+and still useful: **an item's display NAME does not identify its type.** Two
+cfgIds share this one, so any binding matched on a rendered name rather than a
+`cfgId` is unsafe.
+
+The sentence "the log carries no `exEquip` for either" was also simply wrong -
+the log carries `exEquip` for both, and it is the reason the two are now
+separable.
 
 ### The affix delivery routes are THREE, not two
 

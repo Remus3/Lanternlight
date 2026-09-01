@@ -3334,9 +3334,65 @@ is an operator action rather than a session action.
 
 Opened 2026-08-30. Ledger `LL-0085` and `LL-0086`.
 
-**Three are already bound** - `201 = Valor`, `208 = Fervid`, `211 = Ranged` -
-by the wall-clock join, from log and frames that were both already on disk.
-Four remain: **`101`, `209`, `212`, `214`**.
+**Four are already bound** - `201 = Valor`, `208 = Fervid`, `211 = Ranged` by
+the wall-clock join, and **`209 = Seeker`** added 2026-09-01 by a DIFFERENT
+method described below. **Three remain: `101`, `212`, `214`.**
+
+### THE DURABILITY JOIN - added 2026-09-01, ledger `LL-0107`
+
+**A frame can be joined to the log by DURABILITY instead of by wall clock**, and
+that removes this item's hardest constraint. Item records carry
+`"durability":<int>`; the tooltip renders it as a percentage of a per-tier
+maximum, and **that maximum is `900 + (third cfgId digit) * 100`** - measured at
+tiers 1, 2, 3, 4 and 6 as 1000, 1100, 1200, 1300 and 1500, with every tier's
+largest observed value landing exactly on it.
+
+So an on-screen `97%` on a tier-3 item means a logged durability of 1164 to
+1175, which picks one record out of the corpus without needing the frame and the
+log line to coincide in time.
+
+**`209 = Seeker` was bound this way, and the argument does not even need the
+durability** - that only corroborates it:
+
+- The frame `s01223_19.54.36` (`25/scene`, 1280x720) shows an **Equipped**
+  `Oil-soaked Wooden Bow`, `Rare Bow and Arrow`, carrying **`Seeker` Lv.1** at
+  **97%** durability, in the item-borne affix position with no gem slot.
+- The log's affixed WEAPONS are `3030403` (affix 209), `3030404` (affix 211) and
+  `3060404` (affix 211). **`211 = Ranged` is confirmed three independent ways**
+  and the frame does not show `Ranged`, so the item is neither of those two.
+- `3030403` is the only affixed weapon left, so its affix `209` is `Seeker`.
+- **Corroboration:** `3030403` is logged at 1166/1200 = 97.17%, which is what
+  renders as `97%`, and it is the ONLY weapon-range record that would.
+
+**The limit, stated:** this assumes the bow on screen is one of the eight
+affixed `cfgId`s the log records. A ninth affixed weapon never logged would
+break it. The durability record is also 77 minutes older than the frame, so it
+holds only if the bow was not used in between - which the `97%` reading is
+itself evidence for, and which is why the elimination argument is the primary
+one and durability the corroboration.
+
+**The recipe for the two ids this could still reach**, from the same table:
+`101` sits on item `1430301` at 98% and 100%, and `212` on `1230304` at 94%,
+98% and 100%. **Prefer a distinctive percentage** - 97% picked out one weapon,
+whereas 100% is shared by many items and 98% is shared by `1430301` and
+`1230304` both. `214` has no durability record at all and is unreachable this
+way.
+
+### Why the wall-clock sweep missed this, and it is NOT the sweep being careless
+
+The recorded conclusion was that `101` and `209` "are lost because **no usable
+tooltip was on screen** at any instant a full-scene capture was running". **The
+narrow half of that survives and the generalisation does not.** The sweep
+selected frames at the four tooltip-EVENT timestamps and correctly found no
+usable tooltip at any of them. But the tooltip for `3030403` was on screen at
+`19:54:36` - **one second after** the 19:54:35 event the sweep checked, and 33
+seconds after the 19:54:03 event for that same item.
+
+**A tooltip is rendered when the player hovers, and the `cfgid ==` line fires on
+its own schedule.** Selecting frames by the log event's timestamp therefore
+looks in the wrong second. That is `LL-0100`'s rule turned on the sweep itself:
+the measurement was exact and answered a different question from the one that
+mattered.
 
 **They are not blocked on the game. They are blocked on the CAPTURE**, and that
 distinction is the whole item. Every one of the four failed for a reason that a
@@ -3529,7 +3585,7 @@ The 2026-08-09 character is Level 2 with every page-two cluster gated at Lv. 6
 or above, and all 16 tooltips render anyway. The level-5 capture yields no
 page-two text not because locked nodes are mute but because nobody hovered them.
 
-## 14. The item-borne affix is NOT known to travel with the item type - OPEN
+## 14. CLOSED 2026-09-01 - the premise is REFUTED, the two bows are two TYPES
 
 Opened 2026-08-30d. Ledger `LL-0096`, which withdraws the claim that it does.
 
@@ -3547,11 +3603,43 @@ two models and the UI says they differ.
 not by `cfgId`, and two cfgIds could share a name. The log carries no `exEquip`
 for either, so this cannot be closed from disk.
 
-**Acceptance:** two instances of one item type, both with their `cfgId` visible
-in the log AND their affix visible on screen at the same wall clock. If their
-affixes differ, the roll is per-instance and `fixed:true` means something else -
-which is itself worth knowing, because Emberforge would otherwise treat an
-item's affix as derivable from its type.
+**Acceptance, as written:** two instances of one item type, both with their
+`cfgId` visible in the log AND their affix visible on screen at the same wall
+clock. If their affixes differ, the roll is per-instance and `fixed:true` means
+something else.
+
+### CLOSED 2026-09-01 - and not by meeting that acceptance, but by refuting the premise
+
+**The two bows were never two instances of one type. They are two different
+`cfgId`s that share a display name and base stats**, held simultaneously in
+adjacent slots with distinct 19-digit instance ids:
+
+| cfgId | slot | affix triple | durability seen | on-screen affix |
+|---|---|---|---|---|
+| `3030403` | 10 | `(209, 1, true)` | 1166/1200 = 97.17%, 1027 = 85.58% | `Seeker` |
+| `3030404` | 11 | `(211, 1, true)` | 1137/1200 = 94.75%, 1200 = 100% | `Ranged` |
+
+Both render as `Oil-soaked Wooden Bow`, `Rare Bow and Arrow`, `23 Attack`,
+`+2.00% Physical Damage`. **`LL-0096`'s own "honest limit" turns out to be
+exactly what happened** - it warned that "two different cfgIds could share a
+name", and they do.
+
+**So the withdrawal in `LL-0096` is itself withdrawn, and the type-to-affix
+mapping SURVIVES.** Every one of the eight affixed cfgIds still maps to exactly
+one affix triple, and no observation contradicts it. Emberforge may treat an
+item's affix as derivable from its `cfgId` - though NOT from its display name,
+which is the trap this item existed to find.
+
+**What is still NOT established, stated so nobody reads more into this than it
+carries:** nothing here shows that two items sharing a `cfgId` must share an
+affix. No such pair exists on disk. What is refuted is the specific evidence
+that was offered against the type-level model, not the general possibility.
+
+**How it was resolved, and the method is the reusable part - see item 11.** Not
+by the wall-clock join the acceptance asks for. The item records in the log
+carry `"durability":<int>`, and the tooltip renders that as a percentage of a
+per-tier maximum, so **durability is a join key that needs no wall-clock
+coincidence at all**.
 
 ## Ordering note
 
