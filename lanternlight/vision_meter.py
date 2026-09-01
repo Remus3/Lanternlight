@@ -216,8 +216,32 @@ MAX_GLYPH_WIDTH = 18
 #: ``row_max`` is deliberately not a criterion: the comma is CLIPPED by
 #: ``TOTAL_BAND``, whose last row is 26, so its bottom edge is a property of
 #: the crop rather than of the glyph.
+#:
+#: **These two bound CROP TOLERANCE, not the comma, and must not be tightened
+#: to the comma population.** The comma's own geometry moves with the crop
+#: origin - over the 55 four-digit frames it is height 6-7 at y=389, 6-8 at
+#: y=390, 8-9 at y=391 and 9 at y=392, with the first inked row sliding 18-21.
+#: A tidy-looking bound of ``top >= 19`` with height 6-8 and width 3-4 rejects
+#: a real comma at y=391 and ALL 54 at y=392, which would destroy the measured
+#: property that every offset in 388-392 yields zero disagreements.
 SEPARATOR_MIN_ROW = 12
 SEPARATOR_MAX_HEIGHT = 10
+
+#: A comma has a MINIMUM height too, and the absence of this floor was the
+#: whole looseness in the rule.
+#:
+#: With a ceiling and no floor, a 1px speck sitting low in the band passed as a
+#: thousands separator. Measured over both captures: 354 runs fire the
+#: predicate without being a comma, at heights 1x25, 2x27, 3x290 and 4x6 -
+#: against a genuine comma that is never shorter than 6. This floor removes 348
+#: of the 354 and loses none of the 85 real commas.
+#:
+#: **5 rather than 6, because the observed minimum is not a bound.** The comma
+#: reaches height 9 at one crop offset and 6 at another, so a floor set at the
+#: minimum seen would have zero margin against the next capture. Note also that
+#: no INK-COUNT floor is safe here: a genuine comma at 9 lit pixels exists in
+#: the 2026-08-25 capture against a misfire population reaching 18.
+SEPARATOR_MIN_HEIGHT = 5
 
 
 class Unreadable(Exception):
@@ -390,7 +414,8 @@ def _is_separator(mask, x0: int, x1: int) -> bool:
     top, bottom = min(rows), max(rows)
     if top < SEPARATOR_MIN_ROW:
         return False
-    return bottom - top + 1 <= SEPARATOR_MAX_HEIGHT
+    height = bottom - top + 1
+    return SEPARATOR_MIN_HEIGHT <= height <= SEPARATOR_MAX_HEIGHT
 
 
 def _split_merged(mask, x0: int, x1: int, field: str) -> list[tuple[int, int]]:
@@ -421,7 +446,29 @@ def _split_merged(mask, x0: int, x1: int, field: str) -> list[tuple[int, int]]:
             "is no defensible place to split it"
         )
     gap_start, gap_end = gaps[0]
-    return [(x0, x0 + gap_start - 1), (x0 + gap_end + 1, x1)]
+    pieces = [(x0, x0 + gap_start - 1), (x0 + gap_end + 1, x1)]
+
+    # The splitter owns its own postcondition. Splitting ONCE is only defensible
+    # for a run that is two glyphs; a 30-57px run is three merged glyphs or
+    # scene bleed welding the row together, and one split leaves a piece still
+    # far too wide to be a digit. Nine such pieces exist in the 2026-08-25
+    # capture, 22 to 54px, and before this check all nine were caught by the
+    # DISTANCE threshold alone - one guard where the design intends two, and the
+    # distance threshold is the guard most likely to move.
+    for a, b in pieces:
+        width = b - a + 1
+        if width < MIN_GLYPH_WIDTH:
+            raise Unreadable(
+                f"{field}: splitting x{x0}-{x1} left a {width}px piece at "
+                f"x{a}-{b}, narrower than {MIN_GLYPH_WIDTH}"
+            )
+        if width > MAX_GLYPH_WIDTH:
+            raise Unreadable(
+                f"{field}: splitting x{x0}-{x1} left a {width}px piece at "
+                f"x{a}-{b}, still wider than {MAX_GLYPH_WIDTH} - it is not two "
+                "glyphs and there is no defensible second split"
+            )
+    return pieces
 
 
 def _regroup(tokens: list[str | None], field: str) -> str:
@@ -489,11 +536,6 @@ def _read_field(image, window: tuple[int, int], field: str) -> int:
             else _split_merged(mask, x0, x1, field)
         )
         for a, b in pieces:
-            if b - a + 1 < MIN_GLYPH_WIDTH:
-                raise Unreadable(
-                    f"{field}: splitting x{x0}-{x1} left a {b - a + 1}px piece "
-                    f"at x{a}-{b}, narrower than {MIN_GLYPH_WIDTH}"
-                )
             digit = _classify(_normalise(image, a, b), field, f"x{a}-{b}")
             if digit is None:
                 raise Unreadable(f"{field}: run x{a}-{b} matched no digit")
