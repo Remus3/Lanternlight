@@ -143,11 +143,24 @@ across 353 saves plus 10 events on a third, lowercase-`nameid` log surface found
 later. Route 2 needs a SECOND distinct `SkillNameId`; the corpus holds exactly
 one, `6130017`, in 139 save generations. Both routes now need fresh gameplay.
 
-**Next client-free candidate: item `14`** - two instances of one item type with
-their `cfgId` in the log AND their affix on screen at the same wall clock. That
-is the frame-to-log join this project is already good at, against 19,000 frames
-and 25 logs already on disk. Item `12` is the other candidate: re-measure the
-10.35-per-hit floor on client `1.0.15` and say whether it moved.
+**Item `14` is CLOSED** (`LL-0107`) - its premise was refuted. The two bows were
+two different cfgIds sharing a display NAME, so the type-to-affix mapping
+survives and a rendered name must never be used to identify a type.
+
+**Next: item `11`, and it now has a CLIENT-FREE route.** `209 = Seeker` is
+bound; `101`, `212`, `214` remain. Use the **durability join**: item records
+carry a durability integer, the tooltip renders it as a percentage of
+`900 + (third cfgId digit) * 100`, so a frame matches a log record with NO
+wall-clock coincidence. `101` sits on `1430301` at 98% and 100%; `212` on
+`1230304` at 94%, 98%, 100%. Prefer a DISTINCTIVE percentage - 100 is shared by
+many items and 98 by those two. `214` has no durability record and is
+unreachable this way.
+
+**Index every frame-naming convention before filtering** - there are at least
+three (`f0000_HH.MM.SS`, `p00000_HH.MM.SS.mmm`, `s00000_HH.MM.SS` with a jpg
+extension), and missing the third is what hid the deciding frame for a whole
+pass. Item `12` remains the other candidate: re-measure the 10.35-per-hit floor
+on client `1.0.15` and say whether it moved.
 
 **One surface is left unexplored and its direction is UNSETTLED** - the 10
 verbose `nameid` events in `7`. Do not resolve the direction by adjacency; both
