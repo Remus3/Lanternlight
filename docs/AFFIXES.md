@@ -1004,8 +1004,11 @@ argument above needs none of it.
 
 ### What is NOT bound
 
-Four of the seven known numeric affix ids remain unbound: **101, 209, 212,
-214**. Nothing here guesses them.
+**TWO of the seven known numeric affix ids remain unbound: `101` and `214`**,
+updated 2026-09-01. `209 = Seeker` and `212 = Fervor` were bound that day - see
+the `Affix Details` section above and ledger `LL-0107` and `LL-0108`. Nothing
+here guesses the remaining two, and each now has a measured blocker rather than
+an assumed one.
 
 **`GA_Affix_RangeEnhanced_1_C` is still NOT bound to `211`**, even though `211`
 is now known to be `Ranged`. The gameplay-ability class names and the numeric
@@ -2168,11 +2171,12 @@ recorded fact is better than any measurement this project runs.
 **Rewritten 2026-08-30 after the binding pass.** Items 3 and 5 of the previous
 list are wholly or partly answered and are marked so rather than deleted.
 
-1. **The four unbound affix ids**, per the recipe in the section above. `212` is
-   the cheapest - the operator still holds item `1230304`, so it is one tooltip
-   hover with a FULL-SCREEN capture running. `214` needs the Auction House
-   filter, one affix ticked alone. `101` and `209` need an item carrying them
-   and may need one re-acquired.
+1. **The two unbound affix ids, `101` and `214`** - updated 2026-09-01, when
+   `209` and `212` were bound and left this list. `214` needs the Auction House
+   filter, one affix ticked alone. `101` needs item `1430301` EQUIPPED while the
+   `Affix Details` screen is open, because its tooltip route is lost to capture
+   CADENCE - the hover lasted 262 ms against a 1 fps capture, which is a
+   different problem from the resolution one this list was written about.
    **The binding constraint is the capture, not the game.** Every failure in
    that section is a frame that was never taken or was cropped - so a
    full-screen poller running during ordinary menu use is worth more here than
