@@ -5,6 +5,163 @@ fidelity and archive older ones rather than deleting them.
 
 ---
 
+# Wrap 2026-09-01c - item 12 ANSWERED from disk, and the answer is that its acceptance can never be met
+
+Suite **1390 passed**, ruff clean, merge gate OK against baseline **1390**
+(re-measured before dispatching, by summing per-file counts). Ledger `LL-0110`.
+Client **closed** all session. Cycle 34.
+
+**The watcher armed at 07:50:14 as pid 17568 is still the only one.**
+`ensure_armed('C:/ll-captures')` was called and REFUSED on its own, which is the
+correct result. Nothing was stopped.
+
+## The headline
+
+**Item 12 asked for the 10.35-per-hit floor to be re-measured on `1.0.15`. It
+cannot be, ever, and that is now measured rather than suspected.**
+
+The item said it needed the client. It did not. **A `1.0.15` training-ground
+capture has been on disk since 2026-08-30** - two `TrainingGround` windows,
+local `00:40:23-00:44:31` and `00:45:16-00:49:10`, with **355 of 2172
+full-screen frames** inside them and the `Total Damage` meter legible in **124**.
+**No session had read it** - though the previous hand-off had already named
+that set as the one to check, so this followed a live pointer rather than
+finding something unnoticed.
+
+**What crossed the patch boundary intact - the confirmations, which the item
+said were worth as much as an overturn:**
+
+- **the display model.** One ten-hit run solves to a constant under
+  round-to-nearest, `v` in `[579/10, 695/12]` = `[57.9000, 57.9167]`, width
+  `1/60`, truncation EMPTY, no integer fitting. Section 11's real-valued sum
+  rounded for display is reproduced on `1.0.15`.
+- **the training bot**, identical on every recorded field in all three sessions:
+  `classId` 10, nine items, zero affixes, zero gems, **7 items at durability
+  1400 and 2 at 0** (necklace and ring carry none). 20 spawns in 1.0.14 A, 16 in
+  1.0.14 B, 4 in 1.0.15. **One exception, and it is in the 10.35 session:** a
+  single `classId` **12** bot at 18:38:27, 8 items at durability 1100 - the only
+  non-class-10 bot in the corpus, so section 11 had at least two candidate
+  targets and the log does not say which was shot.
+- **the safe-circle radius** `25597.265625`, re-measured rather than cited.
+
+**Why it is still NOT a re-measurement of 10.35.** The shooter differs on
+everything: level **3 against 5**, **all nine of nine equipment slots**, four
+affix instances against none, and the held weapon `3030403` (affix 209) against
+a bare tier-1 `3010401`.
+
+**AND THE ACCEPTANCE IS UNACHIEVABLE.** 10.35 was measured at character
+**level 3**; the character has been level 5 since 2026-08-25 and levelling does
+not reverse. Item 12's acceptance has been **replaced with a forward one** -
+capture a `1.0.15` baseline whose configuration is recorded at the same wall
+clock as its meter run - because the backward comparison has no path.
+
+## The surface that makes every future comparison possible
+
+**`TS.Dungeon: [DungeonPlayerState]OnCustomInfoReady roleInfo`** fires within a
+second of every `TrainingGround` `LoadMap` and carries the **complete equipped
+set with affixes, gems and durability, plus talents, class, level and exp**.
+
+**This REFUTES `FINDINGS` 13.1's "a loadout baseline can only be pixels".** The
+save measurements under it stand and equipment really is server-side; what fails
+is the last inference. 13.1 checked the `.sav` files, found nothing, and
+generalised to the whole local surface **without grepping the log**. A negative
+over one surface is not a negative over the machine.
+
+## Also delivered
+
+- **The `Training Room Settings` panel FIELDS, read for the first time.**
+  `Bot Settings` -> `Weapon Archetype: Blackarrow`, `Difficulty: Difficulty 1`,
+  `Equipment Rarity: Common Equipment`. These configure the TARGET, so they
+  parameterise every damage number the room has ever produced. This repo has
+  recorded the panel's ENGINE names since 2026-08-25 and never read its
+  contents. Two of the three are positive-controlled against log facts;
+  `Difficulty` is recorded as UNMAPPED.
+- **Talent `32000` = `Status.Talent.Scout.Bow.ContinuouseShoot_FocusPoint`**, by
+  a one-element set difference on BOTH sides between two character levels with a
+  2/2 and 3/3 count control, corroborated by `FINDINGS` 14's record of the
+  operator spending a point on `Focus Fire`. `30008` and `30009` stay unbound.
+- **`vision_meter.read_panel` fits a full-screen 2560x1440 frame unmodified** at
+  crop origin `(2058, 390)`, and **refuses every value at or above 1000** - the
+  thousands comma is a 3 px run against `MIN_GLYPH_WIDTH` 6. All 55 four-digit
+  frames refused, none misread. It fails SAFE. **Do not lower that constant**;
+  re-harvest templates instead.
+- **`101`'s blocker is now exact.** `1430301` is at pants for the whole
+  2026-08-25 session - 46 `server_EquipArmors` payload lines, 18:37:18 to
+  20:24:31 - and that session has **zero** `Affix Details` openings, while both
+  openings that exist are in a session with different pants. The two facts are
+  disjoint in time, so no capture change could have bridged them.
+
+## `FINDINGS` 11.7's constancy rule is NARROWED, not refuted
+
+11.7 offers constancy as the diagnostic for floor membership. On `1.0.15` **two
+segments of one visit each admit a constant**, at about 57.9 and about 8.65, and
+they cannot both be a minimum. The likely reconciliation - never excluded - is
+that **constancy indicates a STATIONARY SHOOTER rather than a clamp**. A probe
+built to test that from inter-frame scene change **FAILED**: it cannot separate
+camera movement from animation and arrows in flight, and is reported as a failed
+probe rather than as weak evidence. 11.7's observations stand; its use as a test
+does not.
+
+## Traps earned this session
+
+1. **`grep -iF` CRASHES on this machine** - GNU grep 3.0 under Git Bash, SIGABRT
+   and exit 134. `grep -i` works, `grep -F` works, together they abort. Under the
+   `2>/dev/null` most sweeps carry it is **indistinguishable from a clean
+   negative**, and it nearly passed a withdrawal check on a crashed instrument.
+   Added to `CLAUDE.md`.
+2. **A line-oriented grep is a claim about the file's line breaks.** Prose here
+   wraps near 80 columns, so a quoted sentence spans two lines and a single-line
+   pattern misses it. This cost two false clean bills in one session - including
+   one on item 12's own false-premise clause.
+3. **A filed count is a hypothesis, including the merger's own.** "Eight of nine
+   equipment slots differ" was my arithmetic, not any agent's; re-counted slot by
+   slot it is **nine of nine**, and it had already propagated into two documents.
+4. **A selective extractor is a claim about the extractor**, hit twice in one
+   hour by two different agents: the `roleInfo` gem key is **`gem`**, singular,
+   and equipment lives under **`inventory.equipments`**. Both wrong guesses
+   returned a confident, clean-looking "no gems" that the PIXELS refuted.
+5. **A missing `slot` key means slot 0, the helm** - the serialiser omits
+   zero-valued fields, and a reader that treats it as "unslotted" silently drops
+   the helm from every equipped set. The unequip-all payload is also
+   `cfgIds-[0,0,0,0,0,0]`, **six** elements where every other is seven.
+6. **Do not build a presence detector from an ink count.** A grey sky scored
+   2,835 neutral pixels with no panel on screen, and my own gold-title detector
+   ranked four panel-free frames above a frame that genuinely held the panel.
+   **The control, not the ranking, is what made the scan mean anything.**
+
+## Disclosed, not fixed
+
+**I gave all three parallel slices ONE shared scratchpad directory and they
+collided.** Two files were overwritten and one agent then deleted two files it
+believed were its own. Nothing of value was lost and no repo file was touched.
+The fix is structural: **give every parallel slice its own subdirectory**. I
+applied disjoint file sets to the repo and failed to apply them to the one
+directory every slice was told to write into.
+
+## Still owed, both one hover each once the client is open
+
+Unchanged from cycle 33, and the negative is now **positive-controlled and
+broad**: the **Splatter Arrow** tooltip, and **one** of `Elusive`, `Smiting` or
+`Curse` for the five-level ladder prediction.
+
+**33 known rendered names were tested against the whole log corpus** - 20 affix
+names, 8 skill and talent names, 5 item names - including `Steel Arrow` and
+`Sky Piercer`, which this project HAS read off frames and which serve as the
+positive controls. **Every skill, talent and item name scores zero.** Four affix
+words return hits and **not one is an affix**: `Focused` is UI focus routing,
+`Seamless` is the `AllowPIESeamlessTravel` CVar, `Ranged` is the
+`RangedAttackIndicator` module and a damage-cue class, and `Wealth` is a
+lowercase `wealth` CURRENCY field in match results - a near-miss a careless grep
+would have counted.
+
+So the log carries **no player-facing affix, skill or item name**, and no log
+work can substitute for a hover. A first draft asserted this from six words;
+it is now 33 with the confounds identified.
+
+**Items 7 and 11 are NOT credited.** Item 11 still has `101` and `214` unbound.
+
+---
+
 # Wrap 2026-09-01 - item 4d CLOSED, a watcher is RUNNING, and two refutations caught a red suite and two wrong cost figures
 
 Suite **1390 passed / 1390 collected**, ruff clean, merge gate OK against

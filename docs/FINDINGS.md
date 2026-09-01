@@ -2174,6 +2174,19 @@ content, at 21:31, and it flipped straight back. **Equipment is server-side**,
 like `InvertCameraYAxis`. So a loadout baseline can only be pixels, and the
 equipment screen must ride in the same frame stream as the damage numbers.
 
+> **The last sentence is REFUTED - see section 16.** The loadout is in the game
+> log. `OnCustomInfoReady roleInfo` fires within a second of every
+> TrainingGround `LoadMap` and carries the full equipped set with its affixes,
+> gems and durability, plus talents, class, level and exp - for all three
+> training sessions, including the one behind 10.35. **The save-file
+> measurements above stand**: `Deck.sav`, `CampData_<userId>.sav` and `Scav.sav`
+> really are silent about equipment, and equipment really is server-side. What
+> fails is the inference. "Can only be pixels" was a claim about the whole local
+> surface made after checking only the saves, and **the log was never grepped
+> for it.** A negative over one surface is not a negative over the machine. The
+> equipment screen is a convenience here, not the only route, and 16.5 recovers
+> the section 11 baseline that this subsection was written to say was lost.
+
 ### 13.2 The run, and the solve that refuses it
 
 Meter reset observed at 22:55:17 (`0`, `0 Hit`), ten body shots. The poller
@@ -2481,3 +2494,407 @@ about 3 to 4 display units per hit rather than a fraction of one, which turns
 To separate talent from base mechanic, fire ten hits **alternating between two
 targets**. "With each hit on the same enemy" implies the stack resets per
 enemy; if the buff survives target switching it is not that talent.
+
+## 16. The 1.0.15 training ground - measured, and NOT comparable, 2026-08-30
+
+ROADMAP item 12 asked whether the 10.35 floor value of section 11 survives the
+client patch. It is answered here, and the answer is a **refusal**: a 1.0.15
+training-ground session was captured, four runs read out of it and one of them
+solved cleanly, but **none of those numbers is a re-measurement of 10.35**,
+because the configuration behind them differs on nearly every axis that section
+11 left unstated. What the session does deliver is the display model confirmed
+across the patch boundary, the loadout readable from the log for the first time,
+and a panel of target settings this repo had never written down.
+
+### 16.1 The capture exists - item 12 was never blocked on data
+
+The item read as though it were waiting on the operator to play. It was not. The
+frames and the log were already on disk before it was opened, and finding them
+took a corpus sweep rather than a capture session.
+
+Client builds, from the logs' own header lines:
+
+| client | header |
+|---|---|
+| 1.0.14 | `Version: 1.0.14, Build Date: 20260818232428` |
+| 1.0.15 | `Version: 1.0.15, Build Date: 20260826170036` |
+
+**The log corpus reduces over CONTENTS, not over paths.** 25 MistfallHunter log
+files hold **14 distinct contents**, which drop to **4 MAXIMAL contents** once
+every log that is a strict byte prefix of another is discarded. Counting the 25
+FILES would have reported a corpus **6.25x** larger than the one that carries
+independent evidence, and stopping at the 14 distinct CONTENTS - the dedup most
+sweeps do - still reports it **3.5x** larger. A first draft said "four to six
+times", which is neither ratio and is the kind of remembered range this section
+exists to warn against.
+
+**Exactly ONE maximal log is 1.0.15 AND contains a training ground**: the
+4,454,403-byte backup of 2026-08-30. The other 1.0.15 log, 235,864 bytes, has no
+`TrainingGround` `LoadMap` in it at all. So the whole of this section rests on a
+single session, and that is stated here rather than left to be discovered.
+
+That session entered `LoadMap(/Game/Project/Maps/TrainingGround/Training)`
+**twice**. Local windows, 2026-08-30:
+
+| window | local clock | frames in window | cadence | max gap |
+|---|---|---|---|---|
+| A | 00:40:23 - 00:44:31 | 173 | 0.698 fps | 3 s |
+| B | 00:45:16 - 00:49:10 | 182 | 0.778 fps | **2 s** |
+
+`C:\ll-captures\2026-08-30\frames` holds **2172 PNGs at 2560x1440** under one
+filename convention. **355 fall inside the two windows and 124 show the meter
+panel.**
+
+**Hits ARE missed between frames, and it does not cost the indexing.** At 0.7
+fps against a shot every two to three seconds, whole hits land between samples -
+far worse than the 2 fps of sections 11 and 13. What rescues the readout is that
+the panel displays the **hit count** beside the total, so every frame is an
+`(n, total)` pair with `n` read off the screen rather than inferred from
+position in a sequence. A missed hit costs a **point**, not the numbering, which
+is the same convention 11.7 states for its dashes. A run captured at 0.7 fps is
+sparse, not ambiguous.
+
+**Corpus completeness, so the next sweep does not redo it.** 18,965 images
+machine-wide, 18,898 of them timestamped. Scoped to `C:\ll-captures` alone the
+figures are 18,747 and 18,680, which is what ledger entry LL-0109 recorded. The
+**218-frame difference is `~/.lanternlight/frames`**, the 2026-08-09 set, which
+also holds a **sixth** timestamped filename convention, `skills_HH.MM.SS.png`.
+The earlier count was not wrong; it was scoped to one root and the scope was not
+carried with the number.
+
+### 16.2 Four runs, and R1 solves a constant
+
+Runs are segmented by the displayed hit count going **backwards** - the meter
+resets per run, which is what makes a run self-delimiting (11.2). Four frames of
+this readout were cross-checked by eye against the source PNGs rather than taken
+from an extractor's output.
+
+| run | window | local clock | hits | final total |
+|---|---|---|---|---|
+| R1 | A | 00:41:12 - 00:41:42 | 1-10 | 579 |
+| R2 | A | 00:41:51 - 00:44:25 | 1-50 | 2000, **last seen, a lower bound** |
+| R3 | B | 00:45:37 - 00:45:50 | 1-2 | 20 |
+| R4 | B | 00:45:51 - 00:45:54 | 1 | 11 |
+
+R2's `2000` is the largest value read and is recorded as a **lower bound**, not
+a run total. It is not used as a total anywhere below.
+
+**R1 is complete - all ten pairs observed, no gaps:**
+
+    (1,58) (2,116) (3,174) (4,232) (5,290) (6,347) (7,405) (8,463) (9,521) (10,579)
+
+**R1 SOLVES CONSTANT under round-to-nearest:**
+
+> **v is in [579/10, 695/12] = [57.9000, 57.9167]**, width `1/60`.
+
+Both bounds are binding and both are named, because an interval nobody can
+re-derive is an assertion:
+
+- the **lower** bound binds at hit 5: `5 * 57.9 = 289.5`, an exact tie, which
+  displays `290`. This is the tie allowance 11.7 states - where `n * v` lands on
+  an exact `.5` the display may round either way - applied unchanged.
+- the **upper** bound binds at hit 6: `6 * 57.9 = 347.4`, which displays `347`.
+
+**The TRUNCATION model is EMPTY for R1**, exactly as it is for section 11's body
+runs. **No integer per-hit value fits.**
+
+### 16.3 The display model IS reproduced across the patch boundary
+
+**This is the one part of section 11 that this session confirms across the
+patch, and it is worth saying plainly.** Section 11.3 established that the meter
+holds a **real-valued running sum and rounds it for display** - inferred there
+from a non-empty rounding solve, an empty truncation solve, and no integer
+fitting. R1 reproduces all three signatures on 1.0.15, on a different client
+build, a different character level and a different loadout.
+
+So the **instrument** survived the patch even though the **reading** cannot be
+compared. That distinction is the whole content of this section: a model that
+holds across a configuration change is a stronger claim than a number that does
+not.
+
+**What this does NOT confirm.** It says nothing about 10.35. `57.9` is not
+`10.35` re-measured, is not offered as one, and 16.6 gives the reasons.
+
+### 16.4 R2 is a manual distance sweep, and neither of its ends is a floor
+
+**R2 does not solve as a whole - EMPTY under both display models.** It also has
+real gaps: hits 4, 5, 7 and 10 were never sampled.
+
+Segment fits were tried, and they are reported with their weakness attached:
+
+| segment | result |
+|---|---|
+| hits 28-40 | **EMPTY** |
+| hits 41-50 | a constant fits, **v in [8.6001, 8.7142]** |
+
+**Both segments are gap-free, and that had to be checked rather than assumed**,
+because R2 as a whole is not. Hits 28 through 40 are all thirteen sampled, and
+hits 41 through 50 are all ten sampled. The four unsampled hits - 4, 5, 7 and
+10 - all fall early in the run, outside both segments. A segment fit whose
+points were themselves sparse would be weaker again than what the note below
+describes.
+
+> **A segment fit carries TWO free parameters where the whole-run solve carries
+> one** - it must solve for the per-hit value AND for where the segment started
+> - so it needs many points before a fit means anything. Ten points at two
+> parameters is a much weaker statement than ten points at one, and nothing in
+> this subsection should be read at the strength of 16.2.
+
+So **within one run the per-hit value runs from about 58 down to about 8.65**.
+That is not variance in a hit; **R2 is a manual DISTANCE SWEEP**, the operator
+walking the distance axis inside one uninterrupted meter window, and it is not a
+controlled run of any kind.
+
+**NEITHER 57.9 NOR 8.65 IS ESTABLISHED AS A CLAMP, and neither may be called the
+1.0.15 floor or ceiling.** Nothing in this capture shows the value ceasing to
+respond to distance at either end - the endpoints are the ends of what was
+sampled, which is a property of the sweep and not of the game.
+
+### 16.5 The configuration IS in the log - `OnCustomInfoReady roleInfo`
+
+`OnCustomInfoReady roleInfo` is emitted **within a second of every
+TrainingGround `LoadMap`** and carries the **full equipped set with affixes,
+gems and durability, plus talents, class, level and exp**. It is the surface
+section 13.1 needed and did not look for, and it exists for all three training
+sessions including the one behind 10.35.
+
+Player, all three sessions, all class 12 Blackarrow. Parenthesised numbers are
+affix ids; `bare` means the item carries neither affix nor gem.
+
+| | 1.0.14 A, the 10.35 baseline | 1.0.14 B, sections 13/14 | 1.0.15 |
+|---|---|---|---|
+| training load, local | 18:38:16 | 22:49:35 | 00:40:23 and 00:45:16 |
+| level | **3** | **5** | **5** |
+| talents | 30008, 30009 | 32000, 30008, 30009 | 32000, 30008, 30009 |
+| items equipped | 9 | 9 | **4 then 5** |
+| affix instances | 4 | 6 | **0 then 1** |
+| gems | 0 | 2 | **0 then 1** |
+| helm | 1120301 | 1130308 | EMPTY |
+| chest | 1230304 (212) | 1230304 (212) | 1210301 bare |
+| gloves | 1320301 | 1360303 (211) | EMPTY |
+| pants | 1430301 (101) | 1430303 (208) | 1410301 bare |
+| boots | 1520301 | 1530303 (208) | 1510301 bare |
+| necklace | 1630102 | 1630103 (gem 224110) | EMPTY |
+| ring | 1720201 | 1720201 | EMPTY |
+| weapon slot 10 | 3030403 (209) | 3060404 (211 + gem 223106) | 3010401 bare tier 1 |
+| weapon slot 11 | 3030404 (211) | 3030404 (211) | EMPTY then 3060404 (211 + gem 223106) |
+
+**The 1.0.15 loadout CHANGED BETWEEN THE TWO WINDOWS** - 4 items in window A, 5
+in window B. R1 and R2 are window A; R3 and R4 are window B. Runs from the two
+windows are not one another's replicates.
+
+**Two mechanical traps in reading this surface, both measured:**
+
+- **A missing `slot` key means slot 0, the helm.** Proved rather than assumed: a
+  bot record in the same log carries an explicit `"slot": 0` for the same helm
+  cfgId. A reader that treats the absent key as "no slot" drops a helm silently.
+- **The `gem` key is SINGULAR.** An extractor looking for `gems` returns nothing
+  and will **wrongly report a character as gem-free** - a measured zero
+  manufactured out of a spelling, which is precisely the failure the measurement
+  doctrine exists to prevent.
+
+**THE BOT IS THE ONE CONTROLLED VARIABLE.** Every session spawns the same
+target: `classId 10`, 9 items, **ZERO affixes, ZERO gems**, and a durability
+profile of **7 items at 1400 and 2 at 0** - the necklace and the ring, which
+carry no durability at all, exactly as they do on the player. Spawn counts, by
+distinct `roleId`: **20 in 1.0.14 A, 16 in 1.0.14 B, 4 in 1.0.15**, with **no
+field differing across the patch**.
+
+> **Two numbers in this paragraph were wrong in a first draft and the cause is
+> one line of code.** It said "every durability 1400" and "16 spawns in 1.0.14
+> A". The extractor building the durability histogram kept an item only if its
+> durability value was TRUTHY, and zero is not, so the 2 zero-durability items
+> per bot were silently dropped and the histogram looked uniform. The
+> spawn count was simply miscounted. **A truthiness test is not a presence
+> test** - the same defect that made an earlier pass report a gem-free character
+> because it looked for a key named `gems` instead of `gem`. Both were caught by
+> an adversarial pass re-deriving the histogram without the filter.
+
+**One exception, and it lands in the worst possible session.** In the 10.35
+session only, a **classId 12 bot at 18:38:27 with 8 items at durability 1100**.
+It is the only non-class-10 bot in the corpus. So **section 11's runs had at
+least two candidate targets and the log does not say which one was shot.** That
+does not overturn 10.35 - it means section 11's target is one hypothesis short of
+pinned, and 11.7's scope line "this bot" was carrying more weight than the
+evidence supports.
+
+### 16.6 The verdict: NOT COMPARABLE - and the acceptance is UNACHIEVABLE
+
+**NOT COMPARABLE.** No 1.0.15 number in this section is a re-measurement of
+10.35, because the configuration differs on **level**, on **all nine of the nine
+equipment slots**, on **affix count**, on **gems** and on **talents**. Against
+that, the target is the one variable held fixed. Publishing `57.9 / 10.35` as a
+patch effect would be attributing to a client build a difference produced by
+five simultaneous changes to the shooter.
+
+**AND THE ACCEPTANCE AS WRITTEN CANNOT BE MET.** 10.35 was measured at
+**character level 3**. The character has been **level 5 since 2026-08-25** and
+levelling is irreversible, so **section 11's conditions cannot be reconstructed
+on this character at all** - not now, not with the client open, not by any
+sequence of item swaps. An acceptance criterion that requires restoring level 3
+is not hard, it is unachievable, and it should be rewritten rather than left
+open to be re-attempted.
+
+**What DID cross the patch boundary intact:**
+
+| | evidence |
+|---|---|
+| the display model | R1's non-empty rounding solve and empty truncation solve, 16.3 |
+| the bot | identical on every recorded field, 16.5 |
+| the safe-circle radius `25597.265625` | already recorded at 10.9; re-measured for this section rather than cited |
+
+The radius was re-derived from both 1.0.14 maximal logs and the 1.0.15 maximal
+log rather than taken from the ledger. It is **absent from the short 1.0.15
+log**, which is a property of that log's coverage and not a disagreement.
+
+**That third row falsifies part of item 12's own acceptance.** The acceptance
+ends by asserting that this project has no record of any value checked across a
+patch boundary. **That clause is false** - the safe-circle radius was exactly
+that, and was recorded as such at 10.9 before item 12 was written. What had NOT
+been checked across the boundary is any measured **combat** quantity, and that
+narrower claim is the true one.
+
+### 16.7 The Training Room Settings panel, and its fields, recorded for the first time
+
+Read off frame `f0462_18.47.18` - **1.0.14 session A, between section 11's runs 5
+and 6**:
+
+    TRAINING ROOM SETTINGS -> Bot Settings
+      Weapon Archetype    Blackarrow
+      Difficulty          Difficulty 1
+      Equipment Rarity    Common Equipment
+
+plus an `Add Bot` button, and `Restore All Players' Status`, `Clear Bots`,
+`Stop Bot AI`, `Resume Bot AI`.
+
+**This repo has recorded this panel's ENGINE names since section 11.1** -
+`WBP_Level_Room_Setting` and `PracticeRoomSettingView_C` in
+[`docs/OBSERVED_IDS.md`](OBSERVED_IDS.md) - **and has never recorded a single one
+of its FIELDS.** The frame carrying them sat in the section 11 capture the whole
+time and nobody opened it.
+
+**These fields configure the TARGET.** They are therefore parameters of every
+damage number this room has ever produced, including 10.35, and their absence
+from section 11 is a gap in that section's stated conditions rather than a new
+mechanic.
+
+**Two of the three bind to log facts, which is what makes them more than OCR:**
+
+| field | log correlate |
+|---|---|
+| `Weapon Archetype: Blackarrow` | predicts a classId 12 bot, and the only classId 12 bot in the corpus is in that session |
+| `Equipment Rarity: Common Equipment` | predicts a bot with no affixes and no gems, and every bot in the corpus has none |
+| `Difficulty 1` | **no log correlate - UNMAPPED** |
+
+`Difficulty` is recorded as unmapped rather than guessed. Nothing observed says
+what it scales, or whether it scales anything.
+
+**The panel is NOT open in any 1.0.15 frame, and the negative is now a LOG
+negative rather than a pixel one.** It was first established by scanning
+frames - a gold-pixel detector calibrated at **303 pixels on the known open
+panel** against **0 on a no-panel control**, returning a **median of 0 across
+the 1.0.15 window**. That was a real scan, but it could only speak for the 355
+frames it looked at.
+
+The log settles it exhaustively. The panel announces itself as
+`TS.UI: Verbose: [WindowHandle] open WBP_Level_Room_Setting`:
+
+| session | openings | local times |
+|---|---|---|
+| `1.0.14` A | **5** | 18:38:24, 18:45:30, 18:46:52, 19:06:21, 19:29:58 |
+| `1.0.14` B | **1** | 23:10:01 |
+| `1.0.15` | **0** | - |
+
+So the `1.0.15` room settings are **unobserved, not observed-to-be-default**,
+and no capture could have shown them because the screen was never opened.
+
+**This is `LL-0108`'s lesson arriving a second time: THE CHEAPEST SWEEP IS OVER
+THE EVENT THAT OPENS A SCREEN, NOT OVER THE FRAMES THAT MIGHT SHOW IT.** The
+opening at 18:46:52 is why `f0462_18.47.18` has the panel on it - 26 seconds
+later, still up. Enumerating six openings across the corpus costs one grep;
+finding them by looking at 18,965 frames does not. A future session wanting a
+settings reading should list the openings first and pull the frames after.
+
+### 16.8 The Progress Record gave nothing the live meter had not - a negative
+
+Recorded because a negative that is not written down gets re-run. Progress
+Record pairs observed across the session, in the panel's own `total / hits`
+order: `(0, 0)`, `(579, 10)`, `(20, 2)`.
+
+**Both non-zero pairs are R1's and R3's own final pairs.** The record therefore
+yielded **no completed-run data point the live meter had not already given**,
+which is exactly what 11.2 predicts - it holds the previous run's pair - and
+exactly the trap 13.4 had to withdraw a claim over. It is a second display of a
+reading already taken, not a second reading.
+
+### 16.9 This NARROWS 11.7's constancy rule - it does not refute its observations
+
+**11.7 offers constancy as the diagnostic for floor membership**: on the floor a
+constant fits every run, off the floor no constant fits any run, the ceiling
+included.
+
+**On 1.0.15 TWO segments each admit a constant** - at `57.9` and at about
+`8.65`. **They cannot both be the floor**, and `57.9` cannot be a minimum
+because `8.65` is lower.
+
+**So the DIAGNOSTIC is narrowed, and the observations are not touched.** Every
+floor run 11.7 recorded does admit a constant, no off-floor run it recorded
+does, and those totals are measured and unaffected. What fails is the step from
+**constancy** to **clamp**: constancy is not sufficient for floor membership.
+Section 15.4 already contested that same inference from a different direction -
+a stack buff of about 1% per stack reproduces 11.7's split with no distance term
+at all - and this is a second, independent narrowing of the same step.
+
+**The most likely reconciliation, and it is NOT excluded: constancy may indicate
+a STATIONARY SHOOTER rather than a clamp.** A shooter who does not move gives a
+constant per-hit value wherever he stands, floor or not.
+
+**That was tested and the test FAILED.** Stationarity was probed from
+inter-frame scene change, and the probe **could not separate camera movement
+from animation and from arrows in flight**. It is reported here as a **failed
+probe**, not as weak evidence, and it **settles nothing in either direction**. A
+probe that cannot distinguish the hypothesis from the alternative is not a small
+amount of support for whichever answer was expected.
+
+### 16.10 The floor-to-ceiling ratio is a HYPOTHESIS and a prediction, never a result
+
+Across the three loadouts of 16.5, the ratio the earlier sections would call
+**floor-to-ceiling** - the per-hit value at the near end of the curve over the
+value at the far end - comes out at **about 6.68, 6.57 and 6.69**. That is close
+enough to look like a mechanic, and it is written down here **as a prediction
+for a future session to test and as nothing else**. The three values are
+reported without being attributed to individual loadouts, because the attribution
+was not measured with them.
+
+**Three reasons it is not publishable as a result**, all of them independent:
+
+1. **Neither 1.0.15 endpoint is established as a clamp.** Nothing shows the
+   value ceasing to respond to distance at either end (16.4), so the ratio is
+   between two sampled extremes and not between a floor and a ceiling.
+2. **It is fitted after the fact to n=1 on 1.0.15.** One session, one sweep, no
+   replicate. A ratio that was noticed after the numbers were in is a
+   description of those numbers until an independent run reproduces it.
+3. **Constancy is not proof of floor membership** (16.9), so the very step that
+   would let a constant segment stand in for an endpoint is the step this
+   session narrowed.
+
+**What would test it:** a session that establishes **both** endpoints as clamps -
+by showing the value stop responding to distance at each end - under **one
+unchanged loadout**, and then takes the ratio. A result far from ~6.6 refutes the
+hypothesis outright. A result near it is **one point**, not a law, and would need
+its own replicate.
+
+**What section 16 establishes:** a 1.0.15 training session exists and is fully
+read out; the meter's real-valued-sum-rounded-for-display model reproduces across
+the client patch; the loadout for all three training sessions is recoverable from
+the log; the bot is unchanged across the patch and is the room's one controlled
+variable; and the Training Room Settings panel has three fields, two of which
+bind to log facts.
+
+**What it does NOT establish, and must not be written down as though it did:**
+any comparison between 1.0.15 damage and 10.35; a 1.0.15 floor or ceiling; a
+patch effect of any size; what `Difficulty` does; whether the shooter was
+stationary; and the floor-to-ceiling ratio as anything but a guess with a test
+attached.
+
+**No coefficient enters Emberforge from this section.**

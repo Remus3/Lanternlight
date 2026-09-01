@@ -1367,25 +1367,145 @@ tooltip says "partially" and gives no number. Recorded as a named mechanic with
 an unmeasured coefficient, which is the state this project keeps distinct from
 a measured zero.
 
-### The numeric talent ids remain UNBOUND
+### The numeric talent ids - ONE now binds, TWO remain UNBOUND
+
+**This heading read "The numeric talent ids remain UNBOUND" until 2026-09-01,
+and it was correct when it was written.** The statement is now true of two of
+the three ids, not all three: `32000` binds. The narrowing is written out here
+rather than the old paragraph being quietly replaced, because for a reader
+deciding how much to trust the next binding, what changed and why is the part
+that matters.
 
 The log carries `TS.Ability: talent data response: [30008,30009]` on 2026-08-25
-and `[32000,30008,30009]` on 2026-08-30, plus three gameplay tags -
-`Talent.Scout.Bow.ContinuouseShoot` (the game's spelling),
-`Talent.Scout.Bow.DrawEnhanced` and `Talent.Scout.Bow.HomingTarget`.
+and `[32000,30008,30009]` on 2026-08-30, plus three gameplay tags. Those tags
+were first recorded here in a CLIPPED form - `Talent.Scout.Bow.ContinuouseShoot`
+(the game's own misspelling), `Talent.Scout.Bow.DrawEnhanced` and
+`Talent.Scout.Bow.HomingTarget`. **The full literals, enumerated 2026-09-01c and
+tabulated below, are `Status.`-prefixed and the first also ends `_FocusPoint`.**
 
-**None of the three tags is bound to any of the three ids, and no id is bound to
-any name on this screen.** The 2026-08-25 response falls inside the `25/scene`
-capture, so a join is available in principle - but a two-element array yields a
-SET, not an assignment, exactly as with the affix ids, and the allocated set at
-that moment is not otherwise known. Pairing `HomingTarget` with a node called
-`Unstoppable Edge` on a shared intuition would be the reasoning this project has
-withdrawn three times.
+**What the old argument had right, and the one thing it did not.** It had right
+that a two-element array yields a SET and not an assignment, exactly as with the
+affix ids - which is precisely why `30008` and `30009` are still unbound below.
+It had right that the 2026-08-25 response falls inside the `25/scene` capture so
+a join is available in principle, and right that pairing `HomingTarget` with a
+node called `Unstoppable Edge` on a shared intuition would be the reasoning this
+project has withdrawn three times. What it did NOT have is that these are not
+one undifferentiated pool of three ids against three tags. They are two
+CONFIGURATIONS of the same character at two levels, with a single talent point
+spent between them, and a difference taken BETWEEN two configurations is not the
+same object as a difference taken inside one.
+
+**The surface that made the configurations legible** is
+`OnCustomInfoReady roleInfo`, read 2026-09-01 during the ROADMAP item 12 pass
+and recorded in [`OBSERVED_IDS.md`](OBSERVED_IDS.md). It is emitted within a
+second of every `TrainingGround` `LoadMap` and carries the talent list beside
+the character's level and full equipped set, so a talent list can be pinned to a
+specific level and session instead of to a date.
+
+**BOUND: `32000` = `Status.Talent.Scout.Bow.ContinuouseShoot_FocusPoint`.**
+
+| configuration | talent ids | talent tags |
+|---|---|---|
+| `1.0.14` session A, character level 3 | `30008`, `30009` | `DrawEnhanced`, `HomingTarget` |
+| `1.0.14` session B and `1.0.15`, character level 5 | `32000`, `30008`, `30009` | `ContinuouseShoot_FocusPoint`, `DrawEnhanced`, `HomingTarget` |
+
+**The tag surface, named here because nothing in this repo had named it.** The
+tags are NOT part of any payload - each is its own log line, emitted once per
+talent when the character's talents are applied:
+
+    TS.Dungeon: [Talent] Add Tag: Status.Talent.Scout.Bow.ContinuouseShoot_FocusPoint
+
+They fire within a second of the training-ground load, alongside the `roleInfo`
+record but on separate lines, so the id list and the tag list are **two
+independent surfaces at one instant** rather than two readings of one object.
+Counted per session: 2 tag lines at session A's load, 3 at session B's, 3 at
+each of the two `1.0.15` loads - matching the id counts exactly, every time.
+
+**Method: a one-element set difference on BOTH sides simultaneously, with a
+count control.** The id list gains exactly one member between the two
+configurations and the tag set gains exactly one member. The counts agree on
+each side - 2 ids against 2 tags at level 3, 3 against 3 at level 5 - so neither
+surface is reporting a subset of what is allocated. Exactly one assignment
+survives.
+
+**Corroborated independently by `docs/FINDINGS.md` section 14**, which records
+the operator spending a talent point on `Focus Fire` between those two sessions.
+That attestation was written for a different purpose and before this binding
+existed.
+
+**Bracketing note - and a first draft of it CONFLATED TWO SURFACES, so read the
+correction rather than the claim.** That draft said the three-element *response*
+is "already present in `1.0.14` session B". It is not. There are two different
+log lines and they disagree inside that session:
+
+| surface | 1.0.14 A | 1.0.14 B | 1.0.15 |
+|---|---|---|---|
+| `TS.Ability: talent data response` | `[30008,30009]` at 20:05:51 | `[30008,30009]` at **21:56:22** | `[32000,30008,30009]` at 00:28:27 |
+| `roleInfo` `talents`, at the training load | `[30008,30009]` at 18:38:16 | `[32000,30008,30009]` at **22:49:35** | same, at 00:40:23 and 00:45:16 |
+
+Each surface fires once per session, so neither is a stream - each is a snapshot
+at its own moment. Read together they **bracket the allocation to between local
+21:56:22 and 22:49:35 on 2026-08-25**, INSIDE session B. So the point was not
+spent "between two sessions", and it was certainly not spent across the patch
+boundary. The `1.0.15` readings corroborate the end state rather than dating it.
+
+**This does not touch the binding**, because the binding compares `roleInfo`
+ids against `Add Tag` lines emitted at the SAME event, and both surfaces move
+together: 2 ids and 2 tags at session A's load, 3 and 3 at session B's and at
+both `1.0.15` loads.
+
+**The two tag spellings LOOKED like two strings, and the question is now
+settled by measurement rather than left open.** This document recorded
+`Talent.Scout.Bow.ContinuouseShoot`; the binding above is to
+`Status.Talent.Scout.Bow.ContinuouseShoot_FocusPoint` as `roleInfo` reports it.
+A draft of this section declined to say whether one was a truncation of the
+other, which was the right refusal to make and the wrong place to stop.
+
+Enumerated 2026-09-01c over all four maximal logs, every distinct token matching
+`[A-Za-z0-9_.]*Talent\.[A-Za-z0-9_.]+`, there are **exactly three**, and all
+three carry the `Status.` prefix:
+
+| token | occurrences |
+|---|---|
+| `Status.Talent.Scout.Bow.ContinuouseShoot_FocusPoint` | 3 |
+| `Status.Talent.Scout.Bow.DrawEnhanced` | 4 |
+| `Status.Talent.Scout.Bow.HomingTarget` | 4 |
+
+The bare form `Talent.Scout.Bow.ContinuouseShoot` NOT followed by `_FocusPoint`
+occurs **zero** times. **So the shorter spellings this document carried were
+SUBSTRINGS of the real tokens, not separate tags** - the earlier pass quoted the
+tail of a longer literal, and all three of its tag names were clipped the same
+way, `Status.` off the front of each and `_FocusPoint` off the end of one.
+
+The full forms are the ones to cite. The game's misspelling of "Continuous" is
+real and is preserved above; it was never the part that was wrong.
+
+**Why this is NOT the pattern ledger `LL-0108` refuted, and the difference is
+precise.** In `LL-0108` a bare set difference over affix INSTANCES was
+reasoning toward publishing `212 = Wealth`: the counts balanced, but they
+balanced equally well under TWO assignments, so the arithmetic was satisfied
+while the naming stayed free. An aggregate that balances is not a binding. Here
+the residual has size ONE on the id side AND size ONE on the tag side of the
+SAME step, with the totals controlled at 2/2 and 3/3, which leaves one
+assignment rather than a set of them. Had either side's residual held two
+members this would be the refuted pattern and `32000` would stay unbound -
+which is exactly the state the other two are in.
+
+**STILL UNBOUND: `30008` and `30009`.** Two ids against two tags,
+`Status.Talent.Scout.Bow.DrawEnhanced` and
+`Status.Talent.Scout.Bow.HomingTarget` - full literals, per the table above.
+Both
+assignments are consistent with everything observed and nothing separates them.
+No level step isolates either one, because both were already allocated at level
+3 and neither moved.
 
 **What would bind them:** allocate ONE talent with a full-screen capture
 running, then read the node name off the frame against the `talent data
 response` emitted at that wall clock. One talent per cycle. The same recipe the
-affix ids need, and the same reason.
+affix ids need, and the same reason. `32000` is the case where that recipe was
+satisfied retroactively - the operator happened to spend exactly one point
+between two archived sessions, which is the one-at-a-time step the recipe asks
+for, arriving by accident rather than by design.
 
 ## The SKILLS screen - 2026-08-25, and it carries a `5` that ROADMAP item 10 needs
 

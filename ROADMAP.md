@@ -826,7 +826,7 @@ direction to the escape-then-camp switch this item measured. Neither
 observation is amended; the reading that fits both is a **level transition** in
 either direction, and it is n=1 on each side. `docs/FINDINGS.md` 12.2.
 
-## 7c. Read the training ground meter without a human reading it - PARTLY DONE 2026-08-27b
+## 7c. Read the training ground meter without a human reading it - PARTLY DONE 2026-08-27b, extended 2026-09-01c
 
 Opened 2026-08-25, straight out of the session that measured 10.35. The meter
 is the only damage surface the training ground has, and every number in
@@ -1218,6 +1218,109 @@ and the refusal gate are all measured and working.
   the operator's explicit approval since it enters a public repository
   permanently. **Two of the three guards protect the REDACTION itself**, so it
   cannot erode when the fixture is next regenerated.
+
+### The reader was pointed at a NEW capture 2026-09-01c - two measured results
+
+Found while working item 12, on the `1.0.15` training frames. Ledger `LL-0110`.
+
+**It fits a full-screen frame unmodified.** `read_panel` needs no change to read
+a 2560x1440 full-scene PNG - take the 500x310 crop at origin **`(2058, 390)`**.
+The `x` origin is tolerant across `2056-2061`.
+
+**Row `390` is the BEST row, not the only workable one**, and a draft of this
+line said "the only row that works at all" on a single agent's report rather
+than on a measurement. Re-run over all 124 panel-up frames at five origins:
+
+| crop origin `y` | correct | disagreements | refused |
+|---|---|---|---|
+| 388 | 2 | **0** | 122 |
+| 389 | 33 | **0** | 91 |
+| **390** | **61** | **0** | 63 |
+| 391 | 37 | **0** | 87 |
+| 392 | 2 | **0** | 122 |
+
+**Zero disagreements at every offset**, which is the reassuring half: vertical
+misalignment costs READINGS and never produces a wrong one. It degrades to
+refusal, exactly as designed. Over 124 panel-up frames it returned **61 agreeing readings and 0
+disagreeing ones**, re-run by the merger over all 124 against readings taken by
+eye first. That removes the assumption that this reader only ever works on a
+purpose-built crop.
+
+**"124 panel-up" carries a CRITERION and the criterion is the whole
+disagreement.** It means *a human could read the live row*. An automated
+detector - orange ink in the module's own row band, or header NCC - finds
+**123**, and an adversarial pass reported that as an error in this section. It
+is not. The single frame between them is `f0661_00.45.40`: motion-blurred, zero
+ink in the band, and legible as `9 / 1 Hit` at 8x magnification. **Both counts
+are right about different questions**, which is why the number is now published
+with the question attached. The same frame is why that pass also read the
+single-digit tally as "2 of 19" rather than 3 of 20.
+
+**It goes blind at 1000, and that is the gap worth closing.** Above 999 the
+meter renders a thousands comma - `1,257` and `1,913` are both on screen in that
+capture. Inside the module's row band the comma is a **3 px** column run, and
+`MIN_GLYPH_WIDTH` is 6, so `_read_field` raises *"a fragment, not a digit"*.
+**All 55 four-digit frames refused; none misread.** The two-threshold refusal
+machinery does exactly what its docstring promises and never truncates `1,257`
+into a plausible `157`.
+
+So this is a coverage gap, not a correctness bug - but it bites precisely where
+it hurts, because **a long run is the run that crosses 1000**, and a long run is
+what a distance sweep produces.
+
+### The obvious fix is INSUFFICIENT and produces the exact truncation it forbids
+
+**Read this before touching the module.** A first draft of this section
+prescribed "teach the reader a separator glyph, and do NOT lower
+`MIN_GLYPH_WIDTH`". That prescription is **incomplete in a way that is worse
+than doing nothing**, and an adversarial pass implemented it to find out.
+
+`VALUE_WINDOW` is `(48, 92)`. Measured on `f0600_00.44.21`, whose true value is
+`2,000`, the glyph runs inside the module's own row band are:
+
+    (54,63)=2   (68,70)=comma   (73,83)=0   (86,96)=0   (99,109)=0
+
+**Only the first three fall inside `VALUE_WINDOW`.** The window was sized for
+three digits and it CLIPS THE LAST TWO. So teaching the reader to skip the 3 px
+comma while leaving the window alone makes it read a confident, plausible,
+WRONG number - the adversarial implementation returned `2,06` for a true `2,000`
+and `1,0` plus a fragment for `f0549`. Widening to `(40, 120)` read every
+four-digit frame correctly.
+
+**The 3 px refusal is currently the ONLY thing standing between this module and
+silent truncation.** Do not remove it before the window is widened. The fix is
+all three together: **widen `VALUE_WINDOW`, teach the separator, re-harvest the
+templates** - and re-run the whole 124-frame set expecting **zero
+disagreements**, which is the property that must survive.
+
+This is the session's own warning arriving through its own prescription. Writing
+"do not lower `MIN_GLYPH_WIDTH`" felt like the careful move and was not
+sufficient care, because the danger was never that one constant - it was that
+the value field has a fixed width nobody had checked against a four-digit value.
+
+The full tally over the 124, re-derived by the merger by running the module
+against every one of them:
+
+| digits in total | frames | read | refused |
+|---|---|---|---|
+| 1 | 20 | 17 | 3 |
+| 2 | 7 | 7 | 0 |
+| 3 | 42 | 37 | 5 |
+| 4 | 55 | 0 | **55** |
+| **all** | **124** | **61** | **63** |
+
+61 read, 61 agreeing with the human transcription, **zero disagreements**. The
+non-four-digit refusals are all glyph-distance refusals in the `0.135-0.165`
+band against an `ACCEPT_DISTANCE` of `0.115` - the signature of templates
+harvested from a different capture, and per the module's own doctrine the answer
+is re-harvesting rather than widening a constant.
+
+**A detector warning, measured twice by two independent agents.** Do not build
+panel presence out of an ink count. A grey sky scored 2,835 neutral pixels in
+the header band of a frame with no panel on it, and a gold-title pixel count
+ranked four panel-free frames above a frame that genuinely held the panel.
+Normalised cross-correlation on the header rectangle separates cleanly. **The
+control, not the ranking, is what makes such a scan mean anything.**
 
 ## 4c. Archive the log and the market cache on every session - CLOSED 2026-08-25b, successor 4d OPEN
 
@@ -3533,7 +3636,59 @@ down, since it is currently unknown whether they are filterable.
 deliberate experiment; it needs the frames to exist when the operator happens to
 open a tooltip or a filter.
 
-## 12. The client was PATCHED - 2026-08-25 measurements are provisional - OPEN
+### `101`'s blocker is now EXACT, measured 2026-09-01c - NOT a credit
+
+Found while auditing configuration for item 12, and recorded here so the recipe
+stops being approximate. **Nothing below binds `101`; this item stays open.**
+
+The `Affix Details` screen opens as
+`TS.UI: Verbose: [WindowHandle] open WBP_EquipSkill_DetailPrompt`, view class
+`AffixDetailPromptView_C`. Counted over all four maximal logs, `LL-0108`'s
+"exactly two openings in the whole corpus" is **re-measured and stands**: two,
+both on 2026-08-25b, local `22:28:10` and `22:54:52`, and zero in every other
+session including both `1.0.15` logs.
+
+**And `1430301` - the item carrying `101` - is at the PANTS slot for the whole
+of the 2026-08-25 session**, measured against `server_EquipArmors` rather than
+against a single record: the array
+`[1120301, 1230304, 1320301, 1430301, 1520301, 1630102, 1720201]` appears in
+**46 payload lines from local 18:37:18 to 20:24:31**, and the only variant,
+at `19:54:04`, differs solely by the helm coming off. That session has **zero**
+`Affix Details` openings.
+
+**It is worn in session B too, and saying otherwise was this paragraph's second
+error.** `1430301` sits at pants on 2026-08-25b from `21:29:32` to `21:35:58`,
+and is replaced by `1430303` from `21:36:22` onward. Both `Affix Details`
+openings - `22:28:10` and `22:54:52` - fall **52 minutes or more after that
+swap**, and the pants slot at each is pinned independently: the payload at
+`22:26:39`, 91 seconds before the first opening, and the one at `22:28:56`, 46
+seconds after it, both read `1430303`.
+
+So the two facts never overlap: **the item was on the character for about six
+minutes in a session whose screen openings came nearly an hour later, and for
+two hours in a session that never opened the screen at all.** That is a
+measured miss, not an assumed one - and it is tighter than the first draft,
+which claimed the item was worn in only one session and rested the other half on
+a `roleInfo` record 21 minutes after the opening it was supposed to describe.
+
+**A payload-shape trap, found in that same sweep and worth one line:** the
+unequip-all state serialises as `cfgIds-[0,0,0,0,0,0]` - **SIX** elements, where
+every other payload in the session carries **seven**. A reader that assumes a
+fixed seven-slot array will mis-index or crash on it. It occurs 3 times, at
+local 19:51:09 through 19:51:36.
+
+So the two facts are disjoint in time: **the one session where the item was on
+the character never opened the screen, and every session that opened the screen
+had a different item at pants.** No resolution, cadence or window-width change
+could have bridged that, which retires the last hope that `101` is recoverable
+from existing frames by looking harder.
+
+**The recipe is therefore checkable BEFORE any frame is read.** Equip `1430301`
+at pants, open the `Affix Details` screen while it is worn, and confirm success
+by grepping the session log for `WBP_EquipSkill_DetailPrompt` - if the token is
+absent the attempt failed and no capture needs opening at all.
+
+## 12. The client was PATCHED - the backward comparison is IMPOSSIBLE, a forward baseline is OPEN
 
 Opened 2026-08-30. The log's own marker `TS.Default: [Startup] Version:` reads
 `1.0.14` / Build Date `20260818232428` in both rotated backups and **`1.0.15` /
@@ -3550,10 +3705,103 @@ Also recorded here so nobody re-derives it: the literal string `buildid` occurs
 Anchor future passes on `Version` plus `Build Date`, which is first-party and
 in-log.
 
-**Acceptance:** re-measure the 10.35-per-hit floor value on `1.0.15` and record
-whether it moved. If it did not, say so explicitly - a re-measurement that
-confirms is worth as much as one that overturns, and this project has no record
-of any value being checked across a patch boundary.
+**Acceptance, AS ORIGINALLY WRITTEN and now known to be unachievable - kept
+here because the reason it fails is the result:** re-measure the 10.35-per-hit
+floor value on `1.0.15` and record whether it moved. If it did not, say so
+explicitly - a re-measurement that confirms is worth as much as one that
+overturns, and this project has no record of any value being checked across a
+patch boundary.
+
+**That last clause was FALSE when it was written.** `LL-0098`, filed the same
+day, recorded the safe-circle radius as checked across this very boundary and
+found unmoved. Re-measured here rather than cited: `Radius 25597.265625` is
+byte-identical in both `1.0.14` maximal logs and in the `1.0.15` maximal log,
+and absent from the short `1.0.15` log which never loads a dungeon. The
+defensible narrowing is that no measured **combat** quantity had been checked
+across a patch boundary.
+
+### WORKED 2026-09-01c - the data existed all along, and the acceptance cannot be met
+
+Ledger `LL-0110`. The item said this needed the client. **It did not need the
+client to get an answer, and the answer is that the question as posed can never
+be answered.**
+
+**A `1.0.15` training-ground capture has been on disk since 2026-08-30.** That
+session entered `LoadMap(/Game/Project/Maps/TrainingGround/Training)` **twice**,
+local `00:40:23-00:44:31` and `00:45:16-00:49:10`, and 355 full-screen
+2560x1440 frames cover both windows with the `Total Damage` meter legible in
+124 of them. **No session had read it - though the previous session's
+hand-off had already NAMED that set as the one to check**, so this is a
+follow-through on a live pointer rather than a discovery, and calling it
+"nobody had looked" would take credit that belongs to whoever wrote the
+pointer.
+
+**What crossed the patch boundary intact.** One run of ten hits solves to a
+constant per-hit value under the round-to-nearest model - `v` in
+`[579/10, 695/12]` = `[57.9000, 57.9167]`, width `1/60`, with truncation empty
+and no integer fitting. So **section 11's display model - a real-valued running
+sum rounded for display - is reproduced on `1.0.15`.** The standard training bot
+is also unchanged: `classId` 10, nine items, zero affixes, zero gems, **7 items
+at durability 1400 and 2 at 0**, in every session on both clients - 20 spawns in
+the 2026-08-25 session, 16 on 2026-08-25b, 4 on `1.0.15`.
+
+**That "unchanged" is about the STANDARD bot and the 10.35 session had a second
+kind.** A single `classId` **12** bot spawned at local 18:38:27 with 8 items at
+durability 1100 - the only non-class-10 bot in the corpus, and the room's own
+`Weapon Archetype: Blackarrow` setting predicts exactly that. So section 11's
+runs had at least two candidate targets on the floor and the log does not say
+which was shot. It does not overturn 10.35; it means that measurement's TARGET
+is one hypothesis short of pinned.
+
+**Why it is nevertheless NOT a re-measurement of 10.35.** The configuration
+differs on nearly every axis, and this is now measured rather than assumed,
+from an `OnCustomInfoReady roleInfo` record the log emits within a second of
+every training load. Against the session that produced 10.35: character level
+**3 against 5**, **nine items equipped against four**, four affix instances
+against none, and the held weapon `3030403` carrying affix `209` against a bare
+tier-1 `3010401`. **All NINE of the nine equipment slots differ**, in both
+1.0.15 windows - re-counted slot by slot at merge time after a first draft of
+this line filed "eight of nine", which was the merger's own arithmetic and not
+any agent's. A filed count is a hypothesis.
+
+**THE ACCEPTANCE IS UNACHIEVABLE, AND NOT FOR WANT OF THE CLIENT.** 10.35 was
+measured at character **level 3**. The character has been level 5 since
+2026-08-25 and levelling does not reverse. Section 11's conditions cannot be
+reconstructed on this character at all - not today, not with the client open,
+not ever. The item asked for a comparison whose baseline was destroyed before
+the item was written.
+
+**The exact scope of "unachievable", because the word is doing real work here.**
+It is unachievable ON THIS CHARACTER. A *new* character is not excluded in
+principle - but it would have to be held at level 3 AND carry all nine of the
+2026-08-25 items, `3030403` included, and this document does not claim to know
+whether those items can be moved between characters. That is a materially
+different and larger task than "re-measure a number", which is why the item is
+being re-pointed forward rather than left open against a criterion nobody can
+meet. If a future session establishes that item transfer works, this paragraph
+is the one to revisit.
+
+**Acceptance, REPLACED.** Since the backward comparison is closed, close the
+item forward instead: **record a `1.0.15` combat baseline complete enough that
+the NEXT patch boundary is testable.** That means one meter run whose full
+configuration is captured at the same wall clock - the `roleInfo` equipped set,
+the character level, and the `Training Room Settings` panel photographed open -
+plus the run's own `(hit count, total)` pairs. The reason the current boundary
+is untestable is precisely that this was never recorded; recording it once
+costs one training session and permanently fixes the defect.
+
+**A caution for whoever does it.** Constancy is NOT sufficient evidence that a
+run sits on the floor. This session found two segments of one `1.0.15` visit
+each admitting a constant, at about 57.9 and about 8.65, and they cannot both
+be a minimum. See `docs/FINDINGS.md` section 16 - the likely reconciliation is
+that constancy indicates a stationary shooter rather than a clamp, which
+narrows the diagnostic `11.7` offers.
+
+**Also delivered, and it is the reusable half:** the `Training Room Settings`
+panel has three `Bot Settings` fields - `Weapon Archetype`, `Difficulty` and
+`Equipment Rarity` - that configure the TARGET and so parameterise every damage
+number the room has ever produced. This repo had recorded the panel's engine
+names since 2026-08-25 and never once read its contents.
 
 ### DECISION GATE FOR THE OPERATOR - `CLAUDE.md` carries a claim the client refutes
 
@@ -3715,6 +3963,19 @@ measured: **10.35 per hit** on the damage floor, plus a ten-point falloff curve.
 What remains open under 7b is listed in that item: the step-versus-tangent
 question, the headshot mechanism, and whether the ~1.3x per pace is real.
 
+**10.35 CARRIES A SCOPE AND IT IS NOT OPTIONAL** - stated here because this
+paragraph is where the number gets recited without one. It is a `Blackarrow`
+right-click standard-arrow **body** shot, at floor distance, on client `1.0.14`,
+**at character level 3 with the nine-item loadout of 2026-08-25 including weapon
+`3030403`** - and against a target that is **not fully pinned**, because that
+session spawned both the standard `classId` 10 bot and a single `classId` 12
+one, and nothing recorded says which was shot. Writing "against the training
+bot" here, as a first draft of this very paragraph did, commits the exact defect
+the paragraph exists to prevent. That loadout is gone and the level does
+not reverse, so 10.35 is now a HISTORICAL reading that cannot be reproduced -
+see item 12. It remains correct as measured; it is simply no longer a value any
+future session can check.
+
 **The next item depends on whether the client is open.**
 
 - **Client open:** 7b's remaining threads are all cheap and all need it. Fold
@@ -3734,10 +3995,14 @@ question, the headshot mechanism, and whether the ~1.3x per pace is real.
   open and held. A full-screen poller still costs disk and nothing else, and it
   turns ordinary menu use into evidence.
 
-**Item 12 is a caveat on everything above, not a task to schedule.** The client
-moved from `1.0.14` to `1.0.15` between 2026-08-26 and 2026-08-30, so any
-measurement dated 2026-08-25 that a session leans on should be re-checked before
-being built on rather than assumed to still hold.
+**Item 12 is BOTH a caveat and, since 2026-09-01c, a task.** The client moved
+from `1.0.14` to `1.0.15` between 2026-08-26 and 2026-08-30, so any measurement
+dated 2026-08-25 that a session leans on should be re-checked before being built
+on rather than assumed to still hold. What changed is that the backward check is
+now known to be **impossible** - 10.35's baseline was level 3 and the character
+is level 5 - so item 12's replacement acceptance is a FORWARD one: capture a
+`1.0.15` baseline whose configuration is recorded at the same wall clock as its
+meter run. That needs the client and belongs in the client-open list.
 - **Client closed:** item **7c** (read the meter without a human reading it) is
   now the only specified fallback. Item 4c closed 2026-08-25b, **OPS-8** closed
   2026-08-26b, and **OPS-12** and **OPS-7** both closed 2026-08-27, so none of
@@ -3752,8 +4017,15 @@ being built on rather than assumed to still hold.
   2026-08-31:** item **`4d`** - arm the session watcher automatically - is fully
   specified, is pure code and tests, and needs no client at all. It was split out
   of `4c` precisely because `4c` is in the loop's `completed` list and work
-  parked there is invisible. **`4d` is the client-closed task to pick up.** The
-  other client-closed work is
+  parked there is invisible. ~~**`4d` is the client-closed task to pick up.**~~
+  **`4d` CLOSED 2026-09-01** (ledger `LL-0109`), so it is not the fallback any
+  more either. **The client-closed task is now item `7c`'s reader**, and
+  2026-09-01c gave it two concrete, measured jobs: teach it the thousands
+  separator, since as shipped it refuses every value at or above 1000 and a long
+  run is exactly the run that crosses 1000; and record that it fits a
+  full-screen 2560x1440 frame unmodified at crop origin `(2058, 390)`. Do NOT
+  lower `MIN_GLYPH_WIDTH` to fix the first - that converts a safe refusal into a
+  silent truncation. The other client-closed work is
   now reading more first-party data off the game's own menus into
   [`docs/AFFIXES.md`](docs/AFFIXES.md), which needs the operator in a menu
   but not in combat - and item 10 still supersedes everything the moment the
