@@ -134,6 +134,7 @@ See [ADR-004](adr/ADR-004-redaction-is-mandatory.md).
 | `lanternlight.tail` (log tail) | **done, library only** | Follows the appending log; no service and nothing bound. ROADMAP item 3 |
 | `lanternlight.damage` | **done** | The rolling damage window, accumulated and deduplicated across generations. ROADMAP item 7 |
 | `lanternlight.savewatch` | **done** | Snapshots every generation of every save; refuses a destination inside a repo working directory |
+| `lanternlight.armwatch` | **done, must be armed by hand** | Builds the four-surface session plan (`SaveGames/`, `StandaloneLevel/`, `Saved/` root, `Logs/`) and hands it to `savewatch`. `--dest-root` is required and carries **no date logic** - the caller passes a literal path. Arming is still manual; ROADMAP item 4d |
 | `emberforge` | **empty** | The combat and build math engine. **It computes nothing.** No formulas are published anywhere, so there is nothing yet to encode |
 | `tests/` | early | Every feature starts with a failing test here |
 | `tools/` | **not built** | Operator-run probes. `probe_paks.py` currently lives in `scratchpad/` and is slated to move here |

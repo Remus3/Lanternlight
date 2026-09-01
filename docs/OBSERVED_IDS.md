@@ -232,9 +232,14 @@ inflate, filing an inflated count, is the anti-pattern demonstrating itself.
 **Count by walking, then deduplicate by content hash** - and walk every log
 location, not the two you happen to remember.
 
-**Any corpus statistic in this repo must name which logs it counted.** The three
-distinct sessions are the 2026-08-25 backup, the 2026-08-25 live log, and the
-current live log. Deduplicate by content hash before counting anything.
+**Any corpus statistic in this repo must name which logs it counted.** As of
+2026-08-31 there are **FOUR** distinct sessions, not three - the 2026-08-25
+backup, the 2026-08-25 live log, the 2026-08-30 session since rotated to a
+backup, and the 21-second launch-and-quit that is the current live log.
+Deduplicate by content hash before counting anything, **and note that a hash
+dedupe alone still over-counts sessions**: ten of the archived files are byte
+prefixes of ONE growing log, so they carry ten distinct hashes and represent a
+single session. Count sessions by each log's own `Log file open` line.
 
 
 ## Weapon-stance toggle probe - NOT YET RUN
