@@ -515,13 +515,23 @@ def _crop_fullscreen(name):
 
 
 class TestTheFullScreenCapture:
-    """ROADMAP 7c's remaining acceptance: read the whole 124, agree every time.
+    """ROADMAP 7c's acceptance: read the 124, and never misread one.
 
-    The reader goes blind at 1000 because the meter renders a thousands
-    separator, a 3px column run against ``MIN_GLYPH_WIDTH`` 6. It fails SAFE -
-    every four-digit frame is refused and none is misread - but a long run is
-    exactly the run that crosses 1000, and a long run is what a distance sweep
-    produces, so the gap bites where it hurts.
+    **The reader USED to go blind at 1000**, because the meter renders a
+    thousands separator - a 3px column run against ``MIN_GLYPH_WIDTH`` 6 - and
+    every four-digit frame was refused. It failed safe, but it bit where it
+    hurt: a long run is the run that crosses 1000, and a long run is what a
+    distance sweep produces.
+
+    Closed 2026-09-01d by widening ``VALUE_WINDOW``, teaching the separator and
+    splitting merged runs. **54 of the 55 four-digit frames now read**, and 118
+    of the 124 overall, with ZERO disagreements.
+
+    This docstring described the BEFORE state in the present tense for two
+    commits after the behaviour changed, while a method 130 lines below said
+    "54 of the 55 read". A file that contradicts itself is worse than one that
+    says nothing, and the class docstring is the half a cold session reads
+    first.
     """
 
     def test_the_transcription_has_the_shape_the_roadmap_records(self):
@@ -800,8 +810,12 @@ class TestSplittingAMergedRun:
     **The width gate is what makes splitting safe, not the valley.** Measured
     over the 1.0.15 capture: a run that is definitely ONE glyph is 8-13px in
     the value field and 10-12px in the hit count; a run that is definitely TWO
-    is 24-27px. The populations are disjoint with an 11-column gap and nothing
-    at all lands in 14-23.
+    is 24-27px, and nothing lands in 14-23 ON THAT CAPTURE. The scope matters
+    and ``LL-0113`` was filed for dropping it: on the 6,439-frame 2026-08-25
+    capture, 18 value-window runs and 309 hit-window runs DO land in 14-23.
+    What carries the gate is a different number - the widest run that ever
+    CLASSIFIES as a digit anywhere in that capture is 13px, so a gate at 18
+    sits 5px above the widest real glyph.
 
     **The valley alone would be unsafe** and that is the whole reason for the
     gate: 12 definitely-single glyphs across 9 frames carry an interior blank
