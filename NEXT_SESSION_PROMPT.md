@@ -147,8 +147,19 @@ one, `6130017`, in 139 save generations. Both routes now need fresh gameplay.
 two different cfgIds sharing a display NAME, so the type-to-affix mapping
 survives and a rendered name must never be used to identify a type.
 
-**Next: item `11`, and it now has a CLIENT-FREE route.** `209 = Seeker` is
-bound; `101`, `212`, `214` remain. Use the **durability join**: item records
+**Item `11` is down to `101` and `214`, and BOTH are now blocked from disk.**
+`209 = Seeker` and `212 = Fervor` are bound (`LL-0107`, `LL-0108`). The best
+affix surface is the `Affix Details` panel, but its only two openings in the
+corpus are already read. `101`'s item was never equipped during either, and its
+tooltip lasted 262 ms against a 1 fps capture; `214` has no record of any kind.
+**Item 11 needs the client now.**
+
+**Next client-free item: `12`** - re-measure the 10.35-per-hit floor on client
+`1.0.15` and say plainly whether it moved. The `2026-08-30/frames` set is a
+`1.0.15` session, so check there before concluding it needs the client.
+
+Historic, kept because the method is reusable: `209` was bound by a DURABILITY
+join. Use the **durability join**: item records
 carry a durability integer, the tooltip renders it as a percentage of
 `900 + (third cfgId digit) * 100`, so a frame matches a log record with NO
 wall-clock coincidence. `101` sits on `1430301` at 98% and 100%; `212` on
