@@ -86,6 +86,8 @@ HOST_SHAPED = re.compile(r"(?:[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\.)+[A-Za-
 KNOWN_NON_HOSTS = frozenset(
     {
         "10.png",
+        "19.02.51.472.png",
+        "19.02.52.028.png",
         "19.32.34.jpg",
         "32.34.jpg",
         "3282300.acf",
@@ -202,6 +204,7 @@ KNOWN_NON_HOSTS = frozenset(
         "com.hermes.pstgame",
         "config.json",
         "contract.py",
+        "cycle34.csv",
         "contracts.py",
         "core.hooksPath",
         "current.item",

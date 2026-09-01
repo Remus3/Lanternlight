@@ -194,12 +194,17 @@ does not reverse. Item 12's acceptance is now a FORWARD one - capture a `1.0.15`
 baseline whose configuration is recorded at the same wall clock as its meter
 run - and that needs the client.
 
-**The client-free item is now `7c`**, and it has two concrete measured jobs
-waiting in its ROADMAP section: teach `vision_meter` the thousands separator,
-because as shipped it **refuses every value at or above 1000** and a long run is
-exactly the run that crosses 1000; and record that it fits a full-screen
-2560x1440 frame unmodified at crop origin `(2058, 390)`. **Do NOT lower
-`MIN_GLYPH_WIDTH`** - that converts a safe refusal into a silent truncation.
+**`7c`'s orange pair is DONE as of 2026-09-01d** (`LL-0112`) and it is no
+longer the client-free item. `vision_meter` now reads **118 of the 124**
+panel-up frames of the 1.0.15 capture at crop origin `(2058, 390)` with **ZERO
+disagreements**, including 54 of the 55 four-digit frames. `MIN_GLYPH_WIDTH` was
+NOT lowered.
+
+**Do not try to close the last 6.** They are pinned by name in the tests with a
+measured reason each, and five of them are the module WORKING: turning off the
+accept band and the ambiguity margin reads 123 of 124 and gets THREE wrong,
+including `3334` for a true `1834`. Widening a constant to chase them now fails
+the suite deliberately.
 
 **Before ANY configuration question, use the log, not pixels.**
 `TS.Dungeon: [DungeonPlayerState]OnCustomInfoReady roleInfo` fires within a
@@ -293,8 +298,7 @@ inter-hit intervals prove drawn shots, not Volley.
 specified is closed: OPS-7 and OPS-12 on 2026-08-27, OPS-8 on 2026-08-26b, 4c on
 2026-08-25b, and 7c is as far as its data allows.
 
-**7c is PARTLY DONE.** The orange pair reads and reproduces the hand-read series
-exactly. The white Progress Record pair is **blocked on a new capture** - and the
+**7c's orange pair is DONE** (`LL-0112`); only the WHITE row is left. The white Progress Record pair is **blocked on a new capture** - and the
 reason changed twice, so read it carefully rather than skimming:
 
 - `LL-0071` said the white field never changes. **That was wrong** and `LL-0072`

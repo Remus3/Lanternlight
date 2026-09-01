@@ -106,7 +106,7 @@ class TestTheRealCapture:
     def test_the_second_series_totals_match_the_roadmap(self):
         _require_capture()
         totals = [read_panel(PANEL / name).total for name, _t, _h in SECOND_SERIES]
-        assert totals == [55, 109, 164, 219, 275, 330, 386, 496, 552]
+        assert totals == [55, 109, 164, 219, 275, 330, 386, 441, 496, 552]
 
     def test_a_panel_down_frame_is_refused(self):
         """Presence is decided on the digits, never on brightness.
@@ -126,8 +126,16 @@ class TestTheRealCapture:
 #: into ROADMAP and LL-0071. That was wrong: the scratch scan sampled every third
 #: frame, found a DIFFERENT run that starts at 55, and generalised from one run to
 #: the whole directory - a false negative stated as a positive claim. An
-#: independent refuter found it immediately. Hit 8 (441) is genuinely not in the
-#: capture at this cadence, so it is not pinned.
+#: independent refuter found it immediately.
+#:
+#: **Hit 8 (441) was recorded as "genuinely not in the capture at this cadence"
+#: and that is now REFUTED - it is at p01216 and p01217.** It was never absent;
+#: the reader of the day REFUSED those frames, and a claim about the reader was
+#: written down as a claim about the data. Widening VALUE_WINDOW and splitting
+#: merged runs made 121 previously-refused frames of this capture readable, and
+#: 441 is one of them, so the series is now pinned COMPLETE at all ten values.
+#: This repo's own rule, arriving from a new direction: an empty search is a
+#: claim about the search.
 SECOND_SERIES = (
     ("p01185_19.02.34.191.png", 55, 1),
     ("p01189_19.02.36.427.png", 109, 2),
@@ -136,6 +144,7 @@ SECOND_SERIES = (
     ("p01202_19.02.43.672.png", 275, 5),
     ("p01207_19.02.46.460.png", 330, 6),
     ("p01211_19.02.48.692.png", 386, 7),
+    ("p01216_19.02.51.472.png", 441, 8),
     ("p01219_19.02.53.145.png", 496, 9),
     ("p01224_19.02.55.931.png", 552, 10),
 )
@@ -463,3 +472,383 @@ class TestTheDesignHoldsItsShape:
         Reporting None is the honest answer; a number would not be.
         """
         assert vision_meter.PanelReading(total=1, hits=1).progress is None
+
+
+#: The 1.0.15 full-screen capture, and the human transcription taken off it.
+#:
+#: These frames are 2560x1440 full-scene PNGs rather than the 500x310 panel
+#: crops the reader was built for, so they test something the reference capture
+#: cannot: that the geometry is a property of the HUD and not of a purpose-built
+#: crop. The transcription is the cycle-34 reading, taken by eye before any
+#: reader was pointed at these frames, so it is ground truth this module did not
+#: get to choose - the same standard as FINDINGS section 11.
+FULLSCREEN = Path("C:/ll-captures/2026-08-30/frames")
+TRANSCRIPTION = Path("C:/ll-captures/2026-08-30/meter_transcription_cycle34.csv")
+
+#: Where the 500x310 panel sits inside a 2560x1440 frame. Measured, and
+#: tolerant across x 2056-2061; y 390 is the best row of five swept, and every
+#: offset gave ZERO disagreements, so vertical misalignment costs readings and
+#: never produces a wrong one.
+FULLSCREEN_CROP_ORIGIN = (2058, 390)
+
+
+def _require_fullscreen():
+    if not FULLSCREEN.is_dir():
+        pytest.skip(f"1.0.15 capture not on this machine: {FULLSCREEN}")
+    if not TRANSCRIPTION.is_file():
+        pytest.skip(f"human transcription not on this machine: {TRANSCRIPTION}")
+
+
+def _panel_up_rows():
+    """The transcribed panel-up frames, as (filename, total, hits)."""
+    import csv
+
+    with TRANSCRIPTION.open(newline="") as handle:
+        rows = [r for r in csv.DictReader(handle) if r["panel_state"] == "up"]
+    return [(r["frame"], int(r["live_total"]), int(r["live_hits"])) for r in rows]
+
+
+def _crop_fullscreen(name):
+    Image = _pillow()
+    x, y = FULLSCREEN_CROP_ORIGIN
+    return Image.open(FULLSCREEN / name).convert("RGB").crop((x, y, x + 500, y + 310))
+
+
+class TestTheFullScreenCapture:
+    """ROADMAP 7c's remaining acceptance: read the whole 124, agree every time.
+
+    The reader goes blind at 1000 because the meter renders a thousands
+    separator, a 3px column run against ``MIN_GLYPH_WIDTH`` 6. It fails SAFE -
+    every four-digit frame is refused and none is misread - but a long run is
+    exactly the run that crosses 1000, and a long run is what a distance sweep
+    produces, so the gap bites where it hurts.
+    """
+
+    def test_the_transcription_has_the_shape_the_roadmap_records(self):
+        """Guard the ground truth itself before trusting it."""
+        _require_fullscreen()
+        rows = _panel_up_rows()
+        assert len(rows) == 124, f"expected 124 panel-up frames, got {len(rows)}"
+        tally = {}
+        for _name, total, _hits in rows:
+            tally[len(str(total))] = tally.get(len(str(total)), 0) + 1
+        assert tally == {1: 20, 2: 7, 3: 42, 4: 55}, (
+            f"digit-length tally moved: {tally}"
+        )
+
+    def test_no_panel_up_frame_is_ever_MISREAD(self):
+        """ZERO DISAGREEMENTS. The property that may never be traded.
+
+        A refusal and a wrong number are not two grades of the same failure.
+        A refusal is a required behaviour of this module; a wrong number is the
+        thing it exists to prevent, and it is indistinguishable from a
+        measurement once it reaches a document. So this is asserted on its own,
+        with nothing else in the test that could go red first and mask it.
+        """
+        _require_fullscreen()
+        disagreements = []
+        for name, total, hits in _panel_up_rows():
+            try:
+                reading = read_panel(_crop_fullscreen(name))
+            except Unreadable:
+                continue
+            if (reading.total, reading.hits) != (total, hits):
+                disagreements.append(
+                    (name, (total, hits), (reading.total, reading.hits))
+                )
+        assert disagreements == [], (
+            f"{len(disagreements)} frames DISAGREED with the human "
+            f"transcription: {disagreements[:5]}"
+        )
+
+    def test_the_refusals_are_exactly_the_six_frames_with_a_measured_reason(self):
+        """118 of 124 read. The six that do not are PINNED BY NAME.
+
+        Naming them is what stops this from being a weakened test. A seventh
+        refusal fails it, and so does one of the six starting to read - either
+        direction is a change worth noticing rather than a threshold quietly
+        absorbing it. Every one is an ink-quality or registration limit of the
+        frame, and NONE is a segmentation failure:
+
+        - ``f0661`` carries ZERO orange pixels anywhere in the band. The
+          transcription itself flags it not legible and a human read it at 8x.
+          Refusing is correct and no window or template can change it.
+        - ``f0469`` and ``f0470`` catch the panel sliding IN, vertically
+          misregistered: the glyphs sit at rows 97-116 where every accepted
+          glyph in both captures sits at 100-101/117-118. A +2px shift scores
+          them 0.0601 at margin 0.0910, so a registration search would recover
+          them - and would also be a search for an alignment that makes a glyph
+          match, which is a different fix with a different risk. ROADMAP 7c
+          carries it as an open item rather than this module carrying it now.
+        - ``f0527``, ``f0537`` and ``f0581`` are dithered or smeared transition
+          frames whose leading glyph scores 0.122 to 0.165 against an accept
+          bound of 0.115. Two of the three are within 0.007 of accepting, which
+          is exactly the band the two-threshold design exists to refuse.
+        """
+        _require_fullscreen()
+        expected = {
+            "f0469_00.41.12.png",
+            "f0470_00.41.14.png",
+            "f0527_00.42.36.png",
+            "f0537_00.42.50.png",
+            "f0581_00.43.50.png",
+            "f0661_00.45.40.png",
+        }
+        refused = set()
+        for name, _total, _hits in _panel_up_rows():
+            try:
+                read_panel(_crop_fullscreen(name))
+            except Unreadable:
+                refused.add(name)
+        assert refused == expected, (
+            f"refusal set moved - newly refusing {sorted(refused - expected)}, "
+            f"newly reading {sorted(expected - refused)}"
+        )
+        assert len(_panel_up_rows()) - len(refused) == 118
+
+    def test_the_refusal_band_prevents_three_REAL_misreads(self, monkeypatch):
+        """The guards are LOAD-BEARING here, and that is measured not asserted.
+
+        It would be easy to read the six refusals as a threshold being timid,
+        and to widen a constant until 124 of 124 came back. Disabling the
+        accept band and the ambiguity margin does exactly that - the reader
+        returns 123 of 124 - and THREE of them are wrong:
+
+        | frame | true | read with the guards off |
+        |---|---|---|
+        | ``f0527`` | 261 | 262 |
+        | ``f0537`` | 618 | 633 |
+        | ``f0581`` | 1834 | **3334** |
+
+        The last is wrong in the LEADING digit, a 1500-unit error that would
+        sit unremarked in a damage series. On ``f0581`` the two candidates tie
+        at 0.165 to three decimals and the true digit is neither of them.
+
+        So the count that matters is not how many frames read - it is that no
+        frame is misread. This test fails if a future pass widens a constant to
+        chase the last few frames.
+        """
+        _require_fullscreen()
+        monkeypatch.setattr(vision_meter, "ACCEPT_DISTANCE", 0.199)
+        monkeypatch.setattr(vision_meter, "AMBIGUITY_MARGIN", 0.0)
+        truth = {name: total for name, total, _h in _panel_up_rows()}
+        for name in (
+            "f0527_00.42.36.png",
+            "f0537_00.42.50.png",
+            "f0581_00.43.50.png",
+        ):
+            got = read_panel(_crop_fullscreen(name)).total
+            assert got != truth[name], (
+                f"{name} now reads correctly at a loosened threshold, so this "
+                "test no longer demonstrates what the guard prevents"
+            )
+
+    def test_the_four_digit_frames_are_read(self):
+        """The gap this cycle closed, pinned so a regression names itself.
+
+        54 of the 55 read. The one that does not is ``f0581``, a smeared frame
+        whose LEADING glyph scores 0.165 - it never reaches the separator, and
+        it refused before this work for the same reason it refuses now.
+        """
+        _require_fullscreen()
+        four = [r for r in _panel_up_rows() if r[1] >= 1000]
+        assert len(four) == 55, f"expected 55 four-digit frames, got {len(four)}"
+        wrong, refused = [], []
+        for name, total, hits in four:
+            try:
+                reading = read_panel(_crop_fullscreen(name))
+            except Unreadable:
+                refused.append(name)
+                continue
+            if (reading.total, reading.hits) != (total, hits):
+                wrong.append((name, total, f"read {reading.total}/{reading.hits}"))
+        assert wrong == [], f"a four-digit frame was MISREAD: {wrong}"
+        assert refused == ["f0581_00.43.50.png"], f"refusal set moved: {refused}"
+
+
+class TestTheThousandsSeparator:
+    """A narrow run is only a separator when it sits LOW in the band.
+
+    The measured populations over all 55 four-digit frames of the 1.0.15
+    capture, taken inside the module's own row band:
+
+    | property | separator | digit |
+    |---|---|---|
+    | width | 3-4 | 8-13 |
+    | first inked row | 19-20 | 4-6 |
+    | height | 6-8 | 17-20 |
+
+    The first inked row is the discriminator - a 13-row gap - and it is the
+    axis that stays strong exactly where ink count is weakest, because the
+    faintest genuine digit measured (value 618, 18 lit pixels against a median
+    of 56) still starts at row 4 and stands 19 rows tall.
+
+    **x position is NOT a discriminator and must never be used as one.** The
+    separator occupies x68-72, and 49 genuine digit runs from 2- and 3-digit
+    values overlap that span - value 116 puts a real digit at x68-75, the same
+    left edge as the comma.
+    """
+
+    def _band_blob(self, px, x0, width, row0, row1):
+        """Paint orange ink at rows measured RELATIVE to TOTAL_BAND."""
+        top = vision_meter.TOTAL_BAND[0]
+        for x in range(x0, x0 + width):
+            for y in range(top + row0, top + row1 + 1):
+                px[x, y] = (230, 140, 40)
+
+    def _frame_with_blob(self, row0, row1, width=3, x0=68):
+        Image = _pillow()
+        image = Image.new("RGB", (500, 310), (20, 20, 24))
+        px = image.load()
+        self._band_blob(px, x0, width, row0, row1)
+        return image
+
+    def test_a_narrow_run_HIGH_in_the_band_is_still_a_fragment(self):
+        """NON-VACUITY. This is the test that keeps the rule honest.
+
+        If the separator rule ever degrades into "skip anything narrow", a
+        damaged digit that erodes to a few columns would be silently DROPPED
+        and the number would shorten into something that still looks valid.
+        That is the exact failure this module exists to prevent, so a narrow
+        run at DIGIT height must keep refusing.
+        """
+        image = self._frame_with_blob(row0=4, row1=22)
+        with pytest.raises(Unreadable, match="fragment, not a digit"):
+            vision_meter._read_field(image, vision_meter.VALUE_WINDOW, "value")
+
+    def test_a_narrow_run_LOW_in_the_band_is_taken_as_a_separator(self):
+        """The comma's own geometry: 3px wide, rows 20-26 of the band."""
+        image = self._frame_with_blob(row0=20, row1=26)
+        with pytest.raises(Unreadable) as caught:
+            vision_meter._read_field(image, vision_meter.VALUE_WINDOW, "value")
+        assert "fragment, not a digit" not in str(caught.value), (
+            "a comma-shaped run was refused as a fragment instead of being "
+            "recognised as a thousands separator"
+        )
+
+    def test_a_tall_narrow_run_low_in_the_band_is_not_a_separator(self):
+        """Height is an independent check, so erosion cannot fake a comma."""
+        image = self._frame_with_blob(row0=12, row1=26)
+        with pytest.raises(Unreadable, match="fragment, not a digit"):
+            vision_meter._read_field(image, vision_meter.VALUE_WINDOW, "value")
+
+    def test_a_SHORT_narrow_run_HIGH_in_the_band_is_still_a_fragment(self):
+        """The row rule ISOLATED, and the first version of this suite missed it.
+
+        The earlier high-fragment test painted a run 19 rows tall, so the
+        HEIGHT check refused it and the row check was never exercised - a
+        mutation that deleted the row rule entirely left the suite green. This
+        run is 7 rows tall, exactly a comma's height, and differs from a comma
+        only in sitting at the top of the band. It is the shape an eroded digit
+        actually takes, and it is the case the row rule alone can refuse.
+        """
+        image = self._frame_with_blob(row0=2, row1=8)
+        with pytest.raises(Unreadable, match="fragment, not a digit"):
+            vision_meter._read_field(image, vision_meter.VALUE_WINDOW, "value")
+
+
+class TestTheGroupingRule:
+    """Digits are regrouped after a separator, and bad grouping REFUSES.
+
+    This is what would have caught the truncation an adversarial pass shipped
+    while implementing the naive fix: with the value window still sized for
+    three digits it read a true 2,000 as `2,06`. Two digits after a thousands
+    separator is not a number, and refusing it costs nothing.
+    """
+
+    def test_a_well_formed_thousands_group_is_accepted(self):
+        assert vision_meter._regroup(["1", None, "0", "2", "5"], "value") == "1025"
+
+    def test_a_plain_number_with_no_separator_is_untouched(self):
+        assert vision_meter._regroup(["1", "0", "3"], "value") == "103"
+
+    def test_too_few_digits_after_the_separator_is_refused(self):
+        """The exact shape of the `2,06` truncation."""
+        with pytest.raises(Unreadable, match="grouping"):
+            vision_meter._regroup(["2", None, "0", "6"], "value")
+
+    def test_too_many_digits_after_the_separator_is_refused(self):
+        with pytest.raises(Unreadable, match="grouping"):
+            vision_meter._regroup(["2", None, "0", "6", "1", "4"], "value")
+
+    def test_a_leading_separator_is_refused(self):
+        with pytest.raises(Unreadable, match="grouping"):
+            vision_meter._regroup([None, "0", "2", "5"], "value")
+
+    def test_a_trailing_separator_is_refused(self):
+        with pytest.raises(Unreadable, match="grouping"):
+            vision_meter._regroup(["1", "0", "2", "5", None], "value")
+
+    def test_a_group_longer_than_three_before_the_separator_is_refused(self):
+        with pytest.raises(Unreadable, match="grouping"):
+            vision_meter._regroup(["1", "2", "3", "4", None, "5", "6", "7"], "value")
+
+
+class TestSplittingAMergedRun:
+    """Two glyphs separated by ONE blank column segment as a single run.
+
+    ``_column_runs`` uses ``gap=2`` because the widest intra-glyph gap is 1px,
+    so a run only breaks on a gap of 3 or more. One blank column between two
+    digits gives ``column - previous == 2``, which is not ``> 2``, so the pair
+    merges. The design margin is exactly one column and 18 of the 19 merged
+    runs measured have a ``4`` on the left, whose crossbar spills a column
+    right.
+
+    **The width gate is what makes splitting safe, not the valley.** Measured
+    over the 1.0.15 capture: a run that is definitely ONE glyph is 8-13px in
+    the value field and 10-12px in the hit count; a run that is definitely TWO
+    is 24-27px. The populations are disjoint with an 11-column gap and nothing
+    at all lands in 14-23.
+
+    **The valley alone would be unsafe** and that is the whole reason for the
+    gate: 12 definitely-single glyphs across 9 frames carry an interior blank
+    column of their own - 11 of them the digit ``0`` - so a rule that split on
+    any interior gap would shred them into 4-7px pieces and lose nine frames
+    that currently read correctly.
+    """
+
+    def _mask(self, lit_columns, width=240, rows=27):
+        """A band mask with the named columns inked over every row."""
+        return [[x in lit_columns for x in range(width)] for _ in range(rows)]
+
+    def test_a_merged_pair_splits_at_its_single_blank_column(self):
+        mask = self._mask(set(range(53, 65)) | set(range(66, 77)))
+        assert vision_meter._split_merged(mask, 53, 76, "value") == [(53, 64), (66, 76)]
+
+    def test_a_single_glyph_carrying_an_interior_gap_is_NOT_split(self):
+        """NON-VACUITY against a real frame, and the glyph is the digit ``0``.
+
+        A zero renders as two strokes round a hollow centre, so it carries a
+        blank column exactly like a merged pair does. ``f0549`` reads 1,025 and
+        its ``0`` is a 10px run at x74-83 with an interior gap - 12 such runs
+        exist across the capture. Only the width gate tells them apart, so if
+        splitting were ever driven by the valley alone this frame would be
+        shredded into 4-5px pieces and refuse.
+        """
+        _require_fullscreen()
+        mask = vision_meter._mask(_crop_fullscreen("f0549_00.43.06.png"))
+        gapped = [
+            x for x in range(74, 84) if not any(row[x] for row in mask)
+        ]
+        assert gapped, "the anchor frame no longer has an interior gap at x74-83"
+        assert vision_meter.MAX_GLYPH_WIDTH >= 10, "a 10px zero must clear the gate"
+        reading = read_panel(_crop_fullscreen("f0549_00.43.06.png"))
+        assert (reading.total, reading.hits) == (1025, 20)
+
+    def test_the_gate_sits_in_the_measured_gap(self):
+        """13px is the widest single glyph, 24px the narrowest merged pair."""
+        assert 13 < vision_meter.MAX_GLYPH_WIDTH < 24
+
+    def test_a_wide_run_with_no_interior_gap_is_refused(self):
+        """No valley means no defensible split point, so refuse."""
+        mask = self._mask(set(range(53, 77)))
+        with pytest.raises(Unreadable, match="interior gap"):
+            vision_meter._split_merged(mask, 53, 76, "value")
+
+    def test_a_wide_run_with_two_interior_gaps_is_refused(self):
+        """Three glyphs merged were never observed - refuse, do not presume."""
+        mask = self._mask(
+            set(range(53, 60)) | set(range(61, 68)) | set(range(69, 77))
+        )
+        with pytest.raises(Unreadable, match="interior gap"):
+            vision_meter._split_merged(mask, 53, 76, "value")
