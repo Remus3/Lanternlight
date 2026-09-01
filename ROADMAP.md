@@ -4253,13 +4253,22 @@ meter run. That needs the client and belongs in the client-open list.
   of `4c` precisely because `4c` is in the loop's `completed` list and work
   parked there is invisible. ~~**`4d` is the client-closed task to pick up.**~~
   **`4d` CLOSED 2026-09-01** (ledger `LL-0109`), so it is not the fallback any
-  more either. **The client-closed task is now item `7c`'s reader**, and
-  2026-09-01c gave it two concrete, measured jobs: teach it the thousands
-  separator, since as shipped it refuses every value at or above 1000 and a long
-  run is exactly the run that crosses 1000; and record that it fits a
-  full-screen 2560x1440 frame unmodified at crop origin `(2058, 390)`. Do NOT
-  lower `MIN_GLYPH_WIDTH` to fix the first - that converts a safe refusal into a
-  silent truncation. The other client-closed work is
+  more either. ~~**The client-closed task is now item `7c`'s reader**, with two jobs: teach
+  it the thousands separator, and record that it fits a full-screen frame at
+  crop origin `(2058, 390)`.~~ **BOTH DONE 2026-09-01d** (ledger `LL-0112`,
+  corrected by `LL-0113`). `MIN_GLYPH_WIDTH` was not lowered; the reader now
+  returns **118 of 124** panel-up frames with **ZERO disagreements**, up from
+  61, and the crop origin is recorded in the module's own docstring.
+
+  **So there is again no fully specified client-closed task.** What remains on
+  `7c` is the WHITE row, still blocked on a capture rather than on a session,
+  plus three items recorded in `7c` with acceptance criteria that are
+  defence-in-depth rather than capability: a registration search for two
+  misregistered frames, a re-check of split pieces against the width gate, and
+  tightening `_is_separator` to the comma population it documents. **A
+  four-digit committed fixture is BLOCKED on an operator decision**, not on
+  work - capture-derived pixels enter this public repo only on explicit
+  approval (`LL-0083` precedent). The other client-closed work is
   now reading more first-party data off the game's own menus into
   [`docs/AFFIXES.md`](docs/AFFIXES.md), which needs the operator in a menu
   but not in combat - and item 10 still supersedes everything the moment the
