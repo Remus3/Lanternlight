@@ -351,7 +351,17 @@ path is to re-implement from observed behaviour.
   forward slashes and assert the file parses before trusting a negative.
 - **Windows `write_text` turns LF into CRLF**, and `read_text` hides it. Byte
   counts lie. The `.githooks` scripts must stay LF or Git for Windows chokes on
-  a CR in the shebang.
+  a CR in the shebang. **A hash of a working file is NOT a hash of the commit**:
+  `.gitattributes` pins `*.py` to `eol=lf`, so `lanternlight/vision_meter.py` is
+  26,734 bytes with 602 CRLF pairs on disk and 25,879 bytes with none as a git
+  blob. Measured 2026-09-01e. A ledger entry quoting a hash must say WHICH, and
+  the git blob is the only one a fresh clone can reproduce.
+- **`python -m pytest -q` PRINTS NO SUMMARY LINE AT ALL, and still exits 0.**
+  `pytest.ini` already carries `-q` in `addopts`, so a second one makes it
+  `-qq`: you get dots, a `[100%]`, and nothing else. Measured 2026-09-01e -
+  anyone "confirming 1416 passed" with `-q` read a count that was never
+  printed. Run `python -m pytest` bare and read the last line, and note this is
+  the same defect as the `--collect-only -q` one that prints no total.
 - **`grep -iF` CRASHES on this machine and looks exactly like "no matches".**
   Measured 2026-09-01c on GNU grep 3.0 under Git Bash: `grep -i` matches,
   `grep -F` matches, and combining them aborts with SIGABRT and exit 134. Piped

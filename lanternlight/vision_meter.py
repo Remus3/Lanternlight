@@ -219,8 +219,18 @@ MAX_GLYPH_WIDTH = 18
 #:
 #: **These two bound CROP TOLERANCE, not the comma, and must not be tightened
 #: to the comma population.** The comma's own geometry moves with the crop
-#: origin - over the 55 four-digit frames it is height 6-7 at y=389, 6-8 at
-#: y=390, 8-9 at y=391 and 9 at y=392, with the first inked row sliding 18-21.
+#: origin. Over the 55 four-digit frames, across the WHOLE advertised band and
+#: not the four offsets an earlier version of this paragraph swept:
+#:
+#: | crop y | height | first inked row |
+#: |---|---|---|
+#: | 388 | 4-5 | 21-22 |
+#: | 389 | 6-7 | 20-21 |
+#: | 390 | 6-8 | 19-20 |
+#: | 391 | 8-9 | 18-19 |
+#: | 392 | 9 | 18 |
+#:
+#: So across 388-392 the comma is height 4-9, first row 18-22 and width 3-5.
 #: A tidy-looking bound of ``top >= 19`` with height 6-8 and width 3-4 rejects
 #: a real comma at y=391 and ALL 54 at y=392, which would destroy the measured
 #: property that every offset in 388-392 yields zero disagreements.
