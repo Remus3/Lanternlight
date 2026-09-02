@@ -85,6 +85,7 @@ HOST_SHAPED = re.compile(r"(?:[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\.)+[A-Za-
 #: read before it was added. See the module docstring before extending it.
 KNOWN_NON_HOSTS = frozenset(
     {
+        "00.42.52.png",
         "10.png",
         "19.02.51.472.png",
         "19.02.52.028.png",
