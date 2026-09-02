@@ -36,6 +36,36 @@ A fresh clone runs zero git hooks until that first command runs. The tracked
 
 ## Where the last session left it
 
+**Cycle 36 closed item `7c`'s two DEFENCE-IN-DEPTH gaps** (`LL-0115`), then
+CORRECTED itself the same cycle (`LL-0116`). Neither gap was a bug: over 6,439
+frames the change is 0 changed readings, 0 lost, 0 gained. `_split_merged` now
+refuses a piece it cannot vouch for, and `_is_separator` gained a height FLOOR.
+
+**Read `LL-0116` before touching that floor.** It shipped at 5, justified by a
+geometry sweep over y=389..392 - and the module's advertised tolerance band is
+**388**-392. At y=388 the comma is height **4** in 45 of the 55 four-digit
+frames, so a floor of 5 refused 45 real commas at an offset the module claims
+to tolerate. It is now **4**, the largest floor that refuses no genuine comma
+anywhere in the band, and it is pinned: 2 and 3 fail the speck test, 5 and 6
+fail the shortest-offset test.
+
+**The rules that cycle earned, and they are the live ones:**
+
+1. **A document cannot be more complete than the PROBE behind it.** The
+   omission was in the sweep, not the write-up; every artifact faithfully
+   reported a table already missing its worst case. When a constant is
+   justified by a sweep, read the sweep's range off the property being
+   defended rather than typing it from memory.
+2. **Margin is the wrong frame for a constant whose BOTH directions fail
+   safe.** The rule is not "leave margin", it is **never refuse measured
+   data**. Reasoning about margin is what produced the worse answer.
+3. **A cleanup step that only runs on the success path is not a cleanup
+   step.** A mutation loop timed out and left the module at
+   `SEPARATOR_MIN_HEIGHT = 7`; it was caught only because the restore is
+   VERIFIED by hash rather than assumed.
+
+---
+
 **Cycle 35 closed item `7c`'s ORANGE PAIR** (ledger `LL-0112`, corrected by
 `LL-0113`). `vision_meter` went blind at 1000 because the thousands comma is a
 3px run against `MIN_GLYPH_WIDTH` 6. It now reads **118 of the 124** panel-up

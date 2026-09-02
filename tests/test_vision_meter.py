@@ -934,8 +934,21 @@ class TestSplittingAMergedRun:
         once leaves a piece that is still far too wide to be one digit. Nine
         such pieces exist in the 2026-08-25 capture, 22 to 54px. Six reach this
         postcondition; the other three refuse earlier, on no ink, a 5px
-        fragment and the bleed ceiling. Before this check the six were left to
-        the DISTANCE threshold, the guard most likely to be retuned.
+        fragment and the bleed ceiling.
+
+        **"All six were caught by the distance threshold at 0.1489" was written
+        here and is WRONG on two counts.** 0.1489 is one piece, ``p05718``.
+        Force-scored, the six break down as: ``p05718`` refusing on the
+        over-wide piece itself (0.1489); ``p02435``, ``p02722``, ``p03302`` and
+        ``p05611`` refusing on the SIBLING piece first, which is scanned before
+        the over-wide one (0.1511, 0.1200, 0.1264, 0.1278); and ``p06217`` at
+        0.2115, which is past ``REJECT_DISTANCE`` and so refuses as "matched no
+        digit" rather than in the accept band at all.
+
+        The point survives and is narrower than the slogan: before this
+        postcondition existed, an over-wide piece was left to whatever the
+        distance machinery happened to do with it or with its neighbour, and
+        that is not a guarantee a splitter should be relying on.
 
         That is one guard where the design intends two, and the distance
         threshold is the guard most likely to move. The splitter now refuses a

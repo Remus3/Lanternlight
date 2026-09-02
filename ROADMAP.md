@@ -1533,7 +1533,8 @@ restored byte-exact by sha256 after every one.
   comma at crop origin y=391 and all 54 at y=392, because the comma's geometry
   MOVES with the crop, so `SEPARATOR_MIN_ROW` and `SEPARATOR_MAX_HEIGHT` buy
   crop tolerance rather than discrimination and were left alone. What was
-  actually missing was a height FLOOR (`SEPARATOR_MIN_HEIGHT` = 5), the one
+  actually missing was a height FLOOR (`SEPARATOR_MIN_HEIGHT` = 4 - it
+  shipped at 5 and was corrected the same day, see `LL-0116`), the one
   property the rule never tested. The original wording is kept below for the
   measurements it carries.
 
@@ -1554,16 +1555,24 @@ restored byte-exact by sha256 after every one.
      withdrawn: 30 of those 384 firings are the genuine comma in a frame that
      reads a four-digit value, which only became possible when the value window
      was widened. Only 3 frames in 6,439 ever had `_regroup` as their sole
-     guard, and in all three the field held separators and no digits at all. The
-     docstring describes a comma at width 3-4 and first inked row 19-20. The
-     predicate accepts ANY sub-6px run with first row >= 12 and height <= 10, and
-     on the 2026-08-25 capture it fires **384** times - at widths 1, 2, 3, 4 and
-     5, and at first rows spread across 12-26. None ever reached a number, and
-     the only reason is that `_regroup` rejects every malformed grouping, which
-     is one guard rather than two. **Acceptance:** tighten the predicate to the
-     measured population, or state the looser bounds in the docstring as
-     deliberate - and either way keep the 124-frame set at ZERO disagreements
-     and the 6,439-frame diff at zero changed readings.
+     guard, and in all three the field held separators and no digits at all.
+
+     *The original wording followed, kept for the measurements it carries. It
+     is written in the PRESENT TENSE about a predicate that has since changed,
+     so read it as the BEFORE state:* ~~The docstring describes a comma at
+     width 3-4 and first inked row 19-20. The predicate accepts ANY sub-6px run
+     with first row >= 12 and height <= 10, and on the 2026-08-25 capture it
+     fires **384** times - at widths 1, 2, 3, 4 and 5, and at first rows spread
+     across 12-26. None ever reached a number, and the only reason is that
+     `_regroup` rejects every malformed grouping, which is one guard rather
+     than two. **Acceptance:** tighten the predicate to the measured
+     population, or state the looser bounds in the docstring as deliberate -
+     and either way keep the 124-frame set at ZERO disagreements and the
+     6,439-frame diff at zero changed readings.~~
+
+     Both halves of that are now false: the predicate additionally requires
+     `height >= SEPARATOR_MIN_HEIGHT` (4), and 30 of the 384 firings ARE a
+     genuine comma in a frame that reads a four-digit value.
 
 - **A four-digit committed fixture, BLOCKED on operator approval.** The
   `LL-0083` precedent is that capture-derived pixels enter this public repo only
