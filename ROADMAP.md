@@ -1513,17 +1513,44 @@ restored byte-exact by sha256 after every one.
 - **The white Progress Record row**, unchanged and still blocked exactly as
   described above - it needs a capture with longer stable stretches per record
   value across at least ten distinct records.
-- **A registration search, OPTIONAL and NOT done.** `f0469` and `f0470` sit 2px
-  high because the panel is still sliding in. A +2px shift scores the glyph
-  0.0601 at margin 0.0910, so a search would recover both. It was not done
-  because searching for an alignment that makes a glyph match is a different fix
-  with a different risk profile - it multiplies scoring attempts and so erodes
-  the margin guarantee - and because this item deliberately measured that
-  vertical misalignment degrades to refusal and never to error. **Acceptance if
-  a future session takes it up:** the 124-frame set still shows ZERO
-  disagreements, the 6,439-frame reference capture still shows zero changed
-  readings, and the y-offset sweep at 388-392 still shows zero disagreements at
-  every offset.
+- ~~**A registration search, OPTIONAL and NOT done.**~~ **DONE 2026-09-02 as
+  CONSENSUS, not as a search** (ledger `LL-0118`). `lanternlight.vision_meter`
+  gained `read_frame`, which crops a full frame at every row in
+  `FRAME_CONSENSUS_ROWS` (388-392, x fixed at 2058) and requires the readings to
+  AGREE - a conflict REFUSES rather than being broken in favour of the
+  best-scoring offset. **It is therefore a NEW guard, not a relaxed one**, which
+  is what makes it a different thing from the search this bullet declined: it
+  never picks a winner, so it cannot hunt for an alignment that makes a glyph
+  match, and two rows returning different numbers is a refusal trigger that did
+  not exist before.
+
+  **Measured 2026-09-02:** 118 of 124 at the single shipped row, **120 of 124**
+  by consensus, and the two recovered frames are exactly the `f0469` and `f0470`
+  this bullet named. 0 lost, 0 misread against the human transcription, 0
+  disagreements across the five rows, 0 of 231 panel-down frames read, and 0 of
+  all 1,817 out-of-window frames read. `read_panel` is untouched - the
+  6,439-frame consumer diff is 0 changed / 0 lost / 0 gained, and every function
+  in its call graph compiles to identical bytecode.
+
+  **The four that still refuse are NOT registration failures**, so no shift
+  recovers them: `f0527`, `f0537` and `f0581` are dithered or smeared, and
+  `f0661` is a FADE - its brightest value-window pixel is rgb(106, 65, 24)
+  against rgb(234, 128, 21) in both neighbouring frames, so its ink never passes
+  the orange predicate at any offset. The transcription labels it `up` and
+  records 9/1; a human can read a dimmed glyph that a hard colour threshold
+  cannot. Refusing it is correct behaviour.
+
+  *The original wording is kept for the measurement it carries:* ~~A +2px shift
+  scores the glyph 0.0601 at margin 0.0910, so a search would recover both. It
+  was not done because searching for an alignment that makes a glyph match is a
+  different fix with a different risk profile - it multiplies scoring attempts
+  and so erodes the margin guarantee.~~ That reasoning still stands and is
+  precisely why the fix that shipped requires agreement instead of searching.
+
+  **The x axis was measured and deliberately NOT swept.** A 2-D sweep over x
+  2056-2061 crossed with y 388-392 recovers ZERO additional frames over the y
+  sweep alone, so x consensus is pure cost - and horizontal misalignment is not
+  even safe: see `7d`.
 - ~~**Two DEFENCE-IN-DEPTH gaps, found by the final adversarial pass, recorded
   rather than hot-fixed because neither has ever fired.**~~ **BOTH CLOSED
   2026-09-01e** (ledger `LL-0115`). Neither was a bug: over 6,439 frames the
@@ -1580,6 +1607,84 @@ restored byte-exact by sha256 after every one.
   three-digit read but not a four-digit one, so the separator and splitter paths
   are clone-tested only against synthesised masks. Recorded as a decision gate
   rather than committed unasked.
+
+## 7d. A digit pushed OUTSIDE a field window is SILENTLY DROPPED - OPEN
+
+Opened 2026-09-02, cycle 37. Found by the x-offset slice while measuring
+something else, then DEMONSTRATED ON REAL INK rather than left as geometry.
+
+**The defect.** `_read_field` never asserts that ink stops before `x_hi`. It
+collects column runs inside the window and assembles whatever it finds. When a
+glyph falls ENTIRELY outside the window, the survivors form a valid number and
+are returned as a measurement. This is the failure class the whole module exists
+to prevent: not a refusal, a WRONG NUMBER.
+
+**Demonstrated, on real captured ink, 2026-09-02.** Frame
+`f0539_00.42.52.png`, true `live_hits` 14:
+
+| window passed to `_read_field` | result |
+|---|---|
+| `(193, 224)` - the shipped one | `14`, correct |
+| `(193, 218)` | REFUSED - the partial glyph scores 0.132, in the ambiguity band |
+| `(193, 212)` | **`1`** - a wrong number for a true 14 |
+| `(193, 210)` | **`1`** - a wrong number for a true 14 |
+
+**A PARTIAL cut fails safe and a CLEAN cut fails dangerous.** That is why this
+has no detector: the harmless case is the one that trips a guard.
+
+**Why it is live, not theoretical.** Both fields are LEFT-ALIGNED - the left ink
+extent is constant regardless of digit count - so values grow RIGHTWARD into the
+window's right margin. Measured over all 124 panel-up frames of the 1.0.15
+capture:
+
+| field | window | usable | left margin | right margin at the widest observed value |
+|---|---|---|---|---|
+| value | `(40, 120)` | 40-119 | 13-14 | **4** columns, at 4 digits (55 frames) |
+| hits | `(193, 224)` | 193-223 | 6 | **0** columns, at 2 digits (78 frames) |
+
+The glyph advance is about 13px. So **`hits` reaching 100 would read as 10** -
+the third digit starts near column 225 and the window ends at 223, a CLEAN cut.
+`value` has one digit of headroom left: 10000 would need about 20 more columns
+against 4 available.
+
+**Never fired, and no recorded measurement is corrupt.** The capture's maximum
+`live_hits` is 50 and its digit lengths are 1 and 2 only. This is a latent
+defect, recorded before it bites, not an incident.
+
+**Same family as the value field's "blind at 1000", with the polarity
+REVERSED.** That one refused (the separator made runs too narrow) and was fixed
+by widening `VALUE_WINDOW`. That fix bought exactly one digit of headroom and
+stopped, and it left the *hits* field untouched at zero.
+
+### Do not fix it by widening the window
+
+Choosing a right bound without a capture that actually contains a 3-digit hit
+count is guessing at a boundary, which is `LL-0116`'s exact failure - a constant
+justified by a sweep that never covered the case it was chosen for.
+
+**A naive "refuse if ink touches the last column" is also WRONG and must not be
+shipped.** The rightmost lit column IS 223 in real 2-digit frames, so that guard
+would refuse 78 measured frames. NEVER REFUSE MEASURED DATA.
+
+**Proposed instead: a LOOKAHEAD guard.** Refuse when there is orange ink in the
+columns immediately RIGHT of the window (and, for symmetry, LEFT of it), because
+that is the signature of a glyph pushed out. Measured 2026-09-02 over all 124
+panel-up frames: the 12 columns outside each window, on each side, contain ZERO
+lit pixels in every frame. So the guard refuses NONE of the measured population
+and fires exactly when a digit has been displaced.
+
+**Acceptance:**
+
+- A test reading real captured ink through a truncating window asserts it now
+  REFUSES rather than returning the truncated number. The `(193, 212)` case
+  above is the ready-made fixture.
+- The guard WATCHED GOING RED - delete it, see the test fail, restore.
+- The 6,439-frame consumer diff still shows 0 changed, 0 lost, 0 gained.
+- The 124-frame set still reads 120 with ZERO disagreements.
+- The question is asked and answered for ALL FOUR edges, not just the hits right
+  edge. The defect is a property of `_read_field`, not of one window, and this
+  item's own table exists so that no future pass has to rediscover the other
+  three.
 
 ## 4c. Archive the log and the market cache on every session - CLOSED 2026-08-25b, successor 4d OPEN
 
@@ -1912,6 +2017,48 @@ and that sentence is WITHDRAWN** - see the stated limit above, which withdrew it
 arm. Caught by the wrap refutation, and it is the defect `LL-0104` itself named -
 a stale sentence surviving a few hundred lines from the correction - recurring
 inside the item that named it.
+
+## 4e. Re-check the watcher's LIVENESS at the WRAP, not only at entry - OPEN
+
+Opened 2026-09-02, cycle 37. Deferred here by ledger `LL-0117`, which recorded
+it rather than hot-fixing it because changing the documented start-up contract
+is a ROADMAP item and not a wrap edit.
+
+**The failure it exists to close.** On 2026-09-01 the session watcher was armed
+as pid 17568, correctly REFUSED two re-arm attempts during the session because
+it was still alive, and was then found DEAD at the wrap. For an unmeasured
+stretch nothing was archiving the log, the saves or the market cache. This is
+not "nobody armed it" - `4c` and `4d` closed that. It is the next failure along:
+**a refusal to re-arm is only as good as the process it deferred to**, and
+nothing re-checks that process between the arming and the next session entry.
+
+Every session-entry path calls `ensure_armed` on the way IN. None checks on the
+way OUT - and the way out is precisely when a session hands the machine back to
+an operator who is about to launch the client.
+
+**Liveness is not enough, and this is the part a naive fix will miss.** A pid
+can be recycled, so "a process with that pid exists" is a weaker statement than
+"the watcher is running". Cycle 37 checked both by hand at session entry: pid
+23628 was alive AND its command line was
+`python -m lanternlight.armwatch --dest-base C:\ll-captures`, and the start
+time matched the arming record. A check that stops at the pid would have passed
+on any unrelated process that inherited the number.
+
+**Acceptance:**
+
+- The wrap path re-checks the recorded pid before printing the next-session
+  prompt, and re-arms when it is dead rather than reporting the stale record.
+- The check confirms IDENTITY as well as liveness - a live pid that is not the
+  watcher must read as NOT armed. Name the evidence used (command line, start
+  time against the arming record, or both).
+- A test that has been WATCHED GOING RED: record a pid that is alive but is not
+  the watcher - the test's own process will do - and assert the wrap refuses to
+  treat it as armed. A test that only ever sees a dead pid does not pin this.
+- `docs/HEADLESS.md` states the wrap-side check beside the entry-side one, so a
+  cold session reading the headless contract learns both.
+
+**Not in scope:** killing anything. The loop guard never kills and neither does
+this - it refuses, re-arms, and reports.
 
 ## 4b. Ammo-family and talent measurement - READY, cheap, needs the client
 

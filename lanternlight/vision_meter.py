@@ -69,9 +69,19 @@ rather than guessed - see :data:`VALUE_WINDOW` and :data:`HITS_WINDOW`.
 
 **The geometry is a property of the HUD, not of a purpose-built crop.** A
 2560x1440 full-scene frame reads unmodified by taking the same 500x310 crop at
-origin ``(2058, 390)``. The x origin is tolerant across 2056-2061; y 390 is the
-best of five rows swept and every offset gave ZERO disagreements, so vertical
-misalignment costs readings and never produces a wrong one.
+origin ``(2058, 390)``. y 390 is the best of five rows swept and every offset
+in 388-392 gave ZERO disagreements, so VERTICAL misalignment costs readings and
+never produces a wrong one - which is why :func:`read_frame` sweeps y.
+
+**HORIZONTAL misalignment is NOT the same, and it DOES produce wrong numbers.**
+Measured 2026-09-02 over the 124 panel-up frames: x 2057-2065 each read 118 with
+zero wrong, x 2056 reads only 110, and x 2048, 2066 and 2068 return 30 WRONG
+readings between them - a digit pushed outside a field window is silently
+dropped and the survivors form a valid number, ``ROADMAP`` 7d. The danger is not
+monotonic: 2048 gives 12 wrong while 2050 gives none. An earlier version of this
+docstring advertised the x origin as "tolerant across 2056-2061", which is wrong
+at BOTH ends - it includes 2056, which costs 8 readings, and excludes 2062-2065,
+which are as good as 2058. **x is therefore FIXED at 2058 and never swept.**
 """
 
 from __future__ import annotations
@@ -84,11 +94,15 @@ from lanternlight.vision_meter_templates import HITS, VALUE
 __all__ = [
     "ACCEPT_DISTANCE",
     "AMBIGUITY_MARGIN",
+    "FRAME_CONSENSUS_ROWS",
+    "FRAME_PANEL_X",
     "HITS_WINDOW",
+    "PANEL_SIZE",
     "PanelReading",
     "REJECT_DISTANCE",
     "Unreadable",
     "VALUE_WINDOW",
+    "read_frame",
     "read_panel",
 ]
 
@@ -599,4 +613,107 @@ def read_panel(source) -> PanelReading:
         image = Image.open(source).convert("RGB")
     total = _read_field(image, VALUE_WINDOW, "value")
     hits = _read_field(image, HITS_WINDOW, "hits")
+    return PanelReading(total=total, hits=hits, progress=None)
+
+
+#: The panel crop's size, and so the smallest frame :func:`read_frame` accepts.
+PANEL_SIZE = (500, 310)
+
+#: The x origin of the 500x310 panel inside a 2560x1440 frame. Measured, and
+#: tolerant across 2056-2061 - only the ROW is swept below, because only the
+#: row was measured to give zero disagreements.
+FRAME_PANEL_X = 2058
+
+#: The crop rows read for CONSENSUS by :func:`read_frame`. Every one of these
+#: was measured to give ZERO disagreements over the 124 panel-up frames of the
+#: 1.0.15 capture, so reading all five and demanding agreement costs nothing on
+#: that data while adding a refusal trigger for a class of error that had no
+#: detector at all.
+#:
+#: **These are not candidates to search.** :func:`read_frame` never picks the
+#: offset that scores best. That is the alignment search ``ROADMAP`` 7c
+#: rejected, because scoring the same glyph at offset after offset until one
+#: matches multiplies scoring attempts and erodes the margin guarantee. A
+#: conflict between two rows is a REFUSAL.
+FRAME_CONSENSUS_ROWS = (388, 389, 390, 391, 392)
+
+
+def read_frame(source) -> PanelReading:
+    """Read a full-scene frame by CONSENSUS across crop rows, or raise.
+
+    Where :func:`read_panel` reads one already-cropped panel at one alignment,
+    this crops the same panel out of a full frame at every row in
+    :data:`FRAME_CONSENSUS_ROWS` and requires the readings to AGREE.
+
+    This is strictly a stronger guard than reading a single row, not a looser
+    one. A row that refuses costs a reading and nothing else; two rows that
+    return DIFFERENT numbers are a contradiction that the single-row reader
+    could not have noticed, and this refuses on it. It never breaks the tie.
+
+    Args:
+        source: A path, or a PIL image of the full scene. Paths are opened and
+            converted to RGB. The object must support ``.crop()`` and
+            ``.size``.
+
+    Returns:
+        The agreed reading. ``progress`` is None for the same reason as in
+        :func:`read_panel` - the white row has no labelled templates.
+
+    Raises:
+        Unreadable: if the frame is too small to hold the panel, if no row
+            produced a reading, or if two rows disagreed.
+
+    **The honest cost, measured 2026-09-02 and written here because it was
+    nearly left in conversation.** ``ROADMAP`` 7c declined a registration SEARCH
+    partly because it "multiplies scoring attempts and so erodes the margin
+    guarantee". This multiplies them by five exactly as a search would. What it
+    does NOT do is choose among the results - but that is a narrower rebuttal
+    than the objection deserves, and the difference matters most where the
+    cross-check is thinnest.
+
+    Over the 124 panel-up frames of the 1.0.15 capture the consensus DEPTH is:
+    2 frames read at all five rows, 37 at three, 25 at two, and **56 at exactly
+    ONE row**. For those 56 there is no cross-check at all - they are a
+    single-offset read at a row that happened to work - and they include both
+    frames this function exists to recover. Their only protection is that row's
+    own accept threshold, unchanged from :func:`read_panel`.
+
+    What was measured is that NO individual row misread any frame: zero wrong
+    readings at every one of the five rows, against the human transcription. So
+    the extra attempts bought no false accept here. **That is a claim about this
+    capture, not a guarantee about the next one.**
+    """
+    image = source
+    if isinstance(source, (str, Path)):
+        from PIL import Image
+
+        image = Image.open(source).convert("RGB")
+    width, height = image.size
+    panel_w, panel_h = PANEL_SIZE
+    needed_x = FRAME_PANEL_X + panel_w
+    needed_y = max(FRAME_CONSENSUS_ROWS) + panel_h
+    if width < needed_x or height < needed_y:
+        raise Unreadable(
+            f"frame is {width}x{height}, too small for a {panel_w}x{panel_h} "
+            f"panel at x{FRAME_PANEL_X} - needs at least {needed_x}x{needed_y}"
+        )
+    readings: dict[int, PanelReading] = {}
+    refusals: list[str] = []
+    for y in FRAME_CONSENSUS_ROWS:
+        box = (FRAME_PANEL_X, y, FRAME_PANEL_X + panel_w, y + panel_h)
+        try:
+            readings[y] = read_panel(image.crop(box))
+        except Unreadable as refusal:
+            refusals.append(f"y{y}: {refusal}")
+    if not readings:
+        raise Unreadable("no crop row produced a reading - " + "; ".join(refusals))
+    distinct = {(r.total, r.hits) for r in readings.values()}
+    if len(distinct) > 1:
+        detail = ", ".join(
+            f"y{y}={r.total}/{r.hits}" for y, r in sorted(readings.items())
+        )
+        raise Unreadable(
+            f"crop rows DISAGREE ({detail}) - refusing rather than picking one"
+        )
+    total, hits = distinct.pop()
     return PanelReading(total=total, hits=hits, progress=None)

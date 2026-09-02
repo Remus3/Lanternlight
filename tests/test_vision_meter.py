@@ -1000,3 +1000,169 @@ class TestSplittingAMergedRun:
             assert expected in str(caught.value), (
                 f"{name}: expected {expected!r}, got {str(caught.value)!r}"
             )
+
+
+def _rows_with_state(state):
+    """The transcribed rows in one panel state, as (filename, total, hits)."""
+    import csv
+
+    with TRANSCRIPTION.open(newline="") as handle:
+        rows = [r for r in csv.DictReader(handle) if r["panel_state"] == state]
+    if state != "up":
+        return [(r["frame"], None, None) for r in rows]
+    return [(r["frame"], int(r["live_total"]), int(r["live_hits"])) for r in rows]
+
+
+def _fullscreen_frame(name):
+    """One full 2560x1440 frame, UNCROPPED - what read_frame is given."""
+    Image = _pillow()
+    return Image.open(FULLSCREEN / name).convert("RGB")
+
+
+class TestConsensusRegistration:
+    """ROADMAP 7c's OPTIONAL registration search, done as CONSENSUS instead.
+
+    ``f0469`` and ``f0470`` are refused by the single shipped offset while the
+    panel is still animating in. **They do not "sit 2px high", which is what
+    ``ROADMAP`` 7c said and what an earlier draft of this file repeated without
+    measuring it.** Measured 2026-09-02: both read at y=389 and REFUSE at 388
+    and 392, so the effective offset is 1px, not 2. And it is not a translation
+    at all - their value ink band is rows (2, 21), height 20, against (5, 23),
+    height 19, on a settled frame: 3px at the top, 2px at the bottom, one row
+    TALLER. The panel is SCALING in, not sliding. The hits band is (3, 20) on
+    both, unshifted, which is why a 2px row refuses on hits rather than value.
+
+    The item warned that a shift
+    SEARCH is a different fix with a worse risk profile: scoring the same glyph
+    at offset after offset until one matches multiplies scoring attempts and
+    erodes the margin guarantee.
+
+    So this does not search. It reads at every offset and requires the readings
+    to AGREE, and a conflict is a REFUSAL rather than a tie broken in favour of
+    whichever offset scored best. That makes it strictly a NEW GUARD rather than
+    a relaxed one - two offsets returning different numbers is a refusal trigger
+    that did not exist before, and on this capture it has never fired.
+
+    ``read_panel`` is deliberately untouched: the 2026-08-25 reference capture
+    is 6,439 pre-cropped panels with no offset to vary, so consensus is a
+    property of reading a FULL-SCREEN frame and belongs in its own function.
+    """
+
+    def test_it_reads_at_least_120_of_the_124(self):
+        """The acceptance figure. Single-offset reads 118."""
+        _require_fullscreen()
+        read = [
+            name
+            for name, _total, _hits in _panel_up_rows()
+            if _tries(_fullscreen_frame(name)) is not None
+        ]
+        assert len(read) >= 120, f"consensus read only {len(read)} of 124"
+
+    def test_no_panel_up_frame_is_ever_MISREAD(self):
+        """ZERO DISAGREEMENTS against the human transcription.
+
+        Asserted on its own, with nothing else in the test that could go red
+        first and mask it. Offsets agreeing with EACH OTHER is not the property
+        that matters - they could agree on a wrong number. This checks the
+        agreed value against the number a human read off the screen.
+        """
+        _require_fullscreen()
+        wrong = []
+        for name, total, hits in _panel_up_rows():
+            got = _tries(_fullscreen_frame(name))
+            if got is not None and (got.total, got.hits) != (total, hits):
+                wrong.append((name, (total, hits), (got.total, got.hits)))
+        assert wrong == [], f"consensus MISREAD {len(wrong)} frames: {wrong[:5]}"
+
+    def test_it_recovers_the_two_frames_the_panel_slide_cost_us(self):
+        """The whole point of the item. Both read at y=389 only."""
+        _require_fullscreen()
+        for name, total, hits in (
+            ("f0469_00.41.12.png", 0, 0),
+            ("f0470_00.41.14.png", 0, 0),
+        ):
+            assert (FULLSCREEN / name).is_file(), f"cited frame missing: {name}"
+            with pytest.raises(Unreadable):
+                read_panel(_crop_fullscreen(name))
+            got = vision_meter.read_frame(_fullscreen_frame(name))
+            assert (got.total, got.hits) == (total, hits), f"{name}: got {got}"
+
+    def test_a_DISAGREEMENT_refuses_rather_than_picking_a_winner(self):
+        """The new guard. It has never fired on real data, so force it.
+
+        This is the property that makes consensus safer than a search. If this
+        ever starts returning a value instead of raising, the function has
+        silently become the alignment search the ROADMAP item rejected.
+        """
+        Image = _pillow()
+        seen = []
+
+        def fake_read_panel(crop):
+            seen.append(crop)
+            return vision_meter.PanelReading(
+                total=1234 if len(seen) == 1 else 9999, hits=5
+            )
+
+        original = vision_meter.read_panel
+        vision_meter.read_panel = fake_read_panel
+        try:
+            with pytest.raises(Unreadable) as caught:
+                vision_meter.read_frame(Image.new("RGB", (2560, 1440)))
+        finally:
+            vision_meter.read_panel = original
+        assert len(seen) > 1, "consensus must consult more than one offset"
+        assert "DISAGREE" in str(caught.value), f"got {str(caught.value)!r}"
+
+    def test_no_panel_DOWN_frame_produces_a_reading(self):
+        """0 of 231. Reading more offsets must not invent a panel."""
+        _require_fullscreen()
+        read = [
+            name
+            for name, _t, _h in _rows_with_state("down")
+            if _tries(_fullscreen_frame(name)) is not None
+        ]
+        assert read == [], f"{len(read)} panel-down frames produced a reading: {read[:5]}"
+
+    def test_every_row_in_the_band_is_safe_ON_ITS_OWN(self):
+        """Pins BOTH ends of FRAME_CONSENSUS_ROWS, which nothing else did.
+
+        Shrinking the band to ``(389, 390, 391)`` left every other test in this
+        class green, so the two outer rows were pinned by nothing at all. They
+        are not there for throughput - 388 and 392 read far fewer frames than
+        390 - they buy CROP TOLERANCE, so the property worth pinning is that
+        each row is safe ALONE, not that it is productive.
+        """
+        _require_fullscreen()
+        assert vision_meter.FRAME_CONSENSUS_ROWS == (388, 389, 390, 391, 392)
+        x = vision_meter.FRAME_PANEL_X
+        w, h = vision_meter.PANEL_SIZE
+        wrong, reads = {}, {}
+        for name, total, hits in _panel_up_rows():
+            full = _fullscreen_frame(name)
+            for y in vision_meter.FRAME_CONSENSUS_ROWS:
+                try:
+                    got = read_panel(full.crop((x, y, x + w, y + h)))
+                except Unreadable:
+                    continue
+                reads[y] = reads.get(y, 0) + 1
+                if (got.total, got.hits) != (total, hits):
+                    wrong.setdefault(y, []).append(name)
+        assert wrong == {}, f"a row in the band MISREAD: {wrong}"
+        assert all(reads.get(y, 0) > 0 for y in vision_meter.FRAME_CONSENSUS_ROWS), (
+            f"a row in the band reads nothing at all: {reads}"
+        )
+
+    def test_a_frame_too_small_for_the_crop_refuses(self):
+        """A short frame must not silently read a black padded crop."""
+        Image = _pillow()
+        with pytest.raises(Unreadable) as caught:
+            vision_meter.read_frame(Image.new("RGB", (800, 600)))
+        assert "too small" in str(caught.value), f"got {str(caught.value)!r}"
+
+
+def _tries(frame):
+    """read_frame, or None when it refuses. Keeps the tests above readable."""
+    try:
+        return vision_meter.read_frame(frame)
+    except Unreadable:
+        return None
