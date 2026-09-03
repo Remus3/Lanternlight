@@ -726,6 +726,35 @@ class _AssertingHeartbeat:
         raise AssertionError("the spy fired")
 
 
+class _RecoveringHeartbeat:
+    """A ``_write`` that fails ``fails_left`` times with a real OSError, then works.
+
+    ``OSError`` and nothing wider, for the same reason as
+    :class:`_RefusingHeartbeat`: it is the one class the flush is allowed to
+    absorb, and a spy raising anything else would be exercising a different
+    catch.
+
+    ``write_attempts`` counts every call, which is what separates "the
+    throttle declined to retry" from "the retry happened and failed again".
+    ``failed_writes`` alone cannot tell those apart, and this repo's rule is
+    that a negative assertion has to be paired with something positive.
+
+    Both counters are CLASS attributes used only as defaults; the ``+=`` and
+    ``-=`` below bind instance attributes on first use, so two spied
+    heartbeats never share a count.
+    """
+
+    fails_left = 0
+    write_attempts = 0
+
+    def _write(self, payload: str) -> None:
+        self.write_attempts += 1
+        if self.fails_left > 0:
+            self.fails_left -= 1
+            raise OSError(28, "no space left on device")
+        super()._write(payload)
+
+
 class _FrozenMonotonic:
     """A monotonic clock a test moves by hand.
 
@@ -789,15 +818,27 @@ def _read_heartbeat(path: Path) -> dict:
     return json.loads(path.read_text(encoding="ascii"))
 
 
-def _spy_heartbeat(spy: type, path: Path) -> armwatch.Heartbeat:
+def _spy_heartbeat(
+    spy: type,
+    path: Path,
+    *,
+    monotonic_fn: _FrozenMonotonic | None = None,
+) -> armwatch.Heartbeat:
     """Build a Heartbeat subclass whose ``_write`` comes from ``spy``.
 
     The spy is mixed in AHEAD of ``Heartbeat`` so its ``_write`` wins, which
     puts the raise inside the guarded region rather than around it - a spy
     that replaced the whole guarded call would prove nothing about the catch.
+
+    ``monotonic_fn`` defaults to a fresh frozen clock, so every existing
+    caller keeps the shape it had. A test that has to MOVE the throttle
+    window passes its own handle rather than reaching into a private
+    attribute, which would pin the implementation's field name instead of its
+    behaviour.
     """
+    ticks = _FrozenMonotonic() if monotonic_fn is None else monotonic_fn
     subclass = type(f"Spied{spy.__name__}", (spy, armwatch.Heartbeat), {})
-    return subclass(path, now_fn=_TickingUtcClock(), monotonic_fn=_FrozenMonotonic())
+    return subclass(path, now_fn=_TickingUtcClock(), monotonic_fn=ticks)
 
 
 class TestHeartbeatShape:
@@ -1049,6 +1090,350 @@ class TestAWedgedSurfaceIsVisible:
         assert (written - logs).total_seconds() > armwatch.LOG_POLL_S
 
 
+#: How long a test waits for a surface thread to report or to exit. Generous
+#: on purpose: it is not a timing assertion, it is the difference between a
+#: test that FAILS and a test that HANGS the suite forever on a thread that
+#: never arrived.
+_THREAD_JOIN_TIMEOUT_S = 10.0
+
+
+class _DayFlipClock:
+    """A thread-safe ``now_fn`` naming one day until a test flips it.
+
+    ``_SequenceClock`` pops from a list, which is correct for the synchronous
+    shape and wrong here: four threads read this clock concurrently and the
+    order they happen to arrive in is not a fact about anything. This one
+    hands the same reading to every caller until :meth:`flip`, so the day a
+    surface sees is decided by the TEST rather than by the scheduler.
+    """
+
+    def __init__(self, before: datetime, after: datetime) -> None:
+        self._before = before
+        self._after = after
+        self._flipped = threading.Event()
+
+    def flip(self) -> None:
+        self._flipped.set()
+
+    def __call__(self) -> datetime:
+        return self._after if self._flipped.is_set() else self._before
+
+
+class _OnePassPerSurface:
+    """A ``sleep_fn`` that walks the THREADED shape through one pass per surface.
+
+    ``run_rolling``'s production shape blocks forever, so the only way into
+    its second heartbeat call site is to own the sleeps. Every surface thread
+    reports its completed pass and then parks; the main loop's own wait
+    collects all four reports and raises the ``KeyboardInterrupt`` the
+    function already handles. Nothing here waits on wall-clock time, so the
+    run costs no real seconds and has no timing flake in it.
+
+    The surface threads are told apart from the main loop by THREAD NAME
+    rather than by the sleep duration, because 60.0 is a literal that could
+    drift; a renamed thread instead makes this raise in the wrong thread, the
+    main loop's collection times out, and the test fails loudly rather than
+    passing while looking somewhere else.
+
+    :meth:`release` must be run or the parked threads outlive the test.
+    """
+
+    def __init__(self, surfaces: int) -> None:
+        self.surfaces = surfaces
+        #: (thread name, seconds) for every surface sleep, so a test can assert
+        #: the threaded shape really ran all four rather than one four times.
+        self.surface_sleeps: list[tuple[str, float]] = []
+        self._reported = threading.Semaphore(0)
+        self._parked = threading.Semaphore(0)
+
+    def __call__(self, seconds: float) -> None:
+        name = threading.current_thread().name
+        if name.startswith("armwatch-"):
+            self.surface_sleeps.append((name, seconds))
+            self._reported.release()
+            self._parked.acquire()
+            return
+        for _ in range(self.surfaces):
+            assert self._reported.acquire(timeout=_THREAD_JOIN_TIMEOUT_S), (
+                "a surface thread never reported a completed pass"
+            )
+        raise KeyboardInterrupt
+
+    def release(self) -> None:
+        for _ in range(self.surfaces):
+            self._parked.release()
+
+
+def _armwatch_threads() -> list[threading.Thread]:
+    """Every live surface thread, by the name ``run_rolling`` gives them."""
+    return [t for t in threading.enumerate() if t.name.startswith("armwatch-")]
+
+
+class TestTheHeartbeatDescribesItsOwnCadence:
+    """ROADMAP item 4f. The interval TRAVELS with the stamp it judges.
+
+    ``TestAWedgedSurfaceIsVisible`` above proves a wedged ``logs`` surface
+    falls behind in the file. Visible is not the same as failing, and to
+    judge a surface against its OWN cadence a reader needs that cadence.
+    There are exactly two places it can come from: this file, or a literal
+    re-typed in the reader.
+
+    THAT IS NOT A STYLE PREFERENCE, it is a defect this repo has already
+    filed. Cycle 38's reader re-typed ``300.0`` as its own
+    ``SLOWEST_POLL_INTERVAL_S`` and the refutation pass flagged the drift
+    risk; it is now pinned by a test naming the interval armwatch actually
+    uses. Four surfaces means four more chances to re-type a number, so the
+    number ships beside the stamp instead.
+
+    STATED COST: the payload grows by one map of at most four numbers, and
+    ``surfaces`` and ``intervals`` can disagree for one pass while a surface
+    that has never completed one is missing from both. A reader that keys off
+    ``intervals`` and looks up ``surfaces`` sees a surface with a cadence and
+    no stamp, which is the honest reading of "armed, no completed pass yet"
+    and is precisely what the 4f acceptance forbids reading as stale.
+    """
+
+    def test_a_bounded_run_records_every_surfaces_own_interval(self, tmp_path: Path) -> None:
+        """The synchronous call site, driven through ``run_rolling`` itself.
+
+        A hand-built Heartbeat would prove the map works and nothing at all
+        about whether production fills it.
+        """
+        saved = _saved_tree(tmp_path)
+        base = tmp_path / "captures"
+        path = tmp_path / "beat.json"
+        beat, _clock, _ticks = _beat(path)
+        armwatch.run_rolling(
+            saved,
+            base,
+            max_passes=1,
+            now_fn=_SequenceClock(datetime(2026, 9, 3, 9, 0, 0)),
+            sleep_fn=lambda _s: None,
+            log_fn=lambda _m: None,
+            heartbeat=beat,
+        )
+        data = _read_heartbeat(path)
+        assert data["intervals"] == {
+            "savegames": 3.0,
+            "standalonelevel": 3.0,
+            "savedroot": 30.0,
+            "logs": 300.0,
+        }
+        plans = armwatch.session_plan(saved, base / "2026-09-03")
+        assert data["intervals"] == {plan.name: plan.poll_seconds for plan in plans}
+
+    def test_the_threaded_shape_records_the_interval_too(self, tmp_path: Path) -> None:
+        """The OTHER call site. One updated and one missed is three surfaces of four.
+
+        ``max_passes=None`` is the production shape and the only one an
+        operator ever runs, so a test that exercised the bounded loop alone
+        would stay green while the threaded path recorded bare names. The
+        threads exit through the module's own documented door: tomorrow's
+        dated root already holds a ``.git`` marker, so the retarget after the
+        clock flips refuses and each thread stops rather than leaking.
+        """
+        saved = _saved_tree(tmp_path)
+        base = tmp_path / "captures"
+        (base / "2026-09-04" / ".git").mkdir(parents=True)
+        path = tmp_path / "beat.json"
+        beat, _clock, _ticks = _beat(path)
+        clock = _DayFlipClock(datetime(2026, 9, 3, 9, 0, 0), datetime(2026, 9, 4, 9, 0, 0))
+        sleeper = _OnePassPerSurface(4)
+        said: list[str] = []
+        assert not _armwatch_threads(), "a surface thread leaked out of an earlier test"
+        try:
+            armwatch.run_rolling(
+                saved,
+                base,
+                now_fn=clock,
+                sleep_fn=sleeper,
+                log_fn=said.append,
+                heartbeat=beat,
+            )
+            data = _read_heartbeat(path)
+        finally:
+            clock.flip()
+            sleeper.release()
+            for thread in _armwatch_threads():
+                thread.join(timeout=_THREAD_JOIN_TIMEOUT_S)
+        assert not _armwatch_threads(), "a surface thread outlived the run"
+        assert sum(1 for line in said if line.startswith("stopping ")) == 4
+        assert dict(sleeper.surface_sleeps) == {
+            "armwatch-savegames": 3.0,
+            "armwatch-standalonelevel": 3.0,
+            "armwatch-savedroot": 30.0,
+            "armwatch-logs": 300.0,
+        }, "the threaded shape did not run all four surfaces once each"
+        assert data["intervals"] == {
+            "savegames": 3.0,
+            "standalonelevel": 3.0,
+            "savedroot": 30.0,
+            "logs": 300.0,
+        }
+
+    def test_the_number_comes_from_the_plan_not_from_a_literal(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        """Re-tune one interval and the payload must follow it.
+
+        A test asserting only ``300.0`` is satisfied by a heartbeat that
+        hard-codes ``300.0``, which is the very drift this item exists to
+        prevent - the same defect, moved one file to the left.
+        """
+        monkeypatch.setattr(armwatch, "LOG_POLL_S", 111.0)
+        saved = _saved_tree(tmp_path)
+        path = tmp_path / "beat.json"
+        beat, _clock, _ticks = _beat(path)
+        armwatch.run_rolling(
+            saved,
+            tmp_path / "captures",
+            max_passes=1,
+            now_fn=_SequenceClock(datetime(2026, 9, 3, 9, 0, 0)),
+            sleep_fn=lambda _s: None,
+            log_fn=lambda _m: None,
+            heartbeat=beat,
+        )
+        data = _read_heartbeat(path)
+        assert data["intervals"]["logs"] == 111.0
+        assert data["intervals"]["savedroot"] == armwatch.SAVED_ROOT_POLL_S
+
+    def test_the_surfaces_map_keeps_its_existing_shape(self, tmp_path: Path) -> None:
+        """The ops-layer reader already parses ``surfaces``. It must not move.
+
+        ``intervals`` is a SIBLING map, never a value nested inside the
+        stamps, because folding the two together would turn every existing
+        reader's ``fromisoformat`` into a ``TypeError`` on the first pass
+        after an upgrade.
+        """
+        saved = _saved_tree(tmp_path)
+        path = tmp_path / "beat.json"
+        beat, _clock, _ticks = _beat(path)
+        armwatch.run_rolling(
+            saved,
+            tmp_path / "captures",
+            max_passes=1,
+            now_fn=_SequenceClock(datetime(2026, 9, 3, 9, 0, 0)),
+            sleep_fn=lambda _s: None,
+            log_fn=lambda _m: None,
+            heartbeat=beat,
+        )
+        data = _read_heartbeat(path)
+        assert set(data) == {"pid", "written", "passes", "surfaces", "intervals"}
+        assert set(data["surfaces"]) == set(data["intervals"])
+        for name, stamp in data["surfaces"].items():
+            assert isinstance(stamp, str), f"{name} stopped being a plain ISO stamp"
+            assert datetime.fromisoformat(stamp).utcoffset() == timedelta(0)
+
+    def test_a_surface_recorded_without_an_interval_contributes_no_key(
+        self, tmp_path: Path
+    ) -> None:
+        """Absent, not null. A missing field is a different fact from a null one.
+
+        The positive half matters as much as the negative: the surface is
+        still STAMPED, so what is missing is its cadence and nothing else. An
+        assertion that only ruled the key out would be satisfied by a
+        heartbeat that dropped the surface entirely.
+        """
+        path = tmp_path / "beat.json"
+        beat, _clock, ticks = _beat(path)
+        beat.record("logs", armwatch.LOG_POLL_S)
+        ticks.value += armwatch.HEARTBEAT_FLUSH_INTERVAL_S
+        beat.record("savegames")
+        data = _read_heartbeat(path)
+        assert data["intervals"] == {"logs": armwatch.LOG_POLL_S}
+        assert set(data["surfaces"]) == {"logs", "savegames"}
+        assert data["passes"] == 2
+
+    def test_an_unsupplied_interval_never_appears_as_a_null(self, tmp_path: Path) -> None:
+        """Read as TEXT, because ``json.loads`` makes both readings look alike.
+
+        ``{"savegames": null}`` and an absent key are one keystroke apart in
+        the writer and a different fact to the reader, so this one asks the
+        file rather than the parsed object.
+        """
+        path = tmp_path / "beat.json"
+        beat, _clock, _ticks = _beat(path)
+        beat.record("savegames")
+        beat.flush()
+        text = path.read_text(encoding="ascii")
+        assert "null" not in text, f"the heartbeat wrote a null: {text}"
+        assert datetime.fromisoformat(_read_heartbeat(path)["surfaces"]["savegames"])
+
+    def test_no_interval_at_all_omits_the_key_rather_than_writing_an_empty_map(
+        self, tmp_path: Path
+    ) -> None:
+        """An empty map is a claim that four surfaces have no cadence. Omit it.
+
+        Pinned positively as well: the rest of the payload is exactly what it
+        was before 4f, so nothing here is green merely because the file
+        failed to be written.
+        """
+        path = tmp_path / "beat.json"
+        beat, _clock, _ticks = _beat(path)
+        beat.record("logs")
+        data = _read_heartbeat(path)
+        assert set(data) == {"pid", "written", "passes", "surfaces"}
+        assert "{}" not in path.read_text(encoding="ascii")
+        assert data["passes"] == 1
+        assert datetime.fromisoformat(data["surfaces"]["logs"])
+
+    def test_an_interval_that_changes_is_updated(self, tmp_path: Path) -> None:
+        """First reported wins would freeze a re-tuned cadence into the file."""
+        path = tmp_path / "beat.json"
+        beat, _clock, ticks = _beat(path)
+        beat.record("logs", 300.0)
+        ticks.value += armwatch.HEARTBEAT_FLUSH_INTERVAL_S
+        beat.record("logs", 30.0)
+        data = _read_heartbeat(path)
+        assert data["intervals"] == {"logs": 30.0}
+        assert data["passes"] == 2
+
+    def test_an_integer_interval_is_written_as_a_float(self, tmp_path: Path) -> None:
+        """``3`` and ``3.0`` are the same number and different JSON tokens.
+
+        The reader divides by this value and compares it to a difference of
+        timestamps. Normalising here means the type in the file depends on
+        the contract rather than on how a caller happened to spell a literal.
+        """
+        path = tmp_path / "beat.json"
+        beat, _clock, _ticks = _beat(path)
+        beat.record("savegames", 3)
+        assert isinstance(_read_heartbeat(path)["intervals"]["savegames"], float)
+
+    def test_the_intervals_map_is_sorted_like_the_surfaces_map(self, tmp_path: Path) -> None:
+        """Two heartbeats must differ only where the facts differ.
+
+        Insertion order would follow whichever thread finished first, which
+        is a fact about the scheduler and about nothing else.
+        """
+        path = tmp_path / "beat.json"
+        beat, _clock, ticks = _beat(path)
+        for name in ("standalonelevel", "savegames", "savedroot", "logs"):
+            ticks.value += armwatch.HEARTBEAT_FLUSH_INTERVAL_S
+            beat.record(name, 3.0)
+        data = _read_heartbeat(path)
+        assert list(data["intervals"]) == sorted(data["intervals"])
+        assert list(data["surfaces"]) == sorted(data["surfaces"])
+
+    def test_the_interval_lands_under_the_production_default_wiring(self, tmp_path: Path) -> None:
+        """No injected clock, no injected monotonic - the real defaults.
+
+        Every other test in this class hands the Heartbeat a clock it can
+        move, and this repo has already watched a ``naive_clock`` mutation
+        SURVIVE for exactly that reason: a suite where every test injects a
+        dependency says nothing about the production default. A watcher armed
+        by ``main`` injects nothing at all, so one test has to run that way.
+        """
+        path = tmp_path / "beat.json"
+        before = datetime.now(UTC).replace(microsecond=0)
+        beat = armwatch.Heartbeat(path)
+        beat.record("logs", armwatch.LOG_POLL_S)
+        after = datetime.now(UTC).replace(microsecond=0)
+        data = _read_heartbeat(path)
+        assert data["intervals"] == {"logs": 300.0}
+        assert before <= datetime.fromisoformat(data["surfaces"]["logs"]) <= after
+
+
 class TestHeartbeatThrottle:
     """The flush RATE is capped; the counting behind it never is.
 
@@ -1224,6 +1609,138 @@ class TestHeartbeatFailureNeverStopsTheWatcher:
                 log_fn=lambda _m: None,
                 heartbeat=beat,
             )
+
+
+class TestAFailedFlushDoesNotConsumeTheThrottleWindow:
+    """A write that did not happen consumed none of the rate the throttle caps.
+
+    FOUND BY AN ADVERSARIAL REFUTATION PASS, with a reproduction. The flush
+    used to stamp ``_last_flush`` BEFORE attempting the write and then absorb
+    the ``OSError``, so a flush that failed still spent the full 30-second
+    window: the file was not written, and the next 30 seconds of passes
+    declined to try again.
+
+    THE MEASURED CONSEQUENCE, with every surface polling exactly on cadence:
+
+        t=70  failed_writes=2  ->  SURFACE_STALE  stale=('savegames',)
+
+    That is a HEALTHY watcher reported as having a wedged surface. The 4f
+    reader's per-surface threshold is ``k * poll + 2 * flush``, which for a
+    3-second surface is ``3 * 3 + 2 * 30`` = 69 s - and 60 s of that 69 is
+    the flush slack, so two failed flushes eat the entire allowance the
+    throttle was granted and leave about 6 s of honest headroom. A check that
+    cries wolf on a healthy watcher is worse than no check at all, because it
+    trains its reader to ignore it.
+
+    The throttle itself is not the defect and is not relaxed here: the
+    control below asserts that a SUCCESSFUL flush still holds off the next
+    one, so "retry always" is not a passing answer.
+    """
+
+    def test_a_failed_flush_is_retried_by_the_next_record(self, tmp_path: Path) -> None:
+        """The reproduction. The clock does not move, and the retry happens anyway.
+
+        Positive as well as negative: the recovered file is parsed and its
+        contents asserted, so this cannot pass on a heartbeat that merely
+        stopped raising.
+        """
+        path = tmp_path / "beat.json"
+        beat = _spy_heartbeat(_RecoveringHeartbeat, path)
+        beat.fails_left = 1
+
+        beat.record("savegames", armwatch.MATCH_LIFETIME_POLL_S)
+        assert beat.write_attempts == 1
+        assert beat.failed_writes == 1, "the write never failed - this guard proves nothing"
+        assert not path.exists()
+
+        beat.record("savegames", armwatch.MATCH_LIFETIME_POLL_S)
+        assert beat.write_attempts == 2, "the throttle ate the retry after a failed write"
+        assert beat.failed_writes == 1
+        data = _read_heartbeat(path)
+        assert data["passes"] == 2
+        assert data["intervals"] == {"savegames": armwatch.MATCH_LIFETIME_POLL_S}
+        assert data["surfaces"]["savegames"].endswith("+00:00")
+
+    def test_a_real_failing_destination_is_retried_and_recovers(self, tmp_path: Path) -> None:
+        """No spy anywhere: a real OSError from the filesystem, and a real recovery.
+
+        A guard proven only against a monkeypatched raise is proven against
+        the monkeypatch, and this module has its own precedent for an
+        injected dependency leaving the production path unexercised - the
+        naive clock. Here the parent of the heartbeat path IS an ordinary
+        file, so ``mkdir`` raises ``FileExistsError``; deleting it lets the
+        real :meth:`Heartbeat._write` succeed.
+        """
+        blocker = tmp_path / "runtime"
+        blocker.write_bytes(b"not a directory\n")
+        path = blocker / "beat.json"
+        beat, _clock, ticks = _beat(path)
+
+        beat.record("savedroot", armwatch.SAVED_ROOT_POLL_S)
+        assert beat.failed_writes == 1
+        beat.record("savedroot", armwatch.SAVED_ROOT_POLL_S)
+        assert beat.failed_writes == 2, "the retry never happened - the throttle ate it"
+        assert ticks.value == 0.0, "the retry must not need the clock to have moved"
+        assert blocker.read_bytes() == b"not a directory\n"
+
+        blocker.unlink()
+        beat.record("savedroot", armwatch.SAVED_ROOT_POLL_S)
+        assert beat.failed_writes == 2
+        data = _read_heartbeat(path)
+        assert data["passes"] == 3
+        assert data["intervals"] == {"savedroot": armwatch.SAVED_ROOT_POLL_S}
+
+    def test_a_successful_flush_still_consumes_the_window(self, tmp_path: Path) -> None:
+        """The control. Same spy, same frozen clock, nothing failing.
+
+        Without this, "retry on every record" passes the reproduction above
+        while handing back the entire 60,768-writes-a-day reduction the
+        throttle exists to buy, and a mutation replacing the throttle check
+        with ``return False`` would survive.
+        """
+        path = tmp_path / "beat.json"
+        beat = _spy_heartbeat(_RecoveringHeartbeat, path)
+
+        beat.record("savegames", armwatch.MATCH_LIFETIME_POLL_S)
+        assert beat.write_attempts == 1
+        assert beat.failed_writes == 0
+
+        for _ in range(50):
+            beat.record("savegames", armwatch.MATCH_LIFETIME_POLL_S)
+        assert beat.write_attempts == 1, "a successful flush stopped throttling the next one"
+        assert _read_heartbeat(path)["passes"] == 1
+
+    def test_the_throttle_resumes_from_the_write_that_actually_landed(
+        self, tmp_path: Path
+    ) -> None:
+        """After a recovery the window is measured from the SUCCESS, not the failure.
+
+        The third shape, and the one that says ``_last_flush`` is neither
+        stamped on a failure nor abandoned once a write lands: a failure at
+        t=0, a retry that succeeds at t=5, and then a full interval of
+        silence measured from 5 rather than from 0.
+        """
+        path = tmp_path / "beat.json"
+        ticks = _FrozenMonotonic()
+        beat = _spy_heartbeat(_RecoveringHeartbeat, path, monotonic_fn=ticks)
+        beat.fails_left = 1
+
+        beat.record("logs", armwatch.LOG_POLL_S)
+        assert beat.failed_writes == 1
+        ticks.value = 5.0
+        beat.record("logs", armwatch.LOG_POLL_S)
+        assert beat.write_attempts == 2
+        assert _read_heartbeat(path)["passes"] == 2
+
+        ticks.value = 5.0 + armwatch.HEARTBEAT_FLUSH_INTERVAL_S - 1.0
+        beat.record("logs", armwatch.LOG_POLL_S)
+        assert beat.write_attempts == 2, "the window is measured from the successful write"
+        assert _read_heartbeat(path)["passes"] == 2
+
+        ticks.value = 5.0 + armwatch.HEARTBEAT_FLUSH_INTERVAL_S
+        beat.record("logs", armwatch.LOG_POLL_S)
+        assert beat.write_attempts == 3
+        assert _read_heartbeat(path)["passes"] == 4
 
 
 class TestHeartbeatUnderThreads:

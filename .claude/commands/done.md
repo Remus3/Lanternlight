@@ -60,9 +60,10 @@ test rather than the code is not a green suite.
    next directive, so a cold session can pick up from disk alone.
 8. **Re-check the watcher.** Call `check_watcher()` from `ops/loop/watch.py`
    (or its `ensure_armed_at_wrap` wrapper) before the next-session prompt is
-   printed. Re-arm on `NO_RECORD`, `DEAD` or `IMPOSTOR`; a `STALE` or
-   `NO_HEARTBEAT` result is reported, not re-armed, and nothing is ever
-   killed - see `docs/HEADLESS.md` 4b.
+   printed. Re-arm on `NO_RECORD`, `DEAD` or `IMPOSTOR`; a `STALE`,
+   `SURFACE_STALE` or `NO_HEARTBEAT` result is reported, not re-armed, and
+   nothing is ever killed - see `docs/HEADLESS.md` 4b. `SURFACE_STALE` names
+   WHICH surface stopped, so quote the name rather than the state alone.
 9. **Print the next-session prompt.** A complete, self-contained prompt: what
    was just finished, what is next, the acceptance criterion, and the files to
    read first. Assume the reader has zero context, because they will.

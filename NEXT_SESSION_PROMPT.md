@@ -34,12 +34,40 @@ A fresh clone runs zero git hooks until that first command runs. The tracked
 
 ---
 
-## Where the last session left it - CYCLE 38
+## Where the last session left it - CYCLE 39
 
-`main` is at the cycle 38 wrap commit. Suite **1518 passed** in 103.68s, run
-BARE and read at the wrap; ruff clean. Merge gate OK against a **1430**
-baseline measured the same way BEFORE dispatching. One ledger entry landed:
-`LL-0122`. Client **closed** all session.
+`main` is at the cycle 39 wrap commit. Suite **1560 passed** in 108.13s, run
+BARE and read at the wrap; ruff clean. Merge gate OK against a **1547**
+baseline; the cycle began at **1518**. Ledger `LL-0123` (and `LL-0122` from
+cycle 38 just before it). Client **closed** all session.
+
+### ROADMAP `4f` is CLOSED - and read WHY before trusting the next green suite
+
+A single wedged surface out of four now FAILS instead of merely being visible.
+`check_watcher()` gained a seventh state, `SURFACE_STALE`, which judges each
+surface against its OWN poll interval and NAMES the ones that stopped. The
+heartbeat is self-describing (an `intervals` map beside `surfaces`), and the
+set of surfaces that OUGHT to have reported comes from `session_plan` - never
+from the heartbeat's own maps, because the whole failure mode is a surface that
+never wrote anything.
+
+**THE REFUTATION CAUGHT THE REAL DEFECTS, NOT THE SUITE. Second cycle running.**
+Both slices reported done against a green **1547**-test suite and an OK merge
+gate. Three defects survived that, and TWO of them meant `4f`'s own acceptance
+was not met in production:
+
+1. **It cried wolf.** A FAILED heartbeat write still burned the full 30 s
+   throttle window, so two failures ate 60 s of a 69 s budget and reported a
+   HEALTHY `savegames` as wedged. `_last_flush` now records the last
+   SUCCESSFUL write.
+2. **The missing-key rule was DEAD CODE** on the format the change introduced.
+   `intervals` is always a subset of `surfaces`, so the branch was unreachable:
+   a `logs` thread that never recorded read `ARMED` at 100 s, 2000 s AND
+   100000 s. Its three tests were green against a payload the writer cannot
+   emit.
+3. **The verdict prose stated a falsehood** across a 14-minute window - a
+   whole-watcher stall of 70 to 900 s read `SURFACE_STALE` while its reason
+   asserted the process was "still flushing".
 
 Measure the count yourself with `python -m pytest` run BARE - never with `-q`,
 which prints no summary line at all and still exits 0.
@@ -67,7 +95,32 @@ archived**, which is the observation `armwatch.json` could never provide.
 `HEARTBEAT_STALE_AFTER_S = 900.0` = 3 x the 300 s `logs` interval, which clears
 the 330 s a healthy watcher can honestly take.
 
-## THE FIVE THINGS CYCLE 38 PAID FOR - these are the live ones
+## THE FOUR THINGS CYCLE 39 PAID FOR - read these first
+
+1. **A GREEN SUITE AND A GREEN MERGE GATE ARE NOT EVIDENCE THE ACCEPTANCE IS
+   MET.** 1547 tests passed while two of `4f`'s acceptance criteria were dead
+   in production. **Test the acceptance against an artifact the REAL PRODUCER
+   emits.** The missing-key tests were green against a payload the writer
+   cannot construct - that is what hid the defect for a whole implementation
+   round.
+
+2. **A CHECK THAT CRIES WOLF IS WORSE THAN NO CHECK**, because it trains the
+   reader to ignore it. Before shipping a threshold, run the REAL thing and
+   confirm a HEALTHY subject reads clean. A 330 s threaded run sampled every
+   10 s read `ARMED` 33 of 33 times; that is the check that mattered.
+
+3. **ONE SAMPLE OF A PHASE-DEPENDENT QUANTITY IS AN ANECDOTE.** I measured a
+   healthy watcher once per run and got 60 s, then 90 s, for the same quantity,
+   and correctly refused to call either a worst case. Sampling repeatedly and
+   taking the MAX is the instrument. The sampled run then measured `savegames`
+   at exactly its derived bound of 33.0 s - the bound touched, not approached.
+
+4. **DERIVE PROSE FROM EVIDENCE, NEVER FROM AN ASSUMED MECHANISM.** Defect 3
+   above was a reason string asserting the process "IS alive and flushing" -
+   a mechanism nobody had checked. It was false for 14 minutes out of every
+   stall.
+
+## THE FIVE THINGS CYCLE 38 PAID FOR - still live
 
 1. **A GREEN SUITE IS NOT EVIDENCE A GUARD WAS NOT WEAKENED.** An agent
    narrowed a safety test that was blocking its own feature - the textbook
@@ -152,12 +205,13 @@ is the point of `4e`:
 python -c "from ops.loop import watch; s=watch.check_watcher(); print(s.state); print(s.reason)"
 ```
 
-At the cycle 38 wrap this returned **`NO_HEARTBEAT`** with `armed=True` for pid
-23628 - alive, identity-confirmed at 0.057 s, but armed BEFORE the heartbeat
-existed, so it writes none. **That is correct and must NOT be re-armed**: a
-second poller on the same four sources is the failure `ensure_armed` refuses,
-and `OPS-14` (disk) is open. If the operator has since restarted the watcher,
-expect `ARMED` instead.
+At the cycle 39 wrap this still returned **`NO_HEARTBEAT`** with `armed=True`
+for pid 23628 - alive, identity-confirmed at 0.057 s, but armed BEFORE the
+heartbeat existed, so it writes none. **That is correct and must NOT be
+re-armed**: a second poller on the same four sources is the failure
+`ensure_armed` refuses, and `OPS-14` (disk) is open. If the operator has since
+restarted the watcher, expect `ARMED` - or `SURFACE_STALE`, which NAMES the
+surface that stopped, so quote the name and not just the state.
 
 ---
 
@@ -173,32 +227,35 @@ at PANTS and open Affix Details while worn - grep the log for
 Smiting or Curse. The log carries no player-facing affix, skill or item name -
 33 names tested with two positive controls - so only a hover will do.
 
-**IF THE CLIENT IS CLOSED**, the item is **`4f`**, opened this cycle and fully
-doable from disk:
+**IF THE CLIENT IS CLOSED**, the item is **`OPS-16`**, fully doable from disk:
 
-> **One wedged surface out of four still reads as `ARMED`.** `check_watcher()`
-> judges `STALE` from the single combined `written` stamp. The heartbeat also
-> carries a per-surface map, but nothing compares each surface against its OWN
-> poll interval - so the two 3-second surfaces keep the combined stamp fresh
-> even when `logs`, the 300-second surface guarding the 5 MB log that `4d`
-> exists to protect, has been hung for an hour. The map is EVIDENCE, not a
-> verdict.
+> The termination-path guard in `tests/test_loop_watch.py` collects call NAMES
+> from the AST and forbids a set of them. It is blind to `taskkill` passed as a
+> STRING ARGUMENT (`Popen(["taskkill", ...])` - and `Popen` cannot simply be
+> banned, the module's own detached spawn needs it and an anchor assertion
+> requires it), to `getattr(kernel32, "Open" + "Process")` and any dynamically
+> assembled attribute name, and to `ntdll.NtSuspendProcess` and the other
+> undocumented NT entry points.
 
-Its acceptance is written in `ROADMAP.md` and includes the trap: **the first
-heartbeat after arming can carry fewer than four `surfaces` keys**, and a
-missing key must read as "no completed pass yet", never as stale, or every wrap
-in a watcher's first 30 seconds cries wolf. It also requires a test WATCHED
-GOING RED that freezes ONE surface while the other three and the combined stamp
-stay fresh - freezing all four passes today and pins nothing.
+**All three PREDATE cycle 38.** The refutation replayed both the old and the
+new guard logic over HEAD's module to separate what the cycle-38 narrowing LOST
+from what was never caught at all - exactly one spelling was lost, and that one
+was fixed in the same cycle. These three are the residue.
+
+**The honest fix is a different KIND of check, not one more string in a
+denylist** - an enumerated list that reads as exhaustive and is not is precisely
+how the `.gl` bug in `OPS-13` happened. Full acceptance is in `ROADMAP.md`, and
+it explicitly permits the alternative: state the blindness in the test's own
+docstring so the guard stops implying coverage it does not have.
+
+**Not in scope for it:** the anti-cheat boundary. The refutation inventoried
+every call in the shipped `ops/loop/watch.py` - kernel32 `OpenProcess`,
+`GetProcessTimes`, `CloseHandle`, plus one `Popen` with a fixed argv - and found
+no terminate, suspend or memory-write path. This is a guard-STRENGTH item, not a
+live defect.
 
 **Also available with the client closed:**
 
-- **`OPS-16`** - the termination-path guard is blind to `taskkill` passed as a
-  string argument, `getattr`-assembled attribute names, and ntdll entry points.
-  **All three PREDATE cycle 38** - the refutation replayed both the old and new
-  guard over HEAD's module to separate what the narrowing lost from what was
-  never caught. The honest fix is a different KIND of check, not one more
-  string in a denylist; that is how the `.gl` bug in `OPS-13` happened.
 - **`7d`'s per-edge lookahead.** The ceiling of 19 is priced entirely by
   value-left, which carries 11 columns of slack at the shipped 8, while `hits` -
   zero right margin, the likeliest place for a pushed glyph - is nowhere near
@@ -219,8 +276,8 @@ Item `7` route 1 EXHAUSTED (`LL-0106`). Item `14` CLOSED (`LL-0107`). `4d`
 CLOSED (`LL-0109`). Item `12`'s backward half CLOSED as impossible (`LL-0110`).
 `7c`'s orange pair DONE (`LL-0112`), its two defence-in-depth gaps CLOSED
 (`LL-0115`/`0116`), and its registration search DONE as consensus (`LL-0118`).
-`7d` CLOSED (`LL-0119`). **`4e` CLOSED (`LL-0122`).** **Items 7, 11 and 12
-remain OPEN and UNCREDITED - do not credit any of them.**
+`7d` CLOSED (`LL-0119`). **`4e` CLOSED (`LL-0122`). `4f` CLOSED (`LL-0123`).**
+**Items 7, 11 and 12 remain OPEN and UNCREDITED - do not credit any of them.**
 
 ---
 
