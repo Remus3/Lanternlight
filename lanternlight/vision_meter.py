@@ -75,9 +75,14 @@ never produces a wrong one - which is why :func:`read_frame` sweeps y.
 
 **HORIZONTAL misalignment USED to produce wrong numbers, and no longer does.**
 BEFORE ``ROADMAP`` 7d, measured over the 124 panel-up frames, x 2048, 2066 and
-2068 returned 30 WRONG readings between them, non-monotonically - 2048 gave 12
-while 2050 gave none - because a digit pushed outside a field window was
-silently dropped and the survivors formed a valid number.
+2046-2070 returned **108** WRONG readings, non-monotonically - {2046: 69,
+2047: 9, 2048: 12, 2066: 1, 2068: 17}, with 2050 giving none - because a digit
+pushed outside a field window was silently dropped and the survivors formed a
+valid number. (A first draft of this paragraph said 30, counting only x 2048,
+2066 and 2068 while quoting an AFTER figure swept over the whole 2046-2070
+range. That omitted 2046, the worst offset at 69, and compared two different
+populations - which is LL-0116's shape exactly. Both figures now cover the
+same sweep.)
 :data:`EDGE_LOOKAHEAD` closed that. Re-measured after it, over x 2046-2070:
 **ZERO wrong readings at every offset**, so both axes now degrade to refusal.
 
@@ -698,8 +703,12 @@ def read_panel(source) -> PanelReading:
 PANEL_SIZE = (500, 310)
 
 #: The x origin of the 500x310 panel inside a 2560x1440 frame. Measured, and
-#: tolerant across 2056-2061 - only the ROW is swept below, because only the
-#: row was measured to give zero disagreements.
+#: **The band is 2058-2064**, measured after ``ROADMAP`` 7d. Only the ROW is
+#: swept below, because only the row was measured to give zero disagreements.
+#: This comment previously read "tolerant across 2056-2061", which was the
+#: pre-7d band and was already wrong at both ends - it is corrected here rather
+#: than in the module docstring alone, because a withdrawal 600 lines away from
+#: the claim it retracts does not reach the reader who finds the claim.
 FRAME_PANEL_X = 2058
 
 #: The crop rows read for CONSENSUS by :func:`read_frame`. Every one of these

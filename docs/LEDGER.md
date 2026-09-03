@@ -84,6 +84,37 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0121 - 2026-09-02 - WRAP - CORRECTS LL-0119 - the before-figure counted three offsets while the after-figure swept twenty-five, and eleven claims were false or stale
+
+**Evidence:**
+- python -m pytest -> '1430 passed', exit 0, run bare as its own command at the wrap; python -m ruff check . -> 'All checks passed!'; collect 1430 across 29 test files
+- the wrap refutation independently re-derived and CONFIRMED every headline number: 120 of 124 by consensus, 118 at the single row, the recovered pair f0469/f0470, 0 misreads, 0 disagreements, 0 of 231 panel-down, 0 of 1,817 out-of-window, the 6,439 diff at 0 gained / 0 lost / 0 changed with 62 message-only changes, the rightmost-column histogram {209: 43, 210: 2, 222: 70, 223: 8}, the tidy-guard cost of 8, the ceiling of 19 with 3 readings lost at 20, the floor gaps of 5 and 3, f0661 at rgb(106, 65, 24), the band collapse to 2058-2064, and 111 frames with outside ink at distance 1 of which none read
+- THE ASYMMETRY, re-measured here: pre-guard wrong readings over the full 2046-2070 sweep are {2046: 69, 2047: 9, 2048: 12, 2066: 1, 2068: 17} = 108, not the 30 that LL-0119 published from three offsets
+- the refutation ran 9 independent mutations, all RED, anchors asserted and byte-exact restores - exceeding the 5 this session filed
+- the hook fix independently confirmed in a throwaway repo: clean ASCII commit lands as a positive control, untruncated banned commit blocked, piped banned commit blocked 8 of 8 WITH the trap, and with the trap removed git exits 141 and the commit LANDS 8 of 8 while BLOCKED still prints
+- .githooks/pre-commit after all edits: 0 CRLF pairs, 0 non-ASCII bytes
+- MISALIGNED_X in the regression test now sweeps 2046, 2047, 2048, 2066 and 2068 rather than the last three, and the test still passes - so the worst offset is now covered rather than omitted
+- anti-cheat sweep zero hits with a pattern proven live; ASCII and PII guards 47 passed, and the PII guard carries its own planted-file positive controls
+- every path and symbol cited by LL-0118, LL-0119 and LL-0120 exists, and all four newly named tests are actually COLLECTED rather than merely present as text
+
+THE BEFORE-FIGURE AND THE AFTER-FIGURE WERE MEASURED OVER DIFFERENT POPULATIONS, which is LL-0116's shape arriving inside the session whose own ledger claims to have learned it. LL-0119 published '30 confidently wrong readings' from x 2048, 2066 and 2068, and paired it with an after-figure of zero swept across the whole 2046-2070 range. Over that same range the pre-guard total is 108, and the omitted offsets include 2046 - the WORST at 69 wrong, more than twice the entire published figure. The guard is unaffected and is better than advertised, not worse: it turns 108 wrong readings into refusals rather than 30. A DOCUMENT CANNOT BE MORE COMPLETE THAN THE PROBE BEHIND IT, and here the probe behind the BEFORE half was narrower than the probe behind the AFTER half.
+
+ELEVEN FALSE OR STALE CLAIMS WERE FOUND AND CORRECTED, all documentation rather than behaviour. The code was measured correct at every point; what shipped wrong was what the code said about itself.
+
+THE 78 SURVIVED IN A THIRD FILE. LL-0119 declares the tidy-guard count of 78 wrong and corrects it to 8, and the same commit that carried that correction left '78 real frames' standing in tests/test_vision_meter.py. Two of three sites were fixed and the third was never swept for. A CORRECTION THAT IS NOT SWEPT FOR IS A CORRECTION IN ONE PLACE, not a correction.
+
+A CLAIM SAT 610 LINES BELOW ITS OWN WITHDRAWAL, IN THE SAME FILE. The module docstring was corrected to say the advertised band 2056-2061 was wrong at both ends, while FRAME_PANEL_X's own comment 610 lines further down still advertised exactly that band as fact. This is LL-0109's and LL-0117's shape a third time, and the lesson is sharper than 'withdraw the claim': a withdrawal that is not adjacent to the claim does not reach the reader who finds the claim. The same stale band was also live in the test file and in ROADMAP.
+
+A CLAIM WAS TRUE WHEN WRITTEN AND FALSE ONE COMMIT LATER. ROADMAP's 7c closure said every function in read_panel's call graph compiles to identical bytecode, which was exact for LL-0118. LL-0119 then changed _read_field itself. Nothing re-checked the earlier item when the later one landed, and the two commits are an hour apart in the same session. The claim is now explicitly past-tense and scoped to LL-0118.
+
+A PREDICTION WAS PUBLISHED AS AN OBSERVATION, twice. 'hits reaching 100 would read as 10' is an inference from measured geometry - left alignment, zero right margin, a 13px advance - and no capture on this machine contains a 3-digit hit count. The refutation showed the synthesised fixture refusing as 'matched no digit' pre-guard rather than reading 10, which does not test the real case either way. What IS measured is the MECHANISM, on real ink: f0539 reads 1 for a true 14 through a cut window. Both sites now say prediction where they said fact.
+
+LIVENESS IS NOT FUNCTION, and this is the gap after the one LL-0117 closed. The watcher pid 23628 was alive and identity-confirmed at the wrap - command line and start time both matched - and had archived NOTHING in over 24 hours. That is the correct result with the client closed, and it is indistinguishable from a wedged process: no heartbeat is written, armwatch.json is never touched after arming, a dated root only appears when something is archived, and the instance armed through ensure_armed produced no armwatch.log at all where a direct invocation does. Recorded as additional acceptance on ROADMAP 4e rather than fixed here.
+
+WHAT THE REFUTATION COULD NOT BREAK. Every measured number in LL-0118, LL-0119 and LL-0120 survived independent re-derivation. The hook fix was reproduced 8 times in each direction in a throwaway repo of the refuter's own making. Nine mutations went red where five were claimed. THE CODE WAS BETTER THAN ITS DOCUMENTATION, which is the same verdict as LL-0116 and is becoming this project's characteristic failure: the measurements are sound and the sentences about them are not.
+
+ITEMS 7, 11 AND 12 REMAIN OPEN AND UNCREDITED. The client was closed for the entire session, confirmed at entry, mid-session and at the wrap by filtering on the process NAME with a positive control. Nothing was stopped that this session did not start; the watcher was verified rather than replaced, and the loop lock was not held.
+
 ### LL-0120 - 2026-09-02 - The ASCII pre-commit hook could be DEFEATED by piping the commit through head - it printed BLOCKED and the banned commit landed anyway
 
 **Evidence:**

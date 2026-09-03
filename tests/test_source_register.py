@@ -196,6 +196,7 @@ KNOWN_NON_HOSTS = frozenset(
         "ant.dir.cursortouch.windows",
         "armwatch.json",
         "armwatch.py",
+        "armwatch.log",
         "avgprice.py",
         "meter.read",
         "redact.assert",

@@ -1241,7 +1241,9 @@ Found while working item 12, on the `1.0.15` training frames. Ledger `LL-0110`.
 
 **It fits a full-screen frame unmodified.** `read_panel` needs no change to read
 a 2560x1440 full-scene PNG - take the 500x310 crop at origin **`(2058, 390)`**.
-The `x` origin is tolerant across `2056-2061`.
+The `x` origin was measured tolerant across `2056-2061` at the time of this
+item. **That is superseded**: it was already wrong at both ends, and after
+`ROADMAP` 7d the band reading all 118 frames is `2058-2064`.
 
 **Row `390` is the BEST row, not the only workable one**, and a draft of this
 line said "the only row that works at all" on a single agent's report rather
@@ -1449,7 +1451,7 @@ None is a segmentation failure:
 | frame | true | why it refuses |
 |---|---|---|
 | `f0661` | 9 / 1 | **ZERO orange pixels anywhere in the band** |
-| `f0469` | 0 / 0 | panel sliding IN, misregistered by 2px |
+| `f0469` | 0 / 0 | ~~panel sliding IN, misregistered by 2px~~ **panel SCALING in - reads at y=389 only, so 1px, and the ink band is one row TALLER (2,21) vs (5,23)**; see `LL-0118` |
 | `f0470` | 0 / 0 | same |
 | `f0527` | 261 / 6 | dithered, leading glyph at x54-66, 0.122 |
 | `f0537` | 618 / 13 | dithered, MIDDLE digit at x69-78, 0.164 |
@@ -1530,7 +1532,10 @@ restored byte-exact by sha256 after every one.
   disagreements across the five rows, 0 of 231 panel-down frames read, and 0 of
   all 1,817 out-of-window frames read. `read_panel` is untouched - the
   6,439-frame consumer diff is 0 changed / 0 lost / 0 gained, and every function
-  in its call graph compiles to identical bytecode.
+  in its call graph compiled to identical bytecode **as of `LL-0118`**. That
+  bytecode claim is deliberately past-tense: `LL-0119` then changed
+  `_read_field` itself to add the truncation guard, so it no longer holds and
+  must not be re-quoted as current.
 
   **The four that still refuse are NOT registration failures**, so no shift
   recovers them: `f0527`, `f0537` and `f0581` are dithered or smeared, and
@@ -1644,7 +1649,10 @@ capture:
 | value | `(40, 120)` | 40-119 | 13-15 | **4** columns, at 4 digits (55 frames) |
 | hits | `(193, 224)` | 193-223 | 6 | **0** columns, at 2 digits (78 frames) |
 
-The glyph advance is about 13px. So **`hits` reaching 100 would read as 10** -
+The glyph advance is about 13px, so a third digit lands entirely outside the
+window. **That 100 would read as exactly 10 is a PREDICTION from the measured
+geometry, not an observation** - no capture here holds a 3-digit hit count. The
+MECHANISM is measured on real ink, below. Stated as prediction rather than fact -
 the third digit starts near column 225 and the window ends at 223, a CLEAN cut.
 `value` has one digit of headroom left: 10000 would need about 20 more columns
 against 4 available.
@@ -1701,13 +1709,13 @@ the digit was pushed. Every acceptance criterion above was met:
 | criterion | result |
 |---|---|
 | real ink through a truncating window refuses | `f0539` through `(193, 212)` REFUSES; it returned `1` for a true `14` before |
-| the guard watched going RED | 4 mutations, all RED, module restored byte-exact by sha256 |
+| the guard watched going RED | 5 mutations, all RED, module restored byte-exact by sha256 |
 | 6,439-frame consumer diff | **0 changed, 0 lost, 0 gained**; 62 frames changed only WHICH guard refuses them |
 | the 124-frame set | still 118 single / **120 by consensus**, 0 misreads, 0 disagreements, 0 of 231 panel-down |
 | all four edges answered | the guard is symmetric, and the margin table above is the answer |
 
 **It fixes a real wrong-number bug, not just a theoretical one.** At crop origins
-x 2048, 2066 and 2068 the reader previously returned **30 confidently wrong
+x 2046-2070 the reader previously returned **108 confidently wrong
 numbers** across the 124 panel-up frames - `1913/40` read as `1913/4`, `347/6` as
 `347/5`. All 30 are now refusals. That is the x-axis analogue of the property the
 y axis already had, and `7c`'s "misalignment costs readings and never produces a
@@ -1758,7 +1766,7 @@ wrong readings at every offset, but 2057 reads 110 rather than 118, 2065 reads
 34, and 2056, 2066 and 2068 read 42, 0 and 0. Offsets that used to return a
 confident wrong number now refuse. That is the direction this module is required
 to fail in, and it is a trade rather than a free win: **7 usable origins instead
-of 9, in exchange for 30 wrong readings becoming refusals.**
+of 9, in exchange for 108 wrong readings becoming refusals.**
 
 **One cost, recorded because shrinking coverage should never be silent.**
 `p06217` now refuses at this guard rather than at the splitter's over-wide
@@ -2141,6 +2149,56 @@ on any unrelated process that inherited the number.
   treat it as armed. A test that only ever sees a dead pid does not pin this.
 - `docs/HEADLESS.md` states the wrap-side check beside the entry-side one, so a
   cold session reading the headless contract learns both.
+
+### A THIRD failure mode, measured at the cycle 37 wrap - LIVENESS IS NOT FUNCTION
+
+`4e` above closes "the recorded pid is dead". The wrap that opened it found the
+next gap along, and it is not covered by anything written here or in `4d`.
+
+At the cycle 37 wrap, pid 23628 was **alive and identity-confirmed** - its
+command line named `lanternlight.armwatch --dest-base C:\ll-captures` and its
+start time matched `ops/runtime/armwatch.json` to the second. It had been
+running for over 24 hours. In that time it archived **nothing**: every file
+under `C:/ll-captures/2026-09-01/` carries the arm-time stamp `20260901-202636`
+or the earlier `20260901-075014`, and no `2026-09-02` dated root was ever
+created.
+
+**That is the expected result** - the client was closed for the whole period, the
+source files did not change, and the watcher copies each file exactly once. But
+it is indistinguishable from a watcher that hung five minutes after arming.
+There is no observation that separates "correctly idle" from "wedged":
+
+- No heartbeat is written. `armwatch.json` records the arming and is never
+  touched again.
+- The current instance produced **no `armwatch.log` at all** under its dated
+  root, while a directly-invoked watcher does write one - the newest on this
+  machine is `C:/ll-captures/2026-08-31/armwatch.log`. So the one artifact that
+  would show passes happening is absent exactly when the watcher was armed
+  through `ensure_armed`.
+- A dated root only appears when something is archived, so its absence is
+  equally consistent with both states.
+
+**This matters because it makes `4e`'s own check weaker than it looks.**
+Confirming a live pid with the right command line proves a process exists, not
+that it is still polling. The failure `LL-0117` recorded was a dead watcher;
+a wedged one would have been invisible to every check this project currently
+has, including the one `4e` proposes.
+
+**Additional acceptance for `4e`, or for a successor if it is split out:**
+
+- The watcher writes a heartbeat that advances even when nothing is archived -
+  a timestamp in `armwatch.json`, or a log line per pass. Nothing else in this
+  repo can currently distinguish idle from wedged, so a passive record is the
+  minimum.
+- The wrap-side check reads that heartbeat and reports the watcher as STALE when
+  it has not advanced within a stated multiple of the slowest poll interval,
+  which is the 300s `logs` source.
+- `ensure_armed` produces the same `armwatch.log` a direct invocation does, or
+  the difference is documented as deliberate. An artifact that appears only on
+  one of two arming paths is a trap for whoever goes looking for it.
+- A test that has been WATCHED GOING RED: freeze the heartbeat and assert the
+  check reports STALE. A check that only ever sees a fresh heartbeat does not
+  pin this any more than a dead-pid-only test pins the liveness half.
 
 **Not in scope:** killing anything. The loop guard never kills and neither does
 this - it refuses, re-arms, and reports.
