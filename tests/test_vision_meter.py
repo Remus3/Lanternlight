@@ -281,7 +281,12 @@ class TestSynthesisedFrames:
         px = image.load()
         if field_ink:
             self._draw(px, value, vision_meter.VALUE_WINDOW[0] + 3, "value")
-            self._draw(px, hits, vision_meter.HITS_WINDOW[0] + 4, "hits")
+            # +3, not +4. At +4 a two-digit synthetic value spilled to x224,
+            # one column OUTSIDE the window, where real two-digit ink stops at
+            # 222-223. That was a fixture artifact - the binarised prototypes
+            # are fatter than real ink - and it tripped the EDGE_LOOKAHEAD
+            # guard on a frame that models a perfectly legal reading.
+            self._draw(px, hits, vision_meter.HITS_WINDOW[0] + 3, "hits")
         return image
 
     def _draw(self, px, digits, x_start, field):
@@ -975,15 +980,30 @@ class TestSplittingAMergedRun:
         ("p02722_19.16.49.669.png", "still wider than"),
         ("p03302_19.22.12.802.png", "still wider than"),
         ("p03758_19.26.26.506.png", "panel is not up"),
-        ("p03763_19.26.29.270.png", "fragment, not a digit"),
+        # Was "fragment, not a digit" until ROADMAP 7d. It has stray ink at
+        # x120-127, immediately RIGHT of the value window, so EDGE_LOOKAHEAD
+        # now refuses it earlier and for a truer reason - a digit really has
+        # been pushed out of this field.
+        ("p03763_19.26.29.270.png", "outside the x40-119 window"),
         ("p03827_19.27.04.914.png", "scene is bleeding"),
         ("p05611_19.43.48.662.png", "still wider than"),
         ("p05718_19.44.48.996.png", "still wider than"),
-        ("p06217_19.49.29.035.png", "still wider than"),
+        # Was "still wider than" until ROADMAP 7d. Stray ink at x32-39, this
+        # time on the LEFT. This one COSTS COVERAGE and the loss is recorded
+        # rather than hidden: it no longer reaches the splitter postcondition,
+        # so that guard is now exercised by 5 real frames rather than 6.
+        ("p06217_19.49.29.035.png", "outside the x40-119 window"),
     )
 
     def test_every_overwide_frame_refuses_and_names_its_reason(self):
-        """All nine refuse; six of them at the new postcondition.
+        """All nine refuse; FIVE of them at the splitter postcondition.
+
+        It was six until ROADMAP 7d added ``EDGE_LOOKAHEAD``, which refuses
+        ``p06217`` earlier on stray ink to the LEFT of the value window. The
+        frame still refuses - no reading was gained or lost anywhere in the
+        6,439 - but one fewer real frame now reaches the splitter's own
+        postcondition, and shrinking coverage is worth saying out loud rather
+        than quietly re-pointing the assertion.
 
         Before this guard existed, the six were caught by the DISTANCE
         threshold alone at 0.1489 against an accept bound of 0.115. They still
@@ -1158,6 +1178,153 @@ class TestConsensusRegistration:
         with pytest.raises(Unreadable) as caught:
             vision_meter.read_frame(Image.new("RGB", (800, 600)))
         assert "too small" in str(caught.value), f"got {str(caught.value)!r}"
+
+
+class TestADigitPushedOutsideTheWindow:
+    """ROADMAP 7d. A glyph outside a field window was SILENTLY DROPPED.
+
+    ``_read_field`` collected the column runs inside its window and assembled
+    whatever it found. It never asked whether the ink STOPPED before the
+    window's edge, so a glyph pushed entirely outside was simply not seen and
+    the survivors formed a valid number. That is the failure class this whole
+    module exists to prevent: not a refusal, a WRONG NUMBER.
+
+    **A PARTIAL cut fails safe and a CLEAN cut fails dangerous**, which is why
+    it had no detector. A half-visible glyph scores badly and lands in the
+    ambiguity band, so it refuses; a glyph that misses the window entirely
+    leaves a clean, confident, wrong reading behind.
+
+    It was live rather than theoretical. Both fields are LEFT-aligned - the left
+    ink extent does not move with digit count - so values grow rightward, and
+    the hits window had ZERO right margin at two digits. ``hits`` reaching 100
+    would have read as 10. It never fired only because the capture's largest
+    ``live_hits`` is 50.
+    """
+
+    #: A real frame whose true hits is 14, and a window that cuts the '4' off
+    #: cleanly. Before the guard this returned 1.
+    TRUNCATING_CASE = ("f0539_00.42.52.png", (193, 212), 14)
+
+    #: Crop origins that shift the panel far enough to push a digit out of a
+    #: window. Measured 2026-09-02: these three produced 30 WRONG readings
+    #: between them across the 124 panel-up frames.
+    MISALIGNED_X = (2048, 2066, 2068)
+
+    def test_a_cleanly_cut_digit_REFUSES_instead_of_returning_a_number(self):
+        """The defect itself, on real captured ink."""
+        _require_fullscreen()
+        name, window, true_hits = self.TRUNCATING_CASE
+        assert (FULLSCREEN / name).is_file(), f"cited frame missing: {name}"
+        panel = _crop_fullscreen(name)
+        assert vision_meter._read_field(panel, vision_meter.HITS_WINDOW, "hits") == (
+            true_hits
+        ), "the fixture must read correctly through its REAL window"
+        with pytest.raises(Unreadable) as caught:
+            vision_meter._read_field(panel, window, "hits")
+        assert "outside" in str(caught.value), f"got {str(caught.value)!r}"
+
+    def test_a_MISALIGNED_crop_never_returns_a_wrong_number(self):
+        """The property that may never be traded, on the x axis.
+
+        Vertical misalignment was already measured to degrade to refusal and
+        never to error. HORIZONTAL misalignment did not: at these three origins
+        the reader returned 30 confidently wrong numbers, because a digit had
+        been pushed out of the window and the rest still parsed.
+        """
+        _require_fullscreen()
+        Image = _pillow()
+        wrong = []
+        for name, total, hits in _panel_up_rows():
+            frame = Image.open(FULLSCREEN / name).convert("RGB")
+            for x in self.MISALIGNED_X:
+                try:
+                    got = read_panel(frame.crop((x, 390, x + 500, 390 + 310)))
+                except Unreadable:
+                    continue
+                if (got.total, got.hits) != (total, hits):
+                    wrong.append((name, x, (total, hits), (got.total, got.hits)))
+        assert wrong == [], f"{len(wrong)} WRONG readings at a shifted crop: {wrong[:5]}"
+
+    def test_the_guard_refuses_NO_frame_that_reads_today(self):
+        """NEVER REFUSE MEASURED DATA - LL-0116's rule, applied on the way in.
+
+        The tidy version of this guard - refuse when ink touches the window's
+        last column - would have refused 78 real frames, because the hits field
+        legitimately reaches its last usable column at two digits. This one
+        looks OUTSIDE the window instead, where the measured captures are empty.
+        """
+        _require_fullscreen()
+        reads = 0
+        for name, total, hits in _panel_up_rows():
+            try:
+                got = read_panel(_crop_fullscreen(name))
+            except Unreadable:
+                continue
+            reads += 1
+            assert (got.total, got.hits) == (total, hits), f"{name} misread"
+        assert reads == 118, f"the shipped origin must still read 118, got {reads}"
+
+    def test_a_THREE_DIGIT_hits_value_refuses_AT_THE_LOOKAHEAD(self):
+        """A third digit lands outside the window, and this is why it refuses.
+
+        The hits field is LEFT-aligned and its window has ZERO right margin at
+        two digits, so the third digit of 100 falls entirely outside it.
+
+        **This fixture did NOT previously read as 10, and an earlier version of
+        this test said it did.** Measured against the pre-guard module: it
+        refused with "run x199-204 matched no digit". So this pins WHICH guard
+        refuses it - the lookahead, naming the pushed side - and not a rescue
+        from a wrong number that was never measured on this input. The wrong
+        number is real and is demonstrated on REAL ink by the truncating-window
+        and misaligned-crop tests above; a synthesised glyph is not evidence
+        about what the HUD does.
+        """
+        frame = TestSynthesisedFrames()._frame(value="103", hits="100")
+        with pytest.raises(Unreadable) as caught:
+            vision_meter._read_field(frame, vision_meter.HITS_WINDOW, "hits")
+        assert "outside" in str(caught.value), f"got {str(caught.value)!r}"
+        assert "pushed right" in str(caught.value), f"got {str(caught.value)!r}"
+
+    def test_an_image_too_NARROW_for_the_window_cannot_defeat_the_guard(self):
+        """The hole the first version of this guard left open.
+
+        ``_read_field`` clamps ``x_hi`` to the image width. When the image is
+        narrower than the window, that clamp SHRINKS the field and then leaves
+        the right-hand lookahead with zero columns to scan - so the truncation
+        it exists to catch becomes invisible and the survivors are returned as
+        a measurement. Measured on real ink before this was closed: a 212px
+        crop of a frame whose true hits is 14 returned 1.
+
+        A clamped window is not a narrower field, it is a CUT field.
+        """
+        _require_fullscreen()
+        name, _window, true_hits = self.TRUNCATING_CASE
+        panel = _crop_fullscreen(name)
+        assert vision_meter._read_field(panel, vision_meter.HITS_WINDOW, "hits") == (
+            true_hits
+        ), "the fixture must read correctly at full width"
+        narrow = panel.crop((0, 0, 212, 310))
+        with pytest.raises(Unreadable) as caught:
+            vision_meter._read_field(narrow, vision_meter.HITS_WINDOW, "hits")
+        assert "narrower than" in str(caught.value), f"got {str(caught.value)!r}"
+
+    def test_the_lookahead_is_bounded_from_BOTH_sides_by_measurement(self):
+        """The constant, and why it may not drift in either direction.
+
+        Too small and it misses a displaced glyph; too large and it refuses
+        real data because it reaches legitimate panel chrome. Both ends are
+        measured, not reasoned about.
+        """
+        n = vision_meter.EDGE_LOOKAHEAD
+        assert n >= 6, (
+            "a displaced glyph begins within 6 columns - the largest gap between "
+            f"lit columns inside a field is 5 - so {n} could miss one"
+        )
+        assert n <= 19, (
+            "sweeping this constant over the 3,243 frames that read costs zero "
+            f"readings up to 19 and loses 3 at 20, so {n} would REFUSE MEASURED "
+            "DATA"
+        )
 
 
 def _tries(frame):
