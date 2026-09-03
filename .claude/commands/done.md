@@ -58,7 +58,12 @@ test rather than the code is not a green suite.
    literal old value; a stale recital is worse than no recital.
 7. **Advance the loop state.** `ops.loop.state.advance_cycle(...)` with the
    next directive, so a cold session can pick up from disk alone.
-8. **Print the next-session prompt.** A complete, self-contained prompt: what
+8. **Re-check the watcher.** Call `check_watcher()` from `ops/loop/watch.py`
+   (or its `ensure_armed_at_wrap` wrapper) before the next-session prompt is
+   printed. Re-arm on `NO_RECORD`, `DEAD` or `IMPOSTOR`; a `STALE` or
+   `NO_HEARTBEAT` result is reported, not re-armed, and nothing is ever
+   killed - see `docs/HEADLESS.md` 4b.
+9. **Print the next-session prompt.** A complete, self-contained prompt: what
    was just finished, what is next, the acceptance criterion, and the files to
    read first. Assume the reader has zero context, because they will.
 
@@ -69,4 +74,6 @@ test rather than the code is not a green suite.
 - Committed and pushed.
 - Ledger entry appended with real evidence.
 - `ROADMAP.md` reflects reality.
+- Watcher re-checked with `check_watcher()`, and its state reported in the
+  next-session prompt rather than assumed.
 - Next-session prompt printed.

@@ -2111,7 +2111,22 @@ arm. Caught by the wrap refutation, and it is the defect `LL-0104` itself named 
 a stale sentence surviving a few hundred lines from the correction - recurring
 inside the item that named it.
 
-## 4e. Re-check the watcher's LIVENESS at the WRAP, not only at entry - OPEN
+## 4e. Re-check the watcher's LIVENESS at the WRAP, not only at entry - CLOSED 2026-09-03
+
+**CLOSED by ledger `LL-0122`, cycle 38.** `check_watcher()` and
+`ensure_armed_at_wrap()` ship in `ops/loop/watch.py`, the heartbeat ships in
+`lanternlight/armwatch.py` behind `--heartbeat PATH`, and the wrap-side check
+is written into `docs/HEADLESS.md` 4b and step 8 of `.claude/commands/done.md`.
+Suite 1518 passed, ruff clean, measured at the wrap.
+
+**TWO OF THIS ITEM'S OWN PREMISES WERE FALSE and are withdrawn below, adjacent
+to where each was written.** Read the strikethrough notes in place; do not cite
+this item's original text without them.
+
+**What it does NOT close, now split out as `4f`:** the verdict still rests on
+the combined `written` stamp, so one wedged surface out of four reads as
+`ARMED`. The per-surface stamps make that visible to a reader and nothing makes
+it fail.
 
 Opened 2026-09-02, cycle 37. Deferred here by ledger `LL-0117`, which recorded
 it rather than hot-fixing it because changing the documented start-up contract
@@ -2175,6 +2190,20 @@ There is no observation that separates "correctly idle" from "wedged":
   machine is `C:/ll-captures/2026-08-31/armwatch.log`. So the one artifact that
   would show passes happening is absent exactly when the watcher was armed
   through `ensure_armed`.
+
+  **WITHDRAWN 2026-09-03, `LL-0122`: there is no such asymmetry.** NO code path
+  in this repository writes `armwatch.log` - it appears only in prose and in
+  one test's denylist, and a `FileHandler|basicConfig|getLogger` sweep returns
+  nothing with the positive control passing. The 2026-08-31 file is 562 bytes
+  containing exactly `run_rolling`'s startup banner, with a 0-byte
+  `armwatch.err` beside it: a hand-typed shell redirect, not an artifact of
+  either arming path. The real and much smaller difference is that
+  `default_spawn` sends a detached child's stdout and stderr to `DEVNULL`
+  deliberately, so a long-running child cannot block on a pipe nobody drains.
+  The acceptance bullet below that asks for parity is therefore answered by
+  documenting the DEVNULL redirect, which `docs/HEADLESS.md` 4b now does, and
+  by making the HEARTBEAT the sanctioned liveness artifact instead of a log
+  file nobody was writing.
 - A dated root only appears when something is archived, so its absence is
   equally consistent with both states.
 
@@ -2183,6 +2212,23 @@ Confirming a live pid with the right command line proves a process exists, not
 that it is still polling. The failure `LL-0117` recorded was a dead watcher;
 a wedged one would have been invisible to every check this project currently
 has, including the one `4e` proposes.
+
+**WITHDRAWN 2026-09-03, `LL-0122`: "There is no observation that separates
+correctly idle from wedged" was FALSE.** One exists, it needs no code, and it
+is passive: sample `Win32_Process.OtherOperationCount` twice. For pid 23628 it
+climbed 508 in 15 s, 971 in 30 s and 266 in 10 s while `ReadOperationCount`,
+`WriteOperationCount` and CPU stayed flat, with `Threads=5` - four surface
+daemons plus main. That is exactly what `poll_once` predicts, since
+`iterdir()` and a stat per entry are both "Other" operations and every entry
+was already in `_seen` so nothing was copied. Controls: an idle Python process
+gives 0, a scan-only Python process gives 1442, and four `pwsh.exe` gave 0 -
+the counter discriminates.
+
+**So pid 23628 was correctly idle, not wedged.** But the claim must be stated
+as "not WHOLLY wedged" and no stronger: the counter is per-PROCESS, not
+per-thread. The `logs` surface is about 0.5 percent of that traffic, so a hung
+`logs` thread is invisible to it. That per-thread blindness is why the
+heartbeat was still worth building, and it is the whole content of `4f`.
 
 **Additional acceptance for `4e`, or for a successor if it is split out:**
 
@@ -2202,6 +2248,79 @@ has, including the one `4e` proposes.
 
 **Not in scope:** killing anything. The loop guard never kills and neither does
 this - it refuses, re-arms, and reports.
+
+## 4f. One wedged surface out of four still reads as ARMED - OPEN
+
+Opened 2026-09-03, cycle 38, split out of `4e` by ledger `LL-0122` rather than
+left implied inside a closed item.
+
+`check_watcher()` decides `STALE` from the heartbeat's single combined
+`written` stamp. The heartbeat also carries a per-surface map, but nothing
+compares each surface against its OWN poll interval, so the two 3-second
+surfaces keep the combined stamp fresh even when `logs` - the 300-second
+surface, and the one guarding the 5 MB log that `4d` exists to protect - has
+been hung for an hour. The map makes that visible to a human reading the
+evidence line. Nothing makes it fail.
+
+The same blindness defeats the cheaper instrument, which is why this is not
+solved by dropping the heartbeat and sampling the OS counter instead:
+`Win32_Process.OtherOperationCount` is per-PROCESS, and `logs` is roughly 0.5
+percent of that traffic.
+
+**Acceptance:**
+
+- `check_watcher()` reports a surface as stale against that surface's own
+  `poll_seconds`, not against the combined stamp, and names WHICH surface.
+- The verdict distinguishes "every surface stale" from "one surface stale" -
+  they are different failures and collapsing them loses the interesting one.
+- The first heartbeat after arming can carry fewer than four `surfaces` keys.
+  A missing key must read as "no completed pass yet", never as stale, or every
+  wrap in the first 30 seconds of a watcher's life cries wolf.
+- A test WATCHED GOING RED: freeze ONE surface's stamp, leave the other three
+  and the combined `written` stamp fresh, and assert the check reports that
+  surface. A test that freezes all four passes today and pins nothing.
+
+## OPS-16. The termination-path guard has three spellings it cannot see - OPEN
+
+Opened 2026-09-03, cycle 38, by the refutation pass of `LL-0122`. **All three
+predate that cycle**; the guard was narrowed in it, and the refutation replayed
+both the old and new guard logic over HEAD's module to separate what the change
+lost from what was never caught. Exactly one spelling was lost, and it was
+fixed in the same cycle - these three are the residue.
+
+`tests/test_loop_watch.py::test_watch_exposes_no_termination_path` collects
+call NAMES from the AST and forbids a set of them. It is blind to:
+
+- `subprocess.run(["taskkill", "/F", "/PID", pid])` and the same through
+  `Popen`. `taskkill` is banned as a call name, so a string in an argument list
+  sails past - and `Popen` cannot simply be banned, because the module's own
+  detached spawn needs it and an anchor assertion requires it.
+- `getattr(kernel32, "Open" + "Process")`, and any other dynamically assembled
+  attribute name. This defeats every name-based AST check by construction.
+- `ntdll.NtSuspendProcess` and the other undocumented NT entry points, none of
+  which appear in the forbidden set.
+
+**Why this is filed rather than fixed on the spot:** a name-based check cannot
+close any of them, and the honest fix is a different KIND of check. Widening
+the deny list one string at a time is how the `.gl` bug in `OPS-13` happened -
+an enumerated list that reads as exhaustive and is not.
+
+**Acceptance:**
+
+- Either a check that constrains what the module may IMPORT and CALL by
+  allowlist rather than denylist, or a written statement in the test's own
+  docstring naming these three as known-blind, so the guard stops implying
+  coverage it does not have.
+- Whichever is chosen, the blindness is stated in the ARTIFACT. A guard that
+  reads as exhaustive and is not is worse than one that says what it misses.
+- A test WATCHED GOING RED for each spelling the chosen approach claims to
+  catch.
+
+**Not in scope:** the anti-cheat boundary. The refutation inventoried every
+call in the shipped `ops/loop/watch.py` - kernel32 `OpenProcess`,
+`GetProcessTimes` and `CloseHandle`, plus one `Popen` with a fixed argv - and
+found no terminate, suspend or memory-write path. This is a guard-strength
+item, not a live defect.
 
 ## 4b. Ammo-family and talent measurement - READY, cheap, needs the client
 

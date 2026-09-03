@@ -33,11 +33,24 @@ because forgetting it re-copies every unchanged file every day: MEASURED
 2026-09-01, the live ``Saved/Logs/`` holds 3 files totalling 10,316,212 bytes,
 so a forgetful rollover would duplicate 9.84 MB per day - about 3.51 GB per
 year, against a total watcher output to date of 80.12 MB across 115 files.
+
+ROADMAP item 4e adds the third half - the heartbeat. MEASURED at the cycle 37
+wrap: pid 23628 was alive for over 24 hours and had archived nothing. With
+the game client shut that is the CORRECT result, and it is indistinguishable
+from a wedged process: ``armwatch.json`` is written once at arming and never
+touched again, and a dated destination root only appears when something is
+archived, so its absence is equally consistent with both states. The tests
+below drive the heartbeat with injected clocks - a frozen monotonic for the
+flush throttle and a ticking UTC clock for the stamps - so a 30-second
+throttle and a wedged 300-second surface are both asserted in no wall-clock
+time at all.
 """
 
+import json
+import os
 import sys
 import threading
-from datetime import datetime
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -673,3 +686,707 @@ class TestDestBaseEntryPoint:
                 ]
             )
         assert excinfo.value.code == 2
+
+
+_HEARTBEAT_EPOCH = datetime(2026, 9, 3, 5, 0, 0, tzinfo=UTC)
+
+
+class _HeartbeatWasBuilt(Exception):
+    """Raised by the detonator below when a Heartbeat is constructed.
+
+    Deliberately NOT an ``AssertionError``. This repo has already paid for a
+    raising spy that was swallowed by a fail-soft ``except Exception``, and a
+    spy whose exception can be eaten proves nothing. A private class also
+    cannot be confused with a real failure from somewhere else.
+    """
+
+
+class _Detonator:
+    """Stands in for ``armwatch.Heartbeat`` and explodes on construction."""
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        raise _HeartbeatWasBuilt(f"Heartbeat({args!r}, {kwargs!r})")
+
+
+class _RefusingHeartbeat:
+    """A ``_write`` that always fails with a real OSError.
+
+    ``OSError`` specifically, because that is the one class the flush is
+    allowed to absorb. Anything wider would be the fail-soft trap.
+    """
+
+    def _write(self, payload: str) -> None:
+        raise OSError(13, "permission denied")
+
+
+class _AssertingHeartbeat:
+    """A ``_write`` raising the one exception a fail-soft catch must not eat."""
+
+    def _write(self, payload: str) -> None:
+        raise AssertionError("the spy fired")
+
+
+class _FrozenMonotonic:
+    """A monotonic clock a test moves by hand.
+
+    ``armwatch.Heartbeat`` throttles its flush against ``time.monotonic``
+    rather than against the wall clock, so crossing the flush interval in a
+    test means moving THIS clock. Reading it never advances it: a test that
+    wants time to pass has to say so, which keeps a throttle assertion from
+    depending on how many times the implementation happens to read the clock.
+    """
+
+    def __init__(self, value: float = 0.0) -> None:
+        self.value = value
+
+    def __call__(self) -> float:
+        return self.value
+
+
+class _TickingUtcClock:
+    """A UTC-aware wall clock advancing ``step_seconds`` on every read.
+
+    Not thread-safe on its own, and it does not need to be: ``Heartbeat``
+    reads it only while holding its own lock, so every reading is serialised
+    by the same lock that serialises the counter.
+    """
+
+    def __init__(self, start: datetime = _HEARTBEAT_EPOCH, step_seconds: float = 1.0) -> None:
+        assert start.tzinfo is not None, "a naive start cannot test a UTC contract"
+        self._next = start
+        self._step = timedelta(seconds=step_seconds)
+        self.calls = 0
+
+    def __call__(self) -> datetime:
+        self.calls += 1
+        reading = self._next
+        self._next = reading + self._step
+        return reading
+
+
+def _beat(
+    path: Path,
+    *,
+    step_seconds: float = 1.0,
+) -> tuple[armwatch.Heartbeat, _TickingUtcClock, _FrozenMonotonic]:
+    """A Heartbeat wired to injected clocks, plus the clocks themselves.
+
+    The monotonic clock starts FROZEN, so nothing flushes after the first
+    record until a test moves it. That makes every throttle assertion below a
+    statement about the interval rather than about wall-clock luck.
+    """
+    clock = _TickingUtcClock(step_seconds=step_seconds)
+    ticks = _FrozenMonotonic()
+    return armwatch.Heartbeat(path, now_fn=clock, monotonic_fn=ticks), clock, ticks
+
+
+def _read_heartbeat(path: Path) -> dict:
+    """Parse the heartbeat file, which must be exactly one JSON object.
+
+    ``json.loads`` raises "Extra data" on a file that was appended to rather
+    than replaced, so this helper is also the append check.
+    """
+    return json.loads(path.read_text(encoding="ascii"))
+
+
+def _spy_heartbeat(spy: type, path: Path) -> armwatch.Heartbeat:
+    """Build a Heartbeat subclass whose ``_write`` comes from ``spy``.
+
+    The spy is mixed in AHEAD of ``Heartbeat`` so its ``_write`` wins, which
+    puts the raise inside the guarded region rather than around it - a spy
+    that replaced the whole guarded call would prove nothing about the catch.
+    """
+    subclass = type(f"Spied{spy.__name__}", (spy, armwatch.Heartbeat), {})
+    return subclass(path, now_fn=_TickingUtcClock(), monotonic_fn=_FrozenMonotonic())
+
+
+class TestHeartbeatShape:
+    """The file is a fixed set of flat keys, parsed by a reader, not a human.
+
+    ROADMAP item 4e. MEASURED at the cycle 37 wrap: pid 23628 was alive for
+    over 24 hours having archived nothing, which is the CORRECT result with
+    the game client shut - and byte for byte indistinguishable from a wedged
+    process. ``armwatch.json`` is written once at arming and never touched
+    again, and a dated destination root only appears when something is
+    archived, so its absence says "idle" and "hung" in exactly the same voice.
+    """
+
+    def test_the_top_level_keys_are_exactly_the_contract(self, tmp_path: Path) -> None:
+        path = tmp_path / "beat.json"
+        beat, _clock, _ticks = _beat(path)
+        beat.record("logs")
+        assert set(_read_heartbeat(path)) == {"pid", "written", "passes", "surfaces"}
+
+    def test_the_surface_keys_are_the_plan_names(self, tmp_path: Path) -> None:
+        """Cross-checked against session_plan, so a renamed surface breaks here.
+
+        A hard-coded literal set would keep agreeing with itself after
+        somebody renamed a ``WatchPlan``, and the heartbeat would then report
+        a surface the reader has never heard of while the reader waited
+        forever for one that no longer exists.
+        """
+        saved = _saved_tree(tmp_path)
+        names = {plan.name for plan in armwatch.session_plan(saved, tmp_path / "dest")}
+        path = tmp_path / "beat.json"
+        beat, _clock, ticks = _beat(path)
+        for name in sorted(names):
+            ticks.value += armwatch.HEARTBEAT_FLUSH_INTERVAL_S
+            beat.record(name)
+        assert set(_read_heartbeat(path)["surfaces"]) == names
+        assert names == {"savegames", "standalonelevel", "savedroot", "logs"}
+
+    def test_pid_is_this_process(self, tmp_path: Path) -> None:
+        """The pid is what lets a reader join this file to an identity check.
+
+        ``ops.loop.watch`` already confirms a watcher's identity from a pid;
+        the heartbeat has to name the same process or the two records are
+        describing different things.
+        """
+        path = tmp_path / "beat.json"
+        beat, _clock, _ticks = _beat(path)
+        beat.record("logs")
+        assert _read_heartbeat(path)["pid"] == os.getpid()
+
+    def test_written_is_utc_at_second_resolution(self, tmp_path: Path) -> None:
+        """A staleness check is arithmetic, so the stamp must be unambiguous.
+
+        Second resolution keeps the file a fixed width; the explicit offset
+        keeps a reader from having to guess which clock produced it.
+        """
+        path = tmp_path / "beat.json"
+        beat, _clock, _ticks = _beat(path)
+        beat.record("logs")
+        written = datetime.fromisoformat(_read_heartbeat(path)["written"])
+        assert written.utcoffset() == timedelta(0)
+        assert written.microsecond == 0
+
+    def test_every_surface_stamp_is_truncated_to_the_second(self, tmp_path: Path) -> None:
+        """The truncation happens here, not in whatever clock was handed in."""
+        path = tmp_path / "beat.json"
+        beat, _clock, ticks = _beat(path, step_seconds=0.5)
+        for _ in range(3):
+            ticks.value += armwatch.HEARTBEAT_FLUSH_INTERVAL_S
+            beat.record("logs")
+        stamp = datetime.fromisoformat(_read_heartbeat(path)["surfaces"]["logs"])
+        assert stamp.microsecond == 0
+        assert stamp.utcoffset() == timedelta(0)
+
+    def test_a_naive_clock_is_refused_rather_than_guessed_at(self, tmp_path: Path) -> None:
+        """A stamp with no offset is a guess wearing a confident tone.
+
+        Assuming local would be wrong for five hours of every day on this
+        machine and doubly wrong inside a DST fold, where one naive reading
+        names two different instants. This is a wiring error, not an
+        environmental one, so it sits deliberately outside what the flush
+        absorbs.
+        """
+        beat = armwatch.Heartbeat(
+            tmp_path / "beat.json",
+            now_fn=lambda: datetime(2026, 9, 3, 5, 0, 0),
+            monotonic_fn=_FrozenMonotonic(),
+        )
+        with pytest.raises(ValueError):
+            beat.record("logs")
+
+    def test_an_aware_non_utc_clock_is_normalised_to_utc(self, tmp_path: Path) -> None:
+        """The contract says UTC, so a local-but-aware clock is converted."""
+        path = tmp_path / "beat.json"
+        beat = armwatch.Heartbeat(
+            path,
+            now_fn=lambda: datetime(2026, 9, 3, 0, 0, 0, tzinfo=timezone(timedelta(hours=-5))),
+            monotonic_fn=_FrozenMonotonic(),
+        )
+        beat.record("logs")
+        assert _read_heartbeat(path)["surfaces"]["logs"] == "2026-09-03T05:00:00+00:00"
+
+    def test_the_default_clock_is_aware_and_utc(self, tmp_path: Path) -> None:
+        """Every other test here injects a clock, so the DEFAULT needs its own.
+
+        A production watcher injects nothing. A default that had drifted to a
+        naive local reading would be caught by nothing else in this file,
+        because nothing else ever calls it - which is exactly the shape of a
+        guard that is green because it is looking somewhere else. Found by
+        mutating ``_utc_now`` to ``datetime.now()`` and watching every test
+        below stay green.
+        """
+        path = tmp_path / "beat.json"
+        before = datetime.now(UTC).replace(microsecond=0)
+        beat = armwatch.Heartbeat(path, monotonic_fn=_FrozenMonotonic())
+        beat.record("logs")
+        after = datetime.now(UTC).replace(microsecond=0)
+        stamp = datetime.fromisoformat(_read_heartbeat(path)["surfaces"]["logs"])
+        assert stamp.utcoffset() == timedelta(0)
+        assert before <= stamp <= after
+
+    def test_the_payload_is_seven_bit_ascii(self, tmp_path: Path) -> None:
+        path = tmp_path / "beat.json"
+        beat, _clock, _ticks = _beat(path)
+        beat.record("logs")
+        assert max(path.read_bytes()) < 0x80, "the heartbeat file carries a non-ASCII byte"
+
+    def test_the_file_is_rewritten_never_appended(self, tmp_path: Path) -> None:
+        """An appended file grows without bound and stops being one JSON object.
+
+        OPS-14 (disk pressure) is open and a watcher left running for days is
+        the normal case, so the one shape this file must never take is a
+        growing one.
+        """
+        path = tmp_path / "beat.json"
+        beat, _clock, ticks = _beat(path)
+        sizes = []
+        for _ in range(5):
+            ticks.value += armwatch.HEARTBEAT_FLUSH_INTERVAL_S
+            beat.record("logs")
+            sizes.append(path.stat().st_size)
+        assert _read_heartbeat(path)["passes"] == 5
+        assert len(set(sizes)) == 1, f"the heartbeat changed size across flushes: {sizes}"
+
+
+class TestHeartbeatAdvancesWithNothingArchived:
+    """THE point of 4e: an idle watcher and a wedged one must not look alike."""
+
+    def test_passes_advance_when_no_source_ever_changes(self, tmp_path: Path) -> None:
+        """Twelve completed passes, two archived files - ten passes copied nothing.
+
+        The source tree is built once and never touched again, so after the
+        first pass the seen-set inside every ``SaveWatcher`` makes each later
+        pass a no-op. That IS the cycle 37 state - alive, correct, archiving
+        nothing - and the heartbeat has to move through it.
+        """
+        saved = _saved_tree(tmp_path)
+        base = tmp_path / "captures"
+        path = tmp_path / "beat.json"
+        beat, _clock, _ticks = _beat(path)
+        armwatch.run_rolling(
+            saved,
+            base,
+            max_passes=3,
+            now_fn=_SequenceClock(datetime(2026, 9, 3, 9, 0, 0)),
+            sleep_fn=lambda _s: None,
+            log_fn=lambda _m: None,
+            heartbeat=beat,
+        )
+        assert len(_snapshot_files(base)) == 2, "the fixture stopped being a two-file tree"
+        assert _read_heartbeat(path)["passes"] == 12
+
+    def test_a_surface_that_archives_nothing_at_all_still_reports(self, tmp_path: Path) -> None:
+        """StandaloneLevel was measured EMPTY for a whole 36-minute session.
+
+        A heartbeat that only moved when a file was copied would leave that
+        surface permanently silent and unfalsifiable, which is the exact
+        defect this item exists to remove.
+        """
+        saved = _saved_tree(tmp_path)
+        base = tmp_path / "captures"
+        path = tmp_path / "beat.json"
+        beat, _clock, _ticks = _beat(path)
+        armwatch.run_rolling(
+            saved,
+            base,
+            max_passes=2,
+            now_fn=_SequenceClock(datetime(2026, 9, 3, 9, 0, 0)),
+            sleep_fn=lambda _s: None,
+            log_fn=lambda _m: None,
+            heartbeat=beat,
+        )
+        dated = [p for p in base.iterdir() if p.is_dir()]
+        assert len(dated) == 1
+        assert sorted(p.name for p in dated[0].iterdir()) == ["logs", "savedroot"]
+        assert "standalonelevel" in _read_heartbeat(path)["surfaces"]
+
+    def test_the_stamp_advances_between_passes(self, tmp_path: Path) -> None:
+        """Two readings either side of one pass, with nothing else able to move them."""
+        path = tmp_path / "beat.json"
+        beat, _clock, ticks = _beat(path)
+        beat.record("logs")
+        first = _read_heartbeat(path)["surfaces"]["logs"]
+        ticks.value += armwatch.HEARTBEAT_FLUSH_INTERVAL_S
+        beat.record("logs")
+        second = _read_heartbeat(path)["surfaces"]["logs"]
+        assert datetime.fromisoformat(second) > datetime.fromisoformat(first)
+        assert _read_heartbeat(path)["passes"] == 2
+
+
+class TestAWedgedSurfaceIsVisible:
+    """Four surfaces poll at 3 s, 3 s, 30 s and 300 s.
+
+    One aggregate stamp would let the two 3-second threads keep the file
+    looking fresh while the 300-second ``logs`` thread - the slowest, and the
+    one carrying the 5,080,313-byte log - sat wedged. Per-surface stamps are
+    the entire reason the ``surfaces`` object exists.
+    """
+
+    def _wedged(self, tmp_path: Path) -> dict:
+        """Drive one surface hard while ``logs`` records once and then stops."""
+        path = tmp_path / "beat.json"
+        beat, _clock, ticks = _beat(path, step_seconds=60.0)
+        beat.record("logs")
+        for _ in range(20):
+            ticks.value += armwatch.HEARTBEAT_FLUSH_INTERVAL_S
+            beat.record("savegames")
+        return _read_heartbeat(path)
+
+    def test_a_stalled_surface_falls_behind_the_others(self, tmp_path: Path) -> None:
+        data = self._wedged(tmp_path)
+        logs = datetime.fromisoformat(data["surfaces"]["logs"])
+        fast = datetime.fromisoformat(data["surfaces"]["savegames"])
+        assert (fast - logs).total_seconds() > armwatch.LOG_POLL_S
+
+    def test_the_aggregate_stamp_alone_would_call_the_wedge_healthy(self, tmp_path: Path) -> None:
+        """State positively the failure the per-surface stamps prevent.
+
+        ``written`` tracks the last FLUSH, and a flush happens whenever ANY
+        surface completes a pass. So with one surface healthy and one wedged,
+        ``written`` stays fresh: a reader holding only that number would
+        report a healthy watcher while the log surface had been dead for
+        twenty minutes.
+        """
+        data = self._wedged(tmp_path)
+        written = datetime.fromisoformat(data["written"])
+        logs = datetime.fromisoformat(data["surfaces"]["logs"])
+        fast = datetime.fromisoformat(data["surfaces"]["savegames"])
+        assert written >= fast
+        assert (written - logs).total_seconds() > armwatch.LOG_POLL_S
+
+
+class TestHeartbeatThrottle:
+    """The flush RATE is capped; the counting behind it never is.
+
+    Unthrottled, the production shape rewrites this file 28,800 + 28,800 +
+    2,880 + 288 = 60,768 times a day for four surfaces polling at 3 s, 3 s,
+    30 s and 300 s. OPS-14 (disk pressure) is open.
+    """
+
+    def test_the_flush_interval_is_thirty_seconds(self) -> None:
+        assert armwatch.HEARTBEAT_FLUSH_INTERVAL_S == 30.0
+
+    def test_the_interval_sits_between_the_fastest_and_slowest_surface(self) -> None:
+        """Coarser than the fastest surface, or the reduction is given back.
+
+        Finer than the slowest, or the throttle itself becomes the reason a
+        ``logs`` stamp looks stale.
+        """
+        assert armwatch.HEARTBEAT_FLUSH_INTERVAL_S >= armwatch.MATCH_LIFETIME_POLL_S
+        assert armwatch.HEARTBEAT_FLUSH_INTERVAL_S < armwatch.LOG_POLL_S
+
+    def test_records_inside_the_interval_are_counted_but_not_written(self, tmp_path: Path) -> None:
+        """The throttle caps WRITES. Losing a pass from the count would be a bug."""
+        path = tmp_path / "beat.json"
+        beat, _clock, _ticks = _beat(path)
+        for _ in range(100):
+            beat.record("savegames")
+        assert _read_heartbeat(path)["passes"] == 1
+        beat.flush()
+        assert _read_heartbeat(path)["passes"] == 100
+
+    def test_a_record_after_the_interval_flushes(self, tmp_path: Path) -> None:
+        path = tmp_path / "beat.json"
+        beat, _clock, ticks = _beat(path)
+        beat.record("savegames")
+        beat.record("savegames")
+        assert _read_heartbeat(path)["passes"] == 1
+        ticks.value = armwatch.HEARTBEAT_FLUSH_INTERVAL_S
+        beat.record("savegames")
+        assert _read_heartbeat(path)["passes"] == 3
+
+    def test_the_first_record_writes_immediately(self, tmp_path: Path) -> None:
+        """An absent file is ambiguous with being armed without --heartbeat.
+
+        Waiting a full interval before the first write would leave a reader
+        that polls straight after arming unable to tell those apart, which is
+        the same ambiguity 4e exists to close.
+        """
+        path = tmp_path / "beat.json"
+        beat, _clock, _ticks = _beat(path)
+        assert not path.exists()
+        beat.record("savegames")
+        assert path.is_file()
+
+
+class TestHeartbeatWriteIsAtomic:
+    """A reader polls this file, so it must never observe a half-written one."""
+
+    def test_no_temporary_file_survives_a_flush(self, tmp_path: Path) -> None:
+        path = tmp_path / "runtime" / "beat.json"
+        beat, _clock, ticks = _beat(path)
+        for _ in range(3):
+            ticks.value += armwatch.HEARTBEAT_FLUSH_INTERVAL_S
+            beat.record("logs")
+        assert [p.name for p in sorted(path.parent.iterdir())] == ["beat.json"]
+
+    def test_the_payload_never_goes_straight_into_the_polled_path(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        """``tmp.write_text(...)`` then ``tmp.replace(target)``, stated positively.
+
+        Asserting only that no ``.tmp`` file survives is a NEGATIVE: it is
+        satisfied just as well by an implementation that never made one and
+        wrote straight over the live file, which is precisely the shape that
+        lets a reader observe a half-written object. Found by mutating the
+        write to ``target.write_text(...)`` and watching all 69 tests stay
+        green. So this one records where the bytes actually went.
+        """
+        path = tmp_path / "beat.json"
+        written: list[Path] = []
+        replaced: list[tuple[Path, Path]] = []
+        real_write = Path.write_text
+        real_replace = Path.replace
+
+        def spy_write(self, *args, **kwargs):
+            written.append(Path(self))
+            return real_write(self, *args, **kwargs)
+
+        def spy_replace(self, target):
+            replaced.append((Path(self), Path(target)))
+            return real_replace(self, target)
+
+        monkeypatch.setattr(Path, "write_text", spy_write)
+        monkeypatch.setattr(Path, "replace", spy_replace)
+        beat, _clock, _ticks = _beat(path)
+        beat.record("logs")
+        monkeypatch.undo()
+
+        assert written, "nothing was written at all - the spy never fired"
+        assert path not in written, "the payload went straight into the file a reader polls"
+        landed = [source for source, target in replaced if target == path]
+        assert landed, "no atomic replace ever landed the payload on the target path"
+        assert all(source.name.endswith(".tmp") for source in landed)
+        assert all(source.parent == path.parent for source in landed), (
+            "the temp file must sit in the target's own directory, or the "
+            "replace is a cross-volume copy and stops being atomic"
+        )
+        assert _read_heartbeat(path)["passes"] == 1, (
+            "the replace happened but published nothing readable"
+        )
+
+    def test_the_parent_directory_is_created(self, tmp_path: Path) -> None:
+        """``ops/runtime/`` is gitignored and may not exist on a fresh clone."""
+        path = tmp_path / "runtime" / "deeper" / "beat.json"
+        beat, _clock, _ticks = _beat(path)
+        beat.record("logs")
+        assert path.is_file()
+
+
+class TestHeartbeatFailureNeverStopsTheWatcher:
+    """A watcher that dies for want of its own heartbeat is worse than one without."""
+
+    def test_a_failing_write_is_absorbed_and_polling_continues(self, tmp_path: Path) -> None:
+        saved = _saved_tree(tmp_path)
+        base = tmp_path / "captures"
+        path = tmp_path / "beat.json"
+        beat = _spy_heartbeat(_RefusingHeartbeat, path)
+        armwatch.run_rolling(
+            saved,
+            base,
+            max_passes=2,
+            now_fn=_SequenceClock(datetime(2026, 9, 3, 9, 0, 0)),
+            sleep_fn=lambda _s: None,
+            log_fn=lambda _m: None,
+            heartbeat=beat,
+        )
+        assert beat.failed_writes >= 1, "the write never failed - this guard proves nothing"
+        assert _snapshot_files(base), "archiving stopped when the heartbeat failed"
+        assert not path.exists()
+
+    def test_a_real_unwritable_path_does_not_stop_the_run(self, tmp_path: Path) -> None:
+        """No spy: the parent of the heartbeat path IS an ordinary file.
+
+        A guard proven only against a monkeypatched raise is proven against
+        the monkeypatch. Here the OSError comes from the filesystem.
+        """
+        blocker = tmp_path / "blocker"
+        blocker.write_bytes(b"not a directory\n")
+        beat, _clock, _ticks = _beat(blocker / "beat.json")
+        beat.record("logs")
+        assert beat.failed_writes >= 1
+        assert blocker.read_bytes() == b"not a directory\n"
+
+    def test_a_non_oserror_from_the_write_is_not_swallowed(self, tmp_path: Path) -> None:
+        """``except Exception`` would eat an AssertionError and make spies vacuous.
+
+        This repo has paid for that once already. The catch around the flush
+        names ``OSError`` and nothing wider, and this is the test that says so.
+        """
+        beat = _spy_heartbeat(_AssertingHeartbeat, tmp_path / "beat.json")
+        with pytest.raises(AssertionError):
+            beat.record("logs")
+
+    def test_the_run_does_not_swallow_it_either(self, tmp_path: Path) -> None:
+        saved = _saved_tree(tmp_path)
+        beat = _spy_heartbeat(_AssertingHeartbeat, tmp_path / "beat.json")
+        with pytest.raises(AssertionError):
+            armwatch.run_rolling(
+                saved,
+                tmp_path / "captures",
+                max_passes=1,
+                now_fn=_SequenceClock(datetime(2026, 9, 3, 9, 0, 0)),
+                sleep_fn=lambda _s: None,
+                log_fn=lambda _m: None,
+                heartbeat=beat,
+            )
+
+
+class TestHeartbeatUnderThreads:
+    """The production shape is four daemon threads sharing one Heartbeat."""
+
+    def test_concurrent_records_lose_no_passes(self, tmp_path: Path) -> None:
+        """``passes += 1`` is a read-modify-write and four threads share it.
+
+        The monotonic clock stays frozen, so exactly one write happens during
+        the hammering and the final forced flush reports what the counter
+        actually holds.
+        """
+        path = tmp_path / "beat.json"
+        beat, _clock, _ticks = _beat(path)
+        names = ["savegames", "standalonelevel", "savedroot", "logs"]
+
+        def hammer(name: str) -> None:
+            for _ in range(500):
+                beat.record(name)
+
+        threads = [threading.Thread(target=hammer, args=(name,)) for name in names]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        beat.flush()
+        data = _read_heartbeat(path)
+        assert data["passes"] == 4 * 500
+        assert set(data["surfaces"]) == set(names)
+
+
+class TestHeartbeatCommandLine:
+    """``--heartbeat`` is optional, and refuses the one pairing it cannot honour."""
+
+    def test_dest_root_with_heartbeat_is_refused(self, tmp_path: Path, capsys) -> None:
+        """A silently ignored flag is a trap.
+
+        ``--dest-root`` runs the literal-destination path, which is not
+        ``run_rolling`` and writes no heartbeat. Accepting the flag there
+        would leave a reader polling a file nothing ever writes, and reporting
+        a healthy watcher dead.
+        """
+        saved = _saved_tree(tmp_path)
+        path = tmp_path / "beat.json"
+        dest = tmp_path / "dest"
+        rc = armwatch.main(
+            [
+                "--saved-dir",
+                str(saved),
+                "--dest-root",
+                str(dest),
+                "--heartbeat",
+                str(path),
+                "--max-passes",
+                "1",
+            ]
+        )
+        assert rc != 0
+        assert not path.exists()
+        assert not dest.exists(), "the run went ahead anyway and archived into dest-root"
+        err = capsys.readouterr().err
+        assert "--heartbeat" in err
+        assert "--dest-root" in err
+        assert "--dest-base" in err
+
+    def test_dest_base_with_heartbeat_is_accepted(self, tmp_path: Path) -> None:
+        saved = _saved_tree(tmp_path)
+        path = tmp_path / "beat.json"
+        rc = armwatch.main(
+            [
+                "--saved-dir",
+                str(saved),
+                "--dest-base",
+                str(tmp_path / "captures"),
+                "--heartbeat",
+                str(path),
+                "--max-passes",
+                "1",
+            ]
+        )
+        assert rc == 0
+        data = _read_heartbeat(path)
+        assert data["pid"] == os.getpid()
+        assert data["passes"] == 4
+        assert set(data["surfaces"]) == {"savegames", "standalonelevel", "savedroot", "logs"}
+
+    def test_a_refused_dest_base_writes_no_heartbeat(self, tmp_path: Path) -> None:
+        """Building a Heartbeat touches no filesystem, so a refusal leaves none."""
+        saved = _saved_tree(tmp_path)
+        fake_repo = tmp_path / "checkout"
+        (fake_repo / ".git").mkdir(parents=True)
+        path = tmp_path / "beat.json"
+        rc = armwatch.main(
+            [
+                "--saved-dir",
+                str(saved),
+                "--dest-base",
+                str(fake_repo / "captures"),
+                "--heartbeat",
+                str(path),
+                "--max-passes",
+                "1",
+            ]
+        )
+        assert rc == 2
+        assert not path.exists()
+
+    def test_without_the_flag_no_heartbeat_is_built_at_all(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        """Absent means absent: no object, no file, no syscall.
+
+        A watcher armed by an older session passes no such flag, so this path
+        has to behave exactly as it did before 4e.
+        """
+        saved = _saved_tree(tmp_path)
+        monkeypatch.setattr(armwatch, "Heartbeat", _Detonator)
+        rc = armwatch.main(
+            [
+                "--saved-dir",
+                str(saved),
+                "--dest-base",
+                str(tmp_path / "captures"),
+                "--max-passes",
+                "1",
+            ]
+        )
+        assert rc == 0
+
+    def test_the_detonator_fires_when_the_flag_is_present(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        """Proves the test above is not passing because the patch missed.
+
+        A mutation that fails to apply looks exactly like a passing test, so
+        the spy has to be shown firing before its silence means anything.
+        """
+        saved = _saved_tree(tmp_path)
+        monkeypatch.setattr(armwatch, "Heartbeat", _Detonator)
+        with pytest.raises(_HeartbeatWasBuilt):
+            armwatch.main(
+                [
+                    "--saved-dir",
+                    str(saved),
+                    "--dest-base",
+                    str(tmp_path / "captures"),
+                    "--heartbeat",
+                    str(tmp_path / "beat.json"),
+                    "--max-passes",
+                    "1",
+                ]
+            )
+
+    def test_run_rolling_without_a_heartbeat_writes_nothing_new(self, tmp_path: Path) -> None:
+        """The default is None and that path stays exactly as it was."""
+        saved = _saved_tree(tmp_path)
+        base = tmp_path / "captures"
+        armwatch.run_rolling(
+            saved,
+            base,
+            max_passes=2,
+            now_fn=_SequenceClock(datetime(2026, 9, 3, 9, 0, 0)),
+            sleep_fn=lambda _s: None,
+            log_fn=lambda _m: None,
+        )
+        assert sorted(p.name for p in tmp_path.iterdir()) == ["Saved", "captures"]

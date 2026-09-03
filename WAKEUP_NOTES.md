@@ -5,6 +5,59 @@ fidelity and archive older ones rather than deleting them.
 
 ---
 
+# Wrap 2026-09-03 - cycle 38 - `4e` closed, and two of its own premises were false
+
+Suite **1518 passed** in 104.04s, run BARE and read at the wrap. Ruff clean.
+Merge gate OK against a **1430** baseline measured the same way before
+dispatching. Ledger `LL-0122`. Client **closed** all session - `MISTFALL_MATCH=0`
+against 334 total processes, with a self-referential positive control, because
+the first control I wrote filtered on `powershell*` and the tool runs `pwsh`, so
+its zero was a broken query rather than a measurement.
+
+**ROADMAP `4e` is CLOSED.** The wrap now re-checks the watcher instead of
+trusting a record written at session entry. `check_watcher()` returns one of
+`NO_RECORD`, `DEAD`, `IMPOSTOR`, `NO_HEARTBEAT`, `STALE`, `ARMED`, and
+`ensure_armed_at_wrap()` re-arms on the first three ONLY. Identity is the
+process creation time via ctypes `GetProcessTimes`, not the command line, inside
+a deliberately generous 120 s window - a false `IMPOSTOR` re-arms beside a live
+watcher, which is the one failure `ensure_armed` exists to refuse. The watcher
+now writes a heartbeat that advances **even when nothing is archived**, which is
+the observation `armwatch.json` could never provide.
+
+**Two of `4e`'s own premises were FALSE**, and both withdrawals are written
+adjacent to the claims in `ROADMAP.md` rather than only in the ledger:
+
+1. There is **no `armwatch.log` asymmetry**. No code path here writes that file;
+   the 2026-08-31 artifact is a hand-typed shell redirect.
+2. **"There is no observation that separates correctly idle from wedged" was
+   wrong.** `Win32_Process.OtherOperationCount` does it with no code - +508/15 s
+   for pid 23628 with Read, Write and CPU flat. Controls: idle Python 0,
+   scan-only Python 1442. **But that counter is per-PROCESS**, so it proves the
+   watcher is not WHOLLY wedged and nothing more. I first stated that limit too
+   weakly and the refutation pass corrected me.
+
+**The refutation caught a hole my own review had passed.** Slice B narrowed a
+safety guard that was blocking its own feature - removing `OpenProcess` from a
+forbidden set and checking the RIGHT instead. Legitimate, and I adjudicated it
+and approved it. But its replacement collector matched `ast.Attribute` only, so
+a bare `OpenProcess(...)` after a rebinding evaded a spelling the old guard
+caught. The suite was green at 1509 with that hole open and the merge gate said
+OK. Fixed at the wrap with a guard FOR the guard over five synthetic evasion
+spellings, observed red with exactly 1 of 5 failing.
+
+**Two items filed rather than left implied:** `4f` - one wedged surface out of
+four still reads as `ARMED`, because the verdict rests on the combined stamp and
+the per-surface map is evidence only. `OPS-16` - the termination guard is blind
+to `taskkill` passed as a string argument, `getattr`-assembled names, and ntdll
+entry points, all of which PREDATE this cycle.
+
+**Pid 23628 was not re-armed and not stopped.** It runs pre-heartbeat code, so
+it reads `NO_HEARTBEAT` with `armed=True`.
+
+**Items 7, 11 and 12 remain OPEN and UNCREDITED.**
+
+---
+
 # Wrap 2026-09-02 - cycle 37 - `7c`'s registration search and `7d` both closed, and the hook was found defeatable
 
 Suite **1430 passed**, ruff clean, **29** test files, merge gate OK against a
@@ -55,6 +108,15 @@ closed, and indistinguishable from a wedged process. No heartbeat is written,
 and the instance armed through `ensure_armed` produced no `armwatch.log` where a
 direct invocation does. Recorded as additional acceptance on `4e`, which is the
 next item if the client is closed.
+
+> **WITHDRAWN at the cycle 38 wrap, `LL-0122`.** Both halves of that sentence
+> were wrong. No code path in this repo writes `armwatch.log` at all, so there
+> is no asymmetry between the two arming paths - the 2026-08-31 file is a
+> hand-typed shell redirect of `run_rolling`'s banner. And "indistinguishable
+> from a wedged process" was false: sampling
+> `Win32_Process.OtherOperationCount` twice separates idle from wedged with no
+> code at all, and it showed pid 23628 was correctly idle. See ROADMAP `4e`,
+> where both withdrawals are written adjacent to the original claims.
 
 **Items 7, 11 and 12 remain OPEN and UNCREDITED.**
 
