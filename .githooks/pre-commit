@@ -24,6 +24,15 @@
 
 set -u
 
+# IGNORE SIGPIPE. Measured 2026-09-02: piping a commit through a reader
+# that closes early - "git commit ... 2>&1 | head -1" - killed this hook
+# mid-message, and THE BANNED COMMIT LANDED with exit 141 while the word
+# BLOCKED still appeared on screen. A guard that prints its refusal and
+# then lets the commit through is worse than no guard, because the
+# operator reads the refusal and believes it. Ignoring PIPE lets the
+# diagnostics fail silently and still reach the exit below.
+trap '' PIPE
+
 RED=''
 BOLD=''
 RESET=''

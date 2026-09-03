@@ -108,6 +108,75 @@ def test_repository_is_seven_bit_ascii():
     )
 
 
+def _git(args, cwd):
+    import subprocess
+
+    return subprocess.run(
+        ["git", *args], cwd=cwd, capture_output=True, text=True, timeout=120
+    )
+
+
+def test_the_hook_survives_a_reader_that_closes_the_pipe():
+    """End to end, in a throwaway repo: stage a banned glyph, commit, assert HEAD.
+
+    **Measured 2026-09-02, and it is why this test exists.** Piping a commit
+    through a reader that stops after one line -
+    ``git commit ... 2>&1 | head -1`` - killed the pre-commit hook mid-message
+    with SIGPIPE. Git exited 141 and **the banned commit landed**, while the
+    word BLOCKED still appeared on screen. A guard that prints its refusal and
+    then lets the commit through is worse than no guard at all, because the
+    operator reads the refusal and believes it. The hook now ignores PIPE.
+
+    The pipe is the whole point of this test, so it runs the commit through a
+    real shell. It SKIPS when no POSIX shell is available rather than passing
+    vacuously - a skip is honest, and a test that quietly stops exercising the
+    pipe would leave exactly the hole it was written to close.
+    """
+    import shutil
+    import subprocess
+    import tempfile
+
+    sh = shutil.which("sh") or shutil.which("bash")
+    if sh is None:
+        import pytest
+
+        pytest.skip("no POSIX shell on this machine, so the pipe cannot be exercised")
+    hooks = REPO_ROOT / ".githooks"
+    assert (hooks / "pre-commit").is_file(), "the hook under test is missing"
+
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = Path(tmp) / "probe"
+        repo.mkdir()
+        assert _git(["init", "-q"], repo).returncode == 0
+        _git(["config", "user.email", "probe@example.invalid"], repo)
+        _git(["config", "user.name", "probe"], repo)
+        shutil.copytree(hooks, repo / ".githooks")
+        _git(["config", "core.hooksPath", ".githooks"], repo)
+
+        (repo / "seed.txt").write_text("seed\n", encoding="ascii")
+        _git(["add", "seed.txt"], repo)
+        assert _git(["commit", "-q", "-m", "seed"], repo).returncode == 0, (
+            "the hook must ALLOW a clean commit - otherwise this test proves "
+            "nothing except that the hook refuses everything"
+        )
+        before = _git(["rev-parse", "HEAD"], repo).stdout.strip()
+
+        (repo / "bad.py").write_bytes('x = "em dash \u2014 here"\n'.encode("utf-8"))
+        _git(["add", "bad.py"], repo)
+        piped = subprocess.run(
+            [sh, "-c", 'git commit -m "must be refused" 2>&1 | head -1'],
+            cwd=repo,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        after = _git(["rev-parse", "HEAD"], repo).stdout.strip()
+        assert after == before, (
+            "THE BANNED COMMIT LANDED THROUGH A CLOSED PIPE. "
+            f"HEAD moved {before[:8]} -> {after[:8]}; shell exit {piped.returncode}"
+        )
+
+
 def test_walker_actually_reaches_this_test_file():
     # Cheap self-check: if the walker cannot see the file it lives in, its
     # skip list or its root is wrong and every other assertion here is
