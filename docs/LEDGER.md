@@ -84,6 +84,53 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0119 - 2026-09-02 - ROADMAP 7d CLOSED and CORRECTS LL-0118 - a digit outside a field window was silently dropped, and the guard turns 30 measured WRONG readings into refusals
+
+**Evidence:**
+- python -m pytest -> '1429 passed', exit 0, run bare as its own command; collect 1429 across 29 test files against a 1423 baseline measured BEFORE any change
+- python -m ruff check . -> 'All checks passed!', exit 0
+- the defect, on real captured ink: f0539_00.42.52.png has a true live_hits of 14 and read as 1 through window (193, 212) before this change; it now REFUSES
+- 6,439-frame consumer diff, commit 308d69c against this tree: 3,243 identical, 3,196 both refused, 0 GAINED, 0 LOST, 0 CHANGED - the guard costs no reading anywhere on the reference capture
+- 62 of those 6,439 changed only WHICH guard refuses them, outcome identical in every case; an independent slice measured the same 62 firings with 0 readings lost and 0 changed
+- the 30 WRONG readings at crop origins x 2048, 2066 and 2068 across the 124 panel-up frames are ALL now refusals; re-swept over x 2046-2070 after the change there are ZERO wrong readings at EVERY offset
+- the price is x TOLERANCE: the band reading all 118 frames narrowed from 2057-2065 to 2058-2064, so 7 usable crop origins instead of 9 in exchange for 30 wrong readings becoming refusals
+- the 2026-08-30 capture after the change: 118 read at the single shipped row, 120 by consensus, 0 misreads, 0 disagreements, 0 of 231 panel-down frames read - every figure unchanged from LL-0118
+- FLOOR measured at 6: the largest gap between two column runs that BOTH classify as real digits is 5 in the value field and 3 in hits, so a displaced glyph begins within 6 columns
+- CEILING measured at 19 by SWEEPING the constant rather than by a proxy: over the 3,243 frames that read, EDGE_LOOKAHEAD costs zero readings up to 19 and loses 3 at 20. Over ALL 6,439 frames the nearest outside ink is 1 column in 111 of them, and none of those 111 reads - which is why the ceiling must be scoped to reading frames
+- five mutations, anchor asserted to occur exactly once before each, module restored byte-exact by sha256 after every one: disable the guard 3 RED, EDGE_LOOKAHEAD 3 (below floor) 2 RED, EDGE_LOOKAHEAD 25 (above ceiling) 2 RED, drop the LEFT half only 1 RED, remove the narrow-image precondition 1 RED
+- THE FIRST VERSION OF THIS GUARD WAS DEFEATED BY A CLAMPED WINDOW, found by attacking it rather than by a test: a 212px-wide crop of f0539 returned 1 for a true 14 with the lookahead never firing. After the precondition, widths 212 and 223 REFUSE and 224, 232 and 500 all read 14
+- a synthesised 3-digit hits value refuses AT THE LOOKAHEAD, naming the pushed side; against the pre-guard module the same fixture refused with 'run x199-204 matched no digit', so it never read as 10 and no such claim is made
+- the nine over-wide frames all still refuse: 7 with the reason they had, 2 (p03763 right, p06217 left) now at the earlier lookahead guard
+- 1,088 of the 6,439 frames have ink within 60 columns outside a window; 517 already refuse and the 571 that read are ALL value-left only
+
+ROADMAP 7d IS CLOSED. _read_field now scans EDGE_LOOKAHEAD (8) columns immediately outside its window on both sides and refuses when it finds orange ink there, naming the side the digit was pushed. The defect was that it collected runs INSIDE the window and never asked whether the ink stopped before the edge, so a glyph pushed entirely out was dropped in silence and the survivors formed a valid number.
+
+IT FIXED A REAL WRONG-NUMBER BUG, NOT A THEORETICAL ONE. At crop origins x 2048, 2066 and 2068 the reader previously returned 30 confidently wrong numbers across the 124 panel-up frames - 1913/40 read as 1913/4, 347/6 as 347/5. All 30 are refusals now. LL-0118 recorded that vertical misalignment degrades to refusal while horizontal misalignment produces wrong numbers; that asymmetry is gone, and 7c's 'misalignment costs readings and never produces a wrong one' is now true of BOTH axes.
+
+A PARTIAL CUT ALREADY FAILED SAFE AND A CLEAN CUT FAILED DANGEROUS, which is the whole reason this had no detector. A half-visible glyph scores badly and lands in the ambiguity band, so it refuses; a glyph that misses the window entirely leaves a clean, confident, wrong reading behind. The harmless case was the one that tripped a guard.
+
+THE CONSTANT IS PINNED FROM BOTH SIDES AND BOTH CAPTURES WERE ASKED - LL-0116's lesson applied on the way IN rather than a cycle later. The ceiling's binding question is not 'where is there ink' but 'where is there ink on a frame that READS', because refusing a frame that already refuses costs nothing. Over ALL 6,439 frames the nearest outside ink is 1 column in 111 of them - not one bleed frame, which is what an earlier draft of this entry claimed - and NONE of those 111 reads. Sweeping the constant over the 3,243 that do read costs zero readings up to 19 and loses 3 at 20, which is the ceiling; a proxy measurement of 'nearest ink' had put it at 18 and was off by one. Mutating the constant to 3 or to 25 both go RED, and dropping only the LEFT half of the guard also goes RED, so neither the bound nor either half can drift unnoticed.
+
+THE TIDY GUARD WAS A TRAP AND WAS NOT SHIPPED. 'Refuse when ink touches the window's last column' would have refused 8 real frames, because the hits field legitimately reaches its last usable column at two digits. LL-0118 SAID 78, conflating 'frames with a two-digit hits value' with 'frames whose ink reaches column 223' - the rightmost-column histogram over the 124 is {209: 43, 210: 2, 222: 70, 223: 8}. Refusing 8 measured frames is still fatal, so the count was wrong and the verdict was not. The guard looks OUTSIDE the window instead.
+
+THE REFERENCE CAPTURE CANNOT DEMONSTRATE THE GUARD WORKING, and saying so is the honest form of this result. Zero out-of-window runs in the 6,439 classify as a digit, so that capture BOUNDS the constant but contains no positive example of the defect. The catching is demonstrated on three other surfaces instead: the 30 misaligned-crop wrong readings, the real f0539 truncation, and a synthesised 3-digit hits value. A capture that only ever produces a negative is a bound, not a proof.
+
+THE CEILING IS PRICED BY THE WRONG EDGE, recorded as a considered limitation rather than smoothed over. value-left sets the bound at 18 while carrying 11 columns of slack at the shipped 8, and hits - the field with ZERO right margin, and so the likeliest place for a glyph to be pushed out - is nowhere near the constraint. A per-edge lookahead would decouple them; it was declined because one symmetric bound is safe on both captures today and four constants are four things to drift instead of one. The acceptance for taking it up is recorded in 7d.
+
+ONE COVERAGE LOSS, RECORDED BECAUSE SHRINKING COVERAGE SHOULD NEVER BE SILENT. p06217 now refuses at the lookahead rather than at the splitter's over-wide postcondition, so that postcondition is exercised by 5 real frames rather than 6. No reading changed anywhere. The test that pins those nine frames was updated to the reasons they ACTUALLY give, with the loss written into its docstring rather than the assertion quietly re-pointed.
+
+A FIXTURE ARTIFACT WAS CORRECTED RATHER THAN WORKED AROUND. The synthesiser drew hits at HITS_WINDOW[0] + 4, putting a two-digit synthetic value's ink at x224 - one column OUTSIDE the window - where real two-digit ink stops at 222-223. The binarised prototypes are deliberately fatter than real ink, so this was the FIXTURE misrepresenting the HUD, and it would have tripped the new guard on a frame modelling a perfectly legal reading. It is now + 3. The alternative, loosening the guard by a column to accommodate a synthetic frame, would have been the guard bending to the test rather than the test to the measured HUD.
+
+A NUMBER MEASURED AGAINST A TREE ANOTHER AGENT IS EDITING MUST BE REPEATED UNTIL STABLE. The independent edge slice recorded one run reporting 0 guard firings while the module was mid-save, against 62 on three re-runs. Nothing was concluded from the unstable reading, but it is the same family as this project's other instrument failures: a transient file state produces a confident zero that looks exactly like a clean negative.
+
+THE FIRST VERSION OF THIS FIX WAS INCOMPLETE, AND IT WAS FOUND BY ATTACKING IT RATHER THAN BY A PASSING SUITE. _read_field clamped x_hi to the image width and read on. When the image is NARROWER than the window that clamp silently cuts the field AND leaves the right-hand lookahead with zero columns to scan, so the guard could not see the very truncation it exists to catch: a 212px crop of f0539 returned 1 for a true 14 while the whole suite was green. A CLAMPED WINDOW IS A CUT FIELD, NOT A NARROWER ONE, and _read_field now refuses an image too narrow to contain its window. The 6,439-frame diff was re-run after this second change and is still 0 gained, 0 lost, 0 changed - the panels are all 500 wide, so the precondition never fires there, which was MEASURED rather than assumed.
+
+THE RESIDUAL LIMIT IS STATED IN THE MODULE RATHER THAN IMPLIED. The guard catches a glyph that exists in the image but sits outside the window. It cannot catch a glyph that is not in the image at all - a crop ending exactly at the window edge has nothing beyond it to inspect, and no guard can invent it. That case is now a refusal when the window does not fit, and read_frame never produces one because it checks the frame size first.
+
+TWO OF LL-0118'S NUMBERS ARE SUPERSEDED RATHER THAN WRONG, and the distinction matters. Its 'x 2057-2065 each read 118 with zero wrong, and x 2048, 2066 and 2068 return 30 WRONG readings' was true of the tree it described. This guard changed it: re-swept over x 2046-2070 there are now ZERO wrong readings at every offset, and the all-118 band is 2058-2064. LL-0118 is not edited - the ledger is append-only and a correction is a new entry, which is this one.
+
+ITEMS 7, 11 AND 12 REMAIN OPEN AND UNCREDITED. The client was closed throughout, confirmed by filtering on the process NAME with a positive control. The session watcher pid 23628 was verified alive and identity-confirmed - its command line names lanternlight.armwatch and its start time matches the arming record.
+
 ### LL-0118 - 2026-09-02 - ROADMAP 7c's registration search DONE as CONSENSUS - and the refutation found its '2px high' premise was false, inherited and repeated unmeasured for a fifth cycle
 
 **Evidence:**

@@ -73,15 +73,23 @@ origin ``(2058, 390)``. y 390 is the best of five rows swept and every offset
 in 388-392 gave ZERO disagreements, so VERTICAL misalignment costs readings and
 never produces a wrong one - which is why :func:`read_frame` sweeps y.
 
-**HORIZONTAL misalignment is NOT the same, and it DOES produce wrong numbers.**
-Measured 2026-09-02 over the 124 panel-up frames: x 2057-2065 each read 118 with
-zero wrong, x 2056 reads only 110, and x 2048, 2066 and 2068 return 30 WRONG
-readings between them - a digit pushed outside a field window is silently
-dropped and the survivors form a valid number, ``ROADMAP`` 7d. The danger is not
-monotonic: 2048 gives 12 wrong while 2050 gives none. An earlier version of this
-docstring advertised the x origin as "tolerant across 2056-2061", which is wrong
-at BOTH ends - it includes 2056, which costs 8 readings, and excludes 2062-2065,
-which are as good as 2058. **x is therefore FIXED at 2058 and never swept.**
+**HORIZONTAL misalignment USED to produce wrong numbers, and no longer does.**
+BEFORE ``ROADMAP`` 7d, measured over the 124 panel-up frames, x 2048, 2066 and
+2068 returned 30 WRONG readings between them, non-monotonically - 2048 gave 12
+while 2050 gave none - because a digit pushed outside a field window was
+silently dropped and the survivors formed a valid number.
+:data:`EDGE_LOOKAHEAD` closed that. Re-measured after it, over x 2046-2070:
+**ZERO wrong readings at every offset**, so both axes now degrade to refusal.
+
+What it cost is x TOLERANCE, and that is the honest trade. The band reading all
+118 frames narrowed from 2057-2065 to **2058-2064**; 2057 now reads 110, 2065
+reads 34, and 2056, 2066 and 2068 read 42, 0 and 0. Offsets that used to return
+a confident wrong number now refuse instead, which is the direction this module
+is required to fail in. **x is FIXED at 2058 and never swept** - a sweep buys
+nothing, since consensus over x was measured to recover zero frames.
+
+An earlier version of this docstring advertised x as "tolerant across
+2056-2061", which was wrong at both ends even before the guard.
 """
 
 from __future__ import annotations
@@ -94,6 +102,7 @@ from lanternlight.vision_meter_templates import HITS, VALUE
 __all__ = [
     "ACCEPT_DISTANCE",
     "AMBIGUITY_MARGIN",
+    "EDGE_LOOKAHEAD",
     "FRAME_CONSENSUS_ROWS",
     "FRAME_PANEL_X",
     "HITS_WINDOW",
@@ -286,6 +295,53 @@ SEPARATOR_MAX_HEIGHT = 10
 #: comma at 9 lit pixels exists in the 2026-08-25 capture against a misfire
 #: population reaching 18.
 SEPARATOR_MIN_HEIGHT = 4
+
+#: Columns scanned OUTSIDE each field window for ink that should not be there.
+#:
+#: ``_read_field`` used to assemble whatever column runs it found INSIDE its
+#: window and never asked whether the ink stopped before the edge. A glyph
+#: pushed entirely outside was therefore dropped in silence and the survivors
+#: formed a valid number - a WRONG NUMBER rather than a refusal, which is the
+#: one outcome this module exists to prevent. Measured on real ink: a frame
+#: whose true hits is 14 read as 1 through a window that cut the last digit.
+#:
+#: **A PARTIAL cut already failed safe** - a half glyph scores badly and lands
+#: in the ambiguity band - so only a CLEAN cut was dangerous, which is why the
+#: defect had no detector.
+#:
+#: The bound is pinned from both sides by measurement, not by margin-feel:
+#:
+#: * **At least 6.** The largest gap between lit columns inside a field is 5,
+#:   so a displaced glyph begins within 6 columns of the last in-window ink.
+#:   Anything smaller could step over one.
+#: * **At most 19, measured by sweeping the constant itself.** The binding
+#:   constraint is not "where is there ink" but "where is there ink on a frame
+#:   that READS", because refusing a frame that already refuses costs nothing.
+#:   Over ALL 6,439 frames the nearest outside ink is 1 column, in 111 of them -
+#:   but NONE of those 111 reads. Over the 3,243 that do read, sweeping this
+#:   constant 1..21 costs zero readings up to 19 and loses 3 at 20. The same
+#:   boundary holds on the 2026-08-30 capture. Reaching it would REFUSE MEASURED
+#:   DATA, which is the one thing a bound here may never do. (An earlier draft
+#:   put the ceiling at 18 from a proxy measurement of "nearest ink" rather than
+#:   from sweeping the constant; the proxy was off by one and the direct sweep
+#:   is what this now cites.)
+#:
+#: The tidy alternative - refuse when ink touches the window's last column - is
+#: a trap and was measured as one: the hits field legitimately reaches its last
+#: usable column at two digits, so that rule would refuse 8 real frames. (An
+#: earlier draft said 78, which conflated "frames with a two-digit hits value"
+#: with "frames whose ink reaches column 223". The rightmost-column histogram
+#: over the 124 is {209: 43, 210: 2, 222: 70, 223: 8}. Refusing 8 measured
+#: frames is still fatal - the count was wrong, the verdict was not.)
+#:
+#: **The residual limit, stated rather than implied.** This catches a glyph that
+#: exists in the image but sits outside the window. It cannot catch a glyph that
+#: is not in the image at all - if a caller hands over a crop that ends at the
+#: window's edge, there is nothing beyond it to inspect and no guard can invent
+#: it. :func:`_read_field` therefore REFUSES an image too narrow to contain its
+#: whole window, which is the case that used to read a truncated number, and
+#: :func:`read_frame` never produces one because it checks the frame size first.
+EDGE_LOOKAHEAD = 8
 
 
 class Unreadable(Exception):
@@ -561,7 +617,18 @@ def _regroup(tokens: list[str | None], field: str) -> str:
 def _read_field(image, window: tuple[int, int], field: str) -> int:
     mask = _mask(image)
     x_lo, x_hi = window
-    x_hi = min(x_hi, image.size[0])
+    if image.size[0] < x_hi:
+        # A CLAMPED WINDOW IS A CUT FIELD, NOT A NARROWER ONE. This used to
+        # clamp x_hi to the image width and read on, which silently dropped
+        # every digit past the edge AND left the lookahead below with no
+        # columns to scan - so the truncation guard could not see the very
+        # truncation it exists to catch. Measured: a 212px crop of a frame
+        # whose true hits is 14 returned 1.
+        raise Unreadable(
+            f"{field}: the image is {image.size[0]}px wide, narrower than the "
+            f"x{x_lo}-{x_hi - 1} window - the field is cut off, so any reading "
+            "would be missing its right-hand digits"
+        )
     lit = sum(1 for row in mask for x in range(x_lo, x_hi) if row[x])
     if lit == 0:
         raise Unreadable(f"{field}: no orange ink in x{x_lo}-{x_hi} - the panel is not up")
@@ -570,6 +637,17 @@ def _read_field(image, window: tuple[int, int], field: str) -> int:
             f"{field}: {lit} lit pixels in x{x_lo}-{x_hi}, above {BLEED_CEILING} - "
             "the scene is bleeding through the semi-transparent plate"
         )
+    for side, scan_lo, scan_hi in (
+        ("left", max(0, x_lo - EDGE_LOOKAHEAD), x_lo),
+        ("right", x_hi, min(image.size[0], x_hi + EDGE_LOOKAHEAD)),
+    ):
+        stray = [x for x in range(scan_lo, scan_hi) if any(row[x] for row in mask)]
+        if stray:
+            raise Unreadable(
+                f"{field}: orange ink at x{min(stray)}-{max(stray)}, outside the "
+                f"x{x_lo}-{x_hi - 1} window - a digit has been pushed {side} out "
+                "of the field and would be dropped silently"
+            )
     columns = [x for x in range(x_lo, x_hi) if any(row[x] for row in mask)]
     tokens: list[str | None] = []
     for x0, x1 in _column_runs(columns):

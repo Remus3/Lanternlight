@@ -1608,16 +1608,18 @@ restored byte-exact by sha256 after every one.
   are clone-tested only against synthesised masks. Recorded as a decision gate
   rather than committed unasked.
 
-## 7d. A digit pushed OUTSIDE a field window is SILENTLY DROPPED - OPEN
+## 7d. A digit pushed OUTSIDE a field window is SILENTLY DROPPED - CLOSED 2026-09-02
 
 Opened 2026-09-02, cycle 37. Found by the x-offset slice while measuring
 something else, then DEMONSTRATED ON REAL INK rather than left as geometry.
 
-**The defect.** `_read_field` never asserts that ink stops before `x_hi`. It
-collects column runs inside the window and assembles whatever it finds. When a
-glyph falls ENTIRELY outside the window, the survivors form a valid number and
-are returned as a measurement. This is the failure class the whole module exists
-to prevent: not a refusal, a WRONG NUMBER.
+**The defect, in the past tense because it is CLOSED - everything from here to
+the closure block below describes the BEFORE state.** `_read_field` did not
+assert that ink stopped before `x_hi`. It collected the column runs inside the
+window and assembled whatever it found, so when a glyph fell ENTIRELY outside,
+the survivors formed a valid number and were returned as a measurement. That is
+the failure class the whole module exists to prevent: not a refusal, a WRONG
+NUMBER.
 
 **Demonstrated, on real captured ink, 2026-09-02.** Frame
 `f0539_00.42.52.png`, true `live_hits` 14:
@@ -1639,7 +1641,7 @@ capture:
 
 | field | window | usable | left margin | right margin at the widest observed value |
 |---|---|---|---|---|
-| value | `(40, 120)` | 40-119 | 13-14 | **4** columns, at 4 digits (55 frames) |
+| value | `(40, 120)` | 40-119 | 13-15 | **4** columns, at 4 digits (55 frames) |
 | hits | `(193, 224)` | 193-223 | 6 | **0** columns, at 2 digits (78 frames) |
 
 The glyph advance is about 13px. So **`hits` reaching 100 would read as 10** -
@@ -1664,7 +1666,11 @@ justified by a sweep that never covered the case it was chosen for.
 
 **A naive "refuse if ink touches the last column" is also WRONG and must not be
 shipped.** The rightmost lit column IS 223 in real 2-digit frames, so that guard
-would refuse 78 measured frames. NEVER REFUSE MEASURED DATA.
+would refuse 8 measured frames. NEVER REFUSE MEASURED DATA. (This item first
+said 78, which conflated "frames with a two-digit hits value" with "frames whose
+ink reaches column 223". The rightmost-column histogram over the 124 is
+{209: 43, 210: 2, 222: 70, 223: 8}. Refusing 8 measured frames is still fatal -
+the count was wrong, the verdict was not.)
 
 **Proposed instead: a LOOKAHEAD guard.** Refuse when there is orange ink in the
 columns immediately RIGHT of the window (and, for symmetry, LEFT of it), because
@@ -1685,6 +1691,85 @@ and fires exactly when a digit has been displaced.
   edge. The defect is a property of `_read_field`, not of one window, and this
   item's own table exists so that no future pass has to rediscover the other
   three.
+
+### CLOSED 2026-09-02 - `EDGE_LOOKAHEAD`, ledger `LL-0119`
+
+`_read_field` now scans `EDGE_LOOKAHEAD` (8) columns immediately outside its
+window on BOTH sides and refuses when it finds orange ink there, naming the side
+the digit was pushed. Every acceptance criterion above was met:
+
+| criterion | result |
+|---|---|
+| real ink through a truncating window refuses | `f0539` through `(193, 212)` REFUSES; it returned `1` for a true `14` before |
+| the guard watched going RED | 4 mutations, all RED, module restored byte-exact by sha256 |
+| 6,439-frame consumer diff | **0 changed, 0 lost, 0 gained**; 62 frames changed only WHICH guard refuses them |
+| the 124-frame set | still 118 single / **120 by consensus**, 0 misreads, 0 disagreements, 0 of 231 panel-down |
+| all four edges answered | the guard is symmetric, and the margin table above is the answer |
+
+**It fixes a real wrong-number bug, not just a theoretical one.** At crop origins
+x 2048, 2066 and 2068 the reader previously returned **30 confidently wrong
+numbers** across the 124 panel-up frames - `1913/40` read as `1913/4`, `347/6` as
+`347/5`. All 30 are now refusals. That is the x-axis analogue of the property the
+y axis already had, and `7c`'s "misalignment costs readings and never produces a
+wrong one" is now true of BOTH axes rather than only the vertical.
+
+**The constant is pinned from both sides by measurement, and both captures were
+asked** - `LL-0116`'s lesson applied on the way in rather than a cycle later:
+
+- **Floor 6.** The largest gap between two runs that BOTH classify as real digits
+  is 5 columns (value; 3 in hits), so a displaced glyph begins within 6.
+- **Ceiling 19, measured by sweeping the constant itself.** The binding question
+  is not "where is there ink" but "where is there ink on a frame that READS".
+  Over ALL 6,439 frames the nearest outside ink is 1 column, in 111 of them - and
+  NONE of those 111 reads. Over the 3,243 that do, sweeping this constant costs
+  zero readings up to 19 and loses 3 at 20. An earlier draft of this block said
+  18, from a proxy measurement of "nearest ink" rather than from sweeping; the
+  proxy was off by one.
+- Mutating to 3 or to 25 both go RED, so it cannot drift either way.
+
+**Two honest limits, recorded rather than smoothed over.**
+
+1. **The 6,439-frame capture contains no positive example of the defect.** Zero
+   out-of-window runs there classify as a digit, so that capture BOUNDS the
+   constant but cannot demonstrate the guard catching anything. The catching is
+   demonstrated elsewhere: on the 30 misaligned-crop wrong readings, on the real
+   `f0539` truncation, and on a synthesised 3-digit `hits` value.
+
+   **That last one carried a false claim and it is withdrawn.** An earlier draft
+   said the synthesised value "previously read as 10". It did not - against the
+   pre-guard module it refused with "run x199-204 matched no digit". The test
+   pins WHICH guard refuses it, not a rescue from a wrong number that was never
+   measured on that input. A synthesised glyph is not evidence about the HUD;
+   the wrong number is real and is demonstrated on REAL ink by the other two.
+2. **The ceiling is priced entirely by value-left**, which has 11 columns of
+   slack at `EDGE_LOOKAHEAD` 8, while `hits` - the field with zero right margin
+   and therefore the likeliest place for a pushed glyph - is nowhere near the
+   bound. A per-edge lookahead would decouple them. It is NOT done, because a
+   single symmetric bound is safe on both captures today and per-edge constants
+   are four things to drift instead of one. **Acceptance if a future session
+   takes it up:** the 6,439-frame diff still shows 0 changed / 0 lost / 0 gained,
+   the 124-frame set still reads 120 with zero disagreements, and each per-edge
+   value is pinned from both sides by a test watched going red.
+
+**A second cost, and it is the real price of this guard: x TOLERANCE.** The
+band of crop origins reading all 118 frames narrowed from **2057-2065 to
+2058-2064**. Re-measured over x 2046-2070 after the change, there are now ZERO
+wrong readings at every offset, but 2057 reads 110 rather than 118, 2065 reads
+34, and 2056, 2066 and 2068 read 42, 0 and 0. Offsets that used to return a
+confident wrong number now refuse. That is the direction this module is required
+to fail in, and it is a trade rather than a free win: **7 usable origins instead
+of 9, in exchange for 30 wrong readings becoming refusals.**
+
+**One cost, recorded because shrinking coverage should never be silent.**
+`p06217` now refuses at this guard rather than at the splitter's over-wide
+postcondition, so that postcondition is exercised by **5** real frames rather
+than 6. No reading changed anywhere.
+
+**A fixture artifact was corrected, not worked around.** The synthesiser drew the
+hits field at `HITS_WINDOW[0] + 4`, which put a two-digit synthetic value's ink
+at x224 - one column OUTSIDE the window, where real two-digit ink stops at
+222-223. The prototypes are deliberately fatter than real ink, so this was the
+fixture misrepresenting the HUD; it is now `+ 3` and lands where real ink lands.
 
 ## 4c. Archive the log and the market cache on every session - CLOSED 2026-08-25b, successor 4d OPEN
 
