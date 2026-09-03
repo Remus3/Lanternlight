@@ -191,10 +191,16 @@ killed for either one.** A second poller on the same four sources doubles the
 snapshot traffic while `OPS-14` (this machine's disk) is still open, and a
 live, identity-confirmed watcher that merely lacks a fresh heartbeat is not
 evidence that it stopped working - it is evidence that nothing has changed for
-it to copy. Pid 23628 on this machine is exactly this case as this section is
-written: armed before the heartbeat existed, still alive, still the right
-process by creation time, and re-arming it on sight of a missing heartbeat
-would be precisely the false re-arm this rule exists to prevent.
+it to copy. Pid 23628 was exactly this case when this section was written:
+armed before the heartbeat existed, alive, and the right process by creation
+time - so re-arming it on sight of a missing heartbeat would have been
+precisely the false re-arm this rule exists to prevent.
+
+**That watcher has since DIED and been re-armed** (`LL-0124`), so do not read
+the paragraph above as a description of the current machine. It is the worked
+example, not a status line. Ask `check_watcher()` for the state; a document
+reciting a pid goes stale the moment that process exits, which is the whole
+reason this check exists.
 
 **Identity is checked, not only liveness.** A pid can be recycled, so "a
 process with that pid exists" is a weaker statement than "the watcher is

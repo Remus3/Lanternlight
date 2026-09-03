@@ -84,6 +84,23 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0124 - 2026-09-03 - The 4e wrap check FIRED IN PRODUCTION at the very next wrap - the watcher was dead, nothing was archiving, and it re-armed
+
+**Evidence:**
+- At the cycle 39 wrap, check_watcher() reported NO_HEARTBEAT with armed=True for pid 23628. Minutes later, at the next wrap invoked by the operator, the same call reported DEAD with rearm needed=True.
+- Independently confirmed before acting, with a control: Get-CimInstance Win32_Process for 23628 returned nothing (PID=GONE), CONTROL_self=1, and a command-line sweep for armwatch across all python.exe gave ARMWATCH_COUNT=0. NOTHING on this machine was watching the log, the saves or the market cache.
+- This session did not kill it. The only processes this session terminated were two watchers it spawned itself in scratch directories, pids 10528 and 9140, each stopped by taskkill /F /PID naming that exact pid. 23628 died of something else, unobserved - which is precisely the failure mode LL-0117 recorded and 4e exists to catch.
+- ensure_armed_at_wrap('C:/ll-captures') re-armed as pid 21452 into C:\ll-captures\2026-09-03 - today's date, so the dated-root rollover from the stale 2026-09-01 record also worked.
+- The reason string names the failure in words: 'This is the LL-0117 failure exactly: armed, then trusted by every later re-arm attempt, then dead before the wrap with nothing archiving. Re-arm.'
+- The new watcher is the FIRST on this machine to write a heartbeat. check_watcher() now reads ARMED with heartbeat_age_s=8.0, and the file carries pid 21452, a written stamp, passes, and both the surfaces and intervals maps.
+- 4f's grace window was observed working in production, not only in tests: at passes=1 only standalonelevel had recorded, and the three surfaces that had not yet run were reported neither stale nor unjudged - fresh=('standalonelevel',), stale=(), unjudged=(). Polling to steady state gave passes=23 with all four surfaces and intervals 300.0/30.0/3.0/3.0.
+- Suite 1560 passed in 107.99s, run BARE this wrap. ruff check . clean. Working tree clean and HEAD == origin/main at 950915d before this entry.
+
+THE POINT OF THIS ENTRY. 4e was closed one commit earlier on the strength of tests and a fixture-driven end-to-end check. It then caught a REAL dead watcher within the hour, on the operator's own machine, in the exact circumstance it was designed for - the wrap, when the session hands the machine back to someone about to launch the client. The mechanism is no longer only test-proven.
+IT ALSO MEANS THE WINDOW WAS REAL. Between the cycle 39 wrap and this one, nothing was archiving. Had the operator launched Mistfall Hunter in that gap, the log would have been emptied with no copy taken - the 6.1 MB loss of 2026-08-09 repeated. The gap was closed by a check that did not exist two commits ago.
+WHAT IS NOT KNOWN, and it is not a small gap: WHY pid 23628 died is unmeasured. It had run for over 24 hours and was polling normally when last observed - +508 OtherOperationCount over 15 s with Read, Write and CPU flat. Nothing in this repo records a watcher's exit. That is a genuine open question and it is recorded here rather than guessed at.
+FOR THE NEXT SESSION: the armed watcher is pid 21452, not 23628. Any document still naming 23628 as the live watcher is stale. The expected state at next entry is ARMED, not NO_HEARTBEAT, because this instance writes a heartbeat.
+
 ### LL-0123 - 2026-09-03 - ROADMAP 4f CLOSED - a single wedged surface now FAILS, and the refutation found two acceptance criteria that were not actually met
 
 **Evidence:**

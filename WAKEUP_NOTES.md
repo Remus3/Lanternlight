@@ -57,8 +57,14 @@ with: the per-surface bound holds only while SOME surface still records, so if
 all stop, no flush fires, the combined stamp freezes and `STALE` fires first.
 **`STALE` and `SURFACE_STALE` cover each other's blind spot.**
 
-**Pid 23628 still reads `NO_HEARTBEAT` / `armed=True`** and was neither
+**Pid 23628 read `NO_HEARTBEAT` / `armed=True` at this wrap** and was neither
 re-armed nor stopped. `REARM_STATES` unchanged.
+
+> **SUPERSEDED within the hour - see `LL-0124`.** At the very next wrap that
+> same call returned **`DEAD`**: pid 23628 was gone, `ARMWATCH_COUNT=0`, and
+> nothing on the machine was archiving. `4e`'s wrap check fired in production
+> one commit after it shipped, and re-armed as **pid 21452** - the first
+> watcher here to write a heartbeat. WHY 23628 died is unmeasured.
 
 **Items 7, 11 and 12 remain OPEN and UNCREDITED.**
 
