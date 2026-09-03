@@ -84,6 +84,32 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0120 - 2026-09-02 - The ASCII pre-commit hook could be DEFEATED by piping the commit through head - it printed BLOCKED and the banned commit landed anyway
+
+**Evidence:**
+- python -m pytest -> '1430 passed', exit 0, run bare; python -m ruff check . -> 'All checks passed!'; collect 1430 across 29 test files
+- reproduced end to end, both arms measured in the same loop against the SAME staged banned glyph: 'git commit' with output untruncated -> exit 1, HEAD UNCHANGED; 'git commit 2>&1 | head -1' -> exit 141, COMMIT LANDED
+- the landed probe commit was d35eac2 on main, local only - origin was at 308d69c throughout and never received it; removed with git reset --hard ce5ccc7 and HEAD re-verified
+- after adding "trap '' PIPE" to .githooks/pre-commit, the same two arms give exit 1 and HEAD UNCHANGED in BOTH cases
+- the fix is pinned by an end-to-end regression test in tests/test_ascii_hygiene.py that builds a throwaway git repo, installs the hook, and runs the commit through a real shell pipe
+- that test WATCHED GOING RED: removing the trap fails it, and the hook was restored byte-exact by sha256 with 0 CRLF pairs afterwards
+- the test carries its own positive control - it first asserts the hook ALLOWS a clean commit, so it cannot pass by the hook refusing everything
+- .githooks/pre-commit is still pure LF: 0 CRLF pairs after the edit, checked because a CR in the shebang breaks the hook outright on Git for Windows
+
+THE GUARD PRINTED ITS REFUSAL AND LET THE COMMIT THROUGH. Piping a commit through a reader that stops early - 'git commit ... 2>&1 | head -1' - closed the hook's stdout mid-message. Git exited 141 on SIGPIPE and the banned-glyph commit landed, while the word BLOCKED still appeared on screen. That is the worst available failure mode for a guard: the operator sees the refusal and believes it, and the only way to notice is to check HEAD.
+
+IT WAS FOUND BY THE VERIFICATION STEP ITSELF, NOT BY A TEST. The wrap check for LL-0119 ran the documented end-to-end probe - stage a banned glyph, attempt a real commit, assert HEAD is unchanged - and this time the probe was written with 'head -1' to keep the output short. The probe that exists to prove the hook works is what defeated it. An EARLIER probe the same session used 'tail -4', which reads its input to the end, and passed correctly; the two differ only in whether the reader drains the pipe.
+
+THE CONTRADICTION IS WHAT EXPOSED IT. The hook printed BLOCKED, naming the staged file, and the HEAD comparison said the commit had landed. Believing either one alone would have been wrong in a different direction - the message says the guard worked, the exit code 141 says only that something was signalled, and only HEAD says what actually happened. CLAUDE.md already required asserting HEAD rather than reading the output, and that rule is the sole reason this was caught.
+
+A DEFECT IN THE PROBE IS A DEFECT IN THE GUARD when the probe is the only thing standing behind it. The fix is in the hook, not in the probe: telling future sessions 'do not pipe the commit' would leave the hole open for every operator who does. The hook now ignores PIPE, so its diagnostics fail silently on a closed pipe and control still reaches the exit.
+
+THIS IS THE FIFTH INSTRUMENT TO REPORT FALSELY IN THIS SESSION, and the first that could have written a banned glyph into the public record rather than merely producing a wrong number in chat. The others: grep -c reporting 0 carriage returns in a file with 602, cmp reporting a content difference that was purely CRLF against LF, a co_consts comparison reporting five changed functions when none had changed, and a hand-rolled PII control whose planted identifier went to C:/Program Files/Git/ because Git Bash maps a leading slash to the Git root.
+
+NOTHING WAS PUSHED WITH THE DEFECT PRESENT. origin/main was at 308d69c for the whole episode, the probe commit existed only locally, and it was removed before any push. The reset discarded exactly one commit, which this session created and which had to not exist.
+
+ITEMS 7, 11 AND 12 REMAIN OPEN AND UNCREDITED. The client was closed throughout, confirmed by filtering on the process NAME with a positive control, and the session watcher pid 23628 was alive and identity-confirmed at the wrap.
+
 ### LL-0119 - 2026-09-02 - ROADMAP 7d CLOSED and CORRECTS LL-0118 - a digit outside a field window was silently dropped, and the guard turns 30 measured WRONG readings into refusals
 
 **Evidence:**
