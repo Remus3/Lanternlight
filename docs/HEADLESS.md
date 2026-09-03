@@ -162,6 +162,97 @@ generations survives midnight and an unchanged file is not re-copied every day.
 is no stop path, by design: the watcher is meant to outlive the session, and
 deciding a running process is unwanted is an operator decision.
 
+### 4b. Re-checking the watcher at the wrap - `check_watcher`
+
+Arming happens on the way IN, at session entry. Nothing checked the way OUT
+before this section existed, and the way out is exactly when a session hands
+the machine back to an operator about to launch the client. On 2026-09-01 a
+watcher was armed, correctly refused two re-arm attempts while it looked
+alive, and was then found DEAD at the wrap - for an unmeasured stretch nothing
+was archiving the log, the saves or the market cache. `ops/loop/watch.py`
+closes that gap with `check_watcher()`, and `ensure_armed_at_wrap` is the wrap
+entry point that calls it before the next-session prompt is printed.
+
+`check_watcher()` returns one of six states. The first three mean "not armed"
+and cause a re-arm; the other three are reported and left alone:
+
+| State | Meaning | Re-arms? |
+|---|---|---|
+| `NO_RECORD` | No usable arming record exists. | Yes |
+| `DEAD` | The recorded pid is not alive. | Yes |
+| `IMPOSTOR` | The pid is alive, but its process creation time does not match the arming record's `started` stamp - an unrelated process inherited a recycled pid. | Yes |
+| `NO_HEARTBEAT` | Identity is confirmed but no heartbeat file exists. Counted ARMED. | No |
+| `STALE` | Identity is confirmed and a heartbeat file exists, but it has not advanced within `HEARTBEAT_STALE_AFTER_S` = **900 s**, which is 3 x the slowest poll interval (300 s, the `logs` surface). One missed pass is noise - a slow disk, a machine that slept - three consecutive ones are a pattern. | No |
+| `ARMED` | Identity is confirmed and the heartbeat is fresh. | No |
+
+**`NO_HEARTBEAT` and `STALE` are reported, never re-armed, and nothing is ever
+killed for either one.** A second poller on the same four sources doubles the
+snapshot traffic while `OPS-14` (this machine's disk) is still open, and a
+live, identity-confirmed watcher that merely lacks a fresh heartbeat is not
+evidence that it stopped working - it is evidence that nothing has changed for
+it to copy. Pid 23628 on this machine is exactly this case as this section is
+written: armed before the heartbeat existed, still alive, still the right
+process by creation time, and re-arming it on sight of a missing heartbeat
+would be precisely the false re-arm this rule exists to prevent.
+
+**Identity is checked, not only liveness.** A pid can be recycled, so "a
+process with that pid exists" is a weaker statement than "the watcher is
+running". The evidence is the process CREATION TIME, read via the Windows
+`GetProcessTimes` API and compared against the arming record's `started`
+stamp - not the command line. A live pid whose creation time does not match
+the record reads as `IMPOSTOR`, not `ARMED`.
+
+**The heartbeat.** The watcher writes `ops/runtime/armwatch_heartbeat.json`,
+rewritten in place - never appended. The first record is flushed immediately at
+arming, a finite run flushes once more as it ends, and every write between
+those two is throttled to no more often than every 30 seconds. It is enabled
+by a `--heartbeat PATH` flag on `python -m lanternlight.armwatch`, which the
+`default_spawn` helper in `ops/loop/watch.py` passes down automatically. It
+carries the `pid`, a `written` UTC stamp at second resolution, a monotonic
+`passes` count, and a `surfaces` map of per-surface last-poll stamps. It
+advances EVEN WHEN NOTHING IS ARCHIVED, which is the entire point: a watcher
+that finds nothing to copy for hours is not distinguishable from a wedged one
+unless something records that it looked.
+
+**The per-surface map is EVIDENCE, not a verdict, and the difference matters.**
+`check_watcher()` decides `STALE` from the combined `written` stamp alone. It
+does NOT compare each surface against its own poll interval, so a single wedged
+thread among four still reads as `ARMED` - and that is the surface most worth
+watching, because `savegames` and `standalonelevel` poll every 3 seconds while
+`logs` polls every 300, so the fast movers keep the combined stamp fresh on
+their own. What the map buys is that a human or a later check reading the
+evidence line can SEE the wedged surface's stamp standing still. Closing the
+gap properly means per-surface staleness in the verdict, which is not built.
+
+This heartbeat, not a log file, is the sanctioned liveness artifact. No code
+path in this repository writes an `armwatch.log` under either arming path -
+`default_spawn` sends a detached child's stdout and stderr to `DEVNULL`
+deliberately, so a long-running child cannot block on a pipe nobody drains,
+and that redirect is the entire difference between the two arming paths.
+
+**Caveats, stated here rather than left implied:**
+
+- A suspended or hibernated machine produces a FALSE `STALE`. Wall-clock time
+  advances past the threshold while the watcher's own thread is frozen along
+  with it, so `STALE` immediately after a sleep or resume is not evidence of
+  a hang.
+- The `written` stamp can lag a surface's true last pass by up to the 30
+  second flush throttle, because the file is rewritten no more often than
+  that.
+- An absent heartbeat means the check CANNOT TELL, not that the watcher is
+  dead - that is why `NO_HEARTBEAT` is reported rather than re-armed, the
+  same as `STALE`.
+- **One wedged surface out of four still reads as `ARMED`.** The verdict rests
+  on the combined `written` stamp, so the two 3 second surfaces keep it fresh
+  even if `logs` has been hung for an hour. The per-surface stamps make that
+  visible to a reader; nothing yet makes it fail.
+
+**This still never kills anything, the same as the guard and `ensure_armed` in
+4a above.** There is no stop path for a `STALE` watcher, or for any other
+state `check_watcher()` can return. It refuses, re-arms, or reports - never
+terminates - and `ensure_armed_at_wrap` re-arms only on `NO_RECORD`, `DEAD`
+and `IMPOSTOR`.
+
 ---
 
 ## 5. Stopping it

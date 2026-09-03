@@ -66,17 +66,38 @@ then holds what CHANGED that day, not everything that existed that day. A day
 whose sources never changed is empty or absent entirely, and reconstructing
 the full state of a surface on such a day means reading back to the earlier
 directory that last captured it.
+
+ROADMAP item 4e - a watcher has to be able to say it is alive
+-------------------------------------------------------------
+
+MEASURED at the cycle 37 wrap: pid 23628 was alive for over 24 hours and had
+archived nothing. With the game client shut that is the CORRECT result - and
+it is indistinguishable from a wedged process. Nothing in this repo could tell
+the two apart. ``armwatch.json`` is written once at arming and never touched
+again, and the rollover above means a dated destination root only APPEARS when
+something is archived, so the absence of one is equally consistent with "idle
+and correct" and "hung since Tuesday".
+
+:class:`Heartbeat` closes that gap, and the one property that makes it work is
+that it advances because a poll pass COMPLETED, never because a file was
+copied. It is opt-in via ``--heartbeat PATH``: a watcher armed by an older
+session passes no such flag and must keep behaving exactly as it did, so with
+the flag absent nothing here builds a heartbeat, writes a file, or makes a
+syscall it did not make before.
 """
 
 from __future__ import annotations
 
 import argparse
+import contextlib
+import json
+import os
 import sys
 import threading
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from lanternlight import paths
@@ -84,6 +105,8 @@ from lanternlight.savewatch import DestinationInsideRepoError, SaveWatcher
 
 __all__ = [
     "DEST_DATE_FORMAT",
+    "HEARTBEAT_FLUSH_INTERVAL_S",
+    "Heartbeat",
     "WatchPlan",
     "arm",
     "dated_dest_root",
@@ -111,6 +134,33 @@ LOG_POLL_S = 300.0
 #: directory listing is already in session order, and it is what the capture
 #: tree on this machine is named in.
 DEST_DATE_FORMAT = "%Y-%m-%d"
+
+#: How often the heartbeat file is rewritten, seconds. ARGUED, like every
+#: other number in this module.
+#:
+#: WHY A THROTTLE AT ALL: :func:`run_rolling`'s production shape is one daemon
+#: thread per surface, polling at 3 s, 3 s, 30 s and 300 s - which is
+#: 28,800 + 28,800 + 2,880 + 288 = 60,768 completed passes a day. Flushing on
+#: every one of them would rewrite this small file 60,768 times a day, and the
+#: two 3-second surfaces alone would account for 57,600 of those. OPS-14 (disk
+#: pressure) is open.
+#:
+#: WHY 30 AND NOT MORE: 30 s is a tenth of the slowest surface's own 300 s
+#: cadence, so the throttle can never be the thing that makes a ``logs`` stamp
+#: look stale - the lag it adds is small against the interval a reader already
+#: has to tolerate for that surface.
+#:
+#: WHY 30 AND NOT LESS: 3 s would match the fastest surface and hand the
+#: entire reduction back. At 30 s the file is rewritten at most 2,880 times a
+#: day, 21x fewer.
+#:
+#: STATED COST: ``written`` can lag a surface's true last completed pass by up
+#: to this interval, so a reader's staleness threshold must exceed
+#: ``LOG_POLL_S + HEARTBEAT_FLUSH_INTERVAL_S`` (330 s) or it will call a
+#: perfectly healthy watcher dead once every logs cycle. Exported so the
+#: reader can import the number instead of re-typing it; ``ops`` imports
+#: ``lanternlight``, never the reverse.
+HEARTBEAT_FLUSH_INTERVAL_S = 30.0
 
 
 @dataclass(frozen=True)
@@ -219,6 +269,214 @@ def dated_dest_root(dest_base: Path | str, *, now: datetime | None = None) -> Pa
     """
     when = datetime.now() if now is None else now
     return Path(dest_base) / when.strftime(DEST_DATE_FORMAT)
+
+
+def _utc_now() -> datetime:
+    """The heartbeat's own clock: UTC and aware.
+
+    UTC here, even though :func:`dated_dest_root` is deliberately LOCAL, and
+    the two are not in conflict. A dated directory is a NAME a human reads and
+    the capture tree on this machine is named in local dates; a heartbeat
+    stamp is a NUMBER a reader subtracts from. A local stamp goes ambiguous
+    for one hour every autumn - inside the DST fold a single reading names two
+    instants an hour apart, and a staleness check across it can come out
+    negative and report a dead watcher as freshly alive. The game's own log
+    timestamps in UTC for the same reason.
+    """
+    return datetime.now(UTC)
+
+
+class Heartbeat:
+    """A small JSON file that ADVANCES while the watcher is merely idle.
+
+    MEASURED at the cycle 37 wrap: pid 23628 alive for over 24 hours, having
+    archived nothing. With the game client shut that is the CORRECT result,
+    and it is indistinguishable from a wedged process - see the 4e section of
+    the module docstring. This class is the missing signal, and the property
+    that makes it one is that it moves because a poll pass COMPLETED, never
+    because a file was copied. A pass that copies nothing is exactly as much
+    evidence that a thread is alive as one that copies a 5 MB log.
+
+    PER-SURFACE STAMPS ARE NOT DECORATION. The four surfaces poll at 3 s, 3 s,
+    30 s and 300 s. One aggregate stamp would be kept fresh by the two
+    3-second threads while the 300-second ``logs`` thread - the slowest, and
+    the one carrying the 5,080,313-byte log - sat wedged. A wedged single
+    thread has to be visible on its own line, or the file lies by omission.
+
+    NO ``fsync``, deliberately, and this is the considered contrast with
+    ``ops.loop.watch.write_record``, which DOES fsync because it is a durable
+    record a later cold session reads back as history. A heartbeat's entire
+    value is FRESHNESS. One lost to a power cut is not a lost fact: the next
+    reader correctly re-derives it as stale, which is the right answer,
+    because a machine that just lost power is not running a watcher. Paying an
+    fsync 2,880 times a day to durably persist a value whose only meaning is
+    "recent" would buy nothing.
+
+    THE WRITE IS STILL ATOMIC. A reader polls this file, and a torn read of a
+    half-written JSON object would report a live watcher as unparseable -
+    which is the same false alarm 4e exists to remove, arriving by another
+    door. ``tmp.write_text(...)`` then ``tmp.replace(target)``, with the temp
+    file in the target's own directory so the replace is a same-volume rename.
+
+    LAYERING: nothing here imports from ``ops/``. ``ops.loop.watch`` imports
+    ``lanternlight.armwatch``, so the reverse would be an import cycle. The
+    heartbeat PATH is handed down from the ops layer as a CLI argument
+    precisely so that direction holds, and this class knows nothing at all
+    about who reads what it writes.
+
+    THREAD SAFETY: the production shape gives each surface its own daemon
+    thread and all four share one instance, so ``passes`` and the ``surfaces``
+    map are guarded by a :class:`threading.Lock`. The ``max_passes`` shape is
+    single-threaded and synchronous, so that lock is uncontended there and
+    costs nothing. The lock is held ACROSS the write rather than released
+    first: dropping it would let two threads interleave a stale payload over a
+    fresh one and would race on the shared temporary filename, to save a
+    sub-millisecond hold on threads that are about to sleep for between 3 and
+    300 seconds.
+    """
+
+    def __init__(
+        self,
+        path: Path | str,
+        *,
+        now_fn: Callable[[], datetime] = _utc_now,
+        monotonic_fn: Callable[[], float] = time.monotonic,
+        flush_interval_s: float = HEARTBEAT_FLUSH_INTERVAL_S,
+    ) -> None:
+        self.path = Path(path)
+        #: Counted, not merely absorbed. A test asserting that a failing write
+        #: did not stop the watcher has to know the write actually failed -
+        #: otherwise it passes just as happily when the flush was never due,
+        #: which is a guard that proves nothing.
+        self.failed_writes = 0
+        self._now_fn = now_fn
+        # The throttle runs on a MONOTONIC clock, never the wall clock. An NTP
+        # step backwards would otherwise freeze flushes for the length of the
+        # correction, and a step forwards would spend the whole interval at
+        # once. An interval is not a date.
+        self._monotonic_fn = monotonic_fn
+        self._flush_interval_s = flush_interval_s
+        # Read once: a pid does not change, and reading it inside the flush
+        # would suggest it might.
+        self._pid = os.getpid()
+        self._passes = 0
+        self._surfaces: dict[str, str] = {}
+        self._last_flush: float | None = None
+        self._lock = threading.Lock()
+
+    def record(self, surface: str) -> None:
+        """Count one COMPLETED poll pass for ``surface``, flushing if due.
+
+        Called after ``poll_once`` returns, whatever it returned. Treating an
+        empty pass differently from a productive one is precisely the defect
+        this class exists to remove.
+
+        The FIRST record always writes, before the throttle has anything to
+        measure against. An absent heartbeat file is ambiguous with "armed
+        without ``--heartbeat``", and making a reader wait a full interval to
+        resolve that would reintroduce a smaller copy of the same ambiguity.
+        """
+        with self._lock:
+            self._passes += 1
+            self._surfaces[surface] = self._stamp()
+            now = self._monotonic_fn()
+            if self._last_flush is not None and now - self._last_flush < self._flush_interval_s:
+                return
+            self._flush_locked(now)
+
+    def flush(self) -> None:
+        """Write the file now, ignoring the throttle.
+
+        Used when a run ends. The throttle exists to cap the rewrite RATE of a
+        long-lived process; a process about to return has no rate left to cap,
+        and withholding its final state would leave the file reporting a count
+        that is knowably out of date.
+        """
+        with self._lock:
+            self._flush_locked(self._monotonic_fn())
+
+    def _flush_locked(self, now: float) -> None:
+        """Write the file. The caller holds the lock.
+
+        The catch names ``OSError`` and nothing wider. A watcher that dies
+        because it could not write its own heartbeat is strictly worse than
+        one with no heartbeat at all - but a bare ``except Exception`` would
+        also swallow an ``AssertionError`` raised by a test spy, and that is
+        exactly how a guard in this repo has previously been made silently
+        vacuous.
+        """
+        self._last_flush = now
+        try:
+            self._write(self._payload())
+        except OSError:
+            self.failed_writes += 1
+
+    def _payload(self) -> str:
+        """The complete file contents. The caller holds the lock.
+
+        ``ensure_ascii=True`` is stated rather than left to the default: the
+        repo is 7-bit ASCII by rule, and it is also what makes this call
+        unable to raise ``UnicodeEncodeError`` - which is not an ``OSError``
+        and so would NOT be absorbed by :meth:`_flush_locked`.
+
+        Surfaces are sorted so two heartbeats differ only where the facts
+        differ. Insertion order would follow whichever thread happened to
+        finish its first pass first, which is not a fact about anything.
+
+        The result is fixed-width but for the digits of ``passes``: four
+        second-resolution stamps, a pid, and a counter. It is REPLACED on
+        every flush and never appended to, so it does not grow.
+        """
+        body = {
+            "pid": self._pid,
+            "written": self._stamp(),
+            "passes": self._passes,
+            "surfaces": dict(sorted(self._surfaces.items())),
+        }
+        return json.dumps(body, ensure_ascii=True, indent=2) + "\n"
+
+    def _stamp(self) -> str:
+        """One UTC, second-resolution ISO 8601 reading. Caller holds the lock.
+
+        Resolution and timezone are enforced HERE rather than trusted from
+        ``now_fn``, so an injected clock cannot quietly widen the contract. A
+        NAIVE reading is refused instead of guessed at: assuming local would
+        be wrong for five hours of every day on this machine, and inside a DST
+        fold one naive reading names two instants an hour apart. That is a
+        wiring error rather than an environmental one, so it sits deliberately
+        outside what :meth:`_flush_locked` absorbs.
+        """
+        when = self._now_fn()
+        if when.tzinfo is None:
+            raise ValueError(
+                "a heartbeat clock must return an aware datetime - a naive stamp "
+                "is ambiguous across the DST fold and a reader cannot subtract it"
+            )
+        return when.astimezone(UTC).replace(microsecond=0).isoformat()
+
+    def _write(self, payload: str) -> None:
+        """Atomically replace the heartbeat file. May raise ``OSError``.
+
+        The temp file carries this process's pid, so two watchers pointed at
+        one path cannot collide on it; within one process the lock already
+        serialises the write. A failed write removes its own temp file rather
+        than leaving litter beside a file a reader is polling.
+
+        ``newline="\\n"`` because on Windows ``write_text`` otherwise turns
+        every LF into CRLF: the bytes on disk would not be the bytes computed,
+        and a reader measuring a size or a hash would get a different answer
+        from the writer. Measured trap, see CLAUDE.md.
+        """
+        target = self.path
+        tmp = target.with_name(f"{target.name}.{self._pid}.tmp")
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            tmp.write_text(payload, encoding="utf-8", newline="\n")
+            tmp.replace(target)
+        except OSError:
+            with contextlib.suppress(OSError):
+                tmp.unlink(missing_ok=True)
+            raise
 
 
 def arm(plans: Sequence[WatchPlan]) -> list[SaveWatcher]:
@@ -372,6 +630,7 @@ def run_rolling(
     now_fn: Callable[[], datetime] = datetime.now,
     sleep_fn: Callable[[float], None] = time.sleep,
     log_fn: Callable[[str], None] | None = None,
+    heartbeat: Heartbeat | None = None,
 ) -> list[SaveWatcher]:
     """Arm the session under ``dest_base`` and keep the dated root current.
 
@@ -386,6 +645,16 @@ def run_rolling(
     crossing in no wall-clock time. ``max_passes=0`` arms and polls nothing,
     which is how a test asks whether the refusal really happens at arm time
     rather than on the first poll.
+
+    ``heartbeat`` is optional and defaults to ``None``, which is the shape
+    every caller before ROADMAP 4e used: with it absent this function builds
+    nothing, writes nothing, and makes no syscall it did not make before.
+    Given one, every surface records a pass against it AFTER ``poll_once``
+    returns - whatever ``poll_once`` returned - because a pass that copied
+    nothing is exactly as much evidence of liveness as one that copied a log.
+    A bounded run flushes once at the end, and so does an interrupted
+    threaded one, since the throttle exists to cap a rate and a run that is
+    over has no rate left to cap.
 
     Returns the armed watchers so a caller can inspect what it got.
     """
@@ -403,6 +672,10 @@ def run_rolling(
                 if surface.retarget(now):
                     say(f"rolled {surface.plan.name} over to {surface.plan.dest}")
                 surface.watcher.poll_once(now=now)
+                if heartbeat is not None:
+                    heartbeat.record(surface.plan.name)
+        if heartbeat is not None:
+            heartbeat.flush()
         return [surface.watcher for surface in surfaces]
 
     def poll_forever(surface: _RollingSurface) -> None:
@@ -417,6 +690,12 @@ def run_rolling(
                 say(f"stopping {surface.plan.name} - {exc}")
                 return
             surface.watcher.poll_once(now=now)
+            # After the pass, never before: the stamp claims a COMPLETED pass.
+            # A surface whose thread returned above (a destination that has
+            # acquired a git checkout) correctly stops advancing here, which
+            # is what makes a stopped surface visible to a reader.
+            if heartbeat is not None:
+                heartbeat.record(surface.plan.name)
             sleep_fn(surface.plan.poll_seconds)
 
     threads = [
@@ -436,6 +715,11 @@ def run_rolling(
             sleep_fn(60.0)
     except KeyboardInterrupt:
         say("stopped")
+    # One last honest reading on the way out. After this the file stops
+    # advancing, which is exactly what a reader should see for a watcher that
+    # has been stopped.
+    if heartbeat is not None:
+        heartbeat.flush()
     return [surface.watcher for surface in surfaces]
 
 
@@ -477,6 +761,22 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=None,
         help="stop after this many passes per watcher (default: run until interrupted)",
     )
+    # A PATH, not a flag, and it comes from the layer above. ops.loop.watch
+    # imports this module, so this module must not import ops - handing the
+    # destination down as an argument is what keeps that direction one-way.
+    # Not part of the mutually exclusive group above: it is not a destination,
+    # and the one pairing it cannot honour is rejected in main() with a reason
+    # rather than by a usage line that cannot explain itself.
+    parser.add_argument(
+        "--heartbeat",
+        type=Path,
+        default=None,
+        help=(
+            "write a small JSON liveness file at this path, advancing on every "
+            "completed poll pass including passes that archive nothing "
+            "(requires --dest-base)"
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -486,11 +786,38 @@ def main(argv: list[str] | None = None) -> int:
     ``--dest-base`` routes through :func:`run_rolling`, which re-derives the
     dated root as the day changes. ``--dest-root`` keeps its original literal
     meaning exactly: the directory named is the directory written to.
+
+    ``--heartbeat`` is honoured on the ``--dest-base`` path and REFUSED with
+    ``--dest-root``, rather than accepted and quietly ignored. A silently
+    ignored flag is a trap: the reader would poll a path nothing ever writes
+    and report a perfectly healthy watcher as dead, which is the same false
+    signal ROADMAP 4e exists to remove, arriving from the opposite direction.
     """
     args = parse_args(argv)
+    if args.heartbeat is not None and args.dest_root is not None:
+        # Exit 2, matching both argparse's usage-error code and the refusal
+        # below, because this IS a usage error.
+        print(
+            "refusing to arm: --heartbeat requires --dest-base, not --dest-root. "
+            "The heartbeat is written by the rolling watcher; --dest-root runs "
+            "the literal-destination path, which would accept the flag and never "
+            "write the file. Re-run with --dest-base.",
+            file=sys.stderr,
+            flush=True,
+        )
+        return 2
     try:
         if args.dest_base is not None:
-            run_rolling(args.saved_dir, args.dest_base, max_passes=args.max_passes)
+            # Constructing a Heartbeat touches no filesystem, so building it
+            # before run_rolling has had its chance to refuse the destination
+            # still leaves nothing behind if it does.
+            beat = None if args.heartbeat is None else Heartbeat(args.heartbeat)
+            run_rolling(
+                args.saved_dir,
+                args.dest_base,
+                max_passes=args.max_passes,
+                heartbeat=beat,
+            )
         else:
             plans = session_plan(args.saved_dir, args.dest_root)
             run(plans, max_passes=args.max_passes)
