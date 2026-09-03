@@ -491,7 +491,8 @@ FULLSCREEN = Path("C:/ll-captures/2026-08-30/frames")
 TRANSCRIPTION = Path("C:/ll-captures/2026-08-30/meter_transcription_cycle34.csv")
 
 #: Where the 500x310 panel sits inside a 2560x1440 frame. Measured, and
-#: tolerant across x 2056-2061; y 390 is the best row of five swept, and every
+#: tolerant across x 2058-2064 after ROADMAP 7d - it read 2056-2061 before,
+#: which was wrong at both ends; y 390 is the best row of five swept, and every
 #: offset gave ZERO disagreements, so vertical misalignment costs readings and
 #: never produces a wrong one.
 FULLSCREEN_CROP_ORIGIN = (2058, 390)
@@ -1196,9 +1197,12 @@ class TestADigitPushedOutsideTheWindow:
 
     It was live rather than theoretical. Both fields are LEFT-aligned - the left
     ink extent does not move with digit count - so values grow rightward, and
-    the hits window had ZERO right margin at two digits. ``hits`` reaching 100
-    would have read as 10. It never fired only because the capture's largest
-    ``live_hits`` is 50.
+    the hits window had ZERO right margin at two digits, so a third digit lands
+    outside it. **That 100 would have read as exactly 10 is a PREDICTION from
+    the measured geometry, not an observation** - no capture on this machine
+    contains a 3-digit hit count, the largest ``live_hits`` being 50. What IS
+    measured is the mechanism, on real ink: a frame whose true hits is 14 reads
+    as 1 through a window that cuts the last digit.
     """
 
     #: A real frame whose true hits is 14, and a window that cuts the '4' off
@@ -1206,9 +1210,12 @@ class TestADigitPushedOutsideTheWindow:
     TRUNCATING_CASE = ("f0539_00.42.52.png", (193, 212), 14)
 
     #: Crop origins that shift the panel far enough to push a digit out of a
-    #: window. Measured 2026-09-02: these three produced 30 WRONG readings
-    #: between them across the 124 panel-up frames.
-    MISALIGNED_X = (2048, 2066, 2068)
+    #: window. Measured 2026-09-02 against the pre-guard module, over the whole
+    #: 2046-2070 sweep: {2046: 69, 2047: 9, 2048: 12, 2066: 1, 2068: 17} = 108
+    #: WRONG readings across the 124 panel-up frames. An earlier version of this
+    #: comment said 30 and listed only the last three, omitting 2046 - the worst
+    #: offset - while the assertion below sweeps the full range.
+    MISALIGNED_X = (2046, 2047, 2048, 2066, 2068)
 
     def test_a_cleanly_cut_digit_REFUSES_instead_of_returning_a_number(self):
         """The defect itself, on real captured ink."""
@@ -1228,7 +1235,7 @@ class TestADigitPushedOutsideTheWindow:
 
         Vertical misalignment was already measured to degrade to refusal and
         never to error. HORIZONTAL misalignment did not: at these three origins
-        the reader returned 30 confidently wrong numbers, because a digit had
+        the reader returned 108 confidently wrong numbers, because a digit had
         been pushed out of the window and the rest still parsed.
         """
         _require_fullscreen()
@@ -1249,7 +1256,7 @@ class TestADigitPushedOutsideTheWindow:
         """NEVER REFUSE MEASURED DATA - LL-0116's rule, applied on the way in.
 
         The tidy version of this guard - refuse when ink touches the window's
-        last column - would have refused 78 real frames, because the hits field
+        last column - would have refused 8 real frames, because the hits field
         legitimately reaches its last usable column at two digits. This one
         looks OUTSIDE the window instead, where the measured captures are empty.
         """

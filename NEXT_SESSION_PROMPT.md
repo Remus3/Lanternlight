@@ -33,302 +33,182 @@ A fresh clone runs zero git hooks until that first command runs. The tracked
    includes other players' names, not only the operator's.
 
 ---
+## Where the last session left it - CYCLE 37
 
-## Where the last session left it
+`main` is at the cycle 37 wrap commit; run `git log --oneline -5` to see it.
+Suite **1430 passed**, ruff clean, **29** test files. Measure the count
+yourself with `python -m pytest` run BARE - never with `-q`, which prints no
+summary line at all and still exits 0.
 
-**Cycle 36 closed item `7c`'s two DEFENCE-IN-DEPTH gaps** (`LL-0115`), then
-CORRECTED itself the same cycle (`LL-0116`). Neither gap was a bug: over 6,439
-frames the change is 0 changed readings, 0 lost, 0 gained. `_split_merged` now
-refuses a piece it cannot vouch for, and `_is_separator` gained a height FLOOR.
+**Four ledger entries landed:** `LL-0118`, `LL-0119`, `LL-0120`, `LL-0121`.
 
-**Read `LL-0116` before touching that floor.** It shipped at 5, justified by a
-geometry sweep over y=389..392 - and the module's advertised tolerance band is
-**388**-392. At y=388 the comma is height **4** in 45 of the 55 four-digit
-frames, so a floor of 5 refused 45 real commas at an offset the module claims
-to tolerate. It is now **4**, the largest floor that refuses no genuine comma
-anywhere in the band, and it is pinned: 2 and 3 fail the speck test, 5 and 6
-fail the shortest-offset test.
+1. **`LL-0118` - ROADMAP `7c`'s registration search is DONE, as CONSENSUS.**
+   `lanternlight.vision_meter` gained `read_frame`, which crops a full 2560x1440
+   frame at every row in `FRAME_CONSENSUS_ROWS` (388-392, x FIXED at 2058) and
+   requires the readings to AGREE. A conflict REFUSES rather than being broken
+   in favour of the best-scoring row, so it is a NEW guard rather than a relaxed
+   one. **118 read at the single row, 120 by consensus**, recovering exactly the
+   `f0469`/`f0470` the item named, with 0 lost, 0 misread, 0 disagreements.
 
-**The rules that cycle earned, and they are the live ones:**
+2. **`LL-0119` - ROADMAP `7d` CLOSED.** `_read_field` never checked that ink
+   stopped before `x_hi`, so a glyph pushed entirely outside a field window was
+   dropped in silence and the survivors formed a valid number - a WRONG NUMBER,
+   not a refusal. `EDGE_LOOKAHEAD` (8) now scans outside the window on both
+   sides and refuses, naming the pushed side.
 
-1. **A document cannot be more complete than the PROBE behind it.** The
-   omission was in the sweep, not the write-up; every artifact faithfully
-   reported a table already missing its worst case. When a constant is
-   justified by a sweep, read the sweep's range off the property being
-   defended rather than typing it from memory.
-2. **Margin is the wrong frame for a constant whose BOTH directions fail
-   safe.** The rule is not "leave margin", it is **never refuse measured
-   data**. Reasoning about margin is what produced the worse answer.
-3. **A cleanup step that only runs on the success path is not a cleanup
-   step.** A mutation loop timed out and left the module at
-   `SEPARATOR_MIN_HEIGHT = 7`; it was caught only because the restore is
-   VERIFIED by hash rather than assumed.
+3. **`LL-0120` - the ASCII pre-commit hook could be DEFEATED by piping the
+   commit.** `git commit ... 2>&1 | head -1` killed the hook with SIGPIPE; git
+   exited 141 and **the banned commit LANDED** while the word BLOCKED still
+   printed. Fixed with `trap '' PIPE`, pinned by an end-to-end test.
 
----
-
-**Cycle 35 closed item `7c`'s ORANGE PAIR** (ledger `LL-0112`, corrected by
-`LL-0113`). `vision_meter` went blind at 1000 because the thousands comma is a
-3px run against `MIN_GLYPH_WIDTH` 6. It now reads **118 of the 124** panel-up
-frames of `C:/ll-captures/2026-08-30/frames` at crop origin `(2058, 390)` with
-**ZERO disagreements**, up from 61, including 54 of the 55 four-digit frames.
-`MIN_GLYPH_WIDTH` was NOT lowered.
-
-**The item's own prescribed third fix was WRONG.** It said to re-harvest
-templates. Refuted by a positive control: the templates' OWN source capture
-produces refusals in the same 0.122-0.165 band, and the typeface is identical
-across both captures. The real cause was segmentation - two digits separated by
-one blank column merge, because `_column_runs` breaks only on a gap of 3 or
-more.
-
-**Do NOT try to close the last 6 refusals.** They are pinned by name in the
-tests with a measured reason each, and five are the module WORKING: turning off
-the accept band and the ambiguity margin reads 123 of 124 and gets THREE wrong,
-including `3334` for a true `1834`. A test fails deliberately if a constant is
-widened to chase them. The sixth, `f0661`, has zero orange pixels in the band
-and can never be read.
-
-**`LL-0113` corrected `LL-0112` one commit later, and the lesson is the live
-one.** Two supporting numbers were measured on ONE capture and written as
-universal - "nothing lands in 14-23" and "84 columns of guaranteed-empty gap".
-Both are false on the older 6,439-frame capture. The acceptance figures had been
-re-measured immediately before writing, exactly as `LL-0111` demands; the
-SUPPORTING figures had not. **Re-measuring the headline number is not
-re-measuring the evidence, and a supporting number is where a scope silently
-drops. State the CRITERION beside every number.**
+4. **`LL-0121` - the wrap, which CORRECTED eleven claims** including one of
+   `LL-0119`'s own numbers.
 
 ---
 
-**Cycle 34 worked item 12 and closed its backward half as IMPOSSIBLE.** The
-item asked for the 10.35-per-hit floor to be re-measured on client `1.0.15`.
-That can never be done - 10.35 was measured at character **level 3**, the
-character has been level 5 since 2026-08-25, and levelling does not reverse.
-**Do not re-attempt it.** The data it needed was never missing either: a
-`1.0.15` training capture had been on disk since 2026-08-30 and was read. Item
-12 stays OPEN under a REPLACED, forward acceptance that needs the client.
-**Items 7, 11 and 12 are all open and uncredited.** Full detail in `LL-0110`
-and `docs/FINDINGS.md` section 16.
+## The five rules cycle 37 paid for - these are the live ones
 
-**Suite 1390 passed / 1390 collected, ruff clean**, measured on a clean tree -
-that is your merge-gate baseline, and **re-measure it yourself before
-dispatching work** rather than trusting this line. **Use
-`python -m pytest --collect-only` WITHOUT `-q`**: `pytest.ini` addopts already
-carries `-q`, so the form printed in `CLAUDE.md` becomes `-qq` and gives
-per-file counts with no total - sum them.
+1. **A correction that is not SWEPT FOR is a correction in one place.**
+   `LL-0119` declared the tidy-guard count of 78 wrong and corrected it to 8 -
+   and the same commit left "78 real frames" standing in a third file. Two of
+   three sites were fixed because only two were looked at. After correcting a
+   number, grep the whole tree for the literal old value.
 
-The ledger runs to **`LL-0111`**, 111 entries. **The line above said `LL-0104`
-until 2026-09-01c and was five entries stale** - the exact defect `LL-0103`
-recorded against these same two hand-off documents. Check the tail of
-`docs/LEDGER.md` yourself rather than trusting this number.
+2. **A withdrawal that is not ADJACENT to the claim does not reach the reader
+   who finds the claim.** The module docstring was corrected to say the x band
+   "2056-2061" was wrong at both ends, while `FRAME_PANEL_X`'s own comment
+   **610 lines below in the same file** still advertised that band as fact. The
+   same stale band was live in the test file and in ROADMAP too.
 
-Read, in this order:
+3. **The BEFORE figure and the AFTER figure must be measured over the same
+   population.** `LL-0119` published "30 wrong readings" from three crop
+   offsets and paired it with an after-figure of zero swept over the whole
+   2046-2070 range. Over that range the pre-guard total is **108**, and the
+   omitted offsets include **2046, the worst at 69** - more than twice the
+   published figure. This is `LL-0116`'s shape, in the session whose own ledger
+   claims to have learned it.
 
-- **`LL-0110`** - 2026-09-01c, item `12`. The item asked for a re-measurement
-  that **cannot ever be performed**: its baseline was character level 3 and the
-  character is level 5. The data it needed was on disk the whole time. Its
-  acceptance has been REPLACED with a forward one.
-- **`LL-0111`** - the correction to `LL-0110`, and read it immediately after.
-  A wrong durability shipped in FOUR documents **by the very mistake `LL-0110`
-  advertises as caught**, one paragraph away from the block quote explaining
-  it, and three of that entry's evidence numbers were measured on an
-  intermediate tree and do not reproduce against what shipped. Its rule:
-  **re-measure every figure in an acceptance record immediately before writing
-  it**, because a wrap edits the tree after the count was taken. And: three
-  adversarial passes ran that cycle, but only the third was pointed at the
-  COMMITTED tree - **a refutation of a tree that no longer exists certifies
-  nothing.**
+4. **A claim can be true when written and false one commit later.** ROADMAP's
+   `7c` closure said every function in `read_panel`'s call graph compiles to
+   identical bytecode. That was exact for `LL-0118`; `LL-0119` then changed
+   `_read_field` itself, an hour later in the same session, and nothing
+   re-checked the earlier item.
 
-- **`LL-0100`** - it WITHDRAWS a correction that was itself wrong, about affix
-  ids `101` and `209`. Its rule is the most reusable thing on file: **before
-  overturning a recorded claim, establish what it was MEASURING.** A measurement
-  can be exact and still answer a different question. Two refutation passes
-  CONFIRMED the wrong claim because each inherited the framing of the brief it
-  was handed.
-- **`LL-0104`** - 2026-09-01, item `4d`. Two refutation passes caught a suite
-  that had gone RED on the session's own doc prose while the entry already
-  claimed it green, a withdrawn headline overclaim, and a cost figure that was
-  wrong twice in opposite directions. **A green result expires the moment you
-  edit anything, including prose.**
-- **`LL-0103`** - the wrap refutation of 2026-08-31. It found that the session
-  correcting stale records had itself left both hand-off documents two sessions
-  stale, a fifth stale corpus count next to the four it had just fixed, and an
-  acceptance criterion parked inside an item the loop had already marked
-  completed, where nothing would ever read it.
-- **`LL-0101`** and **`LL-0102`** - the 2026-08-31 session. `LL-0101` lists five
-  of its own claims that a refutation killed before it landed; `LL-0102` records
-  that the watcher armed in `LL-0101` was deliberately stopped.
-- **`LL-0097`** through **`LL-0099`** - the 2026-08-30 session, which has no
-  wrap entry in `WAKEUP_NOTES.md`. `LL-0097` is the REDISCOVERY failure: a
-  roadmap item was opened asking for what had been on disk for three weeks.
+5. **LIVENESS IS NOT FUNCTION.** `LL-0117` closed "the recorded watcher pid is
+   dead". The next gap: at this wrap pid 23628 was alive AND identity-confirmed
+   and had archived **nothing** in 24 hours. That is correct with the client
+   closed and **indistinguishable from a wedged process** - no heartbeat is
+   written, `armwatch.json` is never touched after arming, and the instance
+   armed through `ensure_armed` produced no `armwatch.log` where a direct
+   invocation does. Recorded as extra acceptance on ROADMAP `4e`.
 
-**The client is CLOSED.** It was launched at 21:11 on 2026-08-30 and quit 21
-seconds later. Nothing has run it since.
+---
 
-**A WATCHER MAY ALREADY BE RUNNING - check, do not assume, and never start a
-second.** As of 2026-09-01 07:50:14 local one was armed as pid 17568. Item `4d`
-made arming part of starting a session, so the right move is simply:
+## FIRST ACTIONS, in this order
+
+**1. Is the client running?** Filter on the process NAME, never a command-line
+pattern - a command-line filter matches your own probe (`LL-0105`). Include a
+positive control so a zero is a measurement rather than a broken query:
+
+```
+powershell -NoProfile -Command "$p=@(Get-Process | Where-Object { $_.ProcessName -like 'Mistfall*' }); \"MATCH=$($p.Count)\""
+```
+
+**2. Arm the session watcher.** Pass the BASE, never a dated path:
 
 ```
 python -c "from ops.loop import watch; print(watch.ensure_armed('C:/ll-captures'))"
 ```
 
-It reads `ops/runtime/armwatch.json`, checks whether the recorded pid is still
-alive, and **refuses on its own** if one is live - two pollers on the same four
-sources double the snapshot traffic while `OPS-14` is open. A result reporting
-`armed=False` is a refusal, not an error. **Never stop the watcher you find**;
-nothing in this project terminates a process it did not start.
+**3. VERIFY THE PID IS ALIVE AND IS ACTUALLY THE WATCHER.** A refusal to re-arm
+is only as good as the process it deferred to (`LL-0117`), and a pid can be
+recycled. Check liveness, the command line (it must name
+`lanternlight.armwatch`), and the start time against `ops/runtime/armwatch.json`.
+Then read rule 5 above: none of that proves it is still polling.
 
-**Pass the BASE, never a dated path.** `C:/ll-captures`, not
-`C:/ll-captures/<today>`. The watcher derives the local date itself and
-retargets at midnight; handing it a literal dated path is the exact defect
-`LL-0102` stopped a watcher over.
+---
 
-## Two machine-level things that were repaired, not in this repo
+## NEXT - it depends on whether the client is open
 
-**Ports.** This project's block is **8810-8819** and `CLAUDE.md` carries the
-machine-wide registry for all six local projects. `tests/test_ports.py` fails if
-a constant lands outside the block. Knowing a neighbour's block is not
-permission to talk to it - the standalone rule still holds.
+**IF THE CLIENT IS OPEN**, item **10** supersedes everything, then item `12`'s
+FORWARD baseline, then `11` and `4b`. **Do NOT re-attempt item 12's backward
+comparison: CLOSED as impossible** (`LL-0110`). For affix `101`: equip `1430301`
+at PANTS and open Affix Details while worn - grep the log for
+`WBP_EquipSkill_DetailPrompt` first.
 
-**Two MCP servers were dead and are fixed** (`LL-0077`), both outside this
-repository in the plugin cache, both backed up as `.bak-2026-08-29`:
+**Still owed, one hover each:** the Splatter Arrow tooltip, and ONE of Elusive,
+Smiting or Curse. The log carries no player-facing affix, skill or item name -
+33 names tested with two positive controls - so only a hover will do.
 
-- **github** rejected a hardcoded `Authorization` header with 401. The header
-  was removed so OAuth fallback can engage - **but it still needs a human to
-  complete the sign-in** when the server next prompts.
-- **serena** re-installed itself through `uvx` on every launch and lost a race
-  extracting a package. It is now installed once via `uv tool install` and the
-  config runs `serena.exe` directly.
+**IF THE CLIENT IS CLOSED**, the item is **`4e`** - re-check the watcher's
+liveness AND identity at the WRAP as well as at entry, plus the heartbeat gap in
+rule 5. It is fully doable from disk and it has bitten twice now. Read the whole
+of `4e` in `ROADMAP.md`; its acceptance is written there, including that a live
+pid which is NOT the watcher must read as NOT armed, and a test watched going
+RED.
 
-## Check the world before anything else
+**Also available with the client closed**, both recorded with acceptance in
+`ROADMAP.md`:
 
-```
-tasklist | grep -qi mistfall && echo "CLIENT OPEN" || echo "client closed"; stat -c '%y %s' "$LOCALAPPDATA/MistfallHunter/Saved/Logs/MistfallHunter.log"
-```
+- **`7d`'s per-edge lookahead.** The ceiling of 19 is priced entirely by
+  value-left, which carries 11 columns of slack at the shipped 8, while `hits` -
+  zero right margin, the likeliest place for a pushed glyph - is nowhere near
+  the bound. Declined as four constants to drift instead of one; the acceptance
+  for taking it up is in `7d`.
+- **`7c`'s WHITE Progress Record row**, still blocked on a capture with longer
+  stable stretches per record value across at least ten distinct records. That
+  is blocked on DATA, not on a session.
 
-That is Bash, not PowerShell - `grep` and `stat` do not exist in this repo's
-default shell. Run it through the Bash tool.
+**OPERATOR DECISION PENDING:** a four-digit committed fixture needs explicit
+approval before capture-derived pixels enter this public repo (`LL-0083`).
 
-**Then make sure capture is armed, whatever the answer. One command:**
+---
 
-```
-python -c "from ops.loop import watch; print(watch.ensure_armed('C:/ll-captures'))"
-```
+## DO NOT RE-DO
 
-That is ROADMAP `4c` plus `4d`, both closed. It arms all four surfaces at intervals
-argued from measured triggers, and it **refuses a destination inside a git
-working directory** rather than trusting you to remember. It watches the
-`Logs/` DIRECTORY, not the log file, which is what catches a launch's
-`MistfallHunter-backup-<UTC>.log` - so arming at session start recovers the
-PREVIOUS session as well as preserving the current one. Whether a launch leaves
-a backup at all is **unmeasured**: one did, an entire earlier session had none.
+Item `7` route 1 EXHAUSTED (`LL-0106`). Item `14` CLOSED (`LL-0107`). `4d`
+CLOSED (`LL-0109`). Item `12`'s backward half CLOSED as impossible (`LL-0110`).
+`7c`'s orange pair DONE (`LL-0112`), its two defence-in-depth gaps CLOSED
+(`LL-0115`/`0116`), and its registration search DONE as consensus (`LL-0118`).
+`7d` CLOSED (`LL-0119`). **Items 7, 11 and 12 remain OPEN and UNCREDITED - do
+not credit any of them.**
 
-## NEXT: it depends on whether the client is open - CHECK THAT FIRST
+---
 
-**Client CLOSED -> items `4d` and `7` are both done as far as disk allows.**
+## Verification traps that produce FALSE GREENS
 
-`4d` is CLOSED (`LL-0104`). Do NOT re-do it: arming is wired into `/loop`,
-`/continue` and `docs/HEADLESS.md` 4a, and the destination rolls over per pass.
+- **`python -m pytest -q` prints NO summary line and still exits 0**, because
+  `pytest.ini` already carries `-q` so a second makes it `-qq`. Run it BARE.
+- **A sha256 of a working `.py` is NOT the commit's.** `.gitattributes` pins
+  `*.py` to `eol=lf` while the working tree is CRLF. Say WHICH form you measured;
+  only the git blob is reproducible from a clone.
+- **`grep -iF` CRASHES here** (SIGABRT, exit 134) and looks exactly like a clean
+  negative. Use `-i` or `-F`, never both.
+- **A line-oriented grep is a claim about line breaks** and a case-sensitive one
+  is a claim about capitalisation. Prose here wraps near 80 columns, so search
+  whitespace-collapsed AND case-insensitively.
+- **NEVER pipe a `git commit` through `head`.** Fixed in the hook this cycle, but
+  the general lesson stands: a reader that closes the pipe early can kill the
+  process writing to it, and the failure prints a success message.
+- **Five instruments reported falsely in cycle 37 alone**, each caught only by a
+  second method: `grep -c` seeing 0 carriage returns in a file with 602; `cmp`
+  flagging a CRLF-vs-LF artifact as a content change; a `co_consts` comparison
+  flagging five unchanged functions because nested code objects compare by
+  identity; a hand-rolled PII control whose planted identifier went to
+  `C:/Program Files/Git/` because Git Bash maps a leading `/` to the Git root;
+  and the commit-pipe above. **An empty or passing result is a claim about the
+  INSTRUMENT.**
 
-**Item `7` is NOT credited but route 1 is EXHAUSTED - do not re-run that
-search** (`LL-0106`). No non-zero `nameId` exists anywhere: 424 JSON readings
-across 353 saves plus 10 events on a third, lowercase-`nameid` log surface found
-later. Route 2 needs a SECOND distinct `SkillNameId`; the corpus holds exactly
-one, `6130017`, in 139 save generations. Both routes now need fresh gameplay.
+---
 
-**Item `14` is CLOSED** (`LL-0107`) - its premise was refuted. The two bows were
-two different cfgIds sharing a display NAME, so the type-to-affix mapping
-survives and a rendered name must never be used to identify a type.
+## GROUND TRUTH for the meter work
 
-**Item `11` is down to `101` and `214`, and BOTH are now blocked from disk.**
-`209 = Seeker` and `212 = Fervor` are bound (`LL-0107`, `LL-0108`). The best
-affix surface is the `Affix Details` panel, but its only two openings in the
-corpus are already read. `101`'s item was never equipped during either, and its
-tooltip lasted 262 ms against a 1 fps capture; `214` has no record of any kind.
-**Item 11 needs the client now.**
+`C:/ll-captures/2026-08-30/meter_transcription_cycle34.csv`, sha256
+`973a3f58...`, 124 panel-up rows, digit-length tally 20/7/42/55, 231 panel-down,
+and 1,817 out-of-window frames - the last of which were ALL swept this cycle and
+produce zero readings, so 124 is a TOTAL and not a floor.
 
-**Item `12` is WORKED and its backward half is CLOSED as impossible**
-(`LL-0110`). Do not re-attempt it. The `2026-08-30/frames` set WAS a `1.0.15`
-training session - two windows, 355 in-window frames, meter legible in 124 - and
-it was read. The display model, the bot and the safe-circle radius all cross the
-patch boundary unchanged. **What cannot be done is the comparison itself:** 10.35
-was measured at character **level 3**, the character is level 5, and levelling
-does not reverse. Item 12's acceptance is now a FORWARD one - capture a `1.0.15`
-baseline whose configuration is recorded at the same wall clock as its meter
-run - and that needs the client.
-
-**`7c`'s orange pair is DONE as of 2026-09-01d** (`LL-0112`) and it is no
-longer the client-free item. `vision_meter` now reads **118 of the 124**
-panel-up frames of the 1.0.15 capture at crop origin `(2058, 390)` with **ZERO
-disagreements**, including 54 of the 55 four-digit frames. `MIN_GLYPH_WIDTH` was
-NOT lowered.
-
-**Do not try to close the last 6.** They are pinned by name in the tests with a
-measured reason each, and five of them are the module WORKING: turning off the
-accept band and the ambiguity margin reads 123 of 124 and gets THREE wrong,
-including `3334` for a true `1834`. Widening a constant to chase them now fails
-the suite deliberately.
-
-**Before ANY configuration question, use the log, not pixels.**
-`TS.Dungeon: [DungeonPlayerState]OnCustomInfoReady roleInfo` fires within a
-second of every `TrainingGround` `LoadMap` and carries the full equipped set
-with affixes, gems and durability, plus talents, class, level and exp. Two
-extractor traps, both hit this session: the gem key is **`gem`** singular, and a
-**missing `slot` key means slot 0**, the helm.
-
-Historic, kept because the method is reusable: `209` was bound by a DURABILITY
-join. Use the **durability join**: item records
-carry a durability integer, the tooltip renders it as a percentage of
-`900 + (third cfgId digit) * 100`, so a frame matches a log record with NO
-wall-clock coincidence. `101` sits on `1430301` at 98% and 100%; `212` on
-`1230304` at 94%, 98%, 100%. Prefer a DISTINCTIVE percentage - 100 is shared by
-many items and 98 by those two. `214` has no durability record and is
-unreachable this way.
-
-**Index every frame-naming convention before filtering.** Enumerated from the
-filesystem 2026-09-01c: **18,965 images machine-wide across 28 distinct filename
-shapes, of which SIX are timestamped** - `fNNNN_HH.MM.SS` in both `.png` and
-`.jpg`, `pNNNNN_HH.MM.SS.mmm`, `sNNNNN_HH.MM.SS` in `.jpg` with and without
-milliseconds, and a single `skills_HH.MM.SS.png`. Missing one hid a deciding
-frame for a whole pass and produced a figure wrong by 4x.
-
-**`LL-0109`'s "FIVE conventions, 18,680 of 18,747" is correct and SCOPED to
-`C:/ll-captures`.** Machine-wide it is 18,898 of 18,965; the 218-frame
-difference is `~/.lanternlight/frames`, the 2026-08-09 set, and the sixth
-convention lives inside it. Recite that figure with its scope or it reads as a
-machine-wide count.
-
-**One surface is left unexplored and its direction is UNSETTLED** - the 10
-verbose `nameid` events in `7`. Do not resolve the direction by adjacency; both
-readings already have partial support and the line carries no `sourceType`.
-
-Two things `4d` disclosed and did NOT fix, if you want them: the real
-detached-spawn helper has no test, and the no-termination guard matches call
-NAMES only. Neither is a defect on its own; both are written down in `LL-0104`
-because the surrounding prose reads stronger than the guards are.
-
-**Client OPEN -> item 10 below, then 11, 5 and 6.** Item **11** is IN FLIGHT and
-uncredited: **TWO affix ids remain, `101` and `214`** - `209 = Seeker` and
-`212 = Fervor` were bound 2026-09-01 (`LL-0107`, `LL-0108`).
-
-**The best surface is the `Affix Details` screen, not a tooltip.** It prints a
-per-slot count per active affix, and for ARMOUR (`1xxxxxx`) the second cfgId
-digit is the equipment slot, so a row attributes to a specific equipped item. **Open it after every
-gear change.** For `101`, item `1430301` must be EQUIPPED at the pants slot when
-you do - it never was during either panel already on disk. **Capture FASTER as
-well as full-screen**: `101`'s tooltip route died to a 262 ms hover against a
-1 fps capture, which is a cadence problem, not a resolution one. `214` needs the
-Auction House filter with one affix ticked alone.
-
-Still worth doing while equipping: **keep the `Affixes` panel OPEN**. **One
-affix per cycle** - a pair yields a set, not an assignment. Items **5 and 6**
-pair on one pass over the Sorcerer creation screen; 5's archive route is proven
-exhausted.
-
-Also owed the moment the client is open, both one hover each: the **Splatter
-Arrow** tooltip (the camp skill grid renders ICONS ONLY, so no capture yields it
-unless the operator hovers), and **one** of `Elusive`, `Smiting` or `Curse` to
-settle the standing prediction that each has a FIVE-level ladder. **Record the
-result either way** - a refutation is worth as much as a confirmation.
+---
 
 ## Item 10 - the stack buff, measured AT THE CEILING
 
@@ -399,7 +279,7 @@ pytest - 24 consecutive green full-suite runs against a measured 9-of-10-red
 baseline - so the merge gate no longer reddens for reasons unrelated to the
 work it gates.
 
-## Traps this session paid for
+## Traps EARLIER cycles paid for - kept because they are still live
 
 - **Point verification at the READINGS, not the arithmetic.** Four independent
   refuters found **zero** arithmetic errors and **eight** bad readings: a
@@ -445,7 +325,7 @@ work it gates.
   what is staged against what you intended.
 - **A measured null needs the same evidence as a positive.** "The capture
   cannot supply this" closes an avenue for every later session. Two such claims
-  were wrong this session - one inferred from a neighbouring field, one from a
+  were wrong in the cycle that recorded them - one inferred from a neighbouring field, one from a
   scan that sampled every third frame and missed the run it was looking for.
 - **Derive an id or a label from BEHAVIOUR, never from shape or from a stored
   order.** Two wrong meter label sets came from a creation-order list that is

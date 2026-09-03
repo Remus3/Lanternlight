@@ -5,6 +5,61 @@ fidelity and archive older ones rather than deleting them.
 
 ---
 
+# Wrap 2026-09-02 - cycle 37 - `7c`'s registration search and `7d` both closed, and the hook was found defeatable
+
+Suite **1430 passed**, ruff clean, **29** test files, merge gate OK against a
+**1423** baseline measured before dispatching. Ledger `LL-0118`, `LL-0119`,
+`LL-0120`, `LL-0121`. Client **closed** all session, confirmed at entry,
+mid-session and at the wrap by filtering on the process NAME with a positive
+control. Cycle 37.
+
+**Two ROADMAP items closed.**
+
+- **`7c`'s optional registration search, done as CONSENSUS rather than a
+  search.** `read_frame` crops a full frame at all five rows in
+  `FRAME_CONSENSUS_ROWS` and requires agreement; a conflict REFUSES. 118 read at
+  the single row, **120** by consensus, recovering exactly the `f0469`/`f0470`
+  the item named. `read_panel` untouched: 6,439-frame diff 0 gained / 0 lost /
+  0 changed.
+- **`7d`, opened and closed the same day.** `_read_field` never checked that ink
+  stopped before `x_hi`, so a glyph pushed outside a window was dropped in
+  silence and the survivors formed a valid number. `EDGE_LOOKAHEAD` (8) now
+  refuses on stray ink outside the window. It turns **108** wrong readings into
+  refusals across the 2046-2070 crop sweep.
+
+**The pre-commit hook could be DEFEATED, and the probe that proves it works is
+what defeated it.** `git commit ... 2>&1 | head -1` killed the hook with
+SIGPIPE; git exited 141 and the banned-glyph commit **LANDED** while the word
+BLOCKED still printed. An earlier probe the same session used `tail -4`, which
+drains the pipe, and passed correctly. Only the HEAD assertion caught it - the
+message said the guard worked. Fixed with `trap '' PIPE` and pinned by an
+end-to-end test that builds a throwaway repo and pipes through a real shell.
+Nothing was pushed with the defect present.
+
+**The refutation confirmed every measured number and found eleven false
+sentences.** That is now this project's characteristic failure: the
+measurements are sound and the prose about them is not. The sharpest three:
+
+1. A correction applied in two files and **not swept for** left the wrong number
+   standing in a third - in the same commit whose ledger declares it wrong.
+2. A withdrawal **610 lines away** from the claim it retracts, in the same file,
+   does not reach the reader who finds the claim.
+3. The BEFORE figure counted three crop offsets while the AFTER figure swept
+   twenty-five, omitting the worst offset (69 of the 108 wrong readings). That
+   is `LL-0116`'s shape inside the session whose ledger claims to have learned
+   it.
+
+**The watcher is the open thread.** Pid 23628 was alive AND identity-confirmed
+at the wrap and had archived **nothing** in 24 hours - correct with the client
+closed, and indistinguishable from a wedged process. No heartbeat is written,
+and the instance armed through `ensure_armed` produced no `armwatch.log` where a
+direct invocation does. Recorded as additional acceptance on `4e`, which is the
+next item if the client is closed.
+
+**Items 7, 11 and 12 remain OPEN and UNCREDITED.**
+
+---
+
 # Wrap 2026-09-01c - item 12 ANSWERED from disk, and the answer is that its acceptance can never be met
 
 Suite **1390 passed**, ruff clean, merge gate OK against baseline **1390**
