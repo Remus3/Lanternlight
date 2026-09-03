@@ -1680,11 +1680,16 @@ def check_watcher(
        surface fresh.
 
     ``NO_HEARTBEAT`` being ARMED is the load-bearing decision here, and it is
-    not a corner case. Pid 23628 is running on this machine right now, armed
-    before the heartbeat existed, and it passes the identity check. Treating an
-    absent heartbeat as a dead watcher would spawn a second poller on the same
-    four sources - the exact thing :func:`ensure_armed` refuses to do - so it
-    would be a REGRESSION wearing the clothes of a stricter check.
+    not a corner case. Pid 23628 was running on this machine when this was
+    written, armed before the heartbeat existed and passing the identity check.
+    Treating an absent heartbeat as a dead watcher would spawn a second poller
+    on the same four sources - the exact thing :func:`ensure_armed` refuses to
+    do - so it would be a REGRESSION wearing the clothes of a stricter check.
+
+    That pid is NO LONGER the live watcher: it was found DEAD at the very next
+    wrap and re-armed (``LL-0124``). The example stands; the status does not.
+    A docstring naming a live pid is stale the moment that process exits, so
+    this one names the case and not the machine.
 
     CAVEAT, written down rather than only said: a machine that SUSPENDED or
     HIBERNATED produces a false ``STALE``, because wall clock advances while

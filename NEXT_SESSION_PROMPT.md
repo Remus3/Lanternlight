@@ -205,13 +205,30 @@ is the point of `4e`:
 python -c "from ops.loop import watch; s=watch.check_watcher(); print(s.state); print(s.reason)"
 ```
 
-At the cycle 39 wrap this still returned **`NO_HEARTBEAT`** with `armed=True`
-for pid 23628 - alive, identity-confirmed at 0.057 s, but armed BEFORE the
-heartbeat existed, so it writes none. **That is correct and must NOT be
-re-armed**: a second poller on the same four sources is the failure
-`ensure_armed` refuses, and `OPS-14` (disk) is open. If the operator has since
-restarted the watcher, expect `ARMED` - or `SURFACE_STALE`, which NAMES the
-surface that stopped, so quote the name and not just the state.
+**The live watcher is pid 21452, armed 2026-09-03 into
+`C:\ll-captures\2026-09-03`.** Expect **`ARMED`**. Any document still naming
+**23628** as the live watcher is stale - that one DIED and was replaced.
+
+**IT DIED, AND THE CHECK CAUGHT IT - one commit after the check shipped.** At
+the cycle 39 wrap `check_watcher()` reported `NO_HEARTBEAT`/`armed=True` for
+pid 23628. At the very next wrap, minutes later, the same call reported
+**`DEAD`**: the process was gone, an independent command-line sweep gave
+`ARMWATCH_COUNT=0`, and NOTHING on this machine was archiving the log, the
+saves or the market cache. `ensure_armed_at_wrap` re-armed as pid 21452. Full
+account in `LL-0124`.
+
+**WHY 23628 died is UNMEASURED and is a real open question.** It had run over
+24 hours and was polling normally when last observed. Nothing in this repo
+records a watcher's exit. Do not assume it was killed by a session - this
+session terminated only two watchers it spawned itself in scratch directories,
+each by exact pid.
+
+What each state means for you: `ARMED` is fine. `NO_HEARTBEAT` means a watcher
+armed before the heartbeat shipped - correct, and it must NOT be re-armed,
+because a second poller on the same four sources is the failure `ensure_armed`
+refuses while `OPS-14` (disk) is open. `SURFACE_STALE` NAMES the surface that
+stopped, so quote the name and not just the state. Only `NO_RECORD`, `DEAD` and
+`IMPOSTOR` re-arm, and nothing is ever killed.
 
 ---
 

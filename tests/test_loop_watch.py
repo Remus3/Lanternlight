@@ -1335,10 +1335,15 @@ def test_the_wrap_never_rearms_a_watcher_it_can_still_see(
 def test_the_wrap_never_rearms_a_watcher_with_no_heartbeat(
     tmp_path: Path, record_file: Path
 ) -> None:
-    """The state pid 23628 is in on this machine right now.
+    """The state pid 23628 was in when this test was written.
 
-    It was armed before the heartbeat existed and it passes the identity check.
-    Re-arming it would spawn the second poller ``ensure_armed`` refuses.
+    It had been armed before the heartbeat existed and it passed the identity
+    check. Re-arming it would spawn the second poller ``ensure_armed`` refuses.
+
+    That pid died at the next wrap and was re-armed (``LL-0124``), so this is a
+    worked example rather than a claim about the machine - which is the point:
+    any watcher armed before the heartbeat shipped lands here, and one still
+    could after a rollback.
     """
     watch_mod.write_record(_record(os.getpid(), tmp_path, started=ARMED_AT), record_file)
     calls: list = []
