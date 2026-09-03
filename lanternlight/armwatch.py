@@ -84,6 +84,30 @@ copied. It is opt-in via ``--heartbeat PATH``: a watcher armed by an older
 session passes no such flag and must keep behaving exactly as it did, so with
 the flag absent nothing here builds a heartbeat, writes a file, or makes a
 syscall it did not make before.
+
+ROADMAP item 4f - the heartbeat has to describe its own cadence
+---------------------------------------------------------------
+
+4e made a wedged surface VISIBLE. It did not make one FAIL, because a reader
+holding four stamps still has to know each surface's own cadence before it can
+call any of them late, and the four are 3 s, 3 s, 30 s and 300 s - one
+threshold cannot judge them all. There are exactly two places that number can
+come from: this file, or a literal re-typed in the reader.
+
+The reader re-typed it once already. Cycle 38's ops layer carried its own
+``SLOWEST_POLL_INTERVAL_S`` of ``300.0``; the refutation pass called that a
+drift risk, and it now takes a test to hold the two copies together. Four
+surfaces would be four more copies of the same defect. So ``Heartbeat.record``
+takes the interval beside the surface name and the payload grows a parallel
+``intervals`` map - the number that judges a stamp travels with it,
+and re-tuning ``LOG_POLL_S`` moves both at once.
+
+A surface recorded with no interval contributes NO entry, and when no surface
+has supplied one the key is absent entirely rather than empty. A missing field
+is absent - never ``null``, never ``{}``. That is this project's measurement
+doctrine applied to its own instruments: conflating "not reported" with
+"reported as nothing" is how a reader starts judging a healthy surface against
+a cadence nobody measured.
 """
 
 from __future__ import annotations
@@ -303,6 +327,15 @@ class Heartbeat:
     the one carrying the 5,080,313-byte log - sat wedged. A wedged single
     thread has to be visible on its own line, or the file lies by omission.
 
+    AND THE INTERVAL TRAVELS WITH THE STAMP - ROADMAP 4f. That ``logs`` last
+    completed a pass at 05:00 does not say whether it is late; only its own
+    300 s cadence does, and the four surfaces do not share one. The only
+    alternative was for the reader to re-type the four numbers, which it has
+    already done once with ``300.0`` and had flagged as a drift risk.
+    ``intervals`` is a PARALLEL map rather than a value folded in beside each
+    stamp, because a reader already runs ``fromisoformat`` over those stamps
+    and a shape change would break it on the first pass after an upgrade.
+
     NO ``fsync``, deliberately, and this is the considered contrast with
     ``ops.loop.watch.write_record``, which DOES fsync because it is a durable
     record a later cold session reads back as history. A heartbeat's entire
@@ -361,10 +394,13 @@ class Heartbeat:
         self._pid = os.getpid()
         self._passes = 0
         self._surfaces: dict[str, str] = {}
+        # Parallel to _surfaces, never merged into it: the stamps have a
+        # reader that already parses them, and the cadences do not.
+        self._intervals: dict[str, float] = {}
         self._last_flush: float | None = None
         self._lock = threading.Lock()
 
-    def record(self, surface: str) -> None:
+    def record(self, surface: str, poll_seconds: float | None = None) -> None:
         """Count one COMPLETED poll pass for ``surface``, flushing if due.
 
         Called after ``poll_once`` returns, whatever it returned. Treating an
@@ -375,10 +411,32 @@ class Heartbeat:
         measure against. An absent heartbeat file is ambiguous with "armed
         without ``--heartbeat``", and making a reader wait a full interval to
         resolve that would reintroduce a smaller copy of the same ambiguity.
+
+        ``poll_seconds`` is this surface's OWN cadence, and it is what makes
+        the stamp judgeable: three seconds late is a wedged ``savegames`` and
+        a perfectly healthy ``logs``. It stays optional because a caller that
+        does not know the cadence has to be able to say so - a default of
+        ``0.0`` is a number a reader would divide by, and a default of 300
+        would call a wedged 3-second surface healthy for five minutes.
+        Omitted means omitted: no entry is stored and :meth:`_payload` leaves
+        the key out.
+
+        A supplied value is stored as a ``float``, because ``3`` and ``3.0``
+        are the same number and different JSON tokens, and what lands in the
+        file should follow the contract rather than how a caller spelled a
+        literal. A value that is not a number raises here rather than being
+        absorbed by :meth:`_flush_locked`, for the reason a naive clock does:
+        it is a wiring error, not an environmental one.
+
+        LAST REPORT WINS, not first. An interval re-tuned between passes is a
+        new fact, and a file still quoting the old one would have a reader
+        judging a 300-second surface against a 30-second window.
         """
         with self._lock:
             self._passes += 1
             self._surfaces[surface] = self._stamp()
+            if poll_seconds is not None:
+                self._intervals[surface] = float(poll_seconds)
             now = self._monotonic_fn()
             if self._last_flush is not None and now - self._last_flush < self._flush_interval_s:
                 return
@@ -404,12 +462,69 @@ class Heartbeat:
         also swallow an ``AssertionError`` raised by a test spy, and that is
         exactly how a guard in this repo has previously been made silently
         vacuous.
+
+        ``_last_flush`` RECORDS THE LAST SUCCESSFUL WRITE, never the last
+        attempt, and that ordering is the whole of this method. The throttle
+        caps the rate at which the FILE IS REWRITTEN; a flush that raised
+        rewrote nothing, so it consumed none of that rate and must not spend
+        any of the window. Stamping the attempt instead cost a measured false
+        alarm, reproduced with every surface polling exactly on cadence:
+
+            t=70  failed_writes=2  ->  SURFACE_STALE  stale=('savegames',)
+
+        - a HEALTHY watcher reported as having a wedged surface. The 4f
+        reader's per-surface threshold is ``k * poll + 2 * flush``, so for a
+        3-second surface it is 69 s of which 60 s is flush slack, and two
+        failed flushes ate that entire allowance and left about 6 s of honest
+        headroom. A check that cries wolf on a healthy watcher is worse than
+        no check, because it trains its reader to ignore it.
+
+        NO BACKOFF, and here is the cost that buys. With the window left
+        unspent, every subsequent :meth:`record` re-attempts the write, so a
+        destination that stays broken is attempted once per completed poll
+        pass - up to 60,768 times a day at the production cadence, with
+        OPS-14 (disk pressure) open. That is accepted, on three arguments
+        that are arithmetic rather than taste:
+
+        - The retry ADDS NO NEW RATE. There is no retry loop here; an attempt
+          rides a poll pass that was going to happen anyway, and by this line
+          that pass has already run an ``iterdir`` plus a ``stat`` per entry
+          inside ``SaveWatcher.poll_once``. The heartbeat attempt is a
+          bounded constant on top of I/O the surface already performs.
+        - The quantity the throttle exists to cap stays at ZERO while the
+          destination is broken. The 60,768 figure was always a count of
+          REWRITES of this file, and a failing flush rewrites it none. The
+          realistic persistent failures - a parent that is a file, a removed
+          volume, a denied ACL - all raise at the ``mkdir`` or the open,
+          before a payload byte reaches the disk.
+        - A bounded backoff needs a constant, and there is nothing to derive
+          one FROM. Nobody has measured how long a heartbeat destination
+          stays broken here, and this project omits a number rather than
+          guessing one. The one retry interval that IS measured is the
+          surface's own cadence, which a per-pass attempt already uses.
+
+        THE CAVEAT, written down rather than left implied: one failure mode
+        does put bytes on the disk per attempt - a payload written in full
+        that then fails at ``tmp.replace``, which on Windows is what a reader
+        holding the target open without share-delete produces. At roughly
+        400 bytes a payload that is about 24 MB a day of writes immediately
+        thrown away. It is also the mode where retrying is most obviously
+        right, because that collision is transient by construction and the
+        next attempt lands. A persistent ``replace``-stage failure has never
+        been observed; if one ever is, that measurement is what a backoff
+        constant would be derived from, and it does not exist yet.
+
+        ``failed_writes`` therefore counts failed ATTEMPTS, not failed
+        intervals, and under a broken destination it climbs at the pass rate.
+        That is the intended reading: it is the number that separates "this
+        watcher cannot write" from "this watcher is idle".
         """
-        self._last_flush = now
         try:
             self._write(self._payload())
         except OSError:
             self.failed_writes += 1
+            return
+        self._last_flush = now
 
     def _payload(self) -> str:
         """The complete file contents. The caller holds the lock.
@@ -423,16 +538,23 @@ class Heartbeat:
         differ. Insertion order would follow whichever thread happened to
         finish its first pass first, which is not a fact about anything.
 
-        The result is fixed-width but for the digits of ``passes``: four
-        second-resolution stamps, a pid, and a counter. It is REPLACED on
-        every flush and never appended to, so it does not grow.
+        The result settles at a fixed width once every surface has reported
+        once - at most four second-resolution stamps, at most four intervals,
+        a pid and a counter - and after that only the digits of ``passes``
+        move. It is REPLACED on every flush and never appended to, so it does
+        not grow.
         """
-        body = {
+        body: dict[str, object] = {
             "pid": self._pid,
             "written": self._stamp(),
             "passes": self._passes,
             "surfaces": dict(sorted(self._surfaces.items())),
         }
+        # ABSENT, not empty. ``{}`` would assert that four surfaces have no
+        # cadence, which is a claim nobody measured; leaving the key out says
+        # only that none has reported one, which is the fact.
+        if self._intervals:
+            body["intervals"] = dict(sorted(self._intervals.items()))
         return json.dumps(body, ensure_ascii=True, indent=2) + "\n"
 
     def _stamp(self) -> str:
@@ -654,7 +776,10 @@ def run_rolling(
     nothing is exactly as much evidence of liveness as one that copied a log.
     A bounded run flushes once at the end, and so does an interrupted
     threaded one, since the throttle exists to cap a rate and a run that is
-    over has no rate left to cap.
+    over has no rate left to cap. BOTH shapes hand the surface's own
+    ``poll_seconds`` across with the name - a reader cannot call a stamp late
+    without it, and a shape that passed only the name would leave the
+    heartbeat describing three surfaces out of four.
 
     Returns the armed watchers so a caller can inspect what it got.
     """
@@ -673,7 +798,7 @@ def run_rolling(
                     say(f"rolled {surface.plan.name} over to {surface.plan.dest}")
                 surface.watcher.poll_once(now=now)
                 if heartbeat is not None:
-                    heartbeat.record(surface.plan.name)
+                    heartbeat.record(surface.plan.name, surface.plan.poll_seconds)
         if heartbeat is not None:
             heartbeat.flush()
         return [surface.watcher for surface in surfaces]
@@ -695,7 +820,7 @@ def run_rolling(
             # acquired a git checkout) correctly stops advancing here, which
             # is what makes a stopped surface visible to a reader.
             if heartbeat is not None:
-                heartbeat.record(surface.plan.name)
+                heartbeat.record(surface.plan.name, surface.plan.poll_seconds)
             sleep_fn(surface.plan.poll_seconds)
 
     threads = [

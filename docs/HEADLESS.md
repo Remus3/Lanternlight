@@ -173,8 +173,8 @@ was archiving the log, the saves or the market cache. `ops/loop/watch.py`
 closes that gap with `check_watcher()`, and `ensure_armed_at_wrap` is the wrap
 entry point that calls it before the next-session prompt is printed.
 
-`check_watcher()` returns one of six states. The first three mean "not armed"
-and cause a re-arm; the other three are reported and left alone:
+`check_watcher()` returns one of seven states. The first three mean "not armed"
+and cause a re-arm; the other four are reported and left alone:
 
 | State | Meaning | Re-arms? |
 |---|---|---|
@@ -183,6 +183,7 @@ and cause a re-arm; the other three are reported and left alone:
 | `IMPOSTOR` | The pid is alive, but its process creation time does not match the arming record's `started` stamp - an unrelated process inherited a recycled pid. | Yes |
 | `NO_HEARTBEAT` | Identity is confirmed but no heartbeat file exists. Counted ARMED. | No |
 | `STALE` | Identity is confirmed and a heartbeat file exists, but it has not advanced within `HEARTBEAT_STALE_AFTER_S` = **900 s**, which is 3 x the slowest poll interval (300 s, the `logs` surface). One missed pass is noise - a slow disk, a machine that slept - three consecutive ones are a pattern. | No |
+| `SURFACE_STALE` | The combined stamp is inside its threshold, but at least one INDIVIDUAL surface has stopped advancing against its own poll interval - or never recorded a pass at all. The status names which. | No |
 | `ARMED` | Identity is confirmed and the heartbeat is fresh. | No |
 
 **`NO_HEARTBEAT` and `STALE` are reported, never re-armed, and nothing is ever
@@ -214,15 +215,38 @@ advances EVEN WHEN NOTHING IS ARCHIVED, which is the entire point: a watcher
 that finds nothing to copy for hours is not distinguishable from a wedged one
 unless something records that it looked.
 
-**The per-surface map is EVIDENCE, not a verdict, and the difference matters.**
-`check_watcher()` decides `STALE` from the combined `written` stamp alone. It
-does NOT compare each surface against its own poll interval, so a single wedged
-thread among four still reads as `ARMED` - and that is the surface most worth
-watching, because `savegames` and `standalonelevel` poll every 3 seconds while
-`logs` polls every 300, so the fast movers keep the combined stamp fresh on
-their own. What the map buys is that a human or a later check reading the
-evidence line can SEE the wedged surface's stamp standing still. Closing the
-gap properly means per-surface staleness in the verdict, which is not built.
+**The per-surface map is a VERDICT, not just evidence - item `4f` closed that.**
+Until `4f` the map was informational: `STALE` was decided from the combined
+`written` stamp alone, so a single wedged thread among four read as `ARMED`,
+and that is the surface most worth watching - `savegames` and
+`standalonelevel` poll every 3 seconds while `logs` polls every 300, so the
+fast movers keep the combined stamp fresh on their own. Now each surface is
+judged against its OWN interval and a wedged one raises `SURFACE_STALE`.
+
+The heartbeat is **self-describing**: it carries an `intervals` map beside
+`surfaces`, so the reader never re-types a cadence the watcher owns. The set of
+surfaces that OUGHT to have reported comes from `session_plan`, not from the
+heartbeat's own maps - a heartbeat cannot be the authority on which surfaces
+should have reported, because the whole failure mode is a surface that never
+wrote anything. A surface named in the heartbeat but absent from the plan, or a
+plan that cannot be imported, yields an EMPTY expectation: nothing is ever
+accused on the strength of a reading the check could not take.
+
+**Per-surface threshold:** `SURFACE_STALE_MULTIPLE * poll + 2 * flush`, the
+same k = 3 as the combined one, giving 69 / 69 / 150 / 960 s. A surface's
+honest worst-case age is `poll + flush` (33 / 60 / 330 s), so the real margins
+are 2.1x, 2.5x and 2.9x; the extra flush term is conservative on purpose and
+absorbs scheduling jitter and a skipped flush.
+
+**Why `STALE` and `SURFACE_STALE` are separate, and it is structural.** That
+per-surface bound holds only while SOME surface is still recording, because a
+flush fires whenever any surface records and the throttle has elapsed. If every
+surface stops, no flush fires at all - and then the combined stamp freezes and
+`STALE` fires first, since it is decided earlier in the chain. **The two states
+cover each other's blind spot.** When every judged surface is stale the status
+says so rather than claiming the process is still flushing, because a whole
+watcher stalling for 70 to 900 seconds would otherwise land in
+`SURFACE_STALE` with prose asserting a mechanism it had not checked.
 
 This heartbeat, not a log file, is the sanctioned liveness artifact. No code
 path in this repository writes an `armwatch.log` under either arming path -
@@ -242,10 +266,20 @@ and that redirect is the entire difference between the two arming paths.
 - An absent heartbeat means the check CANNOT TELL, not that the watcher is
   dead - that is why `NO_HEARTBEAT` is reported rather than re-armed, the
   same as `STALE`.
-- **One wedged surface out of four still reads as `ARMED`.** The verdict rests
-  on the combined `written` stamp, so the two 3 second surfaces keep it fresh
-  even if `logs` has been hung for an hour. The per-surface stamps make that
-  visible to a reader; nothing yet makes it fail.
+- A FAST surface cannot be caught any faster than the flush cadence allows.
+  Its 69 s threshold is 60 s of flush slack and only 9 s of its own interval,
+  so `savegames` wedging is detectable in about a minute while `logs` wedging
+  takes up to 16. That is a property of the throttle, not a defect.
+- **A missing surface key is innocent only for a while.** Inside that
+  surface's own threshold, measured from the record's `started` stamp, it
+  reads as "no completed pass yet". Past it, the surface is named as never
+  having recorded. `now - started` is an UPPER bound on the watcher's age, so
+  the window closes about a second early - the crying-wolf direction, and
+  small against 60 s of flush slack.
+- A failed heartbeat write does NOT consume the throttle window. It used to,
+  and two failed flushes then burned 60 s of a 69 s budget and reported a
+  healthy `savegames` as wedged. `_last_flush` records the last SUCCESSFUL
+  write; `failed_writes` counts failed attempts, not failed intervals.
 
 **This still never kills anything, the same as the guard and `ensure_armed` in
 4a above.** There is no stop path for a `STALE` watcher, or for any other

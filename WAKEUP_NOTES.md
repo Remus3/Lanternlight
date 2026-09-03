@@ -5,6 +5,65 @@ fidelity and archive older ones rather than deleting them.
 
 ---
 
+# Wrap 2026-09-03 - cycle 39 - `4f` closed, and the refutation found two acceptance criteria that were never met
+
+Suite **1560 passed** in 108.13s, run BARE at the wrap. Ruff clean. Merge gate
+OK against a **1547** baseline; the item started from **1518**. Ledger
+`LL-0123`. Client **closed** all session.
+
+**ROADMAP `4f` is CLOSED.** A single wedged surface out of four now FAILS
+instead of merely being visible. `check_watcher()` gained a seventh state,
+`SURFACE_STALE`, judging each surface against its OWN poll interval and NAMING
+the ones that stopped. The heartbeat became self-describing (an `intervals`
+map), and the set of surfaces that OUGHT to have reported comes from
+`session_plan` - never from the heartbeat's own maps, because the failure mode
+is a surface that never wrote anything.
+
+**THE HEADLINE, and it is the second cycle in a row with this shape: the
+REFUTATION caught the real defects, not the suite.** Both slices reported done
+against a green 1547-test suite and an OK merge gate. Three defects survived
+that, and two of them meant `4f`'s own acceptance was NOT met in production:
+
+1. **It cried wolf.** A FAILED heartbeat write still burned the full 30 s
+   throttle window, so two failures ate 60 s of a 69 s budget and reported a
+   healthy `savegames` as wedged. Reproduced at `t=70, failed_writes=2`.
+2. **The missing-key rule was DEAD CODE** on the very format the change
+   introduced. `intervals` is always a subset of `surfaces`, so the branch was
+   unreachable: a `logs` thread that never recorded read `ARMED` at 100 s,
+   2000 s and 100000 s. The three grace-window tests were green against a
+   payload the writer cannot emit.
+3. **The verdict prose stated a falsehood** over a 14-minute window: a
+   whole-watcher stall of 70 to 900 s read `SURFACE_STALE` while its reason
+   asserted the process was "still flushing".
+
+**A test modification that LOOKED like last cycle's hole was not one.** A slice
+changed a cycle-38 test whose `surfaces` map inherited `written`, so it had
+silently been asserting the exact blindness `4f` removes. The refutation
+reconstructed the old test against the new code out of tree - 3 failed, 85
+passed, only that test - and the assertion line is byte-identical. Isolation,
+not weakening. The opposite call from cycle 38, and it was made by
+re-deriving rather than by reading.
+
+**Two of my own merger claims were corrected.** My healthy-watcher measurement
+sampled ONCE per run (60 s, then 90 s) and I correctly refused to call either a
+worst case; the refutation sampled every 10 s across 330 s and took the max.
+And my `poll + 2*flush` bound was over-conservative - the true bound is
+`poll + flush` (33/60/330 s, margins 2.1x/2.5x/2.9x), and the refutation
+measured `savegames` at exactly 33.0 s, the bound touched rather than
+approached.
+
+That correction produced a better argument than the one I specified the item
+with: the per-surface bound holds only while SOME surface still records, so if
+all stop, no flush fires, the combined stamp freezes and `STALE` fires first.
+**`STALE` and `SURFACE_STALE` cover each other's blind spot.**
+
+**Pid 23628 still reads `NO_HEARTBEAT` / `armed=True`** and was neither
+re-armed nor stopped. `REARM_STATES` unchanged.
+
+**Items 7, 11 and 12 remain OPEN and UNCREDITED.**
+
+---
+
 # Wrap 2026-09-03 - cycle 38 - `4e` closed, and two of its own premises were false
 
 Suite **1518 passed** in 104.04s, run BARE and read at the wrap. Ruff clean.

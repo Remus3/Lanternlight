@@ -2249,7 +2249,24 @@ heartbeat was still worth building, and it is the whole content of `4f`.
 **Not in scope:** killing anything. The loop guard never kills and neither does
 this - it refuses, re-arms, and reports.
 
-## 4f. One wedged surface out of four still reads as ARMED - OPEN
+## 4f. One wedged surface out of four still reads as ARMED - CLOSED 2026-09-03
+
+**CLOSED by ledger `LL-0123`, cycle 39.** `check_watcher()` gained a seventh
+state, `SURFACE_STALE`: each surface is judged against its OWN poll interval,
+the status NAMES which surfaces stopped, and a surface that never recorded at
+all is caught once its grace window closes. The heartbeat is now
+self-describing - it carries an `intervals` map - and the set of surfaces that
+OUGHT to have reported comes from `session_plan`, never from the heartbeat's
+own maps. Suite 1560 passed, ruff clean, measured at the wrap.
+
+**Three defects were found by the refutation pass AFTER the first
+implementation reported done, and two of them meant this item's acceptance was
+not actually met in production.** They are recorded in `LL-0123` because the
+shape recurs: all three were invisible to a green 1547-test suite and to the
+merge gate.
+
+Nothing is re-armed and nothing is terminated for a `SURFACE_STALE` watcher.
+`REARM_STATES` is still exactly `NO_RECORD`, `DEAD`, `IMPOSTOR`.
 
 Opened 2026-09-03, cycle 38, split out of `4e` by ledger `LL-0122` rather than
 left implied inside a closed item.

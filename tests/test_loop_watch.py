@@ -741,12 +741,18 @@ def _heartbeat_file(
     written: str,
     surfaces: dict | None = None,
     passes: int = 42,
+    intervals: dict | None = None,
 ) -> Path:
     """Write a heartbeat in the shape pinned with the armwatch slice.
 
     Fixed size, rewritten in place, four surfaces keyed by name. Written here
     by hand rather than by calling the watcher, so this file does not depend on
     a module another agent owns.
+
+    ``intervals`` is item ``4f``'s self-describing key and is OMITTED unless a
+    test asks for it, so every call written before ``4f`` still produces the
+    exact cycle-38 payload - which is the shape the fallback path has to keep
+    working against.
     """
     stamps = dict.fromkeys(("savegames", "standalonelevel", "savedroot", "logs"), written)
     payload = {
@@ -755,9 +761,21 @@ def _heartbeat_file(
         "passes": passes,
         "surfaces": stamps if surfaces is None else surfaces,
     }
+    if intervals is not None:
+        payload["intervals"] = intervals
     target = tmp_path / watch_mod.HEARTBEAT_FILENAME
     target.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return target
+
+
+def _all_surfaces_at(when: datetime) -> dict:
+    """The four surface names, every one stamped ``when``.
+
+    A named helper rather than an inline dict comprehension because item ``4f``
+    turns this map into the thing under test, and a test that has to be read
+    twice to see which surface is frozen is a test nobody will trust.
+    """
+    return dict.fromkeys(SURFACE_NAMES, watch_mod._stamp(when))
 
 
 def _fixed_creation(when: datetime):
@@ -771,6 +789,12 @@ def _fixed_creation(when: datetime):
 
 NOW = datetime(2026, 9, 3, 5, 0, 0, tzinfo=UTC)
 ARMED_AT = "2026-09-02T01:26:36+00:00"
+
+#: The four surfaces the watcher polls, in the order ``session_plan`` builds
+#: them. Named here so a test can freeze ONE of them by name; the INTERVALS are
+#: never re-typed in this file - they are read from the plan or declared in the
+#: heartbeat under test.
+SURFACE_NAMES = ("savegames", "standalonelevel", "savedroot", "logs")
 
 #: The creation time this machine really reported for the armed watcher, pid
 #: 23628, on 2026-09-02, against an ``armwatch.json`` recording
@@ -1134,10 +1158,23 @@ def test_a_fresh_heartbeat_reads_as_armed(tmp_path: Path, record_file: Path) -> 
 def test_a_heartbeat_at_or_inside_the_threshold_is_not_stale(
     tmp_path: Path, record_file: Path, inside_by_s: float
 ) -> None:
-    """The boundary is inclusive, so exactly-at-threshold is not yet stale."""
+    """The COMBINED boundary is inclusive, so exactly-at-threshold is not stale.
+
+    The ``surfaces`` map is stated explicitly here, and item ``4f`` is why. It
+    used to inherit ``written``, which meant this test also, silently, asserted
+    that four surfaces frozen for 900 s read as ARMED - the exact blindness
+    ``4f`` exists to remove. Pinning the surfaces fresh leaves this test saying
+    only what its name says: that the COMBINED threshold's boundary is
+    inclusive. The per-surface boundary is pinned separately below.
+    """
     watch_mod.write_record(_record(os.getpid(), tmp_path, started=ARMED_AT), record_file)
     written = NOW - timedelta(seconds=watch_mod.HEARTBEAT_STALE_AFTER_S - inside_by_s)
-    beat = _heartbeat_file(tmp_path, pid=os.getpid(), written=watch_mod._stamp(written))
+    beat = _heartbeat_file(
+        tmp_path,
+        pid=os.getpid(),
+        written=watch_mod._stamp(written),
+        surfaces=_all_surfaces_at(NOW - timedelta(seconds=4)),
+    )
 
     status = watch_mod.check_watcher(
         path=record_file,
@@ -1328,6 +1365,7 @@ def test_rearm_states_are_exactly_the_three_that_mean_nothing_is_polling() -> No
     assert expected == watch_mod.REARM_STATES
     assert watch_mod.STATE_NO_HEARTBEAT not in watch_mod.REARM_STATES
     assert watch_mod.STATE_STALE not in watch_mod.REARM_STATES
+    assert watch_mod.STATE_SURFACE_STALE not in watch_mod.REARM_STATES
     assert watch_mod.STATE_ARMED not in watch_mod.REARM_STATES
 
 
@@ -1479,3 +1517,860 @@ def test_ensure_armed_still_takes_the_keyword_the_impostor_rearm_depends_on() ->
     assert "disqualified_pid" in params
     assert params["disqualified_pid"].kind is inspect.Parameter.KEYWORD_ONLY
     assert params["disqualified_pid"].default is None
+
+
+# ---------------------------------------------------------------------------
+# ROADMAP 4f - one wedged surface out of four
+#
+# check_watcher used to decide STALE from the combined ``written`` stamp alone,
+# so the two 3 s surfaces kept it fresh while the 300 s ``logs`` surface - the
+# one guarding the 5,080,313-byte log that 4d exists to protect - could be
+# wedged for an hour and still read ARMED. Nothing below re-types a poll
+# interval: the numbers come from the heartbeat under test or from the
+# watcher's own plan.
+# ---------------------------------------------------------------------------
+
+
+def _declared_intervals() -> dict:
+    """The four intervals as the watcher itself reports them.
+
+    Read from ``session_plan`` rather than written out, so a cadence change in
+    ``lanternlight/armwatch.py`` moves these tests with it instead of leaving
+    them asserting against a number the watcher stopped using. That is the
+    defect ``test_the_slowest_poll_interval_is_the_one_armwatch_actually_uses``
+    was written for, and re-typing four of them here would reintroduce it four
+    times.
+    """
+    from lanternlight.armwatch import session_plan
+
+    plans = session_plan(saved_dir=Path("plan-placeholder"), dest_root=Path("plan-placeholder"))
+    return {plan.name: plan.poll_seconds for plan in plans}
+
+
+def _threshold_for(name: str) -> float:
+    """That surface's own staleness threshold, derived, never typed."""
+    from lanternlight.armwatch import HEARTBEAT_FLUSH_INTERVAL_S
+
+    return watch_mod.surface_stale_after_s(_declared_intervals()[name], HEARTBEAT_FLUSH_INTERVAL_S)
+
+
+def _wedged_logs_status(
+    tmp_path: Path,
+    record_file: Path,
+    *,
+    intervals: dict | None,
+) -> watch_mod.WatcherStatus:
+    """One surface frozen, the other three and the combined stamp fresh."""
+    watch_mod.write_record(_record(os.getpid(), tmp_path, started=ARMED_AT), record_file)
+    fresh = NOW - timedelta(seconds=4)
+    surfaces = _all_surfaces_at(fresh)
+    surfaces["logs"] = watch_mod._stamp(NOW - timedelta(seconds=3600))
+    beat = _heartbeat_file(
+        tmp_path,
+        pid=os.getpid(),
+        written=watch_mod._stamp(fresh),
+        surfaces=surfaces,
+        intervals=intervals,
+    )
+    return watch_mod.check_watcher(
+        path=record_file,
+        heartbeat=beat,
+        now=NOW,
+        creation_time_fn=_fixed_creation(MEASURED_CREATION),
+    )
+
+
+def _writer_shaped_beat(
+    tmp_path: Path,
+    *,
+    recorded: tuple[str, ...],
+    when: datetime,
+    written: datetime | None = None,
+) -> Path:
+    """A heartbeat in the only shape the real writer can produce.
+
+    ``surfaces`` and ``intervals`` are keyed IDENTICALLY, because
+    ``lanternlight.armwatch.Heartbeat.record`` sets both in one call per
+    completed pass. A surface that has NEVER completed a pass is therefore
+    absent from BOTH maps - and that, not "absent from surfaces while intervals
+    still names it", is what a dead thread looks like on disk.
+
+    The three grace-window tests below used to hand ``intervals`` all four names
+    while deleting one from ``surfaces``. Nothing can write that payload, so
+    they were green against a shape that does not exist while the rule they
+    were guarding could not run at all. ``_writer_shaped_beat`` exists so a test
+    cannot make that mistake silently, and
+    ``test_the_writer_cannot_declare_an_interval_for_a_surface_it_never_stamped``
+    measures the claim rather than asserting it here.
+    """
+    declared = _declared_intervals()
+    stamped = watch_mod._stamp(when)
+    return _heartbeat_file(
+        tmp_path,
+        pid=os.getpid(),
+        written=watch_mod._stamp(when if written is None else written),
+        surfaces=dict.fromkeys(recorded, stamped),
+        intervals={name: declared[name] for name in recorded},
+    )
+
+
+def test_the_writer_cannot_declare_an_interval_for_a_surface_it_never_stamped(
+    tmp_path: Path,
+) -> None:
+    """The premise the missing-surface rule rests on, MEASURED not assumed.
+
+    ``Heartbeat.record`` writes the stamp and the interval in the same call, so
+    ``intervals`` is always a SUBSET of ``surfaces``. A rule that derives the
+    surfaces it EXPECTS from those two maps therefore expects exactly the
+    surfaces that already reported, and its missing-key branch is unreachable on
+    every payload the writer can emit. That is why the expectation has to come
+    from the PLAN: a heartbeat cannot be the authority on which surfaces should
+    have reported, because the whole failure being watched for is a surface that
+    wrote nothing.
+    """
+    from lanternlight.armwatch import Heartbeat
+
+    target = tmp_path / "premise-heartbeat.json"
+    beat = Heartbeat(target)
+    declared = _declared_intervals()
+    for name in ("savegames", "standalonelevel", "savedroot"):
+        beat.record(name, declared[name])
+    beat.flush()
+
+    payload = json.loads(target.read_text(encoding="utf-8"))
+    assert set(payload["intervals"]) == set(payload["surfaces"]), payload
+    assert "logs" not in payload["surfaces"], payload
+    assert "logs" not in payload["intervals"], payload
+    # Which is the whole point: the union of the two maps names three surfaces,
+    # so a check deriving its expectations from them never asks after the fourth.
+    assert set(payload["surfaces"]) | set(payload["intervals"]) == set(payload["surfaces"])
+
+
+def test_one_wedged_surface_out_of_four_is_named_while_the_other_three_stay_fresh(
+    tmp_path: Path, record_file: Path
+) -> None:
+    """The WATCHED-GOING-RED acceptance ROADMAP 4f names in terms.
+
+    ``logs`` has not completed a pass in an hour. The other three surfaces AND
+    the combined ``written`` stamp are four seconds old, so every ``4e`` check
+    passes and the old code said ARMED. The whole point of the item is that
+    this must fail, and that it must say WHICH surface.
+    """
+    status = _wedged_logs_status(tmp_path, record_file, intervals=_declared_intervals())
+
+    assert status.state == watch_mod.STATE_SURFACE_STALE, status.reason
+    assert status.stale_surfaces == ("logs",), status.evidence
+    # Named in the sentence an operator reads, not only in a machine field.
+    assert "logs" in status.reason
+    assert f"{_threshold_for('logs'):.0f} s" in status.reason
+    # And named in the evidence, which is where the grounds live.
+    assert any("logs STALE" in item for item in status.evidence), status.evidence
+    # The three healthy ones are not accused of anything.
+    for name in ("savegames", "standalonelevel", "savedroot"):
+        assert name not in status.stale_surfaces
+    # Still armed, still nothing re-armed, still nothing stopped.
+    assert status.armed is True
+    assert status.state not in watch_mod.REARM_STATES
+    assert status.heartbeat_age_s == pytest.approx(4.0)
+
+
+def test_all_four_surfaces_frozen_is_a_different_sentence_from_one(
+    tmp_path: Path, record_file: Path
+) -> None:
+    """"A test that freezes all four passes today and pins nothing" - 4f.
+
+    So this one keeps the all-four case AND proves it is distinguishable from
+    the one-surface case. They are different failures: all four points at the
+    watcher, one points at a thread, and a verdict that renders them the same
+    way loses the interesting one.
+    """
+    watch_mod.write_record(_record(os.getpid(), tmp_path, started=ARMED_AT), record_file)
+    fresh = NOW - timedelta(seconds=4)
+    beat = _heartbeat_file(
+        tmp_path,
+        pid=os.getpid(),
+        written=watch_mod._stamp(fresh),
+        surfaces=_all_surfaces_at(NOW - timedelta(seconds=3600)),
+        intervals=_declared_intervals(),
+    )
+
+    every = watch_mod.check_watcher(
+        path=record_file,
+        heartbeat=beat,
+        now=NOW,
+        creation_time_fn=_fixed_creation(MEASURED_CREATION),
+    )
+    one = _wedged_logs_status(tmp_path, record_file, intervals=_declared_intervals())
+
+    assert every.state == watch_mod.STATE_SURFACE_STALE, every.reason
+    assert every.stale_surfaces == tuple(sorted(SURFACE_NAMES))
+    assert one.stale_surfaces == ("logs",)
+    # The distinction has to survive into the prose, not just the tuple.
+    assert every.reason != one.reason
+    assert "ALL 4" in every.reason
+    assert "ALL" not in one.reason
+    assert "1 of its 4" in one.reason
+    # Neither is STALE: the combined stamp is fresh in both, so the process is
+    # flushing. Collapsing SURFACE_STALE into STALE would say the opposite.
+    assert every.state != watch_mod.STATE_STALE
+    assert every.armed is True and one.armed is True
+
+
+@pytest.mark.parametrize(
+    ("since_arming_s", "expected"),
+    [
+        (100.0, watch_mod.STATE_ARMED),
+        (2000.0, watch_mod.STATE_SURFACE_STALE),
+        (100000.0, watch_mod.STATE_SURFACE_STALE),
+    ],
+)
+def test_a_logs_thread_that_never_recorded_is_caught_once_its_window_closes(
+    tmp_path: Path, record_file: Path, since_arming_s: float, expected: str
+) -> None:
+    """The refutation's measurement, turned into the guard it was missing.
+
+    ``logs`` never completes a pass, so it is absent from ``surfaces`` AND from
+    ``intervals`` - the only shape the writer can produce for a thread that died
+    before its first pass. The rule derived the surfaces it expected from the
+    payload's own two maps, so ``set(present) | set(known) == set(present)`` and
+    the missing-key branch was DEAD CODE: this payload was measured reading
+    ARMED at 100 s, 2000 s and 100000 s past arming.
+
+    100 s is inside the 960 s grace window and ARMED is the right answer there.
+    The other two are the wolf that nobody was crying, and the reason has to
+    name ``logs`` rather than leave an operator guessing between a 3 s save
+    watcher and the 300 s surface guarding the 5,080,313-byte log.
+    """
+    started = NOW - timedelta(seconds=since_arming_s)
+    watch_mod.write_record(
+        _record(os.getpid(), tmp_path, started=watch_mod._stamp(started)), record_file
+    )
+    beat = _writer_shaped_beat(
+        tmp_path,
+        recorded=("savegames", "standalonelevel", "savedroot"),
+        when=NOW - timedelta(seconds=2),
+    )
+
+    status = watch_mod.check_watcher(
+        path=record_file,
+        heartbeat=beat,
+        now=NOW,
+        creation_time_fn=_fixed_creation(started),
+    )
+
+    assert status.state == expected, status.reason
+    # The expectation is sourced OUT LOUD, because a verdict about a surface
+    # that left no trace has to say where the surface's name came from.
+    assert any("expected surfaces" in item for item in status.evidence), status.evidence
+    if expected == watch_mod.STATE_SURFACE_STALE:
+        assert status.stale_surfaces == ("logs",), status.evidence
+        assert "logs" in status.reason
+        assert "NEVER recorded a completed pass" in status.reason
+        assert "logs" not in status.unjudged_surfaces
+        # The three that ARE reporting are the evidence that anything still is.
+        assert status.fresh_surfaces == ("savedroot", "savegames", "standalonelevel")
+        assert status.all_surfaces_stale is False
+    else:
+        assert status.stale_surfaces == ()
+        assert any(
+            "logs no completed pass yet" in item for item in status.evidence
+        ), status.evidence
+
+
+def test_a_missing_surface_key_inside_the_grace_window_reads_as_armed(
+    tmp_path: Path, record_file: Path
+) -> None:
+    """The first heartbeat after arming carries fewer than four keys.
+
+    A watcher ten seconds old has not completed a 300 s ``logs`` pass and
+    cannot have. Reading that as stale would make every wrap in a watcher's
+    first half-minute cry wolf, which the 4f acceptance forbids by name.
+
+    The payload is the one the WRITER can emit - ``logs`` absent from both maps.
+    It used to be handed an ``intervals`` map naming all four while ``surfaces``
+    named three, which nothing can write, so this test passed against a shape
+    that does not exist.
+    """
+    started = NOW - timedelta(seconds=10)
+    watch_mod.write_record(
+        _record(os.getpid(), tmp_path, started=watch_mod._stamp(started)), record_file
+    )
+    beat = _writer_shaped_beat(
+        tmp_path,
+        recorded=("savegames", "standalonelevel", "savedroot"),
+        when=NOW - timedelta(seconds=2),
+    )
+
+    status = watch_mod.check_watcher(
+        path=record_file,
+        heartbeat=beat,
+        now=NOW,
+        creation_time_fn=_fixed_creation(started),
+    )
+
+    assert status.state == watch_mod.STATE_ARMED, status.reason
+    assert status.stale_surfaces == ()
+    # Innocent, but not silently: the evidence says a pass is still awaited
+    # rather than pretending a stamp was seen.
+    assert any("logs no completed pass yet" in item for item in status.evidence), status.evidence
+    # And it is not filed as unmeasurable either - the window is being timed.
+    assert "logs" not in status.unjudged_surfaces
+
+
+def test_a_missing_surface_key_past_the_grace_window_is_named_as_never_recorded(
+    tmp_path: Path, record_file: Path
+) -> None:
+    """The hole in the obvious version of the missing-key rule.
+
+    A surface whose thread died BEFORE its first pass has a permanently missing
+    key, so a rule that only ever forgives a missing key reads it as healthy
+    for the life of the process. The grace window is timed from the record's
+    ``started`` stamp, and past it the verdict is stale with a DISTINCT reason -
+    "never recorded a pass" is a different fact from "stopped advancing", and
+    an operator needs to be told which.
+
+    The payload is writer-shaped: ``logs`` is absent from ``surfaces`` and from
+    ``intervals`` alike, which is what a thread that died before its first pass
+    really leaves behind.
+    """
+    grace = _threshold_for("logs")
+    started = NOW - timedelta(seconds=grace + 600.0)
+    watch_mod.write_record(
+        _record(os.getpid(), tmp_path, started=watch_mod._stamp(started)), record_file
+    )
+    beat = _writer_shaped_beat(
+        tmp_path,
+        recorded=("savegames", "standalonelevel", "savedroot"),
+        when=NOW - timedelta(seconds=2),
+    )
+
+    status = watch_mod.check_watcher(
+        path=record_file,
+        heartbeat=beat,
+        now=NOW,
+        creation_time_fn=_fixed_creation(started),
+    )
+
+    assert status.state == watch_mod.STATE_SURFACE_STALE, status.reason
+    assert status.stale_surfaces == ("logs",)
+    assert "NEVER recorded a completed pass" in status.reason
+    assert "grace window" in status.reason
+    # Distinct from the frozen-stamp reason, which is the point of having two.
+    frozen = _wedged_logs_status(tmp_path, record_file, intervals=_declared_intervals())
+    assert frozen.state == watch_mod.STATE_SURFACE_STALE
+    assert "last completed a pass" in frozen.reason
+    assert "NEVER recorded a completed pass" not in frozen.reason
+
+
+def test_the_grace_window_boundary_is_inclusive_the_way_the_combined_one_is(
+    tmp_path: Path, record_file: Path
+) -> None:
+    """Exactly-at-window is still innocent, and one second past it is not.
+
+    ``started`` is stamped just BEFORE the child spawns, so ``now - started``
+    overstates the watcher's age and the window closes about a second early -
+    the crying-wolf direction. An inclusive boundary is the cheap half of not
+    compounding that.
+    """
+    grace = _threshold_for("logs")
+    for offset, expected in ((0.0, watch_mod.STATE_ARMED), (1.0, watch_mod.STATE_SURFACE_STALE)):
+        started = NOW - timedelta(seconds=grace + offset)
+        watch_mod.write_record(
+            _record(os.getpid(), tmp_path, started=watch_mod._stamp(started)), record_file
+        )
+        beat = _writer_shaped_beat(
+            tmp_path,
+            recorded=("savegames", "standalonelevel", "savedroot"),
+            when=NOW - timedelta(seconds=2),
+        )
+        status = watch_mod.check_watcher(
+            path=record_file,
+            heartbeat=beat,
+            now=NOW,
+            creation_time_fn=_fixed_creation(started),
+        )
+        assert status.state == expected, f"at {offset} s past the window: {status.reason}"
+
+
+def test_a_heartbeat_with_no_intervals_key_is_still_judged_through_the_plan(
+    tmp_path: Path, record_file: Path
+) -> None:
+    """A cycle-38 heartbeat carries ``surfaces`` and no ``intervals``.
+
+    Those exist on disk right now, so the fallback is not a hypothetical. It
+    reads ``lanternlight.armwatch.session_plan`` rather than re-typing four
+    numbers here, and the verdict has to be the same one the self-describing
+    payload gets.
+    """
+    fallback = _wedged_logs_status(tmp_path, record_file, intervals=None)
+    declared = _wedged_logs_status(tmp_path, record_file, intervals=_declared_intervals())
+
+    assert fallback.state == watch_mod.STATE_SURFACE_STALE, fallback.reason
+    assert fallback.stale_surfaces == ("logs",)
+    assert fallback.stale_surfaces == declared.stale_surfaces
+    # The evidence says WHERE the intervals came from, because a verdict that
+    # cannot say what it measured against is a status code with extra syllables.
+    # Matched on the INTERVAL-source line specifically, not on the bare token
+    # "session_plan": the expected-surface line names the plan too, and an
+    # assertion that either line could satisfy would stop distinguishing the
+    # fallback from the self-describing payload.
+    assert any(
+        "poll intervals read from lanternlight.armwatch.session_plan" in item
+        for item in fallback.evidence
+    ), fallback.evidence
+    assert any("'intervals' map" in item for item in declared.evidence), declared.evidence
+
+
+def test_a_surface_with_no_determinable_interval_is_unjudged_not_assumed(
+    tmp_path: Path, record_file: Path
+) -> None:
+    """Unmeasured and measured-fresh are different facts.
+
+    A surface the heartbeat names but declares no interval for cannot be given
+    a threshold, so it gets no verdict. Assuming it fresh hides a wedge;
+    assuming it stale cries wolf about a number nobody has. It is reported as
+    UNJUDGED and it is reported OUT LOUD, in the reason an operator reads.
+    """
+    watch_mod.write_record(_record(os.getpid(), tmp_path, started=ARMED_AT), record_file)
+    fresh = NOW - timedelta(seconds=4)
+    beat = _heartbeat_file(
+        tmp_path,
+        pid=os.getpid(),
+        written=watch_mod._stamp(fresh),
+        surfaces={
+            "logs": watch_mod._stamp(fresh),
+            "mystery": watch_mod._stamp(NOW - timedelta(seconds=99999)),
+        },
+        intervals={"logs": _declared_intervals()["logs"]},
+    )
+
+    status = watch_mod.check_watcher(
+        path=record_file,
+        heartbeat=beat,
+        now=NOW,
+        creation_time_fn=_fixed_creation(MEASURED_CREATION),
+    )
+
+    assert status.state == watch_mod.STATE_ARMED, status.reason
+    assert status.unjudged_surfaces == ("mystery",)
+    assert status.stale_surfaces == ()
+    assert "mystery" in status.reason, status.reason
+    assert any("mystery UNJUDGED" in item for item in status.evidence), status.evidence
+
+
+def test_an_unreadable_surface_stamp_is_unjudged_rather_than_stale(
+    tmp_path: Path, record_file: Path
+) -> None:
+    """Cannot-tell is the third answer here too, exactly as it is for identity."""
+    watch_mod.write_record(_record(os.getpid(), tmp_path, started=ARMED_AT), record_file)
+    fresh = NOW - timedelta(seconds=4)
+    surfaces = _all_surfaces_at(fresh)
+    surfaces["logs"] = "not a timestamp"
+    beat = _heartbeat_file(
+        tmp_path,
+        pid=os.getpid(),
+        written=watch_mod._stamp(fresh),
+        surfaces=surfaces,
+        intervals=_declared_intervals(),
+    )
+
+    status = watch_mod.check_watcher(
+        path=record_file,
+        heartbeat=beat,
+        now=NOW,
+        creation_time_fn=_fixed_creation(MEASURED_CREATION),
+    )
+
+    assert status.state == watch_mod.STATE_ARMED, status.reason
+    assert status.unjudged_surfaces == ("logs",)
+    assert status.stale_surfaces == ()
+
+
+def test_a_heartbeat_with_no_surfaces_map_at_all_judges_nothing(
+    tmp_path: Path, record_file: Path
+) -> None:
+    """A payload with no per-surface map is a cannot-tell, not a wedge.
+
+    Reading it as SURFACE_STALE would be crying wolf about a FORMAT. The check
+    says so in the evidence instead, which is the honest report.
+    """
+    watch_mod.write_record(_record(os.getpid(), tmp_path, started=ARMED_AT), record_file)
+    fresh = watch_mod._stamp(NOW - timedelta(seconds=4))
+    beat = tmp_path / watch_mod.HEARTBEAT_FILENAME
+    beat.write_text(
+        json.dumps({"pid": os.getpid(), "written": fresh, "passes": 7}) + "\n",
+        encoding="utf-8",
+    )
+
+    status = watch_mod.check_watcher(
+        path=record_file,
+        heartbeat=beat,
+        now=NOW,
+        creation_time_fn=_fixed_creation(MEASURED_CREATION),
+    )
+
+    assert status.state == watch_mod.STATE_ARMED, status.reason
+    assert status.stale_surfaces == ()
+    assert any("no per-surface map" in item for item in status.evidence), status.evidence
+
+
+def test_the_combined_stale_verdict_still_wins_over_the_per_surface_one(
+    tmp_path: Path, record_file: Path
+) -> None:
+    """Order matters: nothing-is-flushing is decided before which-thread-died.
+
+    When the whole file has stopped advancing, naming four stale surfaces would
+    describe the symptom and bury the cause. STALE is the cause.
+    """
+    watch_mod.write_record(_record(os.getpid(), tmp_path, started=ARMED_AT), record_file)
+    frozen = NOW - timedelta(seconds=watch_mod.HEARTBEAT_STALE_AFTER_S + 60)
+    beat = _heartbeat_file(
+        tmp_path,
+        pid=os.getpid(),
+        written=watch_mod._stamp(frozen),
+        surfaces=_all_surfaces_at(frozen),
+        intervals=_declared_intervals(),
+    )
+
+    status = watch_mod.check_watcher(
+        path=record_file,
+        heartbeat=beat,
+        now=NOW,
+        creation_time_fn=_fixed_creation(MEASURED_CREATION),
+    )
+
+    assert status.state == watch_mod.STATE_STALE, status.reason
+    assert status.state != watch_mod.STATE_SURFACE_STALE
+
+
+def test_a_whole_watcher_stall_is_not_reported_as_a_process_that_is_still_flushing(
+    tmp_path: Path, record_file: Path
+) -> None:
+    """DEFECT 2: the SURFACE_STALE prose asserted a mechanism it had not checked.
+
+    A real heartbeat has ``written >= every surface stamp``, because ``written``
+    is set at flush time and the stamps at or before it. So the combined age is
+    the age of the FRESHEST surface, and any combined age over the smallest
+    surface threshold (69 s) puts those surfaces past their own thresholds while
+    the combined age is still under the 900 s combined one. A whole-watcher
+    stall of 70 to 900 seconds therefore landed in SURFACE_STALE, whose reason
+    said the combined stamp was "still fresh, so the process IS alive and
+    flushing" - false, because nothing had flushed for the length of the stall.
+
+    The payload here is a genuine 800 s stall: the three fast surfaces stamped
+    800 s ago, ``logs`` stamped one 300 s cycle before that, and ``written``
+    equal to the freshest stamp. Every threshold is passed and the combined
+    stamp is still inside its own.
+    """
+    stall_s = 800.0
+    assert stall_s < watch_mod.HEARTBEAT_STALE_AFTER_S, "the stall must not read as STALE"
+    watch_mod.write_record(_record(os.getpid(), tmp_path, started=ARMED_AT), record_file)
+    surfaces = _all_surfaces_at(NOW - timedelta(seconds=stall_s))
+    surfaces["logs"] = watch_mod._stamp(
+        NOW - timedelta(seconds=stall_s + _declared_intervals()["logs"])
+    )
+    beat = _heartbeat_file(
+        tmp_path,
+        pid=os.getpid(),
+        written=watch_mod._stamp(NOW - timedelta(seconds=stall_s)),
+        surfaces=surfaces,
+        intervals=_declared_intervals(),
+    )
+
+    status = watch_mod.check_watcher(
+        path=record_file,
+        heartbeat=beat,
+        now=NOW,
+        creation_time_fn=_fixed_creation(MEASURED_CREATION),
+    )
+
+    assert status.state == watch_mod.STATE_SURFACE_STALE, status.reason
+    assert status.stale_surfaces == tuple(sorted(SURFACE_NAMES))
+    # The explicit all-vs-some answer, and the evidence it is derived from.
+    assert status.all_surfaces_stale is True
+    assert status.fresh_surfaces == ()
+
+    collapsed = " ".join(status.reason.split())
+    # The falsehood, gone - and pinned POSITIVELY as well, because a negative
+    # assertion rules something out without pinning anything down.
+    assert "alive and flushing" not in collapsed, collapsed
+    assert "NO judged surface is inside its own threshold" in collapsed, collapsed
+    # The combined stamp is stated as the measurement it is, not as a mechanism.
+    assert f"{stall_s:.0f} s ago" in collapsed, collapsed
+    assert f"{watch_mod.HEARTBEAT_STALE_AFTER_S:.0f} s" in collapsed, collapsed
+    # Still a report. Nothing re-armed, nothing stopped, REARM_STATES untouched.
+    assert status.armed is True
+    assert status.state not in watch_mod.REARM_STATES
+
+
+def test_one_wedged_surface_names_the_fresh_ones_as_the_evidence_it_is_flushing(
+    tmp_path: Path, record_file: Path
+) -> None:
+    """The other half of the all-vs-some split: SOME stale is a different claim.
+
+    When a surface IS still inside its own threshold, saying the process is
+    flushing is supported - by that surface, which is named. That is the whole
+    difference from the stall above, and it is why the two cases must not share
+    one sentence.
+    """
+    status = _wedged_logs_status(tmp_path, record_file, intervals=_declared_intervals())
+
+    assert status.state == watch_mod.STATE_SURFACE_STALE, status.reason
+    assert status.stale_surfaces == ("logs",)
+    assert status.all_surfaces_stale is False
+    assert status.fresh_surfaces == ("savedroot", "savegames", "standalonelevel")
+
+    collapsed = " ".join(status.reason.split())
+    # The claim is made, and the evidence for it is named in the same breath.
+    assert "still flushing" in collapsed, collapsed
+    for name in status.fresh_surfaces:
+        assert name in collapsed, collapsed
+
+
+def test_the_stall_sentence_and_the_wedged_thread_sentence_are_not_the_same(
+    tmp_path: Path, record_file: Path
+) -> None:
+    """Collapsing them loses the interesting one - the 4f acceptance, in terms.
+
+    A stall says nothing is advancing and offers the combined stamp's age as the
+    only measurement it has. A wedged thread says three surfaces are advancing
+    and names them. A reader who cannot tell those apart cannot tell a dead
+    watcher from a dead thread.
+    """
+    watch_mod.write_record(_record(os.getpid(), tmp_path, started=ARMED_AT), record_file)
+    stall_s = 800.0
+    surfaces = _all_surfaces_at(NOW - timedelta(seconds=stall_s))
+    surfaces["logs"] = watch_mod._stamp(
+        NOW - timedelta(seconds=stall_s + _declared_intervals()["logs"])
+    )
+    beat = _heartbeat_file(
+        tmp_path,
+        pid=os.getpid(),
+        written=watch_mod._stamp(NOW - timedelta(seconds=stall_s)),
+        surfaces=surfaces,
+        intervals=_declared_intervals(),
+    )
+    stalled = watch_mod.check_watcher(
+        path=record_file,
+        heartbeat=beat,
+        now=NOW,
+        creation_time_fn=_fixed_creation(MEASURED_CREATION),
+    )
+    wedged = _wedged_logs_status(tmp_path, record_file, intervals=_declared_intervals())
+
+    assert stalled.state == wedged.state == watch_mod.STATE_SURFACE_STALE
+    assert stalled.reason != wedged.reason
+    assert stalled.all_surfaces_stale is True and wedged.all_surfaces_stale is False
+    assert "still flushing" in " ".join(wedged.reason.split())
+    assert "still flushing" not in " ".join(stalled.reason.split())
+
+
+def test_the_real_healthy_bound_and_its_precondition_are_written_down() -> None:
+    """A caveat stated in chat but dropped from the artifact is a lie in it.
+
+    The module's formula keeps the conservative ``2 * flush`` - it costs nothing
+    and absorbs scheduling jitter and one skipped flush - but the TRUE worst
+    case for a healthy surface is ``poll + flush``, because a flush fires
+    whenever any surface records and the two 3 s surfaces record ten times per
+    30 s throttle window. The precondition is the interesting half and is the
+    argument for keeping STALE and SURFACE_STALE separate: it holds only while
+    some surface still records, and if every surface stops then no flush fires
+    at all. Both have to survive into the module the next session reads.
+    """
+    collapsed = " ".join(_module_source().split())
+    assert "true bound is poll + flush" in collapsed
+    assert "2.1x, 2.5x and 2.9x" in collapsed
+    assert "no flush fires at all" in collapsed
+
+
+def test_the_documented_true_bound_matches_the_plan_it_describes() -> None:
+    """The correction is a set of NUMBERS in prose, and prose goes stale silently.
+
+    ``poll + flush`` is 33 / 60 / 330 s against thresholds of 69 / 150 / 960 s,
+    so the real margins are 2.1x / 2.5x / 2.9x. Both triples are written into
+    the module, so both are re-derived here from the plan the module claims to
+    be describing. Without this, a cadence change in ``lanternlight/armwatch.py``
+    leaves the ops docstring confidently quoting figures nobody measures any
+    more - the same defect as the re-typed ``300.0``, wearing prose.
+    """
+    from lanternlight.armwatch import HEARTBEAT_FLUSH_INTERVAL_S, session_plan
+
+    plans = session_plan(saved_dir=Path("plan-placeholder"), dest_root=Path("plan-placeholder"))
+    bounds = sorted({p.poll_seconds + HEARTBEAT_FLUSH_INTERVAL_S for p in plans})
+    assert bounds == [33.0, 60.0, 330.0], bounds
+
+    margins = sorted(
+        {
+            round(
+                watch_mod.surface_stale_after_s(p.poll_seconds, HEARTBEAT_FLUSH_INTERVAL_S)
+                / (p.poll_seconds + HEARTBEAT_FLUSH_INTERVAL_S),
+                1,
+            )
+            for p in plans
+        }
+    )
+    assert margins == [2.1, 2.5, 2.9], margins
+
+    collapsed = " ".join(_module_source().split())
+    assert "33 s, 60 s and 330 s" in collapsed, "the true bound is not written down"
+    assert "2.1x, 2.5x and 2.9x" in collapsed
+
+
+def test_the_wrap_never_rearms_a_watcher_with_one_wedged_surface(
+    tmp_path: Path, record_file: Path
+) -> None:
+    """SURFACE_STALE is a REPORT. Re-arming it is the failure, not the fix.
+
+    A watcher with one wedged thread is still one watcher. Arming a second one
+    would double the traffic on the three surfaces that ARE working in order to
+    chase the one that is not, while ``OPS-14`` is open. Nothing is stopped
+    either: killing is out of scope, inherited from 4e and 4d.
+    """
+    watch_mod.write_record(_record(os.getpid(), tmp_path, started=ARMED_AT), record_file)
+    fresh = NOW - timedelta(seconds=4)
+    surfaces = _all_surfaces_at(fresh)
+    surfaces["logs"] = watch_mod._stamp(NOW - timedelta(seconds=3600))
+    beat = _heartbeat_file(
+        tmp_path,
+        pid=os.getpid(),
+        written=watch_mod._stamp(fresh),
+        surfaces=surfaces,
+        intervals=_declared_intervals(),
+    )
+    calls: list = []
+
+    result = watch_mod.ensure_armed_at_wrap(
+        tmp_path / "captures",
+        spawn_fn=_spy_spawn(calls),
+        dest_root_fn=_dated,
+        now=NOW,
+        path=record_file,
+        heartbeat=beat,
+        creation_time_fn=_fixed_creation(MEASURED_CREATION),
+    )
+
+    assert result.status.state == watch_mod.STATE_SURFACE_STALE, result.reason
+    assert calls == [], f"the wrap spawned over a live watcher: {calls}"
+    assert result.arm is None
+    assert result.rearmed is False
+    assert result.status.armed is True
+    # The incumbent is untouched, record and process alike.
+    survivor = watch_mod.read_record(record_file)
+    assert survivor is not None
+    assert survivor.pid == os.getpid()
+    assert guard_mod.pid_is_alive(os.getpid()) is True
+
+
+# ---------------------------------------------------------------------------
+# the per-surface threshold itself - a number with no argument is a guess
+# ---------------------------------------------------------------------------
+
+
+def test_the_surface_threshold_has_the_shape_its_derivation_claims() -> None:
+    """``k * poll + 2 * flush``, with both flush terms present.
+
+    The second flush term is the one an implementation counting only "the
+    watcher's own worst case" forgets: the file being READ may itself have been
+    written a flush interval ago. Dropping it would put the threshold below a
+    healthy surface's honest worst case and turn this check into a false-alarm
+    generator.
+    """
+    assert watch_mod.surface_stale_after_s(300.0, 30.0) == (
+        watch_mod.SURFACE_STALE_MULTIPLE * 300.0 + 2.0 * 30.0
+    )
+    assert watch_mod.surface_stale_after_s(300.0, 30.0) == 960.0
+    assert watch_mod.surface_stale_after_s(3.0, 30.0) == 69.0
+
+
+def test_the_surface_threshold_clears_every_surfaces_own_honest_worst_case() -> None:
+    """A healthy surface can read as ``poll + 2 * flush`` old. All four of them.
+
+    Asserted across the real plan rather than for the slowest surface alone,
+    because the fast surfaces are the ones where the margin is thinnest.
+    """
+    from lanternlight.armwatch import HEARTBEAT_FLUSH_INTERVAL_S, session_plan
+
+    plans = session_plan(saved_dir=Path("plan-placeholder"), dest_root=Path("plan-placeholder"))
+    for plan in plans:
+        honest = plan.poll_seconds + 2.0 * HEARTBEAT_FLUSH_INTERVAL_S
+        threshold = watch_mod.surface_stale_after_s(plan.poll_seconds, HEARTBEAT_FLUSH_INTERVAL_S)
+        assert threshold > honest, (
+            f"{plan.name}: threshold {threshold} s does not clear the {honest} s a healthy "
+            "surface can legitimately take"
+        )
+
+
+def test_the_surface_multiple_is_the_same_k_as_the_combined_one() -> None:
+    """One argument, one number. Two literals would drift and nothing would go red."""
+    assert watch_mod.SURFACE_STALE_MULTIPLE == watch_mod.HEARTBEAT_STALE_MULTIPLE
+    assert watch_mod.SURFACE_STALE_MULTIPLE >= 3
+
+
+def test_the_flush_interval_this_module_documents_is_the_one_armwatch_uses() -> None:
+    """``HEARTBEAT_FLUSH_THROTTLE_S`` is a MIRROR, and a mirror can drift.
+
+    It was shipped as a re-typed literal with nothing coupling it to the number
+    the watcher actually flushes at - the same shape as the re-typed ``300.0``
+    that ``test_the_slowest_poll_interval_is_the_one_armwatch_actually_uses``
+    exists to catch. The 4f derivation reads the lanternlight value directly, so
+    this pins the leftover copy rather than trusting two comments to be edited
+    together.
+    """
+    from lanternlight import armwatch as armwatch_mod
+
+    assert watch_mod.HEARTBEAT_FLUSH_THROTTLE_S == armwatch_mod.HEARTBEAT_FLUSH_INTERVAL_S
+    assert watch_mod._watcher_flush_interval_s() == armwatch_mod.HEARTBEAT_FLUSH_INTERVAL_S
+
+
+def test_the_four_intervals_are_read_from_the_plan_and_not_re_typed_here() -> None:
+    """The ops layer must not carry a second copy of four lanternlight numbers.
+
+    One re-typed copy of ``300.0`` was already caught and pinned. Four more
+    would be the same defect four times, so the fallback reads the plan and this
+    asserts that it really is the plan it read.
+    """
+    from lanternlight.armwatch import session_plan
+
+    plans = session_plan(saved_dir=Path("plan-placeholder"), dest_root=Path("plan-placeholder"))
+    assert watch_mod._plan_poll_intervals() == {p.name: p.poll_seconds for p in plans}
+
+
+def test_the_fast_surface_limit_is_written_down_rather_than_only_known() -> None:
+    """A caveat stated in chat but dropped from the artifact is a lie in the artifact.
+
+    For a 3 s surface the threshold is 69 s, of which 60 s is flush, so a fast
+    surface cannot be caught any faster than the flush cadence allows. That is
+    a real limit of the design and it has to survive in the module the next
+    session reads, not only in the commit message.
+    """
+    source = _module_source()
+    collapsed = " ".join(source.split())
+    assert "flush cadence allows" in collapsed, "the fast-surface limit is not stated in the module"
+    assert "STATED COST" in collapsed
+
+
+def test_the_lanternlight_imports_added_for_4f_are_still_lazy() -> None:
+    """Item 4f added two more lanternlight reads. Neither may reach module scope.
+
+    ``test_the_default_dated_destination_is_imported_lazily`` already forbids a
+    module-scope lanternlight import, but it only proves ONE nested import
+    exists. Three do now, and a later edit could hoist two of them and leave
+    that test green.
+    """
+    tree = ast.parse(_module_source())
+    nested_names: set[str] = set()
+    for fn in ast.walk(tree):
+        if not isinstance(fn, ast.FunctionDef):
+            continue
+        for node in ast.walk(fn):
+            if isinstance(node, ast.ImportFrom) and node.module == "lanternlight.armwatch":
+                nested_names.update(alias.name for alias in node.names)
+
+    assert {"dated_dest_root", "session_plan", "HEARTBEAT_FLUSH_INTERVAL_S"} <= nested_names
+
+    module_level = {
+        node.module
+        for node in tree.body
+        if isinstance(node, ast.ImportFrom) and node.module
+    }
+    assert not any(name.startswith("lanternlight") for name in module_level)
