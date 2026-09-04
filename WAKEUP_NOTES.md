@@ -5,6 +5,87 @@ fidelity and archive older ones rather than deleting them.
 
 ---
 
+# Wrap 2026-09-04 - cycle 41 - `OPS-17` closed, and the item's own mechanism was false
+
+Suite **1637 passed** in 107.04s, run BARE at the wrap and read off the summary
+line. Ruff clean. Merge gate OK at 1637 collected against a **1634** baseline
+measured with `--collect-only` BEFORE any slice was dispatched. Ledger
+`LL-0126`. Client **closed** all session, so this was the client-closed item.
+Watcher re-checked at the wrap: **`ARMED`**, pid 21452, all four surfaces
+fresh, 44106 passes reported, identity confirmed to 0.252 s. Nothing re-armed
+and nothing killed.
+
+**`OPS-17` is CLOSED.** `_dead_pid()` in BOTH `tests/test_loop_watch.py` and
+`tests/test_loop_guard.py` now appends the reaped `Popen` to a module-level
+list and never drops it. A reaped child whose handle is still open is dead and
+unreissuable at the same time, which is the pair of properties the liveness
+callers need. **No production code changed.**
+
+## THE FOUR THINGS CYCLE 41 PAID FOR
+
+1. **THE ITEM'S OWN MECHANISM WAS FALSE, and a fix aimed at it would have
+   changed NOTHING.** `OPS-17` blamed the `with` block for closing the process
+   handle. It does not: `Popen.__exit__` closes the standard streams and calls
+   `wait()`, and neither it nor `_wait()` touches the handle. With the block
+   exited and the name still bound, the pid was still openable 275 of 275
+   times. What frees it is the REFCOUNT drop - and the refcount alone, with no
+   collection anywhere, 60 of 60. Withdrawn in `ROADMAP.md` adjacent to the
+   claim. **A filed mechanism is a hypothesis, exactly like a filed count** -
+   this is the third cycle running that re-measuring one paid off.
+
+2. **THE ITEM'S INVENTORY WAS ONE FILE SHORT.** `tests/test_loop_guard.py`
+   carried the same helper with the same defect, character for character, and
+   the item named only the other file. Found by sweeping for the pattern, not
+   by reading the item. Same shape as `OPS-16`'s enumerated blind spots: **an
+   enumerated inventory is a filed count.**
+
+3. **A READING IS A CLAIM ABOUT THE INSTRUMENT - INCLUDING THE MERGER'S OWN.**
+   My first probe bound `proc._handle` into a local before dropping the
+   `Popen`. That kept the OS handle open, so every post-release reading said
+   the pid was still reserved, and I nearly filed the opposite conclusion.
+   Second cycle running that the merger's own instrument was the broken thing.
+
+4. **"pid 16264 reused" WAS AN INFERENCE, NOT A MEASUREMENT.** The assertion
+   that reddened was `is None`, which keeps no creation time, so it cannot
+   separate a REISSUED pid from a LINGERING process object whose handle a third
+   party still held - both make `OpenProcess` succeed. A 300-trial sweep
+   measured **7 lingers and 0 reuses**. Withdrawn to "openable". The fix closes
+   both, so the item stood; the evidence for its headline did not.
+
+## WHAT THE REFUTATION FOUND THAT NOBODY ASKED FOR - now `OPS-18`
+
+**`ops/loop/guard.py` calls a DEAD process ALIVE when it exited with 259**,
+because it compares `GetExitCodeProcess` against `STILL_ACTIVE`, which is 259,
+and 259 is also a legal exit code. Re-derived by the merger with children
+spawned to exit with chosen codes and pinned open: 0, 1, 42, 258 and 260 all
+read correctly dead; **259 read ALIVE 5 of 5**.
+
+This is not a curiosity. `ensure_armed` refuses to start a watcher while the
+recorded pid reads alive, so a watcher that exited with 259 would be believed
+alive forever and nothing would archive the log, the saves or the market cache
+- the silent outage `LL-0124` caught in production, with the check that caught
+it disarmed. Acceptance is in `OPS-18`, and unlike `OPS-17` the symptom is
+summonable on demand, so a mechanism-only test is not good enough there.
+
+## ONE PID CANNOT SERVE BOTH NEEDS, and it is provable rather than awkward
+
+On Windows the single condition "a process object is still referenced" is what
+BOTH reserves the pid and keeps `OpenProcess` succeeding. So "cannot be
+reissued" and "cannot be opened" are two faces of one thing. The liveness
+callers need the first;
+`test_process_creation_time_is_none_rather_than_a_guess_when_it_cannot_tell`
+needs the second. That test therefore stopped asking for a dead process and
+asks for `UNALLOCATABLE_PID = 999_999` - a number NT can never issue - with the
+four-byte client-id premise ASSERTED at the point of use, so a machine that
+breaks it reddens and names the reason instead of flaking.
+
+**NOT PROVEN, and written down rather than implied:** the pin is a Windows
+guarantee and the mechanism test skips elsewhere, and no test asserts that an
+UNPINNED pid reads free. That assertion IS the race the item opened for, so
+shipping it would be a flake dressed as a guard. It was watched by hand.
+
+---
+
 # Wrap 2026-09-03 - cycle 40 - `OPS-16` closed, and the guard's own docstring was the worst defect in it
 
 Suite **1634 passed** in 107.42s, run BARE at the wrap. Ruff clean. Merge gate

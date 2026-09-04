@@ -41,16 +41,97 @@ def record_file(tmp_path: Path) -> Path:
     return tmp_path / "armwatch.json"
 
 
-def _dead_pid() -> int:
-    """Return a pid that is genuinely no longer running.
+#: Every reaped child whose pid this module has handed out, kept REFERENCED on
+#: purpose. Dropping one of these returns its pid to the OS allocator, which is
+#: the whole of ``OPS-17``, so the list is appended to and never cleared. The
+#: price is one exited process object and one handle per call for the length of
+#: the run - eight or so, all of them already dead.
+_PINNED_DEAD_PROCESSES: list[subprocess.Popen] = []
 
-    Spawning and reaping a real process beats picking a large number and
-    hoping: a guessed pid can be reused, and this test would then flake in the
-    one direction that matters - a live watcher declared stale and doubled.
+
+def _dead_pid() -> int:
+    """Return a pid that is dead AND cannot be reissued while this run lasts.
+
+    Spawning and reaping a real process still beats picking a large number and
+    hoping - that reasoning is unchanged and is why this helper exists: a
+    guessed pid can be reused, and a test would then flake in the one direction
+    that matters, a live watcher declared stale and doubled. ``OPS-17`` is a
+    NARROWING of it, not a reversal. What was wrong was everything after the
+    spawn:
+
+        with subprocess.Popen([sys.executable, "-c", ""]) as proc:
+            proc.wait(timeout=60)
+            return proc.pid
+
+    That reaps the child and then lets the last reference to ``proc`` die at
+    the ``return``, and on Windows that is the moment the pid becomes eligible
+    for reuse - so the helper reopened the hole its own docstring warned about.
+    Not theory: pid 16264 went OPENABLE between being reaped and being probed
+    and reddened the creation-time test below during an unrelated run. Whether
+    the number had been reissued, or the old process object was merely
+    lingering under a handle somebody else still held, is NOT recorded - the
+    assertion was ``is None`` and kept no creation time to tell them apart. A
+    refutation pass measured 7 lingers and 0 reuses in 300 trials on this
+    machine 2026-09-04, so linger is the likelier of the two. The pin closes
+    both.
+
+    THE MECHANISM ``OPS-17`` FILED IS WRONG IN ITS DETAIL, measured here
+    2026-09-04, and it matters because a fix aimed at it would have changed
+    nothing. The item says the ``with`` block closes the process handle on
+    exit. It does not. With the block exited and the name still bound,
+    :func:`ops.loop.watch.process_creation_time` still answered with a real
+    datetime; dropping the last reference is what turned it to ``None``. The
+    REFCOUNT alone does it - 60 of 60 with no collection anywhere in the loop -
+    so a fix reasoning about the garbage collector would miss too.
+    ``Popen.__exit__`` closes the standard streams and waits - it never touches
+    the handle. What frees the pid is the REFCOUNT reaching zero, so dropping
+    the ``with`` on its own would have fixed nothing at all.
+
+    So the pin is a REFERENCE rather than a context manager: the ``Popen`` goes
+    into :data:`_PINNED_DEAD_PROCESSES` before anything can drop it and stays
+    there. On Windows a pid cannot be reissued while a process object still
+    exists under it, and that object outlives the process itself for exactly as
+    long as one handle to it stays open.
+
+    The two properties pull against each other, and holding both at once is the
+    point. The obvious way to keep a process object alive - never reaping the
+    child - would make the pid read as ALIVE and break all four callers. A
+    reaped child with an open handle is the one state that is both: gone, and
+    not reissuable. (``python -c ""`` exits ``0``, which is what makes the
+    reaped half readable: ``guard.pid_is_alive`` calls a process alive when
+    ``GetExitCodeProcess`` reports ``STILL_ACTIVE``, ``259``, so a child that
+    chose that exit code would read as alive forever.)
+
+    THE PIN IS A WINDOWS PROPERTY AND DOES NOT EXIST ON POSIX, written down
+    rather than implied. There ``wait()`` reaps the zombie and frees the pid
+    outright, and the only way to keep the number reserved - leaving the child
+    unreaped - makes ``os.kill(pid, 0)`` succeed, so the pid would read as
+    alive and every caller would break. The helper degrades to the old
+    behaviour there, and the mechanism test below skips rather than pretending
+    otherwise.
     """
-    with subprocess.Popen([sys.executable, "-c", ""]) as proc:
-        proc.wait(timeout=60)
-        return proc.pid
+    proc = subprocess.Popen([sys.executable, "-c", ""])
+    # Pinned BEFORE the reap and before any return path, so no exception can
+    # leave the only reference sitting on a frame that is about to unwind.
+    _PINNED_DEAD_PROCESSES.append(proc)
+    proc.wait(timeout=60)
+    return proc.pid
+
+
+#: A pid the allocator can never issue, for the one place that needs the
+#: creation-time probe's cannot-tell branch rather than a dead process.
+#:
+#: This IS a guessed pid, and :func:`_dead_pid` exists because guesses are
+#: wrong, so the exemption is argued rather than assumed. The guess that helper
+#: refuses to make is "this number is free right now", which is a claim about
+#: an instant and expires immediately. The claim here is a different kind: NT
+#: allocates client ids out of a table with four-byte granularity, so every pid
+#: is a multiple of four and a number that is not has never named a process and
+#: never will. Measured on this machine 2026-09-04 - ``EnumProcesses`` reported
+#: 296 live pids, every one a multiple of four, the largest 31,604. The premise
+#: is ASSERTED at the point of use, so a machine that breaks it reddens a test
+#: instead of flaking one.
+UNALLOCATABLE_PID = 999_999
 
 
 def _dated(dest_base, when: datetime) -> Path:
@@ -70,6 +151,88 @@ def _record(pid: int, tmp_path: Path, *, started: str = "2026-09-01T12:00:00+00:
         dest_root=str(tmp_path / "captures" / "2026-09-01"),
         started=started,
     )
+
+
+# ---------------------------------------------------------------------------
+# the _dead_pid helper itself - ROADMAP OPS-17
+# ---------------------------------------------------------------------------
+
+
+#: How far the reported creation time may sit EARLIER than the wall clock read
+#: just before the spawn. Measured over 30 spawns on this machine 2026-09-04:
+#: the reported time led that reading by 236 to 380 MICROseconds every time, so
+#: a second is three orders of magnitude of headroom for a machine whose
+#: creation FILETIME comes off a coarser clock than :func:`datetime.now`. It
+#: costs nothing, because the bound that rules out a reissued pid is the LATE
+#: one - see the test below.
+_CREATION_CLOCK_SLACK = timedelta(seconds=1)
+
+
+@pytest.mark.skipif(
+    sys.platform != "win32",
+    reason=(
+        "the pin is a Windows guarantee and only Windows can be asked about it: "
+        "POSIX frees a pid the instant the zombie is reaped, and the one way to keep "
+        "the number reserved there would make it read as alive"
+    ),
+)
+def test_the_dead_pid_helper_hands_back_a_pid_that_is_dead_and_cannot_be_reissued() -> None:
+    """Both halves of :func:`_dead_pid`, asserted at the moment it returns.
+
+    ``OPS-17`` says the honest acceptance here is a test on the MECHANISM
+    rather than on the symptom, because the symptom is a race nobody can
+    schedule. So this asserts the invariant directly: the pid is reaped
+    (``pid_is_alive`` is False, which is what the four callers below need) AND
+    the OS still holds a process object under it (a creation time comes back,
+    which on Windows is exactly the condition that stops the allocator handing
+    the number out again).
+
+    THE INSTRUMENT IS THE MODULE UNDER TEST, deliberately rather than
+    carelessly. ``process_creation_time`` is the probe the reuse actually
+    reddened, so it is the right thing to ask, and a broken probe cannot hide
+    here in either direction: one that always answered ``None`` fails this
+    test, and one that always answered a datetime fails
+    :func:`test_process_creation_time_is_none_rather_than_a_guess_when_it_cannot_tell`
+    on the sentinel. Its ability to say ``None`` is checked on the last line
+    rather than assumed, so neither assertion rests on the other's good faith.
+
+    Two pids, because pinning only the most recent one would satisfy a
+    single-pid check while letting every earlier pid escape.
+
+    NO MIRROR TEST IS WRITTEN, and the omission is the point rather than an
+    oversight. The natural mirror - hand back an UNPINNED pid and assert it
+    reads as ``None`` - is precisely the race ``OPS-17`` opened for, so it
+    would be a flake shipped as a guard. That direction was watched by hand
+    instead: dropping the pin turns the assertions below red.
+    """
+    assert watch_mod.process_creation_time(os.getpid()) is not None, (
+        "no creation-time probe on this Windows machine, so nothing below proves anything"
+    )
+
+    before = datetime.now(UTC)
+    first = _dead_pid()
+    second = _dead_pid()
+    after = datetime.now(UTC)
+
+    assert first != second
+    assert guard_mod.pid_is_alive(first) is False
+    assert guard_mod.pid_is_alive(second) is False
+
+    for label, pid in (("first", first), ("second", second)):
+        created = watch_mod.process_creation_time(pid)
+        assert created is not None, (
+            f"the {label} pid was released back to the allocator and can be reissued"
+        )
+        # And it is still OUR process rather than a reissue. This is the bound
+        # that does the work: a process that took the number over would have
+        # had to start after the window closed.
+        assert created <= after, f"the {label} pid names a process created after the spawn"
+        assert created >= before - _CREATION_CLOCK_SLACK, (
+            f"the {label} pid names a process that started before the spawn"
+        )
+
+    # The instrument can say None, or every assertion above is decoration.
+    assert watch_mod.process_creation_time(UNALLOCATABLE_PID) is None
 
 
 # ---------------------------------------------------------------------------
@@ -857,12 +1020,39 @@ def test_process_creation_time_is_none_rather_than_a_guess_when_it_cannot_tell()
     A probe that returned a plausible datetime on failure would settle the
     identity question with fiction. Item 4e's whole hazard is that a wrong
     IMPOSTOR verdict re-arms alongside a live watcher.
+
+    THE LAST ASSERTION IS THE ONLY ONE THAT REACHES CTYPES - the four above it
+    are turned away by the guard clause before any handle is opened - so it is
+    the one that pins ``OpenProcess`` failing, and ``OPS-17`` is about how it
+    used to be spelled. It said ``_dead_pid()``, and a reaped pid is a FREE
+    pid, which is the exact state the allocator reissues from: pid 16264 went
+    openable under this assertion during an unrelated run and reddened it.
+
+    ``_dead_pid`` now PINS its pid against reuse, and that makes the pid
+    permanently openable - which would fail this assertion deterministically
+    rather than occasionally. The two needs cannot be served by one pid, and
+    the reason is not a limitation of this file: on Windows the same single
+    condition, a process object still referenced, is what both reserves the
+    number and keeps ``OpenProcess`` succeeding. "Cannot be reissued" and
+    "cannot be opened" are the two faces of it. So this test stops asking for a
+    dead process and asks instead for a number that was never a process at all.
+    See :data:`UNALLOCATABLE_PID` for why that guess is admissible here and
+    nowhere else.
     """
     assert watch_mod.process_creation_time(None) is None
     assert watch_mod.process_creation_time(0) is None
     assert watch_mod.process_creation_time(-1) is None
     assert watch_mod.process_creation_time(True) is None
-    assert watch_mod.process_creation_time(_dead_pid()) is None
+
+    # The sentinel's premise, checked rather than trusted. If a Windows ever
+    # hands out a pid that is not a multiple of four, this reddens here and
+    # names the reason instead of flaking on the line below.
+    assert UNALLOCATABLE_PID % 4 != 0
+    if sys.platform == "win32":
+        assert os.getpid() % 4 == 0, "this pid is not a multiple of four"
+        assert _dead_pid() % 4 == 0, "a spawned pid is not a multiple of four"
+
+    assert watch_mod.process_creation_time(UNALLOCATABLE_PID) is None
 
 
 def test_process_creation_time_reads_this_process_on_the_platform_that_can() -> None:
