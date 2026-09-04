@@ -84,6 +84,28 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0126 - 2026-09-04 - OPS-17 CLOSED - the pid pin, and the item's own mechanism was false while its inventory was one file short
+
+**Evidence:**
+- `tests/test_loop_watch.py` and `tests/test_loop_guard.py`: `_dead_pid()` now appends the reaped `Popen` to a module-level list and never drops it, so the process object - and with it the pid - survives the whole run.
+- Full suite `1637 passed in 106.31s`, run BARE at the merge and read from the summary line - never with `-q`, which prints no summary at all and still exits 0. Merge gate OK at 1637 collected against a 1634 baseline measured with `--collect-only` BEFORE any slice was dispatched; the three added tests are the two in `tests/test_loop_guard.py` and the one in `tests/test_loop_watch.py`.
+- RED watched BY THE MERGER, not taken from a slice report. Pin removed from `tests/test_loop_guard.py` with the anchor asserted: `2 failed, 22 passed`, the ground-truth test failing on `_pid_owns_a_process_object(28476)` returning False.
+- RED watched BY THE MERGER in `tests/test_loop_watch.py`: pin removed gives `1 failed, 115 passed` on `the first pid was released back to the allocator and can be reissued`; sentinel pointed at a live pid gives `2 failed, 114 passed`, caught at the premise check rather than the symptom.
+- The plausible WRONG fix was watched red too - keep the pin, drop the `wait()` - which reserves the pid by leaving the child ALIVE and reddens every liveness caller (`5 failed` in both files).
+- `OPS-17`'s INVENTORY WAS INCOMPLETE: `tests/test_loop_guard.py` carried the same helper with the same defect and the item named only the other file. Found by sweeping, not by reading the item.
+
+**The item's stated mechanism was FALSE and is withdrawn in `ROADMAP.md` adjacent to the claim.** `Popen.__exit__` does not close the process handle - it closes the standard streams and calls `wait()`, and neither it nor `_wait()` touches the handle in CPython 3.14.4. With the block exited and the name still bound the pid was still openable, 275 of 275, against a negative control that forced the handle shut and flipped every reading. The REFCOUNT drop frees it, and the refcount alone suffices with no collection anywhere (60 of 60). A fix aimed at the `with` block would have changed nothing.
+
+**"pid 16264 reused" overstated the observation and is withdrawn to "openable".** The assertion that reddened was `is None` and keeps no creation time, so it cannot separate a reissued pid from a lingering process object whose handle a third party still held. A 300-trial sweep measured 7 lingers and 0 reuses, so linger is the likelier reading of the original red.
+
+**ONE PID CANNOT SERVE BOTH NEEDS, provably.** On Windows the single condition "a process object is still referenced" is what BOTH reserves the pid and keeps `OpenProcess` succeeding, so "cannot be reissued" and "cannot be opened" are two faces of it. The liveness callers need the first and the creation-time test needs the second, so that test moved to a number NT can never issue, with the four-byte client-id premise asserted at the point of use.
+
+**NOT PROVEN, and not implied.** The pin is a Windows guarantee and the mechanism test skips elsewhere. No test asserts that an unpinned pid reads free, because that assertion IS the race the item opened for; it was watched by hand instead.
+
+**A NEW PRODUCTION DEFECT CAME OUT OF THE REFUTATION, filed as `OPS-18`.** `ops/loop/guard.py` compares `GetExitCodeProcess` against `STILL_ACTIVE`, which is 259, and 259 is also a legal exit code - so a process that exits with 259 reads ALIVE. Re-derived by the merger: exit codes 0, 1, 42, 258 and 260 all read correctly dead, 259 read alive 5 of 5. It matters because `ensure_armed` refuses to re-arm while the recorded pid reads alive, which is the silent no-archiving outage `LL-0124` caught in production.
+
+**THE MERGER'S OWN FIRST PROBE WAS CONTAMINATED.** It bound `proc._handle` into a local before dropping the `Popen`, which held the OS handle open and made every post-release reading say the pid was still reserved. A reading is a claim about the instrument, including the instrument the merger writes to check a slice.
+
 ### LL-0125 - 2026-09-03 - OPS-16 CLOSED - a capability allowlist replaces a name denylist, and the first implementation shipped 11 undeclared holes plus a docstring that claimed coverage it did not have
 
 **Evidence:**

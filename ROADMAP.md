@@ -2365,7 +2365,7 @@ call in the shipped `ops/loop/watch.py` - kernel32 `OpenProcess`,
 found no terminate, suspend or memory-write path. This is a guard-strength
 item, not a live defect.
 
-## OPS-17. `_dead_pid()` reopens the pid-reuse hole its own docstring warns about - OPEN
+## OPS-17. `_dead_pid()` reopens the pid-reuse hole its own docstring warns about - CLOSED 2026-09-04
 
 Opened 2026-09-03, cycle 40, by the refutation pass of `OPS-16`. Found as an
 intermittent red that had nothing to do with the item under test, which is the
@@ -2392,6 +2392,26 @@ free a pid while a handle to the process is still open; closing the last handle
 does. So the helper reintroduces the hole it was written to close, and the
 docstring's reasoning is correct while the code under it is not.
 
+**THE BOLD SENTENCE ABOVE IS FALSE AND IS WITHDRAWN, measured 2026-09-04.**
+`Popen.__exit__` does NOT close the process handle. It closes the standard
+streams and calls `wait()`, and in CPython 3.14.4 neither it nor `_wait()`
+touches `self._handle`. With the `with` block exited and the name still bound,
+the reaped pid was STILL openable - 275 of 275 trials, against a negative
+control that forced the handle shut and flipped every reading. What frees the
+pid is the REFCOUNT reaching zero, which in the old helper happened at
+`return proc.pid`. The refcount alone is enough, with no collection anywhere
+(60 of 60). **So a fix aimed at the `with` block would have changed nothing.**
+The rest of the paragraph - that reaping alone does not free a pid while a
+handle is open, and that the helper reopens its own hole - stands.
+
+**"pid 16264 reused" OVERSTATES THE OBSERVATION and is withdrawn to
+"openable".** The assertion that reddened was `is None`, which keeps no
+creation time, so it cannot separate a REISSUED pid from a LINGERING process
+object whose handle somebody else still held. Both make `OpenProcess` succeed.
+A 300-trial sweep on this machine measured 7 lingers and 0 reuses, so linger is
+the likelier reading of the original red. The pin closes both, so the fix is
+unaffected - but do not re-cite "reused" as a measured fact.
+
 **Acceptance:**
 
 - `_dead_pid()` returns a pid that CANNOT be reused for the lifetime of the
@@ -2410,6 +2430,85 @@ docstring's reasoning is correct while the code under it is not.
 
 **Not in scope:** `OPS-8`, which closed concurrent-pytest safety. This is a
 single-process race against the OS pid allocator, a different mechanism.
+
+**CLOSED 2026-09-04, cycle 41, ledger `LL-0126`.** Both helpers now append the
+reaped `Popen` to a module-level list and never drop it, so the process object
+- and with it the pid - survives the whole run. Watched red by hand in both
+files with the pin removed, and again with the `wait()` removed, which is the
+plausible WRONG fix: it reserves the pid by leaving the child ALIVE, and turns
+every liveness caller red.
+
+**THE ITEM'S INVENTORY WAS INCOMPLETE - there were TWO helpers, not one.**
+`tests/test_loop_guard.py` carried the same defect character for character and
+this item named only `tests/test_loop_watch.py`. An enumerated inventory is a
+filed count, which is the lesson `OPS-16` paid for one cycle earlier.
+
+**ONE PID CANNOT SERVE BOTH NEEDS, and that is provable rather than awkward.**
+On Windows the single condition "a process object is still referenced" is what
+BOTH reserves the pid and keeps `OpenProcess` succeeding, so "cannot be
+reissued" and "cannot be opened" are two faces of it. The liveness callers need
+the first; the creation-time test needs the second. So that test stopped asking
+for a dead process and asks instead for a number NT can never issue, with the
+four-byte client-id premise ASSERTED at the point of use, so a machine that
+breaks it reddens and names the reason instead of flaking.
+
+**NOT PROVEN, stated rather than implied.** The pin is a Windows guarantee and
+the mechanism test skips elsewhere. No test asserts that an UNPINNED pid reads
+free: that assertion IS the race this item opened for, so shipping it would be
+a flake dressed as a guard. It was watched by hand instead.
+
+## OPS-18. `pid_is_alive` calls a DEAD process ALIVE when it exited with 259 - OPEN
+
+Opened 2026-09-04, cycle 41, by the refutation pass of `OPS-17`, which was not
+asked about it and found it anyway.
+
+`ops/loop/guard.py` decides liveness with `GetExitCodeProcess` and compares the
+result against `STILL_ACTIVE`, which is 259. **259 is also a perfectly legal
+exit code.** A process that exits with 259 is therefore reported ALIVE, and
+stays reported alive for as long as anything keeps its process object around.
+
+**Measured twice, independently**, by spawning children that exit with a chosen
+code and pinning them open so the probe has something to read:
+
+| exit code | `pid_is_alive` |
+|---|---|
+| 0, 1, 42, 258, 260 | False - correct |
+| **259** | **True - WRONG**, 5 of 5 |
+
+The neighbours either side read correctly, so this is the constant collision
+and not a general failure of the probe.
+
+**Why this is not a curiosity.** `ensure_armed` REFUSES to start a watcher when
+the recorded pid reads alive - deliberately, because a second poller on the
+same four sources is the exact failure it exists to prevent. A watcher that
+exits with 259 would be believed alive forever, `ensure_armed` would refuse
+every re-arm, and nothing would archive the log, the saves or the market cache.
+That is the silent outage `LL-0124` caught in production, with the check that
+caught it disarmed.
+
+**Acceptance:**
+
+- A test that spawns a child exiting with 259, pins it against pid reuse, and
+  asserts `pid_is_alive` reports it DEAD. **Watched going red against today's
+  `guard.py` first.** This defect reproduces on demand, so a mechanism-only
+  test is not good enough here - unlike `OPS-17`, the symptom is summonable.
+- Exit codes 258 and 260 stay correct, and a live process still reads alive.
+- The fail-closed promise in `pid_is_alive`'s docstring is PRESERVED: when
+  existence genuinely cannot be determined the answer stays True. A fix that
+  makes an ambiguous case read dead trades this bug for a worse one, because
+  the loop guard would then trample a live loop.
+- Whatever call replaces or supplements `GetExitCodeProcess` is added to the
+  `OPS-16` capability allowlist in `tests/test_process_capability.py`
+  deliberately, with the right it asks for argued. `WaitForSingleObject` on the
+  handle with a zero timeout is the obvious candidate - a signalled process
+  object means exited, whatever the code - but this item does not prescribe it.
+- `ops/loop/watch.py` reaches liveness through this same function, so state
+  either way whether `check_watcher`'s `DEAD` branch inherits the bug.
+
+**Not in scope:** `OPS-17`. That was a test-helper race against the pid
+allocator; this is a production constant collision in a module no test helper
+touches. The two met only because `OPS-17`'s refutation needed children with
+chosen exit codes.
 
 ## 4b. Ammo-family and talent measurement - READY, cheap, needs the client
 

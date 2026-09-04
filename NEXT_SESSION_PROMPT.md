@@ -34,210 +34,94 @@ A fresh clone runs zero git hooks until that first command runs. The tracked
 
 ---
 
-## Where the last session left it - CYCLE 40
+## Where the last session left it - CYCLE 41
 
-`main` is at the cycle 40 wrap commit. Suite **1634 passed** in 107.42s, run
-BARE at the wrap; ruff clean. Merge gate OK against a **1594** baseline; the
-item began at 1560. Ledger `LL-0125`. Client **closed** all session.
+`main` is at the cycle 41 wrap commit. Suite **1637 passed** in 107.04s, run
+BARE at the wrap; ruff clean. Merge gate OK at 1637 collected against a **1634**
+baseline measured with `--collect-only` BEFORE any slice was dispatched. Ledger
+`LL-0126`. Client **closed** all session.
 
-### ROADMAP `OPS-16` is CLOSED
+### ROADMAP `OPS-17` is CLOSED
 
-`tests/test_process_capability.py` is a capability ALLOWLIST over the only two
-modules that can acquire a process handle, `ops/loop/guard.py` and
-`ops/loop/watch.py`. It builds a symbol table of what each bound NAME refers to
-and routes every access through the same checks - whether spelled as an
-attribute, a literal `getattr`, or a bare name from a from-import.
-**No production code changed.** It replaces nothing; the old name-denylist in
-`tests/test_loop_watch.py` stays, and the two are read together.
+`_dead_pid()` in **both** `tests/test_loop_watch.py` and
+`tests/test_loop_guard.py` now appends the reaped `Popen` to a module-level list
+and never drops it. A reaped child whose handle is still open is dead AND
+unreissuable at the same time, which is the pair of properties the liveness
+callers need. **No production code changed.**
+
+## THE FOUR THINGS CYCLE 41 PAID FOR
+
+1. **THE ITEM'S OWN MECHANISM WAS FALSE, and a fix aimed at it would have
+   changed NOTHING.** `OPS-17` blamed the `with` block for closing the process
+   handle. It does not: `Popen.__exit__` closes the standard streams and calls
+   `wait()`, and neither it nor `_wait()` touches the handle. With the block
+   exited and the name still bound, the pid was still openable 275 of 275
+   times. What frees it is the REFCOUNT drop - and the refcount alone, with no
+   collection anywhere, 60 of 60. Withdrawn in `ROADMAP.md` adjacent to the
+   claim. **A filed MECHANISM is a hypothesis, exactly like a filed count.**
+
+2. **THE ITEM'S INVENTORY WAS ONE FILE SHORT.** `tests/test_loop_guard.py`
+   carried the same helper with the same defect, character for character, and
+   the item named only the other file. Found by SWEEPING for the pattern, not
+   by reading the item. Same shape as `OPS-16`'s enumerated blind spots: an
+   enumerated inventory is a filed count.
+
+3. **A READING IS A CLAIM ABOUT THE INSTRUMENT - INCLUDING THE MERGER'S OWN.**
+   The merger's first probe bound `proc._handle` into a local before dropping
+   the `Popen`. That kept the OS handle open, so every post-release reading
+   said the pid was still reserved, and the opposite conclusion was nearly
+   filed. Second cycle running that the merger's own instrument was the broken
+   thing.
+
+4. **"pid 16264 reused" WAS AN INFERENCE, NOT A MEASUREMENT.** The assertion
+   that reddened was `is None`, which keeps no creation time, so it cannot
+   separate a REISSUED pid from a LINGERING process object whose handle a third
+   party still held - both make `OpenProcess` succeed. A 300-trial sweep
+   measured **7 lingers and 0 reuses**. Withdrawn to "openable". The fix closes
+   both, so the item stood; the evidence for its headline did not.
+
+### ONE PID CANNOT SERVE BOTH NEEDS - provable, not awkward
+
+On Windows the single condition "a process object is still referenced" is what
+BOTH reserves the pid and keeps `OpenProcess` succeeding, so "cannot be
+reissued" and "cannot be opened" are two faces of one thing. The liveness
+callers need the first;
+`test_process_creation_time_is_none_rather_than_a_guess_when_it_cannot_tell`
+needs the second. That test therefore stopped asking for a dead process and
+asks for `UNALLOCATABLE_PID = 999_999` - a number NT can never issue - with the
+four-byte client-id premise ASSERTED at the point of use, so a machine that
+breaks it reddens and names the reason instead of flaking.
+
+**NOT PROVEN, and written down rather than implied:** the pin is a Windows
+guarantee and the mechanism test skips elsewhere, and no test asserts that an
+UNPINNED pid reads free. That assertion IS the race the item opened for, so
+shipping it would be a flake dressed as a guard. It was watched by hand.
+
+## Where the session before that left it - CYCLE 40
+
+`main` was at the cycle 40 wrap. Suite **1634 passed**; merge gate OK against a
+**1594** baseline; ledger `LL-0125`.
+
+**`OPS-16` is CLOSED.** `tests/test_process_capability.py` is a capability
+ALLOWLIST over the only two modules that can acquire a process handle,
+`ops/loop/guard.py` and `ops/loop/watch.py`. It builds a symbol table of what
+each bound NAME refers to and routes every access through the same checks -
+attribute, literal `getattr`, or bare name from a from-import. No production
+code changed.
 
 **THE WORST DEFECT IN IT WAS ITS OWN DOCSTRING.** The first implementation
-shipped with 11 undeclared holes - `from os import system`, the `executable=`
-kwarg (which makes an argv allowlist worthless, because a caller can name a
-different program in a keyword), the whole `getattr` laundering family, and
-handle rebinding through an alias, `with`, `for` and tuple unpacking - and it
-ASSERTED coverage it did not have, naming `os.system` as caught through a path
-that laundered it. `OPS-16`'s acceptance is that the blindness must be stated in
-the ARTIFACT, so a guard that MIS-states its coverage fails the item outright
-rather than partially. Refuted, fixed, re-verified by hand with three controls
-that must still pass.
+shipped with 11 undeclared holes and ASSERTED coverage it did not have. A guard
+that MIS-states its coverage is worse than one with a hole: a hole honestly
+declared is a known limit, a docstring claiming a laundered path is caught is
+an active lie a later session will rely on. Every "this is caught" sentence
+needs a test behind it.
 
-**`OPS-16`'s own list of three spellings was INCOMPLETE.** Building the
-allowlist surfaced `os.system`, `os.killpg` and `os.abort` as well. **An
-enumerated list of blind spots is itself a filed count.**
-
-## THE FOUR THINGS CYCLE 40 PAID FOR
-
-1. **A guard that MIS-states its coverage is worse than one with a hole.** A
-   hole a module honestly declares is a known limit; a docstring claiming a
-   path is caught when it launders is an active lie a later session will rely
-   on. Every "this is caught" sentence needs a test behind it.
-
-2. **HAND AN AGENT THE METHOD TO RE-DERIVE AN INVENTORY, NOT THE INVENTORY.**
-   I gave a slice my own inventory of two modules as authoritative ground
-   truth and it was incomplete - it missed two `getattr` calls - so I asked for
-   something impossible (ban `getattr` outright AND have both modules pass).
-   A filed inventory is a filed count. I then handed the fix agent a table of
-   21 holes, two of which were not holes, and it said so instead of accepting
-   it.
-
-3. **AN EMPTY RESULT IS A CLAIM ABOUT THE INSTRUMENT - INCLUDING THE ONE THE
-   MERGER WRITES TO CHECK AN AGENT.** Running the new `scan_source` over bare
-   one-line snippets with no imports and no library binding gave FOUR false
-   "allowed" readings, and I nearly reported an agent's claims as false. With
-   realistic context every one was refused. Same shape as an earlier probe that
-   evaluated a real `Heartbeat` against a fabricated clock a day ahead.
-
-4. **THE MERGE GATE IS NOT OPTIONAL COVER FOR THE "RUN ONLY YOUR OWN TESTS"
-   INSTRUCTION.** Both slices reported green; the gate reported `2 failed`. A
-   NEW tracked file needs a lane owner in `ops/lanes.py` or nothing arbitrates
-   a concurrent edit to it - then `python scripts/write_lane_contracts.py`,
-   because the roster is not the only copy of itself. Telling slices to run
-   only their own file avoids reading a neighbour's half-written file as your
-   own failure, and necessarily blinds them to integration failures. Run the
-   gate.
-
-## Where the session before that left it - CYCLE 39
-
-`main` is at the cycle 39 wrap commit. Suite **1560 passed** in 108.13s, run
-BARE and read at the wrap; ruff clean. Merge gate OK against a **1547**
-baseline; the cycle began at **1518**. Ledger `LL-0123` (and `LL-0122` from
-cycle 38 just before it). Client **closed** all session.
-
-### ROADMAP `4f` is CLOSED - and read WHY before trusting the next green suite
-
-A single wedged surface out of four now FAILS instead of merely being visible.
-`check_watcher()` gained a seventh state, `SURFACE_STALE`, which judges each
-surface against its OWN poll interval and NAMES the ones that stopped. The
-heartbeat is self-describing (an `intervals` map beside `surfaces`), and the
-set of surfaces that OUGHT to have reported comes from `session_plan` - never
-from the heartbeat's own maps, because the whole failure mode is a surface that
-never wrote anything.
-
-**THE REFUTATION CAUGHT THE REAL DEFECTS, NOT THE SUITE. Second cycle running.**
-Both slices reported done against a green **1547**-test suite and an OK merge
-gate. Three defects survived that, and TWO of them meant `4f`'s own acceptance
-was not met in production:
-
-1. **It cried wolf.** A FAILED heartbeat write still burned the full 30 s
-   throttle window, so two failures ate 60 s of a 69 s budget and reported a
-   HEALTHY `savegames` as wedged. `_last_flush` now records the last
-   SUCCESSFUL write.
-2. **The missing-key rule was DEAD CODE** on the format the change introduced.
-   `intervals` is always a subset of `surfaces`, so the branch was unreachable:
-   a `logs` thread that never recorded read `ARMED` at 100 s, 2000 s AND
-   100000 s. Its three tests were green against a payload the writer cannot
-   emit.
-3. **The verdict prose stated a falsehood** across a 14-minute window - a
-   whole-watcher stall of 70 to 900 s read `SURFACE_STALE` while its reason
-   asserted the process was "still flushing".
-
-Measure the count yourself with `python -m pytest` run BARE - never with `-q`,
-which prints no summary line at all and still exits 0.
-
-### ROADMAP `4e` is CLOSED
-
-The wrap now re-checks the watcher instead of trusting a record written at
-session entry. `ops/loop/watch.py` gained:
-
-- **`check_watcher()`** - returns `NO_RECORD`, `DEAD`, `IMPOSTOR`,
-  `NO_HEARTBEAT`, `STALE` or `ARMED`, each with the EVIDENCE it rests on.
-- **`ensure_armed_at_wrap()`** - re-arms on the first three ONLY. `STALE` and
-  `NO_HEARTBEAT` are reported, never re-armed. Nothing is ever terminated.
-- **Identity, not just liveness** - process CREATION TIME via ctypes
-  `GetProcessTimes`, compared against the record's `started` stamp inside
-  `IDENTITY_TOLERANCE_S = 120.0` s. The window is generous ON PURPOSE: a false
-  `IMPOSTOR` re-arms beside a live watcher, which is the one failure
-  `ensure_armed` exists to refuse. Command line is deliberately not used - it
-  needs WMI or `PROCESS_VM_READ`, and `PROCESS_QUERY_LIMITED_INFORMATION`
-  already answers the question.
-
-`lanternlight/armwatch.py` gained `--heartbeat PATH`, writing
-`ops/runtime/armwatch_heartbeat.json`. It **advances even when nothing is
-archived**, which is the observation `armwatch.json` could never provide.
-`HEARTBEAT_STALE_AFTER_S = 900.0` = 3 x the 300 s `logs` interval, which clears
-the 330 s a healthy watcher can honestly take.
-
-## THE FOUR THINGS CYCLE 39 PAID FOR - read these first
-
-1. **A GREEN SUITE AND A GREEN MERGE GATE ARE NOT EVIDENCE THE ACCEPTANCE IS
-   MET.** 1547 tests passed while two of `4f`'s acceptance criteria were dead
-   in production. **Test the acceptance against an artifact the REAL PRODUCER
-   emits.** The missing-key tests were green against a payload the writer
-   cannot construct - that is what hid the defect for a whole implementation
-   round.
-
-2. **A CHECK THAT CRIES WOLF IS WORSE THAN NO CHECK**, because it trains the
-   reader to ignore it. Before shipping a threshold, run the REAL thing and
-   confirm a HEALTHY subject reads clean. A 330 s threaded run sampled every
-   10 s read `ARMED` 33 of 33 times; that is the check that mattered.
-
-3. **ONE SAMPLE OF A PHASE-DEPENDENT QUANTITY IS AN ANECDOTE.** I measured a
-   healthy watcher once per run and got 60 s, then 90 s, for the same quantity,
-   and correctly refused to call either a worst case. Sampling repeatedly and
-   taking the MAX is the instrument. The sampled run then measured `savegames`
-   at exactly its derived bound of 33.0 s - the bound touched, not approached.
-
-4. **DERIVE PROSE FROM EVIDENCE, NEVER FROM AN ASSUMED MECHANISM.** Defect 3
-   above was a reason string asserting the process "IS alive and flushing" -
-   a mechanism nobody had checked. It was false for 14 minutes out of every
-   stall.
-
-## THE FIVE THINGS CYCLE 38 PAID FOR - still live
-
-1. **A GREEN SUITE IS NOT EVIDENCE A GUARD WAS NOT WEAKENED.** An agent
-   narrowed a safety test that was blocking its own feature - the textbook
-   conflict of interest. The narrowing was legitimate in principle, the merger
-   reviewed it and PASSED IT, and its replacement collector matched
-   `ast.Attribute` only, so a bare `OpenProcess(...)` after a rebinding evaded a
-   spelling the old guard caught. The suite was green at 1509 with that hole
-   open and the merge gate said OK. Only the refutation pass found it. **When an
-   agent edits a guard that was blocking it, re-derive what the old guard caught
-   and replay both over the same input.**
-
-2. **A guard that has only ever seen the code it ships is untested.** The fix
-   above is a guard FOR the guard: five synthetic evasion spellings fed to the
-   collector, plus a mirror test so a `return False` mutation cannot pass. Red
-   observed with exactly 1 of 5 failing, which is what proves the new branch
-   load-bearing rather than incidental.
-
-3. **A POSITIVE CONTROL CAN ITSELF BE BROKEN.** The first client check ran
-   `Get-Process | Where-Object { $_.ProcessName -like 'powershell*' }` as its
-   control and got 0 - because the tool runs `pwsh`, not `powershell`. The
-   control failed silently and its zero looked exactly like a clean
-   measurement. Use a control that CANNOT fail: the current process itself.
-
-4. **Two premises of a ROADMAP item were false, and the item had been read
-   several times.** See below. Re-measure an item's PREMISES before building
-   against them, not just its acceptance.
-
-5. **A withdrawal must sit ADJACENT to the claim.** Both corrections below are
-   written in `ROADMAP.md` next to the original text, not only in the ledger.
-   Cycle 37 paid for this and cycle 38 applied it.
-
-## TWO FALSE PREMISES, WITHDRAWN - do not re-cite the originals
-
-1. **"`ensure_armed` produced no `armwatch.log` where a direct invocation
-   does."** There is NO such asymmetry. **No code path in this repository
-   writes `armwatch.log` at all** - it appears only in prose and one test's
-   denylist, and a `FileHandler|basicConfig|getLogger` sweep returns nothing
-   with its positive control passing. The 2026-08-31 file is 562 bytes of
-   `run_rolling`'s startup banner with a 0-byte `armwatch.err` beside it: a
-   hand-typed shell redirect. The real difference is that `default_spawn` sends
-   a detached child's streams to `DEVNULL` deliberately, so a long-running child
-   cannot block on a pipe nobody drains.
-
-2. **"There is no observation that separates correctly idle from wedged."** One
-   exists and needs NO code. Sample `Win32_Process.OtherOperationCount` twice:
-   for pid 23628 it climbed 508 in 15 s, 971 in 30 s, 266 in 10 s while
-   `ReadOperationCount`, `WriteOperationCount` and CPU stayed flat, with
-   `Threads=5`. That matches what `poll_once` predicts - `iterdir()` and a stat
-   per entry are "Other" operations, and every entry was already in `_seen`.
-   Controls: idle Python 0, scan-only Python 1442, four `pwsh.exe` 0.
-
-   **BUT STATE IT AS "NOT WHOLLY WEDGED" AND NO STRONGER.** The counter is
-   per-PROCESS, not per-thread. The `logs` surface is about 0.5 percent of that
-   traffic, so a hung `logs` thread is invisible to it. That is the whole
-   content of `4f`.
+**Other cycle 40 lessons still live:** hand an agent the METHOD to re-derive an
+inventory, not the inventory. An empty result is a claim about the instrument.
+The merge gate is not optional cover for the "run only your own tests"
+instruction - both slices reported green and the gate reported `2 failed`. A
+NEW tracked file needs a lane owner in `ops/lanes.py`, then
+`python scripts/write_lane_contracts.py`.
 
 ---
 
@@ -245,7 +129,7 @@ the 330 s a healthy watcher can honestly take.
 
 **1. Is the client running?** Filter on the process NAME, never a command-line
 pattern - a command-line filter matches your own probe (`LL-0105`). **Use a
-control that cannot fail**, which the previous version of this prompt did not:
+control that cannot fail:**
 
 ```
 powershell -NoProfile -Command "$self=@(Get-Process | Where-Object { $_.Id -eq $PID }).Count; $p=@(Get-Process | Where-Object { $_.ProcessName -like 'Mistfall*' }); \"CONTROL_self=$self MISTFALL=$($p.Count) TOTAL=$((Get-Process).Count)\""
@@ -260,36 +144,24 @@ count means nothing.
 python -c "from ops.loop import watch; print(watch.ensure_armed('C:/ll-captures'))"
 ```
 
-**3. Now READ THE WATCHER'S STATE rather than assuming it.** This is new and it
-is the point of `4e`:
+**3. READ THE WATCHER'S STATE rather than assuming it:**
 
 ```
 python -c "from ops.loop import watch; s=watch.check_watcher(); print(s.state); print(s.reason)"
 ```
 
 **The live watcher is pid 21452, armed 2026-09-03 into
-`C:\ll-captures\2026-09-03`.** Expect **`ARMED`**. Any document still naming
-**23628** as the live watcher is stale - that one DIED and was replaced.
+`C:\ll-captures\2026-09-03`.** At the cycle 41 wrap it read **`ARMED`** with all
+four surfaces fresh and 44106 passes reported. Any document naming **23628** is
+stale - that one DIED and was replaced (`LL-0124`), and **why it died is still
+UNMEASURED and is a real open question.** Nothing in this repo records a
+watcher's exit.
 
-**IT DIED, AND THE CHECK CAUGHT IT - one commit after the check shipped.** At
-the cycle 39 wrap `check_watcher()` reported `NO_HEARTBEAT`/`armed=True` for
-pid 23628. At the very next wrap, minutes later, the same call reported
-**`DEAD`**: the process was gone, an independent command-line sweep gave
-`ARMWATCH_COUNT=0`, and NOTHING on this machine was archiving the log, the
-saves or the market cache. `ensure_armed_at_wrap` re-armed as pid 21452. Full
-account in `LL-0124`.
-
-**WHY 23628 died is UNMEASURED and is a real open question.** It had run over
-24 hours and was polling normally when last observed. Nothing in this repo
-records a watcher's exit. Do not assume it was killed by a session - this
-session terminated only two watchers it spawned itself in scratch directories,
-each by exact pid.
-
-What each state means for you: `ARMED` is fine. `NO_HEARTBEAT` means a watcher
-armed before the heartbeat shipped - correct, and it must NOT be re-armed,
-because a second poller on the same four sources is the failure `ensure_armed`
-refuses while `OPS-14` (disk) is open. `SURFACE_STALE` NAMES the surface that
-stopped, so quote the name and not just the state. Only `NO_RECORD`, `DEAD` and
+What each state means: `ARMED` is fine. `NO_HEARTBEAT` means a watcher armed
+before the heartbeat shipped - correct, and it must NOT be re-armed, because a
+second poller on the same four sources is the failure `ensure_armed` refuses
+while `OPS-14` (disk) is open. `SURFACE_STALE` NAMES the surface that stopped,
+so quote the name and not just the state. Only `NO_RECORD`, `DEAD` and
 `IMPOSTOR` re-arm, and nothing is ever killed.
 
 ---
@@ -306,29 +178,29 @@ at PANTS and open Affix Details while worn - grep the log for
 Smiting or Curse. The log carries no player-facing affix, skill or item name -
 33 names tested with two positive controls - so only a hover will do.
 
-**IF THE CLIENT IS CLOSED**, the item is **`OPS-17`**, fully doable from disk:
+**IF THE CLIENT IS CLOSED, the item is `OPS-18`**, opened this cycle by the
+`OPS-17` refutation and fully doable from disk:
 
-> `_dead_pid()` in `tests/test_loop_watch.py` returns a pid whose process
-> handle it has just closed. On Windows that is exactly when the pid becomes
-> eligible for reuse, so the "dead" pid can be alive again by the time it is
-> probed. **Observed, not theorised: pid 16264 reused**, reddening
-> `test_process_creation_time_is_none_rather_than_a_guess_when_it_cannot_tell`
-> during an unrelated verification run.
+> `ops/loop/guard.py` decides liveness with `GetExitCodeProcess` compared
+> against `STILL_ACTIVE`, which is **259**. **259 is also a legal exit code**,
+> so a process that exits with 259 is reported **ALIVE**. Measured twice
+> independently: exit codes 0, 1, 42, 258 and 260 all read correctly dead;
+> **259 read ALIVE 5 of 5.**
 
-The helper exists specifically to avoid GUESSING a pid, and its docstring
-reasons correctly about reuse - then its `with subprocess.Popen(...)` block
-closes the handle on exit and reopens the very hole it was written to close.
-Reaping alone does not free a pid while a handle is still open; closing the
-last handle does.
+It matters because `ensure_armed` refuses to start a watcher while the recorded
+pid reads alive, so a watcher that exited with 259 would be believed alive
+forever and nothing would archive the log, the saves or the market cache - the
+silent outage `LL-0124` caught in production, with the check that caught it
+disarmed.
 
-Full acceptance is in `ROADMAP.md`, including the awkward part stated honestly:
-**the failure is a race, so pin the MECHANISM rather than the symptom.** A fix
-that retries or sleeps is not one - it lowers the odds without changing the
-reason. If no assertion can pin it, say so in the ledger rather than claiming a
-proof the test does not give.
-
-**Not in scope:** `OPS-8`, which closed concurrent-pytest safety. This is a
-single-process race against the OS pid allocator, a different mechanism.
+Full acceptance is in `ROADMAP.md`. The important differences from `OPS-17`:
+**the symptom is summonable on demand here, so a mechanism-only test is NOT
+good enough** - watch it go red against today's `guard.py` first. And the
+fail-closed promise in `pid_is_alive`'s docstring must be PRESERVED: when
+existence genuinely cannot be determined the answer stays True, or the loop
+guard starts trampling live loops, which is a worse bug than the one being
+fixed. Whatever call you add must be declared in the `OPS-16` allowlist in
+`tests/test_process_capability.py` with the right it asks for argued.
 
 **Also available with the client closed:**
 
@@ -352,8 +224,8 @@ Item `7` route 1 EXHAUSTED (`LL-0106`). Item `14` CLOSED (`LL-0107`). `4d`
 CLOSED (`LL-0109`). Item `12`'s backward half CLOSED as impossible (`LL-0110`).
 `7c`'s orange pair DONE (`LL-0112`), its two defence-in-depth gaps CLOSED
 (`LL-0115`/`0116`), and its registration search DONE as consensus (`LL-0118`).
-`7d` CLOSED (`LL-0119`). **`4e` CLOSED (`LL-0122`). `4f` CLOSED (`LL-0123`).
-`OPS-16` CLOSED (`LL-0125`).**
+`7d` CLOSED (`LL-0119`). `4e` CLOSED (`LL-0122`). `4f` CLOSED (`LL-0123`).
+`OPS-16` CLOSED (`LL-0125`). **`OPS-17` CLOSED (`LL-0126`).**
 **Items 7, 11 and 12 remain OPEN and UNCREDITED - do not credit any of them.**
 
 ---
@@ -362,45 +234,50 @@ CLOSED (`LL-0109`). Item `12`'s backward half CLOSED as impossible (`LL-0110`).
 
 - **`python -m pytest -q` prints NO summary line and still exits 0**, because
   `pytest.ini` already carries `-q` so a second one makes it `-qq`. Run it BARE.
-- **A positive control can itself be broken.** See rule 3 above. Prefer a
-  control that cannot fail over one that merely ought to pass.
-- **A green suite says nothing about a guard that was quietly narrowed.** See
-  rule 1 above. This is the cycle's most expensive lesson.
+- **A filed MECHANISM is a hypothesis, exactly like a filed count.** `OPS-17`
+  named the wrong trigger and a fix aimed at it would have changed nothing.
+  Re-measure a mechanism before building against it, not just an acceptance.
+- **An enumerated inventory is a filed count.** `OPS-17` named one file and
+  there were two. Sweep for the pattern; do not trust the item's list.
+- **Your own probe can be the broken instrument.** Binding `proc._handle` into
+  a local kept the OS handle open and faked every reading. Ask what your
+  instrument holds open, keeps alive, or shares with the thing it measures.
+- **A positive control can itself be broken.** Prefer a control that CANNOT
+  fail over one that merely ought to pass.
+- **A green suite says nothing about a guard that was quietly narrowed.**
 - **`grep -iF` CRASHES here** (SIGABRT, exit 134) and looks exactly like a clean
   negative. Use `-i` or `-F`, never both.
 - **A line-oriented grep is a claim about line breaks** and a case-sensitive one
   is a claim about capitalisation. Prose here wraps near 80 columns, so search
   whitespace-collapsed AND case-insensitively.
-- **A shell heredoc mangles backslash escapes.** A sweep script written as a
-  heredoc died on `'\\'` this cycle. Write escape-heavy text with an editor.
-- **Writing prose about a filename can trip the source register.** Four tokens
-  in this cycle's own ledger entry - `Process.OtherOperationCount`,
-  `armwatch.err`, `ast.Attribute`, `done.md` - reddened
-  `test_source_register.py` and had to be added to `KNOWN_NON_HOSTS`. The
-  ledger is append-only, so the denylist is the only lever.
+- **Line endings differ per file in the working tree.** `ROADMAP.md` and
+  `WAKEUP_NOTES.md` are CRLF on disk while `NEXT_SESSION_PROMPT.md` and most
+  `.py` are LF, and `.gitattributes` normalises everything to LF in the blob. A
+  scripted edit whose anchors are LF will silently fail to match a CRLF file -
+  **assert the anchor matched before believing a survivor.**
+- **A shell heredoc mangles backslash escapes.** Write escape-heavy text - any
+  Windows path included - with an editor, not a heredoc.
+- **Writing prose about a filename can trip the source register.** The ledger is
+  append-only, so `KNOWN_NON_HOSTS` in `test_source_register.py` is the only
+  lever.
 - **A grep PATTERN can trip a pre-tool hook.** Searching for the forbidden
   process-stopping cmdlet by name was BLOCKED by `tools/precommit_gate.py`,
   which matched the search string itself.
 - **A sha256 of a working `.py` is NOT the commit's.** `.gitattributes` pins
-  `*.py` to `eol=lf` while the working tree is CRLF. Say WHICH form you
+  `*.py` to `eol=lf` while some working files are CRLF. Say WHICH form you
   measured; only the git blob is reproducible from a clone.
 - **NEVER pipe a `git commit` through `head`.** A reader that closes the pipe
   early kills the process writing to it, and the failure prints a success
-  message. Fixed in the hook (`LL-0120`) and pinned end-to-end by
-  `test_the_hook_survives_a_reader_that_closes_the_pipe`.
+  message. Fixed in the hook (`LL-0120`).
 
 ## Traps EARLIER cycles paid for - kept because they are still live
 
 - **Point verification at the READINGS, not the arithmetic.** Four independent
   refuters found **zero** arithmetic errors and **eight** bad readings.
-- **A sum is not a check on an ordering.** A transposed delta list summed to the
-  same total, so every total-based check passed it.
+- **A sum is not a check on an ordering.**
 - **A self-run refutation cannot find a fix you applied in only one place.**
-- **A FILED MECHANISM IS A HYPOTHESIS, exactly like a filed count.** Re-run the
-  measurement; do not fix what a write-up says is broken.
-- **Ask whether a change makes a guard MISS something, not only whether it
-  still catches what it caught.** This cycle is the second time that question
-  found a real hole.
+- **Ask whether a change makes a guard MISS something**, not only whether it
+  still catches what it caught.
 - **Measure the metric the DESIGN promises, not the one that is easy.**
 - **NEVER `git add -A` while a subagent may be writing to the tree.** Stage
   named paths.
@@ -411,12 +288,11 @@ CLOSED (`LL-0109`). Item `12`'s backward half CLOSED as impossible (`LL-0110`).
   `python scripts/write_lane_contracts.py`.
 - **Prose about an id ALLOCATES it.** Ask for an id rather than counting by eye:
   `python -c "from ops import ops_ids; print(ops_ids.next_free_id())"`.
-- **Verify a scripted edit by READING the file.** A reused variable once wrote a
-  ROADMAP paragraph into `.gitignore`.
+- **Verify a scripted edit by READING the file.**
 - **A green suite says nothing about a branch no test reaches.** Mutate the
   thing you just WROTE, not only the thing you changed.
 - **`write_text` on Windows turns a whole file CRLF.** Write with
-  `write_bytes`, or pass `newline="\n"`, and check by counting BYTES.
+  `write_bytes`, or pass an explicit `newline=`, and check by counting BYTES.
 
 ## Operator context worth having
 
