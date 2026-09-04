@@ -293,6 +293,20 @@ state `check_watcher()` can return. It refuses, re-arms, or reports - never
 terminates - and `ensure_armed_at_wrap` re-arms only on `NO_RECORD`, `DEAD`
 and `IMPOSTOR`.
 
+**How that prohibition is checked, and the honest limit of the check.** Two
+complementary guards run in the suite, over `ops/loop/watch.py` and
+`ops/loop/guard.py` - the only two modules with any path to a process handle.
+`test_watch_exposes_no_termination_path` denies a set of call NAMES (`kill`,
+`taskkill`, `TerminateProcess` and neighbours) inside `watch.py`'s own
+source, and `tests/test_process_capability.py` allowlists what the two
+modules may IMPORT and CALL at all - which is what catches a termination
+spelled as a subprocess argument or reached through a dynamically assembled
+attribute rather than a literal name. Neither reads past these two files: a
+call routed into a THIRD module that did the killing, under an
+ordinary-looking name, is invisible to both. `OPS-16` names the spellings
+that were found; a denylist that reads as exhaustive and is not is worse than
+one that says what it misses.
+
 ---
 
 ## 5. Stopping it

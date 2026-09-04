@@ -2297,7 +2297,33 @@ percent of that traffic.
   and the combined `written` stamp fresh, and assert the check reports that
   surface. A test that freezes all four passes today and pins nothing.
 
-## OPS-16. The termination-path guard has three spellings it cannot see - OPEN
+## OPS-16. The termination-path guard has three spellings it cannot see - CLOSED 2026-09-03
+
+**CLOSED by ledger `LL-0125`, cycle 40.** `tests/test_process_capability.py`
+is a capability ALLOWLIST over the two modules that can acquire a process
+handle, `ops/loop/guard.py` and `ops/loop/watch.py`. It builds a symbol table
+of what each bound NAME refers to and routes every access through the same
+checks whether spelled as an attribute, a literal `getattr`, or a bare name
+from a from-import. Suite 1634 passed, ruff clean, measured at the wrap.
+
+All three spellings this item named are caught, plus `os.system`, `os.killpg`
+and `os.abort`, which it did not - **its own list of three was incomplete**,
+which is the shape it was filed to warn about.
+
+**The first implementation was REFUTED and had to be fixed.** It shipped with
+**11 undeclared holes** - `from os import system`, the `executable=` kwarg,
+the whole `getattr` laundering family, handle rebinding through an alias,
+`with`, `for` and tuple unpacking - and, worse, its docstring ASSERTED coverage
+it did not have. That is precisely the failure this item exists to end, so it
+was not close-able until fixed. Recorded in `LL-0125` because the shape recurs.
+
+What it is still blind to is enumerated in the module docstring rather than
+implied - propagation through a call, a conditional, a container or a helper
+return; a subscripted handle; `getattr` on an unresolvable target; and the
+`**kwargs` splat, named there as the sharpest remaining edge.
+
+**No production code changed.** The anti-cheat boundary was re-inventoried and
+is clean.
 
 Opened 2026-09-03, cycle 38, by the refutation pass of `LL-0122`. **All three
 predate that cycle**; the guard was narrowed in it, and the refutation replayed
@@ -2338,6 +2364,52 @@ call in the shipped `ops/loop/watch.py` - kernel32 `OpenProcess`,
 `GetProcessTimes` and `CloseHandle`, plus one `Popen` with a fixed argv - and
 found no terminate, suspend or memory-write path. This is a guard-strength
 item, not a live defect.
+
+## OPS-17. `_dead_pid()` reopens the pid-reuse hole its own docstring warns about - OPEN
+
+Opened 2026-09-03, cycle 40, by the refutation pass of `OPS-16`. Found as an
+intermittent red that had nothing to do with the item under test, which is the
+expensive kind: a session that meets it spends its time on the wrong thing.
+
+**Observed**, not theorised: a full-suite run failed at
+`tests/test_loop_watch.py::test_process_creation_time_is_none_rather_than_a_guess_when_it_cannot_tell`,
+with **pid 16264 reused** between being reaped and being probed. It passes in
+isolation and passed on the next run.
+
+`_dead_pid()` exists specifically to avoid guessing a pid, and its docstring
+says so - "a guessed pid can be reused, and this test would then flake in the
+one direction that matters". Then it does this:
+
+```python
+with subprocess.Popen([sys.executable, "-c", ""]) as proc:
+    proc.wait(timeout=60)
+    return proc.pid
+```
+
+**The `with` block closes the process handle on exit, and on Windows that is
+exactly the moment the pid becomes eligible for reuse.** Reaping alone does not
+free a pid while a handle to the process is still open; closing the last handle
+does. So the helper reintroduces the hole it was written to close, and the
+docstring's reasoning is correct while the code under it is not.
+
+**Acceptance:**
+
+- `_dead_pid()` returns a pid that CANNOT be reused for the lifetime of the
+  test - for example by keeping the `Popen` object (and therefore the handle)
+  alive for the duration, rather than closing it at the point of return.
+- Whatever is chosen is argued in the docstring against the mechanism above.
+  A fix that merely retries, or that sleeps, is not one: it lowers the odds
+  without changing the reason.
+- The existing reasoning about not GUESSING a pid is preserved. This is a
+  narrowing of that helper, not a reversal of it.
+- A test WATCHED GOING RED. This one is genuinely awkward to pin - the failure
+  is a race - so the honest acceptance is a test on the MECHANISM rather than
+  the symptom: assert the handle is still open (or the chosen invariant holds)
+  at the moment the pid is handed back. If no such assertion can be written,
+  say so in the ledger rather than claiming a proof the test does not give.
+
+**Not in scope:** `OPS-8`, which closed concurrent-pytest safety. This is a
+single-process race against the OS pid allocator, a different mechanism.
 
 ## 4b. Ammo-family and talent measurement - READY, cheap, needs the client
 

@@ -5,6 +5,65 @@ fidelity and archive older ones rather than deleting them.
 
 ---
 
+# Wrap 2026-09-03 - cycle 40 - `OPS-16` closed, and the guard's own docstring was the worst defect in it
+
+Suite **1634 passed** in 107.42s, run BARE at the wrap. Ruff clean. Merge gate
+OK against a **1594** baseline; the item began at **1560**. Ledger `LL-0125`.
+Client **closed** all session. Watcher armed as **pid 21452** (23628 died and
+was re-armed last cycle, `LL-0124`).
+
+**`OPS-16` is CLOSED.** `tests/test_process_capability.py` is a capability
+ALLOWLIST over the only two modules that can acquire a process handle,
+`ops/loop/guard.py` and `ops/loop/watch.py`. It builds a symbol table of what
+each bound NAME refers to and routes every access through the same checks -
+whether spelled as an attribute, a literal `getattr`, or a bare name from a
+from-import. **No production code changed.**
+
+It catches all three spellings the item named, **plus `os.system`, `os.killpg`
+and `os.abort`, which it did not.** An enumerated list of blind spots is itself
+a filed count.
+
+**THE DEFECT THAT MATTERED WAS THE DOCSTRING.** The first implementation
+shipped with 11 undeclared holes - `from os import system`, the `executable=`
+kwarg (which makes an argv allowlist worthless, because a caller can name a
+different program in a keyword), the whole `getattr` laundering family, and
+handle rebinding through an alias, `with`, `for` and tuple unpacking. Worse, it
+ASSERTED coverage it did not have, naming `os.system` as caught through a path
+that laundered it. `OPS-16`'s acceptance is that the blindness must be stated in
+the artifact, so a guard that MIS-states its coverage fails the item outright.
+Refuted, fixed, then re-verified by hand with three controls that must still
+pass.
+
+**THE MERGE GATE CAUGHT A RED NEITHER AGENT COULD SEE.** Both slices reported
+their own files green; the gate reported `2 failed, 1592 passed`. A NEW tracked
+file needs a lane owner in `ops/lanes.py` or nothing arbitrates a concurrent
+edit to it. Assigned to the SAFETY lane, then
+`python scripts/write_lane_contracts.py` because the roster is not the only
+copy of itself. **This is a trade-off of the orchestration, not an agent
+failure** - slices are told to run only their own test file so a concurrent
+half-written file does not read as their own failure, which necessarily blinds
+them to integration failures. The gate is the compensating control.
+
+**MY OWN BRIEF WAS WRONG TWICE AND MY OWN PROBE WAS WRONG TWICE.** I handed an
+agent an inventory as authoritative ground truth and it was incomplete; I then
+handed the fix agent a table of 21 holes, two of which were not holes, and it
+said so rather than accepting it. And running `scan_source` over bare
+one-line snippets - no imports, no library binding - gave four false "allowed"
+readings that I nearly reported as the agent's failure. Hand an agent the
+METHOD to re-derive an inventory, not the inventory; and an empty result is a
+claim about the INSTRUMENT, including the one the merger writes to check an
+agent.
+
+**FILED, NOT FIXED: `OPS-17`.** An intermittent red unrelated to this item -
+`_dead_pid()` returns a pid whose process handle it has just closed, and on
+Windows that is exactly when the pid becomes eligible for reuse. Observed with
+**pid 16264 reused**. The helper reopens the hole its own docstring warns
+about.
+
+**Items 7, 11 and 12 remain OPEN and UNCREDITED.**
+
+---
+
 # Wrap 2026-09-03 - cycle 39 - `4f` closed, and the refutation found two acceptance criteria that were never met
 
 Suite **1560 passed** in 108.13s, run BARE at the wrap. Ruff clean. Merge gate
