@@ -34,7 +34,69 @@ A fresh clone runs zero git hooks until that first command runs. The tracked
 
 ---
 
-## Where the last session left it - CYCLE 39
+## Where the last session left it - CYCLE 40
+
+`main` is at the cycle 40 wrap commit. Suite **1634 passed** in 107.42s, run
+BARE at the wrap; ruff clean. Merge gate OK against a **1594** baseline; the
+item began at 1560. Ledger `LL-0125`. Client **closed** all session.
+
+### ROADMAP `OPS-16` is CLOSED
+
+`tests/test_process_capability.py` is a capability ALLOWLIST over the only two
+modules that can acquire a process handle, `ops/loop/guard.py` and
+`ops/loop/watch.py`. It builds a symbol table of what each bound NAME refers to
+and routes every access through the same checks - whether spelled as an
+attribute, a literal `getattr`, or a bare name from a from-import.
+**No production code changed.** It replaces nothing; the old name-denylist in
+`tests/test_loop_watch.py` stays, and the two are read together.
+
+**THE WORST DEFECT IN IT WAS ITS OWN DOCSTRING.** The first implementation
+shipped with 11 undeclared holes - `from os import system`, the `executable=`
+kwarg (which makes an argv allowlist worthless, because a caller can name a
+different program in a keyword), the whole `getattr` laundering family, and
+handle rebinding through an alias, `with`, `for` and tuple unpacking - and it
+ASSERTED coverage it did not have, naming `os.system` as caught through a path
+that laundered it. `OPS-16`'s acceptance is that the blindness must be stated in
+the ARTIFACT, so a guard that MIS-states its coverage fails the item outright
+rather than partially. Refuted, fixed, re-verified by hand with three controls
+that must still pass.
+
+**`OPS-16`'s own list of three spellings was INCOMPLETE.** Building the
+allowlist surfaced `os.system`, `os.killpg` and `os.abort` as well. **An
+enumerated list of blind spots is itself a filed count.**
+
+## THE FOUR THINGS CYCLE 40 PAID FOR
+
+1. **A guard that MIS-states its coverage is worse than one with a hole.** A
+   hole a module honestly declares is a known limit; a docstring claiming a
+   path is caught when it launders is an active lie a later session will rely
+   on. Every "this is caught" sentence needs a test behind it.
+
+2. **HAND AN AGENT THE METHOD TO RE-DERIVE AN INVENTORY, NOT THE INVENTORY.**
+   I gave a slice my own inventory of two modules as authoritative ground
+   truth and it was incomplete - it missed two `getattr` calls - so I asked for
+   something impossible (ban `getattr` outright AND have both modules pass).
+   A filed inventory is a filed count. I then handed the fix agent a table of
+   21 holes, two of which were not holes, and it said so instead of accepting
+   it.
+
+3. **AN EMPTY RESULT IS A CLAIM ABOUT THE INSTRUMENT - INCLUDING THE ONE THE
+   MERGER WRITES TO CHECK AN AGENT.** Running the new `scan_source` over bare
+   one-line snippets with no imports and no library binding gave FOUR false
+   "allowed" readings, and I nearly reported an agent's claims as false. With
+   realistic context every one was refused. Same shape as an earlier probe that
+   evaluated a real `Heartbeat` against a fabricated clock a day ahead.
+
+4. **THE MERGE GATE IS NOT OPTIONAL COVER FOR THE "RUN ONLY YOUR OWN TESTS"
+   INSTRUCTION.** Both slices reported green; the gate reported `2 failed`. A
+   NEW tracked file needs a lane owner in `ops/lanes.py` or nothing arbitrates
+   a concurrent edit to it - then `python scripts/write_lane_contracts.py`,
+   because the roster is not the only copy of itself. Telling slices to run
+   only their own file avoids reading a neighbour's half-written file as your
+   own failure, and necessarily blinds them to integration failures. Run the
+   gate.
+
+## Where the session before that left it - CYCLE 39
 
 `main` is at the cycle 39 wrap commit. Suite **1560 passed** in 108.13s, run
 BARE and read at the wrap; ruff clean. Merge gate OK against a **1547**
@@ -244,32 +306,29 @@ at PANTS and open Affix Details while worn - grep the log for
 Smiting or Curse. The log carries no player-facing affix, skill or item name -
 33 names tested with two positive controls - so only a hover will do.
 
-**IF THE CLIENT IS CLOSED**, the item is **`OPS-16`**, fully doable from disk:
+**IF THE CLIENT IS CLOSED**, the item is **`OPS-17`**, fully doable from disk:
 
-> The termination-path guard in `tests/test_loop_watch.py` collects call NAMES
-> from the AST and forbids a set of them. It is blind to `taskkill` passed as a
-> STRING ARGUMENT (`Popen(["taskkill", ...])` - and `Popen` cannot simply be
-> banned, the module's own detached spawn needs it and an anchor assertion
-> requires it), to `getattr(kernel32, "Open" + "Process")` and any dynamically
-> assembled attribute name, and to `ntdll.NtSuspendProcess` and the other
-> undocumented NT entry points.
+> `_dead_pid()` in `tests/test_loop_watch.py` returns a pid whose process
+> handle it has just closed. On Windows that is exactly when the pid becomes
+> eligible for reuse, so the "dead" pid can be alive again by the time it is
+> probed. **Observed, not theorised: pid 16264 reused**, reddening
+> `test_process_creation_time_is_none_rather_than_a_guess_when_it_cannot_tell`
+> during an unrelated verification run.
 
-**All three PREDATE cycle 38.** The refutation replayed both the old and the
-new guard logic over HEAD's module to separate what the cycle-38 narrowing LOST
-from what was never caught at all - exactly one spelling was lost, and that one
-was fixed in the same cycle. These three are the residue.
+The helper exists specifically to avoid GUESSING a pid, and its docstring
+reasons correctly about reuse - then its `with subprocess.Popen(...)` block
+closes the handle on exit and reopens the very hole it was written to close.
+Reaping alone does not free a pid while a handle is still open; closing the
+last handle does.
 
-**The honest fix is a different KIND of check, not one more string in a
-denylist** - an enumerated list that reads as exhaustive and is not is precisely
-how the `.gl` bug in `OPS-13` happened. Full acceptance is in `ROADMAP.md`, and
-it explicitly permits the alternative: state the blindness in the test's own
-docstring so the guard stops implying coverage it does not have.
+Full acceptance is in `ROADMAP.md`, including the awkward part stated honestly:
+**the failure is a race, so pin the MECHANISM rather than the symptom.** A fix
+that retries or sleeps is not one - it lowers the odds without changing the
+reason. If no assertion can pin it, say so in the ledger rather than claiming a
+proof the test does not give.
 
-**Not in scope for it:** the anti-cheat boundary. The refutation inventoried
-every call in the shipped `ops/loop/watch.py` - kernel32 `OpenProcess`,
-`GetProcessTimes`, `CloseHandle`, plus one `Popen` with a fixed argv - and found
-no terminate, suspend or memory-write path. This is a guard-STRENGTH item, not a
-live defect.
+**Not in scope:** `OPS-8`, which closed concurrent-pytest safety. This is a
+single-process race against the OS pid allocator, a different mechanism.
 
 **Also available with the client closed:**
 
@@ -293,7 +352,8 @@ Item `7` route 1 EXHAUSTED (`LL-0106`). Item `14` CLOSED (`LL-0107`). `4d`
 CLOSED (`LL-0109`). Item `12`'s backward half CLOSED as impossible (`LL-0110`).
 `7c`'s orange pair DONE (`LL-0112`), its two defence-in-depth gaps CLOSED
 (`LL-0115`/`0116`), and its registration search DONE as consensus (`LL-0118`).
-`7d` CLOSED (`LL-0119`). **`4e` CLOSED (`LL-0122`). `4f` CLOSED (`LL-0123`).**
+`7d` CLOSED (`LL-0119`). **`4e` CLOSED (`LL-0122`). `4f` CLOSED (`LL-0123`).
+`OPS-16` CLOSED (`LL-0125`).**
 **Items 7, 11 and 12 remain OPEN and UNCREDITED - do not credit any of them.**
 
 ---

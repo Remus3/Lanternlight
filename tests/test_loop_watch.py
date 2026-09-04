@@ -479,6 +479,33 @@ def test_watch_exposes_no_termination_path() -> None:
     Structural, over the parsed module rather than its text - the docstring
     names what it refuses to do, and a raw text scan would flag its own
     documentation.
+
+    THIS IS A DENYLIST OF CALL NAMES, and that shape has a hard ceiling: it
+    can only refuse a spelling someone thought to add to ``forbidden`` below.
+    ``OPS-16`` catalogued three real spellings that predate this test and
+    still walk straight through it, none of them hypothetical:
+
+    - **A string, not a name.** ``subprocess.run(["taskkill", "/F", "/PID",
+      pid])``, and the same through ``Popen``. ``taskkill`` is banned as a
+      call NAME, so the identical word as a STRING inside an argument list
+      sails past - and ``Popen`` cannot simply join ``forbidden``, because
+      the module's own detached spawn needs it and the anchor below requires
+      it to be present.
+    - **An assembled name.** ``getattr(kernel32, "Open" + "Process")``, and
+      any other dynamically built attribute access, defeats a name-based AST
+      check BY CONSTRUCTION - there is no literal name in the source for
+      ``ast.walk`` to collect.
+    - **An unlisted entry point.** ``ntdll.NtSuspendProcess`` and the other
+      undocumented NT calls were never added to ``forbidden`` in the first
+      place; a denylist only stops what someone remembered to name.
+
+    All three predate the cycle-38 change; the refutation that opened
+    ``OPS-16`` replayed both the old and the new guard logic over HEAD's
+    module to confirm it. ``tests/test_process_capability.py`` is what closes
+    them - a capability ALLOWLIST over what ``ops/loop/watch.py`` and
+    ``ops/loop/guard.py`` may import and call, rather than a list of what
+    they may not. Read the two tests together; this one alone is not the
+    whole guard.
     """
     exported = set(watch_mod.__all__)
     assert not (exported & {"kill", "terminate", "stop", "stop_watcher", "taskkill", "disarm"})
@@ -599,6 +626,21 @@ def test_liveness_is_delegated_to_the_guard_rather_than_reimplemented() -> None:
     The guard already solved that with ``OpenProcess`` plus
     ``GetExitCodeProcess``. Re-deriving a probe here is how the trap gets
     walked into twice.
+
+    Also structural, and it shares the denylist shape above: the scan below
+    forbids exactly the call NAME ``kill``, so ``getattr(os, "kill")(pid, 0)``
+    or a rebound alias (``f = os.kill; f(pid, 0)``) reaches this module as
+    unseen as the three ``OPS-16`` spellings reach the wider ban. The real
+    work is the assertion on the last line - it proves
+    ``watch_mod.guard.pid_is_alive`` really IS the guard's own function, not
+    a look-alike - but identity is not a call-graph proof: nothing here shows
+    this module actually CALLS it anywhere, only that the name resolves
+    correctly if it is used. A private probe rebuilt from the same
+    ``OpenProcess``/``GetExitCodeProcess`` pair the guard already uses, kept
+    local and never named ``kill``, satisfies every assertion below - and
+    ``tests/test_process_capability.py`` does not close this one either,
+    since it permits this module the same ``OpenProcess`` right the guard
+    itself holds.
     """
     tree = ast.parse(_module_source())
     for node in ast.walk(tree):
