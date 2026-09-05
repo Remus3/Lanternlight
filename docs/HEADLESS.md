@@ -71,6 +71,16 @@ One cycle, start to finish:
    previous one is done. Use `complete_current=False` to mark an item abandoned
    while moving away from it.
 
+   **A cycle that closes a SECOND item calls `state.credit("THE-ID")` at the
+   moment that item closes, not at the wrap** (`OPS-25`). `advance_cycle`
+   INFERS one completion from one transition and structurally cannot record
+   two; before `credit` existed, cycle 43 and cycle 44 each closed two items,
+   recorded one, and were repaired by hand. `credit` writes through the same
+   atomic path, never moves the counter, and is safe to call the instant the
+   work lands - so a session that dies before its wrap still leaves an honest
+   record. It does not weaken `OPS-7`: `advance_cycle` still infers, `credit`
+   asserts, and a carried-forward item is credited by neither.
+
 Then the next cycle starts from step 1, reading disk. It does not inherit
 anything from the cycle before it except what that cycle wrote down.
 

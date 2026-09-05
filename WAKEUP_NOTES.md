@@ -5,6 +5,56 @@ fidelity and archive older ones rather than deleting them.
 
 ---
 
+# Wrap 2026-09-05 - cycle 45 - `OPS-20` and `OPS-25` closed, and a restore anchor caught the merger
+
+Suite **1757 passed** in 109.39s, run BARE at the wrap. Ruff clean. Merge gate
+OK at 1757 collected against a **1727** baseline measured BEFORE dispatch.
+Ledger `LL-0130`. Client **closed**. Watcher `ARMED` / `VERIFIED`, pid 21452.
+
+## THE FOUR THINGS CYCLE 45 PAID FOR
+
+1. **ASSERT THE ANCHOR ON THE WAY BACK, NOT ONLY ON THE WAY IN.** The merger
+   un-mutating `credit()` hit a restore anchor that was no longer unique - the
+   mutation had made it ambiguous with a line inside `advance_cycle`. The
+   `count == 1` assertion caught it. Without that, a broken `state.py` would
+   have been committed under a green suite, because the tests that would have
+   caught it were the ones the mutation had already reddened.
+
+2. **A DEFECT FILED AFTER IT FIRED TWICE.** `OPS-25` was written only once
+   cycles 43 AND 44 had each closed two items, recorded one, and been repaired
+   by hand. The fix is `state.credit(*items)`, callable the INSTANT an item
+   closes - because an argument on the wrap would need the merger to carry the
+   fact from closure to wrap, and **that is exactly the gap both losses fell
+   through.** A fact held only in a context window is a fact already lost.
+
+3. **A LATENT RECORD-DESTROYER, found in passing and guarded.** `save` does not
+   validate `completed` but `LoopState.from_dict` does, so one non-string id
+   reaching the file makes the next `load` reject it WHOLESALE - measured:
+   `completed` returns `[]` and `cycle` returns `0`. One fat-fingered id would
+   destroy the entire completion record. Ids are type-checked before anything
+   is read or written. At least it is not silent: `load` sets `recovered=True`
+   with a note.
+
+4. **A SLICE WIPED ITS OWN WORK AND SAID SO.** It ran `git checkout --` on the
+   file it was implementing, destroying its uncommitted work, re-applied it,
+   and then asked the merger to read the diff independently rather than take
+   its word. That is the behaviour this project wants. The diff was read: 95
+   insertions, 0 deletions, `advance_cycle` untouched.
+
+## `OPS-20`: the access mask is now tested, against the right that matters
+
+The mutation is `PROCESS_TERMINATE` (`0x0001`) planted in `guard.py`'s mask -
+the one right this repo's hard boundary says must never appear. Before the
+change that mutation gave `0 failed`. The merger re-planted it, watched
+`1 failed, 137 passed`, restored `guard.py` and confirmed it byte-identical by
+sha256. The check is parametrized over `SCOPE` **imported** from the sibling
+file, not re-listed - a second copy of a roster is the defect `ops/lanes.py`
+already paid for. Old and new were replayed over one corpus: **new is RED
+everywhere old was RED, plus one the old never caught** (a function-local
+shadow of the constant).
+
+---
+
 # Wrap 2026-09-04 - cycle 44 - `OPS-21` and `OPS-23` closed, and an item's own fix would have started a second poller
 
 Suite **1727 passed** in 108.09s, run BARE at the wrap. Ruff clean. Merge gate

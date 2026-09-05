@@ -84,6 +84,28 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0130 - 2026-09-04 - OPS-20 and OPS-25 CLOSED - the untested access mask now catches PROCESS_TERMINATE, and a cycle can credit both items it closed
+
+**Evidence:**
+- `tests/test_loop_watch.py`: `test_no_in_scope_module_asks_for_a_wider_process_right` is parametrized over `SCOPE` IMPORTED from `tests/test_process_capability.py`, not re-listed - a second copy of a roster is the defect `ops/lanes.py` and the lane contracts already paid for.
+- RED watched against the right that matters: `_PROCESS_QUERY_LIMITED_INFORMATION | 0x0001` - `PROCESS_TERMINATE` - planted in `ops/loop/guard.py`. Before the change the same mutation gave `0 failed`. The merger re-planted it independently and watched `1 failed, 137 passed`, then restored `guard.py` and confirmed it BYTE-IDENTICAL by sha256 with `git status` clean.
+- Old and new replayed over one corpus: the new check is RED everywhere the old was RED, PLUS one case the old never caught - a function-local shadow of the constant. That replay is what cycle 38 taught, after a replacement collector silently caught less.
+- `ops/loop/state.py`: a new `credit(*items)` records completions without moving the cycle counter. Watched red twice - `AttributeError` at TDD time, then a behavioural red on the append condition. Fourteen mutations, zero survivors. The merger independently made `credit` a no-op and watched `9 failed, 35 passed`.
+- `OPS-7`'s guarantee RE-PROVED rather than assumed: the merger confirmed on a temp state file that carrying the same item forward still credits nothing, including when a DIFFERENT item is credited in the same cycle. The live `ops/runtime/loop_state.json` was verified untouched throughout.
+- Full suite `1757 passed in 106.62s`, run BARE. Merge gate OK against a 1727 baseline measured with `--collect-only` BEFORE dispatch. Ruff clean.
+
+**`OPS-25` WAS FILED AFTER THE DEFECT HAD ALREADY FIRED TWICE.** Cycle 43 closed `OPS-19` and `OPS-22`; cycle 44 closed `OPS-21` and `OPS-23`. Each recorded one and was repaired by hand. `completed` is what a COLD session reads to learn what is done, so under-crediting makes it REDO closed work - the rediscovery failure this project's continuity design exists to prevent.
+
+**THE DESIGN ARGUMENT IS THE VALUABLE PART.** An `also_completed=` argument on `advance_cycle` would only work if the merger carried the second closure from the moment it became true to the moment it wraps - and THAT IS PRECISELY THE GAP BOTH REAL LOSSES FELL THROUGH. A fact held only in a context window is a fact already lost. `credit` is callable the instant the item closes and cannot move the counter, so the invariant is structural rather than remembered.
+
+**A LATENT HAZARD WAS FOUND AND GUARDED IN PASSING.** `save` does not validate `completed` but `LoopState.from_dict` does, so a single non-string id reaching the file makes the next `load` reject it WHOLESALE. Measured by the merger: `completed` returns `[]` and `cycle` returns `0`. One fat-fingered id would destroy the entire completion record rather than add one bad row. Ids are now type-checked before anything is read or written, and a rejected call leaves the file byte-identical - also measured. The loss is at least not silent: `load` sets `recovered=True` with a note naming the reason.
+
+**A SLICE WIPED ITS OWN UNCOMMITTED WORK AND SAID SO.** It ran `git checkout -- ops/loop/state.py` to undo a mutation, destroying its own implementation, re-applied it, and then asked the merger to read the diff independently rather than take its word. That is the right instinct and the diff was read: 95 insertions, 0 deletions, `advance_cycle` untouched.
+
+**THE MERGER'S OWN RESTORE ANCHOR WAS NOT UNIQUE.** Un-mutating `credit` failed its `count == 1` assertion, because the mutation had made the anchor line ambiguous with one inside `advance_cycle`. The assertion caught it; without it a broken `state.py` would have been committed under a green suite. **Assert the anchor on the way BACK, not only on the way in.**
+
+**ONE HONEST LIMIT ON `OPS-20`, recorded rather than smoothed over:** a module with NO `OpenProcess` at all PASSES the new check, which is correct - but the pre-existing `test_the_scanner_actually_saw_the_module` in the sibling file WOULD redden on such a module. That alarm lives there, not in the new check, and the docstring now says so.
+
 ### LL-0129 - 2026-09-04 - OPS-21 and OPS-23 CLOSED - a crash path in the loop's front door, and an item whose own fix would have started a second poller
 
 **Evidence:**

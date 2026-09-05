@@ -34,6 +34,35 @@ A fresh clone runs zero git hooks until that first command runs. The tracked
 
 ---
 
+## Where the last session left it - CYCLE 45
+
+`main` is at the cycle 45 wrap commit. Suite **1757 passed** in 109.39s, run
+BARE; ruff clean. Merge gate OK at 1757 against a **1727** baseline measured
+BEFORE dispatch. Ledger `LL-0130`. Client **closed**. **`OPS-20` and `OPS-25`
+CLOSED.**
+
+## THE FOUR THINGS CYCLE 45 PAID FOR
+
+1. **ASSERT THE ANCHOR ON THE WAY BACK, NOT ONLY ON THE WAY IN.** A restore
+   anchor stopped being unique because the mutation had made it ambiguous. The
+   `count == 1` assertion caught it; without it a broken `state.py` would have
+   been committed under a green suite.
+
+2. **`OPS-25` WAS FILED ONLY AFTER FIRING TWICE.** Cycles 43 and 44 each closed
+   two items and recorded one. `state.credit(*items)` is now callable the
+   INSTANT an item closes - an argument on the wrap would need the fact carried
+   from closure to wrap, which is the gap both losses fell through.
+   **Use it: a second closure in one cycle no longer needs a hand repair.**
+
+3. **ONE NON-STRING ID WOULD DESTROY THE WHOLE COMPLETION RECORD.** `load`
+   rejects an invalid `completed` wholesale and returns a fresh default -
+   measured, `completed=[]` and `cycle=0`. Now type-checked before any read or
+   write. Not silent: `load` sets `recovered=True`.
+
+4. **`PROCESS_TERMINATE` IS NOW CAUGHT.** `guard.py`'s access mask was tested
+   by nothing while a docstring claimed otherwise. Planting `| 0x0001` used to
+   change zero test outcomes; it now reddens.
+
 ## Where the last session left it - CYCLE 44
 
 `main` is at the cycle 44 wrap commit. Suite **1727 passed** in 108.09s, run
@@ -294,22 +323,20 @@ at PANTS and open Affix Details while worn - grep the log for
 Smiting or Curse. The log carries no player-facing affix, skill or item name -
 33 names tested with two positive controls - so only a hover will do.
 
-**IF THE CLIENT IS CLOSED, pick from `OPS-20`, `OPS-24` or `OPS-25`.** None is
-huge; all are doable from disk.
+**IF THE CLIENT IS CLOSED**, the remaining ops items are `OPS-24` and
+`OPS-14`. Both are small or blocked; **if neither appeals, the honest answer is
+that the ops backlog is nearly empty and the highest-value work needs the
+client.**
 
-- **`OPS-20`** - nothing tests `ops/loop/guard.py`'s ACCESS MASK, while
-  `tests/test_process_capability.py`'s docstring says the check lives in
-  `tests/test_loop_watch.py` - which reads `watch.py` only. Proved by
-  set-difference: planting `| 0x0001` in guard's mask changes ZERO test
-  outcomes. This is the `OPS-16` sin - a guard MIS-stating its coverage - and
-  it nearly mattered in cycle 42, when a rejected design widened that mask.
-- **`OPS-25`** - `advance_cycle` credits only the single in-flight item, so a
-  cycle closing two records one. Mirror of `OPS-7`. Preserve `OPS-7`'s
-  guarantee and re-prove it.
 - **`OPS-24`** - the pre-tool gate's accepted false block fired on the commit
-  that shipped it. **Declining this item is a perfectly good outcome** - the
-  workaround is one rephrase, against a rule now demonstrably catching four
-  invocation spellings it used to miss.
+  that shipped it. **DECLINING THIS IS A PERFECTLY GOOD OUTCOME** and the item
+  says so: the workaround is one rephrase, weighed against a rule now
+  demonstrably catching four invocation spellings it used to miss. If you take
+  it, the test that decides safety is `<invocation> && git commit -m "..."`,
+  which must STAY blocked.
+- **`OPS-14`** - this machine's disk hit 100 percent mid-session and recovered
+  with nothing deleted. Still open, still unexplained.
+
 
 **Also available with the client closed:**
 
@@ -337,7 +364,8 @@ CLOSED (`LL-0109`). Item `12`'s backward half CLOSED as impossible (`LL-0110`).
 `OPS-16` CLOSED (`LL-0125`). `OPS-17` CLOSED (`LL-0126`).
 `OPS-18` CLOSED (`LL-0127`).
 `OPS-19` and `OPS-22` CLOSED (`LL-0128`).
-**`OPS-21` and `OPS-23` CLOSED (`LL-0129`).**
+`OPS-21` and `OPS-23` CLOSED (`LL-0129`).
+**`OPS-20` and `OPS-25` CLOSED (`LL-0130`).**
 **Items 7, 11 and 12 remain OPEN and UNCREDITED - do not credit any of them.**
 
 ---
