@@ -137,6 +137,48 @@ def _pid_owns_a_process_object(pid: int) -> bool:
     return True
 
 
+#: ``OpenProcess`` failure codes, spelled here rather than imported from
+#: ``guard`` for the reason above: an instrument that shares a constant with
+#: the thing it measures inherits that thing's mistakes. 5 is
+#: ``ERROR_ACCESS_DENIED`` - the process EXISTS and this token may not ask
+#: about it. 87 is ``ERROR_INVALID_PARAMETER`` - the pid names nothing.
+_ERROR_ACCESS_DENIED = 5
+_ERROR_INVALID_PARAMETER = 87
+
+#: A failure code that is NEITHER of the two the probe recognises, used to pin
+#: which way an uncharacterised one falls. ``ERROR_NOT_ENOUGH_MEMORY``, chosen
+#: because a resource failure is a real way for ``OpenProcess`` to fail while
+#: saying nothing whatever about the pid.
+_ERROR_NOT_ENOUGH_MEMORY = 8
+
+
+def _open_process_last_error(pid: int) -> int:
+    """Return the Win32 error a REAL ``OpenProcess`` sets for ``pid``, or 0.
+
+    Ground truth for the constants the injected tests below assert on. An
+    injected 87 pins the branch and says nothing about whether Windows
+    actually answers 87 for a pid that never existed, and a constant nobody
+    ever measured is exactly the kind of thing that reads correct and is not.
+
+    ``use_last_error=True`` is load-bearing: ctypes swaps the thread's error
+    around every such call and stashes the real one privately, so
+    ``ctypes.get_last_error()`` is the accessor and the system one is not.
+    """
+    import ctypes
+    from ctypes import wintypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.OpenProcess.restype = wintypes.HANDLE
+    kernel32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+    kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+
+    handle = kernel32.OpenProcess(_PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+    if not handle:
+        return ctypes.get_last_error()
+    kernel32.CloseHandle(handle)
+    return 0
+
+
 # ---------------------------------------------------------------------------
 # the _dead_pid helper itself
 # ---------------------------------------------------------------------------
@@ -362,9 +404,36 @@ class _FakeGetProcessTimes(_FakeCall):
         return self.result
 
 
+class _FakeOpenProcess(_FakeCall):
+    """``OpenProcess``, with a settable handle AND the error it left behind.
+
+    The two live on one object on purpose. ``GetLastError`` is only meaningful
+    immediately after the call that set it, so a fake that let a test state an
+    error independently of the call could go green while the probe never
+    consulted the error at all. Here the error is READ off the same object the
+    call went through, and :attr:`error_reads` records that it was read.
+    """
+
+    def __init__(self, result, last_error=0):
+        super().__init__(result)
+        self.last_error = last_error
+        self.error_reads = 0
+
+    def read_last_error(self):
+        """Stand in for ``ctypes.get_last_error()``.
+
+        Counts rather than raises. A spy that raised would be vacuous the
+        moment any caller wrapped this in ``except Exception``, which is a
+        trap this repo has already paid for; a counter the test asserts on
+        cannot be swallowed.
+        """
+        self.error_reads += 1
+        return self.last_error
+
+
 class _FakeKernel32:
-    def __init__(self, *, open_result, times):
-        self.OpenProcess = _FakeCall(open_result)
+    def __init__(self, *, open_result, times, last_error=0):
+        self.OpenProcess = _FakeOpenProcess(open_result, last_error)
         self.GetProcessTimes = times
         self.CloseHandle = _FakeCall(1)
 
@@ -433,6 +502,153 @@ def test_a_zero_exit_timestamp_reads_alive(monkeypatch) -> None:
     monkeypatch.setattr(ctypes, "WinDLL", lambda *a, **k: fake)
 
     assert guard_mod.pid_is_alive(1234) is True
+
+
+# ---------------------------------------------------------------------------
+# OPS-19: a failed OpenProcess is TWO different facts
+# ---------------------------------------------------------------------------
+
+
+def _install(monkeypatch, *, last_error, open_result=0):
+    """Install a fake kernel32 whose ``OpenProcess`` fails with ``last_error``.
+
+    Patches ``ctypes.get_last_error`` alongside ``ctypes.WinDLL``, because
+    with the library faked no real call happens and the genuine accessor would
+    hand back whatever some earlier, unrelated call left in the slot - a stale
+    reading that could make any of these tests pass for no reason.
+    """
+    import ctypes
+
+    fake = _FakeKernel32(
+        open_result=open_result,
+        times=_FakeGetProcessTimes(1, exit_raw=0),
+        last_error=last_error,
+    )
+    monkeypatch.setattr(ctypes, "WinDLL", lambda *a, **k: fake)
+    monkeypatch.setattr(ctypes, "get_last_error", fake.OpenProcess.read_last_error)
+    return fake
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="the ctypes probe is Windows-only")
+def test_access_denied_on_open_reads_ALIVE(monkeypatch) -> None:
+    """``ERROR_ACCESS_DENIED`` means it EXISTS, so the answer is True.
+
+    This is ``OPS-19``. The probe used to read any failed ``OpenProcess`` as
+    "not a holder worth blocking on", folding "no such process" together with
+    "running, and this token may not ask" - a fail-OPEN inside a function
+    whose contract promises fail-closed. Measured with ``SeDebugPrivilege``
+    dropped, 13 running processes read DEAD through it.
+
+    Injected, not provoked, and said plainly: a genuine denial needs a
+    protected or other-user subject AND the privilege dropped from the probing
+    token, and this session's token holds it, which bypasses the DACL check in
+    ``OpenProcess`` and measures zero denials. The mirror below is what stops
+    the injection from being satisfied by a function hardwired to True, and
+    ``test_a_pid_that_never_existed_reads_dead_through_the_real_api`` is what
+    ties the injected constants back to what Windows actually answers.
+    """
+    fake = _install(monkeypatch, last_error=_ERROR_ACCESS_DENIED)
+
+    assert guard_mod.pid_is_alive(1234) is True, (
+        "a process this token may not open is UNDECIDED, and undecided fails CLOSED"
+    )
+    assert fake.OpenProcess.calls == 1
+    assert fake.OpenProcess.error_reads == 1, "the failure code was never consulted"
+    assert fake.GetProcessTimes.calls == 0, "there was no handle to ask through"
+    assert fake.CloseHandle.calls == 0, "a null handle must not be closed"
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="the ctypes probe is Windows-only")
+def test_no_such_process_on_open_reads_DEAD(monkeypatch) -> None:
+    """``ERROR_INVALID_PARAMETER`` means the pid names nothing: False.
+
+    The mirror, and the half that must not regress. Without it the test above
+    would pass against a probe that answered True for every open failure,
+    which would wedge ``acquire`` on any stale lock forever - the exact
+    failure the reclaim path exists to prevent.
+    """
+    fake = _install(monkeypatch, last_error=_ERROR_INVALID_PARAMETER)
+
+    assert guard_mod.pid_is_alive(1234) is False
+    assert fake.OpenProcess.error_reads == 1, "the failure code was never consulted"
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="the ctypes probe is Windows-only")
+def test_an_uncharacterised_open_failure_reads_ALIVE(monkeypatch) -> None:
+    """A third code is not a third answer: anything unrecognised fails CLOSED.
+
+    There are far more than two possible values and only one of them is known
+    to mean "no such process". Treating an unfamiliar code as "gone" would
+    reclaim a live loop's lock on the strength of an error nobody has
+    characterised; treating it as undecided costs a refusal the operator can
+    clear by deleting the lock file, which :class:`LockBusy` already says.
+    """
+    fake = _install(monkeypatch, last_error=_ERROR_NOT_ENOUGH_MEMORY)
+
+    assert guard_mod.pid_is_alive(1234) is True
+    assert fake.OpenProcess.error_reads == 1, "the failure code was never consulted"
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="the ctypes probe is Windows-only")
+def test_a_pid_that_never_existed_reads_dead_through_the_real_api() -> None:
+    """No fake anywhere: 999999 must still read DEAD, and 87 is why.
+
+    ``_dead_pid``'s whole contract rests on a gone pid reading dead, and
+    ``tests/test_loop_watch.py`` uses 999999 as a stand-in pid too, so this is
+    the regression that the ``OPS-19`` fix must not cause. It also grounds the
+    injected constant: the first assertion is Windows itself saying 87 for a
+    pid that has never named a process. Windows pids are multiples of four, so
+    999999 is one that never has.
+    """
+    assert _open_process_last_error(999999) == _ERROR_INVALID_PARAMETER
+    assert guard_mod.pid_is_alive(999999) is False
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="the ctypes probe is Windows-only")
+def test_acquire_does_not_steal_a_lock_from_an_owner_it_cannot_open(
+    monkeypatch, lock_path: Path
+) -> None:
+    """The consumer, which is the only reason any of this matters.
+
+    Editing the probe proves the probe changed; it does not prove the caller's
+    behaviour changed. A loop under a different token - a scheduled task,
+    another user, an elevated session - holds a lock whose owner this token
+    cannot open. Before ``OPS-19`` that owner read dead and the lock was
+    unlinked and retaken SILENTLY, which is the two-loops-interleaving-commits
+    failure the module exists to prevent.
+    """
+    foreign = 4  # the System process: unopenable even from an elevated token.
+    lock_path.write_text(
+        json.dumps({"pid": foreign, "acquired": "2026-09-04T00:00:00+00:00", "label": "other"}),
+        encoding="utf-8",
+    )
+    _install(monkeypatch, last_error=_ERROR_ACCESS_DENIED)
+
+    with pytest.raises(LockBusy) as excinfo:
+        guard_mod.acquire(lock_path)
+
+    assert excinfo.value.pid == foreign
+    assert guard_mod.read_owner(lock_path) == foreign, "the foreign lock was overwritten"
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="the ctypes probe is Windows-only")
+def test_acquire_still_reclaims_a_lock_whose_owner_does_not_exist(
+    monkeypatch, lock_path: Path
+) -> None:
+    """The mirror at the consumer: a genuinely gone owner is still reclaimed.
+
+    Fail-closed must not become fail-shut. A probe that answered True for
+    every open failure would pass the test above and wedge every future run
+    against any stale lock, which is worse than the defect being fixed.
+    """
+    lock_path.write_text(
+        json.dumps({"pid": 999999, "acquired": "2026-09-04T00:00:00+00:00", "label": "gone"}),
+        encoding="utf-8",
+    )
+    _install(monkeypatch, last_error=_ERROR_INVALID_PARAMETER)
+
+    assert guard_mod.acquire(lock_path) == lock_path
+    assert guard_mod.read_owner(lock_path) == os.getpid()
 
 
 # ---------------------------------------------------------------------------

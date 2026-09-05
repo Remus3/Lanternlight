@@ -2606,7 +2606,7 @@ all. Re-proved by mutation: `_scope_source` forced to read `guard.py` for every
 path still reddens that test. **No allowlist entry was needed** - every call
 the new probe makes was already in `ALLOWED_WIN32_FUNCTIONS`.
 
-## OPS-19. `pid_is_alive` calls RUNNING processes DEAD on access-denied - OPEN
+## OPS-19. `pid_is_alive` calls RUNNING processes DEAD on access-denied - CLOSED 2026-09-04
 
 Opened 2026-09-04, cycle 42. Found independently by THREE passes during
 `OPS-18` - the implementing slice, the blast-radius sweep and the adjudicator -
@@ -2649,6 +2649,37 @@ prevent, and it would happen silently.
 **Not in scope:** `OPS-18`, which was the exit-code collision on the SUCCESS
 path. This is the failure path, a different mechanism, and fixing one does
 nothing for the other.
+
+**CLOSED 2026-09-04, cycle 43, ledger `LL-0128`.** `_windows_pid_is_alive` now
+consults `GetLastError` after a failed `OpenProcess`. **Only
+`ERROR_INVALID_PARAMETER` (87) returns False.** `ERROR_ACCESS_DENIED` (5) and
+every uncharacterised code return True, because there are far more than three
+possible values, only one is known to mean "gone", and inferring "gone" from an
+error nobody has read reclaims a live loop's lock.
+
+**THE DENIAL WAS PROVOKED FOR REAL, not only injected.** `SeDebugPrivilege` was
+dropped from a scratch process with `AdjustTokenPrivileges` and asserted gone
+(`before: True / after: False`), then 315 pids swept: 299 opened, **13
+ACCESS_DENIED**, 2 INVALID_PARAMETER, 0 other - and all 13 were still
+enumerated half a second later. HEAD's probe reads **False for 13 of 13**; the
+fixed one reads **True for 13 of 13**. Control pid 999999 gives a real error 87
+and False both ways. Injected tests exist alongside, because a denial cannot be
+provoked from inside pytest.
+
+Watched red at `4 failed, 36 passed`, including the CONSEQUENCE test
+`test_acquire_does_not_steal_a_lock_from_an_owner_it_cannot_open`, which is the
+hazard rather than the unit. Four mutations, each red, each restored. The
+merger independently re-mutated both failure branches: flipping the denied
+branch reddens 2, flipping the 87 branch reddens 3.
+
+**The three branches are written out separately and `SIM103` is suppressed with
+its reason.** Folded into one inequality they would share an expression and no
+mutation could separate the denied case from the uncharacterised one. `OPS-18`
+shipped a branch no test reached; this is the cheap defence against a repeat.
+
+**A NEW HAZARD COMES WITH THIS FIX and is filed as `OPS-23` rather than hidden.**
+See that item. The implementing slice found it, could not fix it from its own
+file list, and said so.
 
 ## OPS-20. Nothing tests `guard.py`'s access mask, and a docstring says otherwise - OPEN
 
@@ -2708,7 +2739,7 @@ route.
 **Not in scope:** changing what `acquire` does with a lock whose owner is
 genuinely dead. That path is correct and is the crash-recovery behaviour.
 
-## OPS-22. `precommit_gate` matches a forbidden cmdlet as a bare substring - OPEN
+## OPS-22. `precommit_gate` matches a forbidden cmdlet as a bare substring - CLOSED 2026-09-04
 
 Opened 2026-09-04, cycle 42, by the `OPS-18` blast-radius sweep - which **it
 fired on**, blocking a legitimate command because the analysis mentioned the
@@ -2735,6 +2766,146 @@ trap ("a grep PATTERN can trip a pre-tool hook").
 - **The guard must not become weaker overall.** If a form cannot be
   distinguished safely, it stays blocked and the docstring says so. A false
   block is an annoyance; a false pass is the thing this file exists to prevent.
+
+**CLOSED 2026-09-04, cycle 43, ledger `LL-0128`.** The substring test is
+replaced by `_forbidden_cmdlet_reason`, which blocks on the name in COMMAND
+POSITION (start of string or line, or first token after `;`, `|`, `&`, `(`,
+`{`, `=` or `\`), case-insensitively and including the `spps` alias; and
+separately on the name ANYWHERE in a command that also carries a
+PowerShell-invoking token. That second rule exists because without it, moving
+from "anywhere" to "command position" would have turned
+`powershell -Command "<cmdlet> -Id 1"` from blocked into ALLOWED.
+
+**IT WAS FILED AS AN ERGONOMIC BUG AND IT CLOSED FOUR FALSE PASSES IN A SAFETY
+GUARD.** The old test was a case-SENSITIVE substring match, so a lowercase
+invocation went straight through. Verified independently by the merger over 18
+invocation spellings, old rule against new:
+
+| outcome | count | which |
+|---|---|---|
+| **regressions (block -> pass)** | **0** | none |
+| **strengthened (pass -> BLOCK)** | **4** | lowercase, uppercase, mixed case, `spps` |
+| unchanged BLOCK | 14 | pipes, `&&`, `;`, `{`, `$(`, `=`, newline, module-qualified, `powershell -Command`, `pwsh -c`, `iex` |
+
+All five mention forms - a grep, an echo, a commit message, a filename, prose -
+moved from BLOCK to pass. **Driven END-TO-END through the live hook, not only
+unit-tested:** exit 2 on an invocation and on a lowercase invocation, exit 0 on
+a mention and on an unrelated command.
+
+**The gate's own source no longer holds the contiguous literal**, assembled from
+parts the way `BANNED_GLYPHS` uses `chr()`, so grepping this repo with the hook
+armed is no longer a landmine - which is the failure that produced the item.
+
+**STILL NOT CAUGHT, stated in the docstring rather than implied:** string-concat
+obfuscation, variable indirection, and base64 `-EncodedCommand`. The `kill`
+alias stays uncaught BY CHOICE - it is a first-class POSIX command in the shell
+these calls run in, so blocking it in command position would refuse correct
+commands all day. The old check missed it too, so nothing was lost. `taskkill`
+is unaffected: no word boundary before `kill`.
+
+## OPS-23. A recycled watcher pid can now read ARMED when no watcher exists - OPEN
+
+Opened 2026-09-04, cycle 43, by the slice that closed `OPS-19`. **It is a
+consequence of that fix, it was reported rather than hidden, and it is a narrow
+REGRESSION against the behaviour before it.**
+
+`OPS-19` made an access-denied `OpenProcess` read ALIVE, which is right for the
+loop lock. But the watcher consumers reason differently. Our own watcher runs
+under our own token, so if the RECORDED pid is access-denied, the pid was
+recycled onto a foreign, system-owned process - which means the watcher is
+GONE.
+
+- **Before `OPS-19`:** that pid read DEAD, `check_watcher` returned `DEAD`, and
+  `ensure_armed_at_wrap` re-armed. Correct outcome by accident.
+- **After `OPS-19`:** it reads ALIVE. `ensure_armed` refuses, claiming a watcher
+  is already running, which is false. `check_watcher` then falls through the
+  identity check - `process_creation_time` ALSO returns None for the same
+  unopenable pid, and the current code reads a cannot-tell identity as
+  "incumbent believed" - and lands on `NO_HEARTBEAT`, **which reports ARMED**.
+
+So a genuinely absent watcher reads armed and nothing re-arms it. That is the
+`LL-0124` silent-outage shape: nothing archiving the log, the saves or the
+market cache, with the check that exists to catch it saying fine.
+
+**How narrow:** it needs the watcher to die AND its pid to be recycled onto a
+process this token cannot open AND no usable heartbeat. Not summonable on
+demand. Filed rather than fixed because the repair is in `watch.py`'s identity
+state machine, which `4e` reasoned about carefully, and a wrong `IMPOSTOR`
+re-arms a second poller beside a live watcher - the one failure `ensure_armed`
+exists to refuse.
+
+**A HYPOTHESIS FOR THE FIX, to be tested rather than trusted:** "alive but
+creation time UNREADABLE" is strong evidence the pid is NOT our watcher,
+because our watcher runs under our own token and its creation time is always
+readable. If that holds, the case belongs in `IMPOSTOR` - which IS in
+`REARM_STATES` - rather than in "incumbent believed". **Verify the premise
+before building on it.** `OPS-18` and `OPS-17` were both filed with a false
+mechanism, and this one is written from reasoning, not measurement.
+
+**Acceptance:**
+
+- `check_watcher` distinguishes "identity VERIFIED" from "identity could not be
+  checked". Today both reach the same branch.
+- A test WATCHED GOING RED covering a recorded pid that is alive-but-unopenable,
+  asserting the verdict is one that re-arms.
+- The `4e` guarantee is preserved and re-proved, not assumed: a LIVE, genuinely
+  ours watcher must never read `IMPOSTOR`. Re-run the sampled healthy-watcher
+  check that `4f` used, or say why it does not apply.
+- Whatever is decided, `ensure_armed`'s refusal message must stop asserting "a
+  watcher is already running" in a case where that is unknown.
+
+**Not in scope:** re-opening `OPS-19`. Access-denied reading ALIVE is correct
+for the lock guard, which is where the fail-closed contract is written. This
+item is about the watcher consumers drawing a different inference from the same
+reading.
+
+## OPS-24. `OPS-22`'s accepted false block fired on its own commit - OPEN
+
+Opened 2026-09-04, cycle 43, **within minutes of `OPS-22` closing**, by the
+merger trying to commit it.
+
+`OPS-22` shipped two rules. The second blocks the cmdlet name ANYWHERE in a
+command that also carries a PowerShell-invoking token, and its docstring names
+the cost honestly: "a merely-quoted mention that happens to sit beside the word
+`powershell` is blocked. That is a FALSE BLOCK and it is the intended trade."
+
+**The trade was accepted in the abstract and then billed immediately.** The
+commit message closing `OPS-22` described the fix - it named the shipped alias
+and used the word PowerShell in a sentence about handing text to a shell - and
+the gate refused the commit. The message is DATA. Nothing in it was ever going
+to be executed.
+
+**This is not a reason to weaken rule 2.** Without it,
+`powershell -Command "<cmdlet> -Id 1"` moves from blocked to allowed, and a
+false pass is the one outcome that file exists to prevent. The item is about
+the SHAPE of the check, not its strength.
+
+**The observation that suggests a fix:** `main()` runs the cmdlet check BEFORE
+the `git commit` early return, so a commit message is scanned exactly like a
+command line. For `git commit`, the message body is an argument being STORED,
+not a command being run. That is a distinction the gate already draws elsewhere
+- it reads the staged path list separately from the command text.
+
+**Acceptance:**
+
+- A `git commit` whose MESSAGE merely names the cmdlet is allowed, while a
+  command that actually invokes it is still blocked - including a compound like
+  `<invocation> && git commit -m "..."`, which must stay blocked. **That
+  compound is the test that decides whether any proposed fix is safe**; write
+  it first.
+- Tests both ways, each WATCHED GOING RED, and a mutation showing the new
+  branch is load-bearing.
+- **The guard must not become weaker.** If commit messages cannot be separated
+  from command text safely, the honest outcome is to CLOSE this item as
+  declined and record that the rephrase cost is accepted. Say so rather than
+  shipping a weakening.
+- Whatever is decided, `tools/precommit_gate.py`'s docstring stops describing
+  the false block as purely hypothetical and records that it fired in practice.
+
+**Worth noting for whoever takes it:** the workaround costs one rephrase, which
+is cheap. Weigh that honestly against the risk of touching a guard that is now
+demonstrably catching four invocation spellings it used to miss. Declining this
+item is a perfectly good outcome.
 
 ## 4b. Ammo-family and talent measurement - READY, cheap, needs the client
 
