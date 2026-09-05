@@ -3169,7 +3169,7 @@ re-proof. The merger independently made `credit` a no-op and watched
 **This item was filed after the defect had already fired TWICE** - cycles 43 and
 44 each closed two items, recorded one, and were repaired by hand.
 
-## OPS-26. A watcher that cannot WRITE reads ARMED forever and leaves no trace - OPEN
+## OPS-26. A watcher that cannot WRITE reads ARMED forever and leaves no trace - CLOSED 2026-09-05
 
 Found 2026-09-05 while answering `OPS-14`'s open join. Nothing below is a
 hypothesis about the game; every step was read out of the code in this repo and
@@ -3251,6 +3251,198 @@ arming snapshot sets on disk are byte-identical to each other by content hash.
    test it AT the bound.
 4. The guard is watched going red: break the copy, confirm the reported state
    changes, restore, and confirm the module byte-identical by sha256.
+
+### PROVOKED 2026-09-05 - criterion 1 met. CONFIRMED for the copy, REFUTED for the mkdir
+
+The item said its four steps were each read from source but the JOIN between
+them was reasoning, and that the first thing to do was provoke it rather than
+trust the write-up. Provoked. **The join holds for the failure this item is
+actually about, and does NOT hold for the one the headline implies.**
+
+Four scenarios, each a real `run_rolling` against a real temp `Saved` tree, with
+`check_watcher` given explicit path overrides so nothing read or wrote the live
+record. Nothing touched `C:/ll-captures`, `ops/runtime/` or the game.
+
+| scenario | snapshots archived | passes | surfaces reporting | `check_watcher` |
+|---|---|---|---|---|
+| **A** control, destination writable | 3 | 12 | 4 | `ARMED` / `VERIFIED` |
+| **B** the COPY refused, real `PermissionError` from the filesystem, no mocks | **0** | 12 | 4 | **`ARMED` / `VERIFIED`** |
+| **C** `OSError(28)`, the literal `ENOSPC` this machine hit | **0** | 12 | 4 | **`ARMED` / `VERIFIED`** |
+| **D** the MKDIR refused, threaded, one surface only | n/a | - | 3 | **`SURFACE_STALE`, and it NAMES `savegames`** |
+
+**B and C confirm the item.** A watcher whose every copy is refused completes
+its passes, advances its heartbeat, keeps all four surfaces inside their
+thresholds, archives NOTHING, and reads `ARMED` with identity `VERIFIED`. B used
+no monkeypatching at all - the destination directory exists and is writable and
+only the copy fails, which is exactly the disk-full shape.
+
+**D REFUTES the headline.** `dest_dir.mkdir()` sits OUTSIDE `_copy_one`'s `try`,
+so a destination that refuses the mkdir raises `FileExistsError` straight out
+through `poll_once` - whose docstring promises it "never raises" - and kills that
+surface's thread. The surface then stops advancing and **`4f`'s machinery catches
+it and names it**, measured across the transition: `ARMED` at 5 s and 40 s,
+`SURFACE_STALE` at 75 s and 85 s, against `savegames`' own 69 s grace window. The
+reason string identifies the surface, says it "has NEVER recorded a completed
+pass", and distinguishes itself from `STALE`.
+
+So "a watcher that cannot WRITE reads ARMED forever and leaves no trace" is TRUE
+of the copy and FALSE of the mkdir. **The heading is left as written and this
+paragraph sits beside it**, because the item is append-corrected, not edited.
+
+**Two further things the provocation settled, neither of them guessed:**
+
+- **`poll_once`'s "never raises" is FALSE.** `mkdir` is outside the `try` on
+  `savewatch.py` line 232. That is a real docstring defect independent of
+  everything else here, and D is its demonstration.
+- **The DEVNULL half of step 4 is narrower than the item implied.** A dead
+  surface IS visible to a cold reader through `SURFACE_STALE`; what the
+  discarded stderr loses is the REASON, not the FACT. Python printed a full
+  `FileExistsError` traceback to stderr during D, and in production that goes to
+  the null device.
+
+**And this is the shape the fix must take, now demonstrated rather than
+proposed.** Criterion 2 says to freeze the surface so the existing
+`SURFACE_STALE` machinery names it, instead of inventing a channel
+`check_watcher` does not read. D proves that path already works end to end in
+this codebase. **The fix is to make a persistently failing COPY behave the way a
+failing MKDIR already does** - which also means criterion 3's bounded error
+record is not needed at all: freezing a surface writes nothing, so there is no
+log to grow on a disk that is already full.
+
+**Do NOT make it fire on a single failure.** `_copy_one` tolerating a failed copy
+is deliberate and correct - a save file really does vanish mid-copy, and that is
+the transience the module exists for. A vanished file produces exactly one
+failing pass and then stops being offered at all, because `_entry_identity`
+returns `None` once it is gone. A refusing destination fails EVERY pass forever.
+That difference, not the failure itself, is what the guard has to key on.
+
+**A HARNESS BUG, recorded because it produced a clean-looking false reading.**
+The first version of scenario B blocked the `.part` target with a DIRECTORY and
+reported 3 files archived and `ARMED` - which reads as a refutation of the whole
+item. It was the instrument: `shutil.copy2` with a directory target copies INTO
+it under the source's basename, which is documented behaviour. The real refusal
+needs a name COLLISION inside that directory, and then the filesystem raises
+`PermissionError` on its own. The same version also counted its own sabotage
+files as archived snapshots. **A sabotage that does not sabotage looks exactly
+like a defect that is not there.**
+
+### FIXED and CLOSED 2026-09-05 - criteria 2, 3 and 4 met, and the refutation refused the first cut
+
+**The shape that read `ARMED` forever now reads `SURFACE_STALE` and names the
+surface.** Measured on the fixed code, threaded, every copy refused with
+`ENOSPC`, reproduced twice:
+
+| t | `check_watcher` | snapshots archived |
+|---|---|---|
+| 5 s | `ARMED` | 0 |
+| 40 s | `ARMED` | 0 |
+| **78 s** | **`SURFACE_STALE`, naming `savegames`** | 0 |
+| 88 s | `SURFACE_STALE`, naming `savegames` | 0 |
+
+The fix is three small things:
+
+1. `SaveWatcher.consecutive_failed_passes` counts passes that offered at least
+   one file and archived none. An idle pass RESETS it; one landed copy resets it.
+2. `run_rolling.record_pass` skips `heartbeat.record` for a surface at or past
+   `FAILING_PASSES_BEFORE_SURFACE_FREEZES` (3). The surface falls out of its own
+   freshness window and `4f`'s per-surface staleness NAMES it. **No new channel**
+   - criterion 2 said not to invent one `check_watcher` does not already read.
+3. `dest_dir.mkdir` and `tmp_target.replace` both moved INSIDE `_copy_one`'s
+   `try`, so `poll_once`'s "never raises" is finally true.
+
+**Criterion 3 is N/A, and that is a result rather than a skip.** The item
+demanded any error record be BOUNDED, because a crash-looping watcher must not
+worsen the very disk `OPS-14` is about. The fix writes NOTHING: freezing a
+surface emits no file, and the two `say()` lines fire once per TRANSITION rather
+than per pass, into a stream `default_spawn` sends to the null device. There is
+no log to grow, so there is no bound to state.
+
+**Criterion 4 - eight mutations, eight red, both modules restored byte-exact:**
+
+| mutation | result |
+|---|---|
+| `record_pass` always records | 2 failed, 125 passed |
+| threshold 3 -> 1 | 1 failed, 126 passed |
+| **revert the THREADED call site only** | **2 failed, 125 passed** |
+| revert the synchronous call site only | 3 failed, 124 passed |
+| reset-on-idle reverted to leave-alone | 1 failed, 126 passed |
+| failures never counted | 7 failed, 120 passed |
+| `mkdir` moved back above the `try` | 1 failed, 126 passed |
+| `replace` moved back below the `except` | 1 failed, 126 passed |
+
+### THE REFUTATION REFUSED THE FIRST CUT, and it was right four times
+
+Every measurement in the first cut survived. Four things it ASSERTED did not.
+
+1. **THE PRODUCTION PATH WAS DECORATION.** `run_rolling` records a pass in two
+   places - a synchronous branch driven by `max_passes`, and `poll_forever`, the
+   threaded loop `default_spawn` actually runs. All nine new tests drove the
+   synchronous branch, because a surface's poll interval is fixed by
+   `session_plan` and is not injectable. **Reverting the THREADED call site
+   alone left the entire suite at `1769 passed`.** The guard existed and
+   production did not have it. `docs/LEDGER.md` records this repo hitting the
+   identical two-call-site defect once already, on the `4e` heartbeat. Now
+   guarded structurally by `TestBOTHCallSitesRouteThroughTheFreeze`, which walks
+   the AST and asserts every `heartbeat.record` call sits inside `record_pass` -
+   the same technique `tests/test_process_capability.py` uses. That guard is a
+   deliberate second-best: it cannot prove the threaded loop BEHAVES correctly,
+   only that the two call sites cannot diverge, which is the failure that
+   actually happened.
+
+2. **THE FREEZE WAS STICKY, and the stickiness was DELIBERATE and wrong.** The
+   first cut left the count alone on an idle pass, reasoning in a comment that a
+   destination breaking while nothing changed should still accumulate evidence.
+   Measured: three transient failures, then the source goes quiet - which is the
+   transient save's actual life cycle - and the count stays pinned at 3 through
+   recovery and **200 idle passes**. On sources this very session measured
+   quiescent for five days, a recovered destination would never be forgiven. An
+   idle pass now resets, which costs a few passes of delay and removes an alarm
+   that never clears.
+
+3. **`poll_once` STILL RAISED after the fix that was supposed to stop it.**
+   Moving `mkdir` inside the `try` left `tmp_target.replace(target)` outside it,
+   and an ordinary Windows read-only attribute on the target - no mocks, no
+   exotic ACL - raises `PermissionError [WinError 5]`, kills the thread and
+   leaks the `.part`. **Moving one of two raising calls and declaring the
+   promise kept is the half-fix this repo keeps paying for.**
+
+4. **THREE FALSE SENTENCES WRITTEN THE SAME HOUR AS THE CODE**, which is
+   `OPS-16`'s lesson recurring for the third time:
+   - "covered by 24 assertions in `test_loop_watch.py`" - 24 is the token's
+     occurrence count; the assert lines are 13. **A filed count, in a docstring,
+     in the cycle that had just paid for one.** The number is now gone rather
+     than corrected, because the pointer is what a reader needs.
+   - the `STATED COST` arithmetic was wrong in both figures. The first pass is
+     at t=0, so the third falls at `2 x poll`: `logs` freezes at 10 minutes, not
+     15. And the staleness window runs from the last RECORDED stamp, so
+     `SURFACE_STALE` arrives at 21 minutes, not 31.
+   - the constant cited "`SURFACE_STALE` at 75 s and 85 s" as evidence the
+     mechanism works. Those readings are from the PRE-FIX provocation, where a
+     thread had DIED - a different branch of the reader (never-recorded rather
+     than frozen-stamp), and so never evidence for this mechanism at all.
+
+**A fifth thing it found that is not a defect but is worth keeping:** the count
+cannot tell a refusing DESTINATION from an unreadable SOURCE, and the first
+cut's message said "has been refused", which mis-reports a locked source file as
+a destination fault. The message now says what was observed - files were offered
+and none were archived - and attributes no cause.
+
+### Limits, stated rather than implied
+
+- **The threshold is justified for `logs` and only inferred for the rest.** The
+  ten log snapshots that prove the game does not hold its log exclusively are
+  all `logs`. For a 3 s surface, three passes is about six seconds. What makes
+  that tolerable is not the count but the WINDOW: a frozen surface is only
+  REPORTED once its own staleness threshold has also elapsed, measured at 78 s
+  against a 69 s threshold. **If a save file is ever measured locked for longer
+  than that, this number needs revisiting.**
+- **`logs` is slow to report by construction** - 10 minutes to freeze, 21 to be
+  named - because the alternative is a wall-clock threshold that would have to
+  exceed 300 s to spare it a single ordinary pass.
+- **No behavioural test drives the threaded loop.** The AST guard covers
+  divergence, not behaviour. Driving it for real costs 9 s of wall clock per
+  freeze and was judged not worth it; the end-to-end evidence is the provocation
+  above, run by hand.
 
 **Do NOT fix this by removing the `except OSError`.** Fail-soft is deliberate and
 correct here - a save file really does vanish mid-copy, which is the transience

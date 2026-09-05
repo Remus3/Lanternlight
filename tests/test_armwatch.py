@@ -46,6 +46,7 @@ throttle and a wedged 300-second surface are both asserted in no wall-clock
 time at all.
 """
 
+import ast
 import json
 import os
 import sys
@@ -1907,3 +1908,248 @@ class TestHeartbeatCommandLine:
             log_fn=lambda _m: None,
         )
         assert sorted(p.name for p in tmp_path.iterdir()) == ["Saved", "captures"]
+
+
+class TestARefusedDestinationFreezesItsSurface:
+    """`OPS-26`. A watcher archiving NOTHING must stop looking healthy.
+
+    PROVOKED 2026-09-05 before a line of this was written. Against a
+    destination that refused every copy - once by a real filesystem
+    ``PermissionError``, once by ``OSError(28)``, the ``ENOSPC`` this machine
+    actually hit - ``run_rolling`` completed 12 passes, advanced the heartbeat,
+    kept all four surfaces inside their thresholds, archived ZERO files, and
+    ``check_watcher`` reported ``ARMED`` / ``VERIFIED``.
+
+    The fix reuses the machinery a reader ALREADY consults instead of adding a
+    channel it does not: a refused surface stops recording, so ``4f``'s
+    per-surface staleness names it. **This class proves only that the surface
+    stops recording.** That a stopped surface is then reported as
+    ``SURFACE_STALE`` and NAMED is ``4f``'s property and is covered in
+    ``tests/test_loop_watch.py``; duplicating it here would be a second copy of
+    a roster. An earlier draft of this docstring put a NUMBER on that coverage
+    and the number was the token's occurrence count, not the assertion count -
+    a filed count, in a docstring, in the cycle that had just paid for one.
+
+    The composition was watched end to end on the FIXED code anyway - threaded,
+    every copy refused with ENOSPC: ``ARMED`` at 5 s and 40 s, then
+    ``SURFACE_STALE`` naming ``savegames`` at 78 s and 88 s, zero files archived
+    throughout.
+
+    It must not fire on a transient. A save file vanishing mid-copy is exactly
+    the transience this watcher exists for, and the game does NOT hold its log
+    exclusively - measured on the real archive, ten consecutive log snapshots
+    at the 300 s cadence straight through play session S3 on 2026-08-30,
+    ``20260830-003030`` to ``20260830-011530``, inside a session running local
+    00:20:37 to 01:24:23.
+    """
+
+    class _Spy:
+        """Counts records per surface. The heartbeat FILE cannot answer this.
+
+        Freezing means a surface's stamp stops ADVANCING, not that its key
+        disappears - the heartbeat keeps the last stamp it ever wrote. An
+        earlier draft of these tests asserted the key was absent and failed
+        against correct code.
+        """
+
+        def __init__(self) -> None:
+            self.calls: list[str] = []
+
+        def record(self, surface: str, poll_seconds: float | None = None) -> None:
+            self.calls.append(surface)
+
+        def flush(self) -> None:
+            pass
+
+        def count(self, surface: str) -> int:
+            return self.calls.count(surface)
+
+    def _run(self, saved, base, spy, passes, messages=None):
+        armwatch.run_rolling(
+            saved,
+            base,
+            max_passes=passes,
+            now_fn=_SequenceClock(datetime(2026, 9, 3, 9, 0, 0)),
+            sleep_fn=lambda _s: None,
+            log_fn=(lambda m: messages.append(m)) if messages is not None else (lambda _m: None),
+            heartbeat=spy,
+        )
+
+    def test_a_refused_surface_stops_recording_at_the_threshold(self, tmp_path, monkeypatch):
+        saved = _saved_tree(tmp_path)
+        base = tmp_path / "captures"
+        spy = self._Spy()
+
+        def _refuse(src, dst, *a, **kw):
+            raise OSError(28, "No space left on device")
+
+        monkeypatch.setattr(savewatch.shutil, "copy2", _refuse)
+        passes = armwatch.FAILING_PASSES_BEFORE_SURFACE_FREEZES + 2
+        self._run(saved, base, spy, passes)
+
+        assert _snapshot_files(base) == [], "the fixture must archive nothing"
+        threshold = armwatch.FAILING_PASSES_BEFORE_SURFACE_FREEZES
+        for refused in ("logs", "savedroot"):
+            assert spy.count(refused) == threshold - 1, (
+                f"{refused} has a file it is refused every pass, so it must record "
+                f"until its count REACHES the threshold and then stop"
+            )
+
+    def test_an_empty_surface_is_idle_not_refused_and_keeps_reporting(
+        self, tmp_path, monkeypatch
+    ):
+        """StandaloneLevel was measured EMPTY for a whole 36-minute session.
+
+        It attempts no copy, so it can never be refused. Freezing it would cry
+        wolf on the normal case and would undo
+        TestHeartbeatAdvancesWithNothingArchived.
+        """
+        saved = _saved_tree(tmp_path)
+        base = tmp_path / "captures"
+        spy = self._Spy()
+
+        def _refuse(src, dst, *a, **kw):
+            raise OSError(28, "No space left on device")
+
+        monkeypatch.setattr(savewatch.shutil, "copy2", _refuse)
+        passes = armwatch.FAILING_PASSES_BEFORE_SURFACE_FREEZES + 2
+        self._run(saved, base, spy, passes)
+
+        for idle in ("standalonelevel", "savegames"):
+            assert spy.count(idle) == passes, (
+                f"{idle} is empty, attempts nothing, and must report every pass"
+            )
+
+    def test_a_single_transient_failure_does_not_freeze_anything(self, tmp_path, monkeypatch):
+        """One failure is the NORMAL vanish and must be invisible to a reader."""
+        saved = _saved_tree(tmp_path)
+        base = tmp_path / "captures"
+        spy = self._Spy()
+
+        real_copy2 = savewatch.shutil.copy2
+        calls = {"n": 0}
+
+        def _fails_once(src, dst, *a, **kw):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise FileNotFoundError("simulated vanish mid-copy")
+            return real_copy2(src, dst, *a, **kw)
+
+        monkeypatch.setattr(savewatch.shutil, "copy2", _fails_once)
+        passes = armwatch.FAILING_PASSES_BEFORE_SURFACE_FREEZES + 2
+        self._run(saved, base, spy, passes)
+
+        assert calls["n"] > 1, "sanity check: the fixture must have retried after failing"
+        for name in ("logs", "savedroot", "savegames", "standalonelevel"):
+            assert spy.count(name) == passes, (
+                f"{name} must report every pass - one transient failure is not a "
+                f"refused destination"
+            )
+
+    def test_a_surface_resumes_when_the_destination_comes_back(self, tmp_path, monkeypatch):
+        """Frozen is not dead - the old mkdir path killed the thread outright.
+
+        This has to happen inside ONE ``run_rolling`` call. A second call builds
+        fresh watchers with a fresh count, so a two-call version would pass just
+        as happily if freezing were permanent: it would be measuring the new
+        watcher rather than the recovery.
+        """
+        saved = _saved_tree(tmp_path)
+        base = tmp_path / "captures"
+        spy = self._Spy()
+        messages: list[str] = []
+
+        real_copy2 = savewatch.shutil.copy2
+        # Two files are offered per pass (logs and savedroot), so this refuses
+        # exactly the first `threshold` passes and then lets the copies land.
+        budget = {"n": armwatch.FAILING_PASSES_BEFORE_SURFACE_FREEZES * 2}
+
+        def _recovers(src, dst, *a, **kw):
+            if budget["n"] > 0:
+                budget["n"] -= 1
+                raise OSError(28, "No space left on device")
+            return real_copy2(src, dst, *a, **kw)
+
+        monkeypatch.setattr(savewatch.shutil, "copy2", _recovers)
+        passes = armwatch.FAILING_PASSES_BEFORE_SURFACE_FREEZES + 3
+        self._run(saved, base, spy, passes, messages=messages)
+
+        froze = [m for m in messages if "freezing its heartbeat" in m and m.startswith("logs")]
+        resumed = [m for m in messages if "archiving again" in m and m.startswith("logs")]
+        assert froze, f"logs must announce the freeze; saw {messages}"
+        assert resumed, f"logs must announce the recovery; saw {messages}"
+        assert spy.count("logs") == passes - 1, (
+            "exactly one pass - the one that crossed the threshold - may be skipped"
+        )
+        assert _snapshot_files(base), "the recovered destination must actually archive"
+
+
+class TestBOTHCallSitesRouteThroughTheFreeze:
+    """`OPS-26`. The production loop is the one no behavioural test reaches.
+
+    ``run_rolling`` has TWO places that record a pass: a synchronous branch
+    driven by ``max_passes``, and ``poll_forever``, the threaded loop that
+    ``default_spawn`` actually runs. Every behavioural test in this file drives
+    the synchronous branch, because a surface's poll interval is fixed by
+    ``session_plan`` and is not injectable, so a threaded test would have to
+    spend 9 real seconds to see one freeze.
+
+    The cycle 47 refutation measured what that leaves uncovered: reverting the
+    THREADED call site alone to ``heartbeat.record(...)`` left the whole suite
+    at **1769 passed**. The guard existed and production did not have it.
+    ``docs/LEDGER.md`` records this repo hitting the identical two-call-site
+    defect once already, on the ``4e`` heartbeat.
+
+    This is a STRUCTURAL guard, and that is a deliberate second-best. It cannot
+    prove the threaded loop behaves correctly; it proves the two call sites
+    cannot DIVERGE, which is the failure that actually happened.
+    """
+
+    def _run_rolling_ast(self) -> ast.FunctionDef:
+        source = Path(armwatch.__file__).read_text(encoding="ascii")
+        tree = ast.parse(source)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and node.name == "run_rolling":
+                return node
+        raise AssertionError("run_rolling not found - this test is measuring the wrong file")
+
+    def _nested(self, parent: ast.FunctionDef, name: str) -> ast.FunctionDef:
+        for node in ast.walk(parent):
+            if isinstance(node, ast.FunctionDef) and node.name == name:
+                return node
+        raise AssertionError(f"{name} not found inside run_rolling")
+
+    def test_every_heartbeat_record_call_sits_inside_record_pass(self) -> None:
+        run_rolling = self._run_rolling_ast()
+        recorder = self._nested(run_rolling, "record_pass")
+        lo, hi = recorder.lineno, recorder.end_lineno
+
+        direct = [
+            node.lineno
+            for node in ast.walk(run_rolling)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "record"
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "heartbeat"
+        ]
+        assert direct, "no heartbeat.record call found at all - the pattern is wrong"
+        outside = [line for line in direct if not lo <= line <= hi]
+        assert outside == [], (
+            f"heartbeat.record is called directly at line(s) {outside}, outside "
+            f"record_pass (lines {lo}-{hi}). Both call sites must route through the "
+            f"freeze, or one of them keeps reporting a surface that archives nothing."
+        )
+
+    def test_the_threaded_loop_records_through_record_pass(self) -> None:
+        run_rolling = self._run_rolling_ast()
+        forever = self._nested(run_rolling, "poll_forever")
+        called = {
+            node.func.id
+            for node in ast.walk(forever)
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+        }
+        assert "record_pass" in called, (
+            "poll_forever is the loop default_spawn runs in production - it must "
+            "record through record_pass, not around it"
+        )

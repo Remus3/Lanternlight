@@ -369,6 +369,168 @@ class TestFileVanishingBetweenListingAndCopying:
         assert second[0].destination.read_bytes() == b"R" * 777
 
 
+class TestAPersistentlyRefusedDestinationIsCounted:
+    """`OPS-26`. Tolerating a failed copy is right; hiding it forever is not.
+
+    PROVOKED 2026-09-05 before any of this was written. A watcher whose every
+    copy was refused - once by a real filesystem ``PermissionError`` and once by
+    ``OSError(28)``, the ``ENOSPC`` this machine actually hit - completed 12
+    passes, advanced its heartbeat, kept all four surfaces inside their
+    thresholds, archived ZERO files, and read ``ARMED`` / ``VERIFIED``.
+
+    ``consecutive_failed_passes`` is what lets the layer above tell a REFUSED
+    destination from an idle one. The distinction it has to preserve, and the
+    reason this is a counter rather than a flag:
+
+    * a save file vanishing mid-copy is NORMAL - it is the transience this
+      module exists for - and produces exactly ONE failing pass, because once
+      the file is gone ``_entry_identity`` returns ``None`` and no copy is
+      attempted again;
+    * a refused destination fails EVERY pass, forever.
+
+    A pass that attempted nothing leaves the count alone rather than resetting
+    it. Quiescent sources are the normal state - measured 2026-09-05, no watched
+    file changed for five days - so resetting there would mean a destination
+    that broke while nothing was changing could never accumulate evidence.
+    """
+
+    def _watcher(self, tmp_path):
+        src_dir = tmp_path / "src"
+        src_dir.mkdir()
+        return src_dir, savewatch.SaveWatcher(source_dir=src_dir, dest_dir=_safe_dest(tmp_path))
+
+    def test_a_fresh_watcher_has_not_failed(self, tmp_path):
+        _src, watcher = self._watcher(tmp_path)
+        assert watcher.consecutive_failed_passes == 0
+
+    def test_every_refused_pass_increments_the_count(self, tmp_path, monkeypatch):
+        src_dir, watcher = self._watcher(tmp_path)
+        _touch(src_dir / "a.sav", b"A" * 64, mtime_ns=1_000_000_000)
+
+        def _refuse(src, dst, *a, **kw):
+            raise OSError(28, "No space left on device")
+
+        monkeypatch.setattr(savewatch.shutil, "copy2", _refuse)
+
+        for expected in (1, 2, 3):
+            assert watcher.poll_once(now=datetime(2026, 8, 9, 12, 0, expected)) == []
+            assert watcher.consecutive_failed_passes == expected
+
+    def test_an_idle_pass_CLEARS_the_count_so_the_freeze_is_not_sticky(
+        self, tmp_path, monkeypatch
+    ):
+        """The first version of this test asserted the OPPOSITE, and was wrong.
+
+        It required an idle pass to leave the count alone, reasoning that a
+        destination breaking while nothing changed should still accumulate
+        evidence. The cycle 47 refutation measured what that produces: three
+        transient failures, then the source goes quiet - which is the transient
+        save's actual life cycle - and the count stays pinned through recovery
+        and 200 idle passes. On sources measured quiescent for five days
+        straight, a recovered destination would never be forgiven.
+
+        Resetting costs only a few passes of delay: while nothing is changing
+        there is nothing to archive and so nothing is being lost, and the count
+        climbs again as soon as content reappears.
+        """
+        src_dir, watcher = self._watcher(tmp_path)
+        target = src_dir / "a.sav"
+        _touch(target, b"A" * 64, mtime_ns=1_000_000_000)
+
+        def _refuse(src, dst, *a, **kw):
+            raise OSError(28, "No space left on device")
+
+        monkeypatch.setattr(savewatch.shutil, "copy2", _refuse)
+        watcher.poll_once(now=datetime(2026, 8, 9, 12, 0, 0))
+        assert watcher.consecutive_failed_passes == 1
+
+        target.unlink()  # nothing left to attempt at all
+        watcher.poll_once(now=datetime(2026, 8, 9, 12, 0, 1))
+        assert watcher.consecutive_failed_passes == 0, (
+            "an idle pass must clear, or a surface frozen by a transient stays "
+            "frozen forever once its source goes quiet"
+        )
+
+    def test_a_refused_RENAME_does_not_escape_poll_once_either(self, tmp_path):
+        """The second raising call, found only because the first fix was checked.
+
+        `_copy_one` moves its temporary into place with ``Path.replace``. That
+        sat outside the ``try`` even after the mkdir was moved inside it, so an
+        ordinary Windows read-only attribute on the target - no mocks, no
+        exotic ACL - raised ``PermissionError [WinError 5]`` straight out
+        through ``poll_once``, killed the polling thread, and leaked the
+        ``.part`` behind it.
+        """
+        import stat as _stat
+
+        src_dir, watcher = self._watcher(tmp_path)
+        target = src_dir / "a.sav"
+        _touch(target, b"A" * 64, mtime_ns=1_000_000_000)
+
+        when = datetime(2026, 8, 9, 12, 0, 0)
+        landed = watcher.poll_once(now=when)[0].destination
+        landed.chmod(_stat.S_IREAD)
+        try:
+            # A second watcher with the same stamp and size aims at the very
+            # same target path, which is now read-only.
+            again = savewatch.SaveWatcher(source_dir=src_dir, dest_dir=_safe_dest(tmp_path))
+            assert again.poll_once(now=when) == [], "the refused rename yields no snapshot"
+            assert again.consecutive_failed_passes == 1
+            leftovers = [p.name for p in landed.parent.iterdir() if p.name.endswith(".part")]
+            assert leftovers == [], "a refused rename must not leak its temporary"
+        finally:
+            landed.chmod(_stat.S_IWRITE)
+
+    def test_one_success_clears_the_count(self, tmp_path, monkeypatch):
+        src_dir, watcher = self._watcher(tmp_path)
+        _touch(src_dir / "a.sav", b"A" * 64, mtime_ns=1_000_000_000)
+        real_copy2 = savewatch.shutil.copy2
+        refusing = {"on": True}
+
+        def _sometimes(src, dst, *a, **kw):
+            if refusing["on"]:
+                raise OSError(28, "No space left on device")
+            return real_copy2(src, dst, *a, **kw)
+
+        monkeypatch.setattr(savewatch.shutil, "copy2", _sometimes)
+        watcher.poll_once(now=datetime(2026, 8, 9, 12, 0, 0))
+        watcher.poll_once(now=datetime(2026, 8, 9, 12, 0, 1))
+        assert watcher.consecutive_failed_passes == 2
+
+        refusing["on"] = False
+        assert len(watcher.poll_once(now=datetime(2026, 8, 9, 12, 0, 2))) == 1
+        assert watcher.consecutive_failed_passes == 0, (
+            "a destination that started working again must clear, or the surface "
+            "stays frozen after it recovers"
+        )
+
+    def test_a_refused_MKDIR_does_not_escape_poll_once(self, tmp_path):
+        """The docstring promised "never raises" and it was false. `OPS-26` D.
+
+        ``dest_dir.mkdir()`` sat outside ``_copy_one``'s ``try``, so a
+        destination that refuses the mkdir raised ``FileExistsError`` straight
+        out through ``poll_once`` and killed the polling thread. Provoked in the
+        real threaded shape: the surface stopped advancing and was correctly
+        named by ``SURFACE_STALE`` after its 69 s grace window - so the FACT was
+        visible, but via a dead thread that can never recover, and the REASON
+        went to the null device with the traceback.
+        """
+        src_dir = tmp_path / "src"
+        src_dir.mkdir()
+        _touch(src_dir / "a.sav", b"A" * 64, mtime_ns=1_000_000_000)
+        dest = _safe_dest(tmp_path)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(b"not a directory")
+
+        watcher = savewatch.SaveWatcher(source_dir=src_dir, dest_dir=dest)
+
+        assert watcher.poll_once(now=datetime(2026, 8, 9, 12, 0, 0)) == []
+        assert watcher.consecutive_failed_passes == 1, (
+            "a destination that refuses mkdir is a refused destination like any "
+            "other, and must reach the same counter"
+        )
+
+
 class TestSnapshotFilenamesPreserveSizeAndTimestamp:
     def test_filename_contains_the_observed_size(self, tmp_path):
         src_dir = tmp_path / "src"

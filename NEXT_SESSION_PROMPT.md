@@ -36,11 +36,18 @@ A fresh clone runs zero git hooks until that first command runs. The tracked
 
 ## Where the last session left it - CYCLE 47
 
-`main` is at the cycle 47 wrap commit. Suite **1760 passed** in 111.56s, run
-BARE; ruff clean. Merge gate OK at 1760 against a **1757** baseline measured
-BEFORE dispatch, which the refutation re-derived independently from a
-`git archive` extract of HEAD. Ledger `LL-0134`. Client **closed**.
-**`OPS-14`'s growth join ANSWERED. `OPS-26` FILED. Nothing was CLOSED.**
+`main` is at the cycle 47 wrap commit. Suite **1772 passed** in 188.39s, run
+BARE; ruff clean. Merge gate OK at 1772 against the **1760** baseline standing
+at the previous commit. Ledgers `LL-0134` and `LL-0135`. Client **closed**.
+**`OPS-14`'s growth join ANSWERED, and `OPS-26` FILED, PROVOKED and CLOSED in
+the same cycle.**
+
+**`OPS-26` was PROVOKED before it was fixed and the provocation SPLIT it.** A
+refused COPY read `ARMED` / `VERIFIED` with ZERO files archived - confirmed. A
+refused MKDIR was already caught and NAMED at 75 s - the headline REFUTED. After
+the fix the same threaded shape reads `SURFACE_STALE` naming `savegames` at 78 s.
+**The refutation then found the fix's own production path untested: reverting
+the THREADED call site alone left the whole suite green at 1769.**
 
 **`OPS-14`'s open join is answered and it needed no correlation.** The client
 has not launched since local **2026-08-30 21:11:46** - measured twice, by a
@@ -81,24 +88,18 @@ percent of the time. The reopen condition is written into the item.
 
 ## READ THIS BEFORE PICKING AN ITEM
 
-**The ops backlog holds `OPS-14` and `OPS-26`.** `OPS-14` is the disk question
-(hit 100 percent mid-session, recovered with nothing deleted, unexplained); its
-capture-growth half was ANSWERED in cycle 47 and its headline half still needs
-an operator-scale scan. **`OPS-26` is new and is doable from disk**: a watcher
-whose destination stops accepting writes reads `ARMED` forever and leaves no
-trace. **Nine** ops items were resolved across cycles 41 to 46, `OPS-17` through
-`OPS-25`; `OPS-16` closed in cycle 40 (`LL-0125`) and is NOT part of that run.
+**The ops backlog is `OPS-14` ALONE.** It is the disk question - `C:` hit 100
+percent mid-session and recovered with nothing deleted, unexplained. Its
+capture-growth half was ANSWERED in cycle 47; **the headline half needs an
+operator-scale disk scan and is not a session task.** `OPS-26` closed in cycle
+47 (`LL-0135`). **Ten** ops items were resolved across cycles 41 to 47,
+`OPS-17` through `OPS-26`; `OPS-16` closed in cycle 40 (`LL-0125`) and is NOT
+part of that run.
 
-**THE HIGHEST-VALUE WORK STILL NEEDS THE CLIENT.** Item 10 is the biggest thing
-in the project and cannot be advanced from disk. If the client is closed and
-neither ops item appeals, **say so plainly and stop** - do not invent work to
-stay busy. That is the loop's own stopping rule.
-
-**`OPS-26` is the best disk-only item on the board**, and its first acceptance
-criterion is to PROVOKE the failure rather than trust the item's own reasoning.
-Read that criterion before starting: the item's four steps are each read from
-source, but the JOIN between them has never been provoked, and this repo has had
-several items whose filed mechanism did not hold.
+**SO THERE IS NO DISK-ONLY OPS WORK LEFT, and the highest-value work needs the
+CLIENT.** Item 10 - the stack buff measured at the ceiling - is the biggest
+thing in the project. If the client is closed, **say so plainly and stop** - do
+not invent work to stay busy. That is the loop's own stopping rule.
 
 ## Where the last session left it - CYCLE 45
 
@@ -389,10 +390,10 @@ at PANTS and open Affix Details while worn - grep the log for
 Smiting or Curse. The log carries no player-facing affix, skill or item name -
 33 names tested with two positive controls - so only a hover will do.
 
-**IF THE CLIENT IS CLOSED**, the ops items are `OPS-26` (new, disk-only, has a
-real acceptance) and `OPS-14` (a question, no acceptance meetable from disk).
-**Prefer `OPS-26`.** If neither appeals, the honest answer is that the
-highest-value work needs the client - say so and stop.
+**IF THE CLIENT IS CLOSED**, the only ops item is `OPS-14`, which is a QUESTION
+with no acceptance meetable from disk - its one disk-measurable half was
+answered in cycle 47. **The honest answer is that the ops backlog is done and
+the highest-value work needs the client** - say so and stop.
 
 - **`OPS-14`** - this machine's disk hit 100 percent mid-session and recovered
   with nothing deleted. Still open, still unexplained. **It is a QUESTION, not
@@ -435,12 +436,29 @@ CLOSED (`LL-0109`). Item `12`'s backward half CLOSED as impossible (`LL-0110`).
 `OPS-20` and `OPS-25` CLOSED (`LL-0130`).
 **`OPS-24` DECLINED and CLOSED (`LL-0131`).**
 **`OPS-14`'s capture-growth join ANSWERED (`LL-0134`) - do not re-derive it; its
-HEADLINE half is still open.** `OPS-26` FILED, not started.
+HEADLINE half is still open.**
+**`OPS-26` PROVOKED, FIXED and CLOSED (`LL-0135`).**
 **Items 7, 11 and 12 remain OPEN and UNCREDITED - do not credit any of them.**
 
 ---
 
 ## Verification traps that produce FALSE GREENS
+
+- **A GUARD ON ONE OF TWO CALL SITES IS A GUARD PRODUCTION DOES NOT HAVE.**
+  `run_rolling` records a pass in a synchronous branch and in `poll_forever`,
+  and `default_spawn` runs only the second. Nine new tests drove the first, so
+  reverting the THREADED call site left the whole suite green at 1769. Ask which
+  branch PRODUCTION takes, then ask what covers it. Third time this repo has
+  paid for a second call site.
+- **`write_text` TURNS A WHOLE `.py` FILE CRLF ON WINDOWS.** It bit three files
+  this cycle. `.gitattributes` normalises the blob so a commit is safe, but
+  every LF-anchored scripted edit silently stops matching. Use `write_bytes`.
+- **AN OCCURRENCE COUNT IS NOT AN ASSERTION COUNT.** "Covered by 24 assertions"
+  was `grep -c` on a token; the asserts were 13. If you are about to put a
+  number in a docstring, re-derive it or drop it.
+- **A COMMENT ARGUING FOR A DESIGN CHOICE IS NOT EVIDENCE THE CHOICE IS RIGHT.**
+  A deliberate, reasoned decision to leave a failure count alone on idle passes
+  froze a surface permanently. Measure the choice, do not justify it.
 
 - **AN EMPTY GREP WITH A PASSING POSITIVE CONTROL IS STILL A CLAIM ABOUT THE
   PATTERN.** Cycle 47 swept every tracked `.md` and `.py` whitespace-collapsed

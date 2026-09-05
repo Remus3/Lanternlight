@@ -5,6 +5,80 @@ fidelity and archive older ones rather than deleting them.
 
 ---
 
+# Wrap 2026-09-05 - cycle 47 continued - `OPS-26` CLOSED, and the refutation found the fix's own production path untested
+
+Suite **1772 passed** in 188.39s, run BARE at the wrap. Ruff clean. Merge gate
+OK at 1772 against the **1760** baseline standing at the previous commit. Ledger
+`LL-0135`. Client **closed**. Watcher `ARMED` / identity confirmed, pid 21452.
+**`OPS-26` CLOSED. The ops backlog is back to `OPS-14` alone.**
+
+## It was PROVOKED before it was fixed, and the provocation SPLIT the item
+
+A destination refusing the COPY - once by a genuine filesystem
+`PermissionError` with no mocks, once by `OSError(28)`, the `ENOSPC` this
+machine hit - completed 12 passes, advanced the heartbeat, held all four
+surfaces inside their thresholds, archived **ZERO** files, and read `ARMED` /
+`VERIFIED`. **Confirmed.**
+
+The same run **REFUTED the item's headline.** A destination refusing the MKDIR
+was already caught: `mkdir` sat outside `_copy_one`'s `try`, raised through
+`poll_once` and killed that surface's thread, and `4f` NAMED it at 75 s. So
+"cannot WRITE reads ARMED forever" was true of the copy and FALSE of the mkdir.
+
+**After the fix**, the same threaded ENOSPC shape reads `ARMED` at 5 s and 40 s
+and then **`SURFACE_STALE` naming `savegames` at 78 s and 88 s**, zero archived
+throughout. The fix reuses the reader that already exists rather than adding a
+channel: a surface that offers files and archives none for 3 passes stops
+recording, so it falls out of its own freshness window.
+
+## THE FOUR THINGS THE REFUTATION CAUGHT - every measurement survived, four claims did not
+
+1. **THE PRODUCTION PATH WAS DECORATION.** `run_rolling` records a pass in TWO
+   places, and `default_spawn` runs only the threaded one. All nine new tests
+   drove the synchronous branch, because a poll interval is not injectable.
+   **Reverting the THREADED call site alone left the ENTIRE suite at 1769
+   passed.** This repo has hit the identical two-call-site defect once already,
+   on the `4e` heartbeat. Now guarded by an AST test asserting both call sites
+   route through `record_pass` - which says outright that it proves they cannot
+   DIVERGE, not that the threaded loop behaves.
+
+2. **A DELIBERATE DESIGN DECISION WAS MEASURED AND WAS WRONG.** The first cut
+   left the failure count alone on an idle pass, with a comment arguing for it.
+   Measured: three transient failures then a quiet source leaves the count
+   pinned through recovery and **200 idle passes** - on sources this session
+   measured quiescent for five days, a recovered destination is never forgiven.
+   **A comment that argues for a choice is not evidence that the choice is
+   right.**
+
+3. **A HALF-FIX WAS DECLARED A FIX.** Moving `mkdir` inside the `try` was called
+   a fix for `poll_once` "never raises" while `tmp_target.replace` sat outside
+   it - and a plain Windows read-only attribute raises there, kills the thread
+   and leaks the `.part`.
+
+4. **THREE FALSE SENTENCES WRITTEN THE SAME HOUR AS THE CODE.** A "24
+   assertions" count that was the token's occurrence count (13 asserts); a
+   STATED COST wrong in both figures (10 minutes not 15, 21 not 31); and a
+   citation of `SURFACE_STALE` readings that came from the PRE-FIX run, where a
+   thread had DIED - a different branch of the reader entirely.
+
+## Two traps this cycle re-paid
+
+- **`write_text` turned three `.py` files CRLF mid-cycle**, exactly as
+  `CLAUDE.md` warns. `.gitattributes` normalises the blob so the commit was
+  never at risk, but every LF-anchored scripted edit silently stops matching -
+  which is how it was noticed. Use `write_bytes`.
+- **`grep -c` on a token is not a count of assertions**, and neither is any
+  other occurrence count. See item 4 above.
+
+## What is left
+
+**The ops backlog is `OPS-14` alone**, and its capture-growth half was answered
+earlier this cycle; the headline half needs an operator-scale disk scan and is
+not a session task. **Everything else of value needs the CLIENT** - item 10, the
+stack buff at the ceiling, is still the biggest thing in the project.
+
+---
+
 # Wrap 2026-09-05 - cycle 47 - `OPS-14`'s growth join ANSWERED, and the refutation refused the merge on prose three times
 
 Suite **1760 passed** in 111.56s, run BARE at the wrap. Ruff clean. Merge gate
