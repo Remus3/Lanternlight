@@ -5,6 +5,58 @@ fidelity and archive older ones rather than deleting them.
 
 ---
 
+# Wrap 2026-09-04 - cycle 43 - `OPS-19` and `OPS-22` closed, and an annoyance was hiding four false passes
+
+Suite **1683 passed** in 109.80s, run BARE at the wrap. Ruff clean. Merge gate
+OK at 1683 collected against a **1647** baseline measured with `--collect-only`
+BEFORE any slice was dispatched. Ledger `LL-0128`. Client **closed** all
+session. Watcher `ARMED`, pid 21452. Two items closed in one cycle on disjoint
+files.
+
+## THE FOUR THINGS CYCLE 43 PAID FOR
+
+1. **AN ERGONOMIC ITEM WAS A SECURITY ITEM.** `OPS-22` was filed because the
+   pre-tool gate blocked MENTIONS of the banned process-stopping cmdlet - it
+   fired on the sweep that found it. Fixing it revealed the old
+   case-**SENSITIVE** substring test let a **lowercase INVOCATION through
+   entirely**, along with the uppercase form, the mixed-case form and the
+   `spps` alias. **Four false passes in a guard nobody had reason to doubt,
+   found by fixing an annoyance.** Verified by the merger over 18 spellings: 0
+   regressions, 4 strengthened, 14 unchanged.
+
+2. **A FIX CAN INTRODUCE A HAZARD, AND SAYING SO IS THE JOB.** The `OPS-19`
+   slice found that its own fix makes a genuinely absent watcher read ARMED
+   when the recorded pid has been recycled onto a process this token cannot
+   open. It could not repair that from its file list and **reported it instead
+   of hiding it.** Filed as `OPS-23`. That is a real, narrow REGRESSION shipped
+   knowingly, with the reasoning written down.
+
+3. **PROVOKE THE CONDITION IF YOU CAN, rather than only injecting it.** The
+   `OPS-19` slice dropped `SeDebugPrivilege` with `AdjustTokenPrivileges`,
+   ASSERTED it was gone, and swept 315 pids: 13 real ACCESS_DENIED, all still
+   running half a second later, HEAD reading False on 13 of 13. Injected tests
+   exist alongside because a denial cannot be provoked inside pytest - but the
+   real sweep is what proves the branch matters.
+
+4. **A HOOK'S PRESENCE IS NEVER PROOF IT FIRES.** `OPS-22`'s gate was driven
+   END-TO-END with real payloads: exit 2 on an invocation and on a lowercase
+   invocation, exit 0 on a mention and on an unrelated command. Unit tests
+   alone would not have shown the live wiring works.
+
+## Two smaller things worth keeping
+
+**The gate's own source no longer holds the contiguous cmdlet literal**,
+assembled from parts the way `BANNED_GLYPHS` uses `chr()`. Grepping this repo
+with the hook armed was a landmine, and that landmine is what produced the item.
+
+**Ruff's `SIM103` is suppressed in `guard.py` with its reason.** Folding the
+last two failure branches into one inequality would make the denied case and
+the uncharacterised case share an expression, so no mutation could separate
+them. `OPS-18` shipped a branch no test reached; the merger PROVED both
+branches are independently mutable rather than asserting it.
+
+---
+
 # Wrap 2026-09-04 - cycle 42 - `OPS-18` closed, and the refutation REFUSED THE MERGE
 
 Suite **1647 passed** in 105.24s, run BARE at the wrap. Ruff clean. Merge gate

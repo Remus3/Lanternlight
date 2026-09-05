@@ -34,6 +34,36 @@ A fresh clone runs zero git hooks until that first command runs. The tracked
 
 ---
 
+## Where the last session left it - CYCLE 43
+
+`main` is at the cycle 43 wrap commit. Suite **1683 passed** in 109.80s, run
+BARE at the wrap; ruff clean. Merge gate OK at 1683 collected against a **1647**
+baseline measured with `--collect-only` BEFORE any slice was dispatched. Ledger
+`LL-0128`. Client **closed** all session. **`OPS-19` and `OPS-22` both CLOSED.**
+
+## THE FOUR THINGS CYCLE 43 PAID FOR
+
+1. **AN ERGONOMIC ITEM WAS A SECURITY ITEM.** `OPS-22` was filed because the
+   pre-tool gate blocked MENTIONS of the banned cmdlet. Fixing it revealed the
+   old case-SENSITIVE substring test let a **lowercase INVOCATION through
+   entirely**, plus the uppercase form, the mixed-case form and the `spps`
+   alias - **four false passes in a guard nobody doubted.** Verified over 18
+   spellings: 0 regressions, 4 strengthened, 14 unchanged.
+
+2. **A FIX CAN INTRODUCE A HAZARD, AND SAYING SO IS THE JOB.** `OPS-19`'s slice
+   found its own fix makes an absent watcher read ARMED when the recorded pid
+   is recycled onto an unopenable process, could not repair it from its file
+   list, and REPORTED it. Filed as `OPS-23` - a narrow regression shipped
+   knowingly, with the reasoning written down.
+
+3. **PROVOKE THE CONDITION IF YOU CAN, rather than only injecting it.**
+   `SeDebugPrivilege` dropped with `AdjustTokenPrivileges` and ASSERTED gone,
+   then 315 pids swept: 13 real ACCESS_DENIED, all still running half a second
+   later, HEAD reading False on 13 of 13.
+
+4. **A HOOK'S PRESENCE IS NEVER PROOF IT FIRES.** The gate was driven END-TO-END
+   with real payloads, not only unit-tested.
+
 ## Where the last session left it - CYCLE 42
 
 `main` is at the cycle 42 wrap commit. Suite **1647 passed** in 105.24s, run
@@ -234,34 +264,30 @@ at PANTS and open Affix Details while worn - grep the log for
 Smiting or Curse. The log carries no player-facing affix, skill or item name -
 33 names tested with two positive controls - so only a hover will do.
 
-**IF THE CLIENT IS CLOSED, the item is `OPS-19`**, opened by the `OPS-18`
-refutation and fully doable from disk. It is the biggest of the four new items:
+**IF THE CLIENT IS CLOSED, the item is `OPS-23`**, opened by the slice that
+closed `OPS-19` and doable entirely from disk:
 
-> `_windows_pid_is_alive` returns False when `OpenProcess` yields no handle,
-> folding TWO different facts together. `ERROR_INVALID_PARAMETER` (87) means no
-> such process. **`ERROR_ACCESS_DENIED` (5) means the process EXISTS and is
-> RUNNING and this token may not ask about it.** Measured with
-> `SeDebugPrivilege` dropped: **13 running processes read DEAD**, all 13 still
-> enumerated half a second later.
+> Our watcher runs under our own token, so an access-denied RECORDED pid means
+> the pid was recycled onto a foreign process and the watcher is **GONE**.
+> Before `OPS-19` that read DEAD and re-armed. After it, `ensure_armed` refuses
+> while claiming a watcher is running, and `check_watcher` falls through the
+> identity check - `process_creation_time` returns None for the same unopenable
+> pid, and a cannot-tell identity currently reads as "incumbent believed" -
+> landing on `NO_HEARTBEAT`, **which reports ARMED**. A genuinely absent watcher
+> reads armed and nothing re-arms it.
 
-`pid_is_alive`'s own docstring promises the opposite - undecidable means True.
-So this is a **fail-OPEN in a function that documents itself as fail-closed**,
-and `guard.acquire` reclaims a lock whose owner reads dead. A loop running
-under a different token could have its lock stolen, silently, which is the
-"two loops interleaving commits" failure the module exists to prevent.
+**READ THE ITEM'S OWN WARNING FIRST.** Its proposed fix - that "alive but
+creation time UNREADABLE" means the pid is not ours, so the case belongs in
+`IMPOSTOR` - is a **HYPOTHESIS written from reasoning, not measurement**.
+`OPS-17` and `OPS-18` were BOTH filed with a false mechanism. Verify the premise
+before building on it, and remember that a wrong `IMPOSTOR` re-arms a second
+poller beside a live watcher, which is the one failure `ensure_armed` exists to
+refuse.
 
-Full acceptance is in `ROADMAP.md`. The trap to plan for: **you must DROP
-`SeDebugPrivilege` from the probing token or the denial cannot occur at all** -
-an elevated session bypasses the DACL check and measures zero. If no reliable
-access-denied subject can be constructed, pin the branch by injection and SAY
-which you did. `tests/test_loop_guard.py` now has a working injection idiom
-(a fake `kernel32` via `monkeypatch.setattr(ctypes, "WinDLL", ...)`) - reuse it.
-
-Three smaller items are also open and client-independent: `OPS-20` (nothing
-tests `guard.py`'s access mask while a docstring claims it is covered),
-`OPS-21` (`read_owner` folds four facts onto `None`, so a corrupt lock file is
-reclaimed) and `OPS-22` (`precommit_gate` matches a forbidden cmdlet as a bare
-substring, so a MENTION is blocked like a CALL).
+Also open and client-independent: **`OPS-20`** (nothing tests `guard.py`'s
+access mask while a docstring claims it is covered - planting `| 0x0001` in the
+mask changes ZERO test outcomes) and **`OPS-21`** (`read_owner` folds four facts
+onto `None`, so a corrupt lock file is reclaimed and overwritten).
 
 **Also available with the client closed:**
 
@@ -287,7 +313,8 @@ CLOSED (`LL-0109`). Item `12`'s backward half CLOSED as impossible (`LL-0110`).
 (`LL-0115`/`0116`), and its registration search DONE as consensus (`LL-0118`).
 `7d` CLOSED (`LL-0119`). `4e` CLOSED (`LL-0122`). `4f` CLOSED (`LL-0123`).
 `OPS-16` CLOSED (`LL-0125`). `OPS-17` CLOSED (`LL-0126`).
-**`OPS-18` CLOSED (`LL-0127`).**
+`OPS-18` CLOSED (`LL-0127`).
+**`OPS-19` and `OPS-22` CLOSED (`LL-0128`).**
 **Items 7, 11 and 12 remain OPEN and UNCREDITED - do not credit any of them.**
 
 ---

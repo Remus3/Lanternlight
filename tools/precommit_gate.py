@@ -8,7 +8,8 @@ hooks until someone runs that script, and because a Claude session can reach for
 Reads the tool-call payload on stdin as JSON, and:
   - blocks a commit whose staged set contains a PII-hazard path
   - blocks a commit message carrying a banned glyph
-  - blocks `Stop-Process`
+  - blocks a CALL to the banned process-stopping cmdlet, while letting a
+    MENTION of its name through - see :func:`_forbidden_cmdlet_reason`
 
 Exit 0 allows. Exit 2 blocks and the stderr text is shown to the model. The
 exit code is the verdict and the stderr text is best-effort - see `_say`, and
@@ -44,6 +45,103 @@ PII_HAZARD = re.compile(
     r"(^|/)(frames|logs|scratchpad|_scratch)/|\.sav$|\.log$|\.log\.\d+$",
     re.IGNORECASE,
 )
+
+# `OPS-22`. The process-stopping PowerShell cmdlet CLAUDE.md bans in favour of
+# `taskkill /F /PID`, plus its shipped alias. Assembled from parts rather than
+# written out, for the same reason BANNED_GLYPHS uses chr(): the literal string
+# in this file would otherwise be a landmine for anyone grepping the repo with
+# this very hook armed. `kill` is the cmdlet's OTHER alias and is deliberately
+# absent - see _forbidden_cmdlet_reason.
+FORBIDDEN_CMDLETS = ("Stop" + "-Process", "spps")
+
+_CMDLET_ALTERNATION = "|".join(re.escape(name) for name in FORBIDDEN_CMDLETS)
+
+#: An INVOCATION: the name in COMMAND POSITION. That means the start of the
+#: string or of a line, or the first token after a statement separator (`;`), a
+#: pipe (`|`, and so also `||`), the call or background operator (`&`, and so
+#: also `&&`), an opening paren (covering `(`, `$(` and `@(`), a script-block
+#: brace (`{`, covering if/else/foreach/-ScriptBlock bodies), an assignment
+#: (`=`), or a module qualifier (`\`).
+CMDLET_CALL = re.compile(
+    r"(?:^|[;|&({=\\])[ \t]*(?:" + _CMDLET_ALTERNATION + r")\b",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+#: The name ANYWHERE, quoted or not. Only consulted together with
+#: POWERSHELL_INVOKER, below.
+CMDLET_ANYWHERE = re.compile(r"\b(?:" + _CMDLET_ALTERNATION + r")\b", re.IGNORECASE)
+
+#: A token that hands a string to PowerShell to RUN. Quoting is what separates
+#: a mention from a call everywhere else, so it cannot also be what excuses
+#: `powershell -Command "<cmdlet> -Id 1"`.
+POWERSHELL_INVOKER = re.compile(
+    r"\b(?:powershell|pwsh|iex|invoke-expression)\b|-encodedcommand\b",
+    re.IGNORECASE,
+)
+
+
+def _forbidden_cmdlet_reason(command: str) -> str | None:
+    """Return why ``command`` CALLS the banned cmdlet, or ``None`` if it does not.
+
+    **`OPS-22`, and the class of bug it belongs to.** This check used to be
+    ``if "<cmdlet>" in command``. A bare substring test cannot tell a CALL from
+    a MENTION, so the name inside a grep pattern, a string literal, a comment
+    or a filename was refused exactly as hard as an invocation - and it fired
+    on the analysis pass that found it. It is the same shape as `OPS-18`: a
+    sentinel that is also a legal datum. ``lanternlight/gvas.py``'s
+    ``KeyMapping`` refuses to fold Unreal's ``"None"`` onto Python ``None`` for
+    the same reason.
+
+    **WHAT THIS CAN SEE.** Two things, and it is a pattern matcher, not a
+    PowerShell parser:
+
+    1. The name in COMMAND POSITION - see :data:`CMDLET_CALL` for the exact
+       list of positions. Case-insensitively, because PowerShell is, which the
+       old substring test was not: ``stop-process -id 1`` used to sail through.
+       The ``spps`` alias is caught for the same reason; it was not before.
+    2. The name ANYWHERE in a command that also carries a PowerShell-invoking
+       token (:data:`POWERSHELL_INVOKER`). Without this rule, moving from
+       "anywhere" to "command position" would have turned
+       ``powershell -Command "<cmdlet> -Id 1"`` from blocked into allowed, and
+       a false pass is the one outcome this file exists to prevent.
+
+    **WHAT THIS CANNOT SEE.** Stated plainly, because a guard whose limits are
+    undocumented gets trusted past them:
+
+    * **The ``kill`` alias.** PowerShell ships it as a third name for this
+      cmdlet and it is NOT blocked here. It is a first-class POSIX command in
+      the shell these tool calls actually run in, so blocking it in command
+      position would refuse ordinary, correct commands all day. Note that the
+      sanctioned replacement, ``taskkill``, would survive either way - it has
+      no word boundary before ``kill``. The old substring test did not catch
+      this alias either, so nothing was lost; it is simply still open.
+    * **Any name it does not hold literally.** ``&("Stop" + "-Process")``,
+      ``-EncodedCommand`` base64, ``$c = 'Stop-Pro'+'cess'; & $c``, or a
+      splatted invocation defeat it. So does a heredoc that writes a script to
+      disk and a later command that runs it.
+    * **Nesting.** Quoting is treated as one flat level. A mention inside a
+      quoted string is allowed unless rule 2 fires, and rule 2 fires on the
+      whole command, so a merely-quoted mention that happens to sit beside the
+      word ``powershell`` is blocked. That is a FALSE BLOCK and it is the
+      intended trade: an annoyance costs a rephrase, a false pass costs the
+      thing the rule protects.
+
+    This is defence in depth against an accidental call, not a sandbox against
+    a determined one. Nothing here is a substitute for the rule itself.
+    """
+    if CMDLET_CALL.search(command):
+        return (
+            "that cmdlet hangs the MCP pipe. Use taskkill /F /PID instead. "
+            "(Blocked because the name is in COMMAND POSITION. To talk ABOUT "
+            "it, quote it or pass it as an argument.)"
+        )
+    if CMDLET_ANYWHERE.search(command) and POWERSHELL_INVOKER.search(command):
+        return (
+            "that cmdlet hangs the MCP pipe. Use taskkill /F /PID instead. "
+            "(Blocked because the name is quoted but the command hands the "
+            "quoted text to PowerShell to run.)"
+        )
+    return None
 
 
 def _staged_paths() -> list[str]:
@@ -149,8 +247,9 @@ def main() -> int:
     if not command:
         return 0
 
-    if "Stop-Process" in command:
-        _block("Stop-Process hangs the MCP pipe. Use taskkill /F /PID instead.")
+    reason = _forbidden_cmdlet_reason(command)
+    if reason is not None:
+        _block(reason)
 
     if "git commit" not in command:
         return 0

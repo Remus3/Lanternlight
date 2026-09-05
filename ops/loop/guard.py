@@ -44,6 +44,17 @@ is undefined." Measured on this machine, every one of 312 RUNNING processes
 reported exactly zero, as did a live child. A child that had exited with 259
 reported a real non-zero timestamp, which is the reading the fix turns on.
 
+What happens when the handle does not open at all is ``OPS-19``, and it is a
+separate fact from any of the above. ``OpenProcess`` fails for more than one
+reason: ``ERROR_INVALID_PARAMETER`` (87) means the pid names nothing, but
+``ERROR_ACCESS_DENIED`` (5) means the process is THERE, running, and this token
+may not ask about it. Reading both as "gone" made a running process owned by a
+scheduled task, another user or an elevated session read DEAD - measured with
+``SeDebugPrivilege`` dropped, 13 running pids did exactly that, all 13 still
+enumerated half a second later - and ``acquire`` reclaims a lock whose owner
+reads dead. The probe therefore consults ``GetLastError`` and only 87 answers
+False. Everything else, characterised or not, answers True.
+
 The alternative - ``WaitForSingleObject`` - has fully defined semantics but
 needs the ``SYNCHRONIZE`` right, and **with ``SeDebugPrivilege`` dropped from
 the probing token** 77 of those same processes deny it while granting
@@ -88,6 +99,13 @@ LOCK_FILENAME = "loop.lock"
 #: Windows access right that is enough to ask whether a process exists without
 #: acquiring any right to affect it.
 _PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+
+#: ``GetLastError`` after a failed ``OpenProcess``. These two are DIFFERENT
+#: FACTS and folding them together was ``OPS-19``: 87 means no process bears
+#: this pid, 5 means one does and this token may not open it. Only 87 licenses
+#: a False.
+_ERROR_ACCESS_DENIED = 5
+_ERROR_INVALID_PARAMETER = 87
 
 #: A zero exit ``FILETIME`` from ``GetProcessTimes`` means the process has not
 #: exited. Once it has, the field carries a real timestamp - a count of
@@ -158,22 +176,31 @@ def _windows_pid_is_alive(pid: int) -> bool:
 
     WHAT THIS RETURNS FALSE FOR, stated exactly, because a probe that
     mis-describes its own blindness is worse than one with a declared hole.
-    False means one of two things: a positive exit timestamp, or ``OpenProcess``
-    yielding no handle AT ALL - and that second case does NOT mean "no such
-    process". ``ERROR_ACCESS_DENIED`` lands there too, so a RUNNING process this
-    token may not open reads DEAD. Measured with ``SeDebugPrivilege`` dropped:
-    13 pids denied access, all 13 still running half a second later, all 13
-    reported dead by this function.
+    Exactly two things: a positive exit timestamp, and an ``OpenProcess``
+    failure whose ``GetLastError`` is ``ERROR_INVALID_PARAMETER`` (87), which
+    is the code Windows returns when no process bears the pid. Nothing else.
 
-    **That is a fail-OPEN and it CONTRADICTS** :func:`pid_is_alive`'s promise
-    that an undecidable case returns True. It is pre-existing rather than new -
-    the old exit-code probe had it identically - and it is filed as ``OPS-19``
-    rather than fixed here, because ``OPS-18`` was the collision on the SUCCESS
-    path and this is the failure path. Do not read the contract as describing
-    this function until ``OPS-19`` closes.
+    That second clause is ``OPS-19``, and it USED to read "any ``OpenProcess``
+    failure". ``ERROR_ACCESS_DENIED`` (5) lands on the same failed call and
+    means the opposite - the process exists, is running, and this token may not
+    ask - so a running process owned by another token read DEAD. Measured with
+    ``SeDebugPrivilege`` dropped: 13 pids denied access, all 13 still running
+    half a second later, all 13 reported dead by this function. That was a
+    fail-OPEN inside a function whose contract promises fail-closed, and the
+    contract was the half that was right.
 
-    Every OTHER failure - a handle that opens but ``GetProcessTimes`` refuses -
-    returns True, per the contract.
+    The three failure branches are written out separately rather than folded
+    into one inequality. Each names a fact, and each can be mutated on its own
+    to prove the test that covers it is not decoration.
+
+    WHAT RETURNS TRUE, therefore, is every undecided reading: a denied open, an
+    open that failed with a code nobody here has characterised, and a handle
+    that opens but ``GetProcessTimes`` refuses. An unrecognised code is treated
+    as undecided on purpose - there are far more than three possible values,
+    only one of them is known to mean "gone", and inferring "gone" from an
+    error nobody has read would reclaim a live loop's lock. The cost of the
+    other error is a refusal, and :class:`LockBusy` already tells the operator
+    that deleting the lock file clears it.
     """
     import ctypes
     from ctypes import wintypes
@@ -199,9 +226,28 @@ def _windows_pid_is_alive(pid: int) -> bool:
 
     handle = kernel32.OpenProcess(_PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
     if not handle:
-        # No such process, or it is gone and unopenable. Either way, not a
-        # holder worth blocking on.
-        return False
+        # WHY it failed is the whole question. ``use_last_error=True`` above is
+        # what makes this readable: ctypes swaps the thread's error around the
+        # call and stashes the real one privately, so this accessor - and not
+        # the system's - is the one that answers.
+        error = ctypes.get_last_error()
+        if error == _ERROR_ACCESS_DENIED:
+            # It EXISTS and this token may not ask about it. Undecided, so the
+            # answer is alive: refusing to start beats trampling a live loop.
+            return True
+        if error == _ERROR_INVALID_PARAMETER:  # noqa: SIM103
+            # The one code that means no process bears this pid.
+            return False
+        # Uncharacterised. Fail closed with the rest of them.
+        #
+        # SIM103 would fold these last two into
+        # `return error != _ERROR_INVALID_PARAMETER`, and the suppression is
+        # deliberate. Each branch NAMES a fact, and - the part that earns its
+        # keep - each can be mutated on its own to show the test covering it is
+        # not decoration. Folded, the uncharacterised case and the denied case
+        # share one expression and no mutation can separate them. `OPS-18`
+        # shipped a branch no test reached; this is the cheap defence.
+        return True
     try:
         created = _FILETIME()
         exited = _FILETIME()
@@ -229,6 +275,12 @@ def pid_is_alive(pid: int | None) -> bool:
 
     Fails closed: when existence cannot be determined, the answer is True, so
     an ambiguous case refuses to start rather than trampling a live loop.
+
+    That promise is delivered rather than merely stated as of ``OPS-19``. It
+    was false on Windows for every process this token could not open, which is
+    the case the promise most needed to cover - a loop under a scheduled task,
+    another user, or an elevated session. See
+    :func:`_windows_pid_is_alive` for the codes and the measurement.
     """
     if pid is None or not isinstance(pid, int) or isinstance(pid, bool) or pid <= 0:
         return False

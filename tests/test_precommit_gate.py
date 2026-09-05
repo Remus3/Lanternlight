@@ -50,6 +50,47 @@ EM_DASH = chr(0x2014)
 BLOCKING = {"tool_input": {"command": f"git commit -m 'bad {EM_DASH} glyph'"}}
 BENIGN = {"tool_input": {"command": "ls -la"}}
 
+#: `OPS-22`. The banned cmdlet is spelled out literally throughout the cases
+#: below. That is safe here and nowhere else: this is a FILE ON DISK, and the
+#: gate only ever inspects a command STRING handed to it on stdin. Typing any
+#: of these into a shell would make the live hook fire on the tool call itself,
+#: which is the exact failure this item was opened by.
+INVOCATIONS = [
+    ("bare", "Stop-Process -Id 1234"),
+    ("leading_whitespace", "   Stop-Process -Id 1234"),
+    ("pipeline", "Get-Process notepad | Stop-Process"),
+    ("pipeline_no_space", "Get-Process notepad |Stop-Process -Force"),
+    ("call_operator", "& Stop-Process -Id 1234"),
+    ("chain_and", "taskkill /F /PID 1 && Stop-Process -Id 2"),
+    ("after_semicolon", "taskkill /F /PID 1 ; Stop-Process -Id 2"),
+    ("script_block", "if ($p) { Stop-Process -Id 1 }"),
+    ("subexpression", "$(Stop-Process -Id 1)"),
+    ("assignment", "$dead = Stop-Process -Id 1 -PassThru"),
+    ("lowercase", "stop-process -id 1234"),
+    ("uppercase", "STOP-PROCESS -ID 1234"),
+    ("mixed_case", "sTOp-PrOcEsS -Id 1234"),
+    ("module_qualified", "Microsoft.PowerShell.Management\\Stop-Process -Id 1"),
+    ("second_line", "cd C:/Lanternlight\nStop-Process -Id 1"),
+    ("alias_spps", "spps -Id 1234"),
+    ("quoted_but_handed_to_powershell", 'powershell -Command "Stop-Process -Id 1"'),
+    ("quoted_but_handed_to_pwsh", "pwsh -c 'Stop-Process -Id 1'"),
+    ("quoted_but_handed_to_iex", "iex 'Stop-Process -Id 1'"),
+]
+
+#: Mentions. Each one is a command a session legitimately wants to run, and
+#: every one of them was blocked by the bare substring test.
+MENTIONS = [
+    ("grep_double_quoted", 'grep -n "Stop-Process" tools/precommit_gate.py'),
+    ("grep_single_quoted", "grep -n 'Stop-Process' tools/precommit_gate.py"),
+    ("grep_unquoted_argument", "grep -rn Stop-Process docs/"),
+    ("not_first_after_a_pipe", "cat tools/precommit_gate.py | grep Stop-Process"),
+    ("shell_comment", "# Stop-Process is banned - use taskkill /F /PID"),
+    ("redirected_echo", 'echo "Stop-Process" >> notes.txt'),
+    ("python_string_literal", "python -c \"print('never use Stop-Process')\""),
+    ("bash_dash_c_is_not_powershell", "bash -c 'echo Stop-Process'"),
+    ("no_word_boundary", "Stop-ProcessNotes.md"),
+]
+
 #: Runs the gate with a ``sys.stderr`` whose ``write`` and ``flush`` both raise.
 #: A wrapper rather than an OS handle trick, so the shape is identical on every
 #: platform and does not depend on how the harness spawns hooks.
@@ -140,3 +181,75 @@ class TestTheGateStillBlocksWhenItCannotReport:
         assert result.returncode == 2
         assert "BLOCKED by tools/precommit_gate.py" in result.stderr
         assert "em-dash" in result.stderr
+
+
+class TestACallIsBlockedAndAMentionIsNot:
+    """ROADMAP `OPS-22`. A sentinel that is also a legal datum.
+
+    The gate used to decide with ``if "<cmdlet>" in command``. A bare substring
+    test cannot tell a CALL from a MENTION, so the name inside a grep pattern,
+    a quoted string, a comment or a path was refused exactly as hard as an
+    invocation - and it FIRED on the analysis pass that found it.
+
+    The fix is a command-POSITION test, not a parser. Both halves are pinned
+    here because only one of them is safe to get wrong: a false block is an
+    annoyance, a false pass is the hole this file exists to close. The
+    invocation table is therefore the load-bearing half, and it is deliberately
+    wider than the old substring check (case variations and the ``spps`` alias
+    were NOT caught before).
+    """
+
+    @pytest.mark.parametrize(
+        "command",
+        [c for _, c in INVOCATIONS],
+        ids=[name for name, _ in INVOCATIONS],
+    )
+    def test_an_invocation_is_still_blocked(self, command):
+        """The whole point: the guard must not have been weakened.
+
+        Measured before the fix: the case variations, ``spps`` and the
+        ``pwsh``/``iex`` forms exited 0 - the old check was case-SENSITIVE and
+        knew no aliases. Everything else here already exited 2 and must keep
+        doing so.
+        """
+        result = _run({"tool_input": {"command": command}}, dead_stderr=False)
+        assert result.returncode == 2, (
+            f"FALSE PASS: {command!r} exited {result.returncode}. This is an "
+            "invocation of the banned cmdlet and only exit 2 blocks it."
+        )
+
+    @pytest.mark.parametrize(
+        "command",
+        [c for _, c in MENTIONS],
+        ids=[name for name, _ in MENTIONS],
+    )
+    def test_a_mention_is_not_blocked(self, command):
+        """The defect. Every one of these exited 2 before the fix."""
+        result = _run({"tool_input": {"command": command}}, dead_stderr=False)
+        assert result.returncode == 0, (
+            f"FALSE BLOCK: {command!r} exited {result.returncode}. The cmdlet "
+            "name appears here as a datum, not in command position."
+        )
+
+    def test_the_block_names_the_sanctioned_replacement(self):
+        """The refusal has to be actionable, or it just gets worked around."""
+        result = _run(
+            {"tool_input": {"command": "Stop-Process -Id 1234"}}, dead_stderr=False
+        )
+        assert result.returncode == 2
+        assert "BLOCKED by tools/precommit_gate.py" in result.stderr
+        assert "taskkill /F /PID" in result.stderr
+
+    def test_the_cmdlet_check_runs_on_commands_that_are_not_commits(self):
+        """Pins the ordering the substring test had.
+
+        The cmdlet check sits ahead of the ``git commit`` early return. If it
+        ever slid below that line it would still pass every case above that
+        happens to mention a commit, and silently stop guarding every command
+        that does not.
+        """
+        result = _run(
+            {"tool_input": {"command": "Get-Process notepad | Stop-Process"}},
+            dead_stderr=False,
+        )
+        assert result.returncode == 2

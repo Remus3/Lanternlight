@@ -84,6 +84,27 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0128 - 2026-09-04 - OPS-19 and OPS-22 CLOSED - a fail-open in the lock guard, and an ergonomic fix that closed four false passes in a safety guard
+
+**Evidence:**
+- `ops/loop/guard.py`: `_windows_pid_is_alive` now consults `GetLastError` after a failed `OpenProcess`. Only `ERROR_INVALID_PARAMETER` (87) returns False; `ERROR_ACCESS_DENIED` (5) and every uncharacterised code return True.
+- THE DENIAL WAS PROVOKED FOR REAL, not only injected. `SeDebugPrivilege` dropped from a scratch process with `AdjustTokenPrivileges` and ASSERTED gone, then 315 pids swept: 299 opened, 13 ACCESS_DENIED, 2 INVALID_PARAMETER, 0 other - all 13 still enumerated half a second later. HEAD reads False 13 of 13; the fix reads True 13 of 13. Control pid 999999 gives error 87 and False both ways.
+- RED watched at `4 failed, 36 passed`, including the CONSEQUENCE test `test_acquire_does_not_steal_a_lock_from_an_owner_it_cannot_open` - the hazard, not just the unit. The merger independently re-mutated BOTH failure branches: flipping the denied branch reddens 2, flipping the 87 branch reddens 3, so neither is decoration and each is separable.
+- `tools/precommit_gate.py`: the bare substring test is replaced by `_forbidden_cmdlet_reason` - the name in COMMAND POSITION, case-insensitively and including the `spps` alias, plus the name ANYWHERE in a command that also carries a PowerShell-invoking token.
+- THE MERGER VERIFIED THE GUARD WAS NOT WEAKENED, over 18 invocation spellings, old rule against new: 0 regressions (block to pass), 4 STRENGTHENED (lowercase, uppercase, mixed case, `spps` - all previously FALSE PASSES, because the old test was case-SENSITIVE), 14 unchanged BLOCK. All five mention forms moved from BLOCK to pass.
+- DRIVEN END-TO-END THROUGH THE LIVE HOOK, not only unit-tested: exit 2 on an invocation and on a lowercase invocation, exit 0 on a mention and on an unrelated command. A hook's presence is never proof it fires.
+- Full suite `1683 passed in 110.01s`, run BARE. Merge gate OK against a 1637 baseline measured with `--collect-only` BEFORE dispatch. Ruff clean.
+
+**AN ERGONOMIC ITEM TURNED OUT TO BE A SECURITY ONE.** `OPS-22` was filed because the gate blocked MENTIONS of the banned cmdlet - it fired on the sweep that found it. Fixing it revealed that the old case-SENSITIVE substring test let a lowercase INVOCATION through entirely, along with the uppercase form, the mixed-case form and the `spps` alias. Four false passes in a guard nobody had reason to doubt, found by fixing an annoyance.
+
+**THE GATE'S OWN SOURCE NO LONGER HOLDS THE CONTIGUOUS LITERAL**, assembled from parts the way `BANNED_GLYPHS` uses `chr()`. Grepping this repo with the hook armed was previously a landmine, and that landmine is what produced the item.
+
+**A NEW HAZARD CAME WITH `OPS-19` AND IS FILED AS `OPS-23` RATHER THAN HIDDEN.** The implementing slice found it, could not fix it from its own file list, and said so plainly - which is the behaviour this project wants. Our watcher runs under our own token, so an access-denied RECORDED pid means the pid was recycled onto a foreign process and the watcher is GONE. Before `OPS-19` that read DEAD and re-armed, correctly by accident. After it, `ensure_armed` refuses while claiming a watcher is running, and `check_watcher` falls through the identity check - `process_creation_time` returns None for the same unopenable pid, and a cannot-tell identity currently reads as 'incumbent believed' - landing on `NO_HEARTBEAT`, which reports ARMED. **A genuinely absent watcher can now read armed.** Narrow, not summonable on demand, and a real regression against the prior behaviour.
+
+**`OPS-23` IS WRITTEN FROM REASONING, NOT MEASUREMENT, and says so.** Its proposed fix - that 'alive but creation time unreadable' means the pid is not ours, so the case belongs in `IMPOSTOR` - is a HYPOTHESIS. `OPS-17` and `OPS-18` were both filed with a false mechanism, so the item instructs the next session to verify the premise before building on it.
+
+**THREE BRANCHES KEPT SEPARATE AND `SIM103` SUPPRESSED WITH ITS REASON.** Ruff wanted the last two folded into one inequality. Folded, the denied case and the uncharacterised case share an expression and no mutation can separate them. `OPS-18` shipped a branch no test reached; keeping them apart is the cheap defence, and the merger PROVED the separability rather than asserting it.
+
 ### LL-0127 - 2026-09-04 - OPS-18 CLOSED - liveness reads the exit TIME, and the losing design was correct on a quarter fewer pids than it could answer
 
 **Evidence:**
