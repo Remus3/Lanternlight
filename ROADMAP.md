@@ -2975,7 +2975,7 @@ unchanged, so the outage closes at the WRAP rather than at session entry. That
 is deliberate - a second spawn path without the identity machinery behind it is
 worse than a delayed recovery.
 
-## OPS-24. `OPS-22`'s accepted false block fired on its own commit - OPEN
+## OPS-24. `OPS-22`'s accepted false block fired on its own commit - DECLINED, CLOSED 2026-09-05
 
 Opened 2026-09-04, cycle 43, **within minutes of `OPS-22` closing**, by the
 merger trying to commit it.
@@ -3022,6 +3022,32 @@ not a command being run. That is a distinction the gate already draws elsewhere
 is cheap. Weigh that honestly against the risk of touching a guard that is now
 demonstrably catching four invocation spellings it used to miss. Declining this
 item is a perfectly good outcome.
+
+**DECLINED 2026-09-05, cycle 46, ledger `LL-0131` - and declined on a
+MEASUREMENT rather than on the shrug the item invited.**
+
+The only SAFE narrowing is "skip rule 2 when the command is a lone `git commit`
+that cannot introduce a second command". That forces it to treat `;`, `|`, `&`,
+`(`, `)`, `{`, `}`, `=`, a backslash, `$(` and a backtick as disqualifying,
+because any of them can start another command - and **the commit MESSAGE is
+part of the same command string.**
+
+Measured over this repo's last 40 real commit messages: **39 of them contain at
+least one of those characters.** So the narrowing would refuse to apply **97
+percent** of the time, while adding a branch to a guard that is now
+demonstrably catching four invocation spellings the old substring test missed.
+It buys almost nothing and costs a branch in a safety check.
+
+**What WAS done:** acceptance criterion 4, which held regardless of the
+decision. `tools/precommit_gate.py`'s docstring no longer describes the false
+block as hypothetical - it records that it fired within minutes of shipping, on
+a commit message that was never going to be executed, and carries the 39-of-40
+measurement so a later session does not re-derive it.
+
+**Reopen this if the cost changes**, not if it merely irritates: the trigger
+would be a false block on something that CANNOT be rephrased, or a measurement
+showing commit messages that avoid all eleven characters are common. Neither is
+true today.
 
 ## OPS-25. A cycle that closes TWO items credits only one - CLOSED 2026-09-04
 
