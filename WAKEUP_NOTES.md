@@ -38,8 +38,11 @@ trigger.
 ## WHERE THE PROJECT ACTUALLY STANDS
 
 **The ops backlog is empty apart from `OPS-14`** (this machine's disk hit 100
-percent mid-session and recovered with nothing deleted; unexplained). Nine ops
-items closed in six cycles: `OPS-16` through `OPS-25`.
+percent mid-session and recovered with nothing deleted; unexplained). **Nine**
+ops items were resolved across cycles 41 to 46: `OPS-17` through `OPS-25`.
+`OPS-16` closed in cycle 40 (`LL-0125`) and is NOT part of that run - the range
+was written as `OPS-16` through `OPS-25`, which is TEN ids, and the wrap
+refutation caught it.
 
 **The highest-value open question needs the CLIENT and cannot be advanced from
 disk.** Item 10 - the stack buff measured AT THE CEILING - is still the biggest
@@ -160,9 +163,15 @@ second as a confirmation. **`ARMED` no longer implies a confirmed identity.**
 The `IMPOSTOR` route keys on the `OpenProcess` ERROR CODE via a new
 `pid_open_denied`, consulted ONLY when identity came back unanswerable.
 Measured with `SeDebugPrivilege` dropped: 40/40 own children readable, 12/307
-live pids alive-but-denied and every one owned by SYSTEM, LOCAL SERVICE, UMFD
-or DWM. With the privilege HELD, 0 of 305 deny - so a test hunting a real
-denied pid from inside pytest finds nothing and must inject.
+live pids alive-but-denied. With the privilege HELD, 0 of 305 deny - so a test
+hunting a real denied pid from inside pytest finds nothing and must inject.
+
+**The ownership half of that reading is WITHDRAWN** - `tasklist /V` returns
+`N/A` for exactly those pids once the privilege is dropped, so nobody could
+have seen the owner. Image names were consistent with system services, plus one
+unattributed `pythonw.exe`, which is the interpreter this project's own tooling
+runs under. `OPS-23`'s fix is unaffected: it rests on the 40-of-40 reading that
+our OWN children are always readable, not on a claim about everyone else's.
 
 `guard.owner_of()` splits the lock into three states; `read_owner`'s contract
 is unchanged so its two remaining callers were untouched.
