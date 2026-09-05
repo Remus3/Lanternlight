@@ -48,6 +48,21 @@ buff rather than a distance term. Items 7, 11 and 12 also need the client. A
 session that finds the client closed and the ops list empty should say so
 rather than inventing work.
 
+## `OPS-14` was re-measured at the wrap, and the reading is useful
+
+`C:/ll-captures` is **9.91 GB across 19,202 files** - up only **0.04 GB and 40
+files** in five days. Over the same window `C:` free fell **161.6 GB to 134.9
+GB**, a loss of **26.7 GB** (now 85.8 percent used). **The captures took 0.15
+percent of what the drive lost**, so whatever is eating tens of gigabytes on
+this machine is not this project - and that is now a measured statement over a
+five-day window rather than an inference from one total.
+
+**The growth slowdown has an obvious candidate and it is NOT closed:** the
+client was shut for the whole window, so the game wrote almost nothing to
+archive. That is a HYPOTHESIS - nobody has joined capture growth to play
+sessions, and a watcher that had silently stopped would produce the same flat
+line. The heartbeat argues against that; the two have not been joined.
+
 ---
 
 # Wrap 2026-09-05 - cycle 45 - `OPS-20` and `OPS-25` closed, and a restore anchor caught the merger
