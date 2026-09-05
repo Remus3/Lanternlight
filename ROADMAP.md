@@ -4867,7 +4867,29 @@ is 83.0 percent used with 161.6 GB free. The captures still cannot explain a
 953 GB drive reaching 100 percent, so the ruling-out survives - but it now rests
 on a number measured today rather than one recited from a fortnight ago, and the
 **growth rate is itself a reason to measure `4d` before arming a watcher
-permanently**. The capture evidence **must not be pruned in response** - the `LL-0016`
+permanently**.
+
+**RE-MEASURED AGAIN 2026-09-05, and this reading SHARPENS the ruling-out
+considerably.** `C:/ll-captures` is **9.91 GB across 19,202 files** - up just
+**0.04 GB and 40 files** in the five days since the last measurement. Over the
+same window `C:` free fell from **161.6 GB to 134.9 GB**, a loss of **26.7 GB**
+(now 85.8 percent used, 818.4 GB of 953.3 GB).
+
+So the captures consumed **0.15 percent** of the space the drive lost. Whatever
+is eating tens of gigabytes on this machine, **it is not this project**, and
+that is now a measured statement over a five-day window rather than an
+inference from a single total.
+
+**The growth SLOWDOWN has an obvious candidate and it is NOT closed:** the
+client was shut the whole of 2026-09-04 into 2026-09-05, so the game wrote
+almost no new logs or saves for the watcher to archive. The earlier burst - 2.96
+GB across 16,941 files to 9.87 GB across 19,162 in about two days - spans active
+play. **That is a hypothesis, not a finding**: nobody has correlated capture
+growth against play sessions, and a watcher that had silently stopped would
+produce the same flat line. The heartbeat says it is polling, which argues
+against that, but the two have not been joined.
+
+The capture evidence **must not be pruned in response** - the `LL-0016`
 neighbourhood records that those directories are the only record behind several
 published claims. A full-drive scan to find the real consumer **timed out at 10
 minutes and was abandoned** rather than left half-finished.
