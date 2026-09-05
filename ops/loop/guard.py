@@ -23,8 +23,37 @@ existence probe, but on Windows CPython maps ``os.kill`` for any signal other
 than the two console-control events onto ``TerminateProcess`` - so the
 conventional "harmless" probe would kill the process it is asking about. This
 module therefore uses ``OpenProcess`` with ``PROCESS_QUERY_LIMITED_INFORMATION``
-plus ``GetExitCodeProcess`` on Windows, and the ordinary signal-0 probe only on
-POSIX.
+on Windows, and the ordinary signal-0 probe only on POSIX.
+
+What it asks THROUGH that handle changed in ``OPS-18``, and the reason is worth
+keeping. ``GetExitCodeProcess`` reports "has not exited" by writing 259 into
+the same ``DWORD`` it otherwise fills with the real exit code, and 259 is a
+legal exit code. A process that exited with 259 was therefore reported alive
+for as long as anything held its process object open - which for the loop guard
+means refusing to start forever, and for ``ops/loop/watch.py`` means refusing
+to re-arm a watcher that is not there. The probe now reads the EXIT time out of
+``GetProcessTimes`` instead: it is zero until the process exits and a real
+timestamp afterwards, it is a different field from the exit code so no exit
+code can impersonate it, and it is answerable under the right this module
+already holds - ``ops/loop/watch.py`` reads the CREATION time out of the same
+call under exactly that right.
+
+The one caveat, written down rather than only known: Microsoft documents
+``lpExitTime`` as "If the process has not exited, the content of this structure
+is undefined." Measured on this machine, every one of 312 RUNNING processes
+reported exactly zero, as did a live child. A child that had exited with 259
+reported a real non-zero timestamp, which is the reading the fix turns on.
+
+The alternative - ``WaitForSingleObject`` - has fully defined semantics but
+needs the ``SYNCHRONIZE`` right, and **with ``SeDebugPrivilege`` dropped from
+the probing token** 77 of those same processes deny it while granting
+``PROCESS_QUERY_LIMITED_INFORMATION``, so that route answers a strictly smaller
+set of pids than this module can answer today. That condition is part of the
+measurement, not a footnote to it: a token that HOLDS ``SeDebugPrivilege``
+bypasses the DACL check in ``OpenProcess`` and sees zero denials, so the same
+sweep run from an elevated session reads 0 of 338 and proves nothing. Widening
+the probe's reach was judged worth more than trading a measured-but-undocumented
+zero for a documented constant that cannot be asked for a quarter of them.
 """
 
 from __future__ import annotations
@@ -60,8 +89,11 @@ LOCK_FILENAME = "loop.lock"
 #: acquiring any right to affect it.
 _PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 
-#: Windows ``GetExitCodeProcess`` sentinel meaning "has not exited".
-_STILL_ACTIVE = 259
+#: A zero exit ``FILETIME`` from ``GetProcessTimes`` means the process has not
+#: exited. Once it has, the field carries a real timestamp - a count of
+#: 100-nanosecond intervals since 1601 - and no exit CODE is involved, which is
+#: the whole of ``OPS-18``.
+_NOT_EXITED = 0
 
 
 class LockBusy(RuntimeError):
@@ -100,14 +132,69 @@ def _now() -> str:
 
 
 def _windows_pid_is_alive(pid: int) -> bool:
-    """Return True if ``pid`` names a running process, without touching it."""
+    """Return True if ``pid`` names a running process, without touching it.
+
+    The oracle is the EXIT time from ``GetProcessTimes``, not the exit CODE
+    from ``GetExitCodeProcess``. ``GetExitCodeProcess`` overloads one ``DWORD``
+    with both answers - a real exit code, and 259 for "has not exited" - and
+    259 is itself a legal exit code, so a process that exited with it read
+    ALIVE for as long as anything held its process object open. The exit time
+    is a separate field with no such overload: zero until the process exits, a
+    timestamp afterwards.
+
+    Follows the ctypes idiom in
+    :func:`ops.loop.watch._windows_process_creation_time` exactly - the same
+    call, the same access right, the other output field - because a second
+    spelling of one probe is a second thing to get wrong.
+
+    ``PROCESS_QUERY_LIMITED_INFORMATION`` remains the ONLY right asked for. It
+    grants no power to affect the process, and it is what makes this probe
+    answerable for every pid the old one could answer: measured on this machine
+    WITH ``SeDebugPrivilege`` DROPPED from the probing token, 77 of the 312
+    openable processes GRANT it and DENY ``SYNCHRONIZE``, so a probe built on a
+    wait function would have to fall back on a quarter of them. The dropped
+    privilege is load-bearing in that sentence - an elevated token bypasses the
+    DACL check and measures zero denials.
+
+    WHAT THIS RETURNS FALSE FOR, stated exactly, because a probe that
+    mis-describes its own blindness is worse than one with a declared hole.
+    False means one of two things: a positive exit timestamp, or ``OpenProcess``
+    yielding no handle AT ALL - and that second case does NOT mean "no such
+    process". ``ERROR_ACCESS_DENIED`` lands there too, so a RUNNING process this
+    token may not open reads DEAD. Measured with ``SeDebugPrivilege`` dropped:
+    13 pids denied access, all 13 still running half a second later, all 13
+    reported dead by this function.
+
+    **That is a fail-OPEN and it CONTRADICTS** :func:`pid_is_alive`'s promise
+    that an undecidable case returns True. It is pre-existing rather than new -
+    the old exit-code probe had it identically - and it is filed as ``OPS-19``
+    rather than fixed here, because ``OPS-18`` was the collision on the SUCCESS
+    path and this is the failure path. Do not read the contract as describing
+    this function until ``OPS-19`` closes.
+
+    Every OTHER failure - a handle that opens but ``GetProcessTimes`` refuses -
+    returns True, per the contract.
+    """
     import ctypes
     from ctypes import wintypes
+
+    class _FILETIME(ctypes.Structure):
+        _fields_ = (
+            ("dwLowDateTime", wintypes.DWORD),
+            ("dwHighDateTime", wintypes.DWORD),
+        )
 
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
     kernel32.OpenProcess.restype = wintypes.HANDLE
     kernel32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
-    kernel32.GetExitCodeProcess.argtypes = (wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD))
+    kernel32.GetProcessTimes.restype = wintypes.BOOL
+    kernel32.GetProcessTimes.argtypes = (
+        wintypes.HANDLE,
+        ctypes.POINTER(_FILETIME),
+        ctypes.POINTER(_FILETIME),
+        ctypes.POINTER(_FILETIME),
+        ctypes.POINTER(_FILETIME),
+    )
     kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
 
     handle = kernel32.OpenProcess(_PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
@@ -116,12 +203,23 @@ def _windows_pid_is_alive(pid: int) -> bool:
         # holder worth blocking on.
         return False
     try:
-        code = wintypes.DWORD()
-        if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+        created = _FILETIME()
+        exited = _FILETIME()
+        in_kernel = _FILETIME()
+        in_user = _FILETIME()
+        ok = kernel32.GetProcessTimes(
+            handle,
+            ctypes.byref(created),
+            ctypes.byref(exited),
+            ctypes.byref(in_kernel),
+            ctypes.byref(in_user),
+        )
+        if not ok:
             # The handle opened, so something is there; fail closed and treat
             # it as alive rather than reclaiming a lock we cannot judge.
             return True
-        return code.value == _STILL_ACTIVE
+        raw = (exited.dwHighDateTime << 32) | exited.dwLowDateTime
+        return raw == _NOT_EXITED
     finally:
         kernel32.CloseHandle(handle)
 

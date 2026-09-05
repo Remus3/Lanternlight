@@ -51,9 +51,10 @@ def _dead_pid() -> int:
 
     Two facts about Windows make the fix a one-liner. A process object survives
     the process, for exactly as long as some handle to it remains open, and the
-    pid stays reserved for that whole time. But ``GetExitCodeProcess`` on that
-    surviving object reports the real exit code rather than ``STILL_ACTIVE``,
-    so :func:`guard.pid_is_alive` calls it dead. A reaped child whose handle is
+    pid stays reserved for that whole time. But that surviving object carries a
+    real EXIT TIME, so :func:`guard.pid_is_alive` calls it dead. (It read the
+    exit CODE until ``OPS-18``, which made this true for every exit code except
+    259 - see the collision tests below.) A reaped child whose handle is
     still open is therefore dead and unreissuable at the same time, which is
     the pair of properties every caller below needs and neither of the obvious
     alternatives gives. Leaving the child unreaped would reserve the pid too,
@@ -82,6 +83,24 @@ def _dead_pid() -> int:
     # the last reference and hands back a pid the allocator has already freed.
     _PINNED_DEAD.append(proc)
     return proc.pid
+
+
+def _dead_pid_exiting_with(code: int) -> subprocess.Popen:
+    """Spawn a child that exits with exactly ``code``, reap it, and pin it.
+
+    The pin is :func:`_dead_pid`'s, for :func:`_dead_pid`'s reason, and the
+    caller gets the whole ``Popen`` back rather than the bare pid so it can
+    assert on ``returncode`` before believing anything the probe says.
+
+    The exit code is the variable ``OPS-18`` turns on: ``GetExitCodeProcess``
+    reports a real exit code and a "still running" sentinel through the same
+    ``DWORD``, and the sentinel is 259, which a process may also legitimately
+    exit with. Only a caller that chooses the code can tell those two apart.
+    """
+    proc = subprocess.Popen([sys.executable, "-c", f"raise SystemExit({code})"])
+    proc.wait(timeout=60)
+    _PINNED_DEAD.append(proc)
+    return proc
 
 
 #: Windows access right that asks only whether a process object exists. It
@@ -209,6 +228,87 @@ def test_pid_is_alive_rejects_nonsense(pid) -> None:
     assert guard_mod.pid_is_alive(pid) is False
 
 
+@pytest.mark.skipif(
+    sys.platform != "win32",
+    reason=(
+        "The collision is a Windows constant - GetExitCodeProcess overloads one "
+        "DWORD with both the exit code and STILL_ACTIVE - and only the Windows "
+        "branch can hold it. The pin that makes the assertion non-vacuous is a "
+        "Windows guarantee too: POSIX frees the pid the moment the zombie is "
+        "reaped, so on POSIX this would probe whoever inherited the number."
+    ),
+)
+@pytest.mark.parametrize("exit_code", [0, 1, 42, 258, 259, 260])
+def test_a_reaped_child_reads_dead_whatever_exit_code_it_chose(exit_code: int) -> None:
+    """A process that has exited is dead, and its exit code is not a vote.
+
+    259 is ``STILL_ACTIVE``, the value ``GetExitCodeProcess`` writes for a
+    process that has NOT exited. It is also an exit code a process may pass to
+    ``ExitProcess``, so a probe that compares the two is asking a question the
+    return value cannot answer. Measured before the fix: 0, 1, 42, 258 and 260
+    all read dead, and 259 read ALIVE, 5 of 5.
+
+    The neighbours are in the parameter list because they are what separates a
+    fixed collision from a special-cased number. 258 is there deliberately: it
+    is ``WAIT_TIMEOUT`` in the wait-status space, which is the constant the
+    REJECTED ``WaitForSingleObject`` design would have had to keep apart from
+    an exit code. The shipped fix reads the exit TIME instead and touches
+    neither space, so 258 is now just a neighbour - but it stays parameterised,
+    because a later rewrite that reaches for the wait API would trip on it.
+
+    Consequence, and the reason this is not a curiosity: ``guard.acquire``
+    refuses to start when the recorded pid reads alive, and THREE call sites in
+    ``ops/loop/watch.py`` reach liveness through here - ``armed_pid``,
+    ``ensure_armed`` and ``check_watcher``. A loop or a watcher that exited
+    with 259 would be believed alive for as long as anything held its process
+    object open, and nothing would ever re-arm.
+
+    That last clause is the honest bound and it matters: the shipped
+    ``default_spawn`` drops its ``Popen`` at ``return child.pid``, so in the
+    detached topology nothing holds the handle and the pid frees within a
+    second. The defect is real and summonable, and it was NOT firing in
+    production - a third party holding a handle is what sustains it.
+    """
+    proc = _dead_pid_exiting_with(exit_code)
+
+    assert proc.returncode == exit_code, (
+        "the child did not exit with the code this case is about, so a dead "
+        "reading below would be about some other exit"
+    )
+    assert _pid_owns_a_process_object(proc.pid) is True, (
+        "the pin did not hold, so OpenProcess would fail and pid_is_alive would "
+        "answer False for the wrong reason entirely - a vacuous pass"
+    )
+
+    assert guard_mod.pid_is_alive(proc.pid) is False
+
+
+def test_a_child_that_is_still_running_reads_alive() -> None:
+    """The other half of the pair: do not fix the bug by answering dead.
+
+    A probe hardwired to False would satisfy every case above, so this pins a
+    process that genuinely IS running. A separate process rather than
+    ``os.getpid()``, because our own pid is the one case a broken probe is most
+    likely to get right by accident.
+
+    The child is ended by closing the stdin it is blocked on, never by killing
+    it - this repo does not terminate processes, not even in its tests.
+    """
+    proc = subprocess.Popen(
+        [sys.executable, "-c", "import sys; sys.stdin.read()"],
+        stdin=subprocess.PIPE,
+    )
+    try:
+        assert guard_mod.pid_is_alive(proc.pid) is True
+    finally:
+        proc.stdin.close()
+        proc.wait(timeout=60)
+
+    # Same pid, same still-open handle, opposite answer now that it has exited.
+    assert proc.returncode == 0
+    assert guard_mod.pid_is_alive(proc.pid) is False
+
+
 def test_liveness_probe_does_not_kill_the_process_it_asks_about() -> None:
     """The probe must be read-only.
 
@@ -220,6 +320,119 @@ def test_liveness_probe_does_not_kill_the_process_it_asks_about() -> None:
     for _ in range(5):
         assert guard_mod.pid_is_alive(os.getpid()) is True
     assert guard_mod.pid_is_alive(os.getpid()) is True
+
+
+# ---------------------------------------------------------------------------
+# the fail-closed promise
+# ---------------------------------------------------------------------------
+
+
+class _FakeCall:
+    """A stand-in for a ctypes function object.
+
+    It must tolerate ``restype`` and ``argtypes`` being assigned, because the
+    probe configures marshalling before calling anything, and a fake that
+    refused those would fail for the wrong reason.
+    """
+
+    def __init__(self, result):
+        self.result = result
+        self.calls = 0
+        self.restype = None
+        self.argtypes = None
+
+    def __call__(self, *args):
+        self.calls += 1
+        return self.result
+
+
+class _FakeGetProcessTimes(_FakeCall):
+    """``GetProcessTimes``, with a settable outcome and exit timestamp."""
+
+    def __init__(self, result, exit_raw=0):
+        super().__init__(result)
+        self.exit_raw = exit_raw
+
+    def __call__(self, handle, created, exited, in_kernel, in_user):
+        self.calls += 1
+        if self.exit_raw:
+            # byref() hands back a CArgObject; _obj is the structure itself.
+            exited._obj.dwLowDateTime = self.exit_raw & 0xFFFFFFFF
+            exited._obj.dwHighDateTime = self.exit_raw >> 32
+        return self.result
+
+
+class _FakeKernel32:
+    def __init__(self, *, open_result, times):
+        self.OpenProcess = _FakeCall(open_result)
+        self.GetProcessTimes = times
+        self.CloseHandle = _FakeCall(1)
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="the ctypes probe is Windows-only")
+def test_a_handle_that_opens_but_will_not_answer_reads_ALIVE(monkeypatch) -> None:
+    """A readable handle whose times cannot be read is UNDECIDED, so: alive.
+
+    This is the promise in :func:`guard.pid_is_alive`'s docstring - when
+    existence cannot be determined the answer is True, so an ambiguous case
+    declines to start rather than trampling a live loop - and until now
+    NOTHING asserted it. The refutation pass for ``OPS-18`` flipped this exact
+    branch to return False and watched the whole suite stay green.
+
+    Injected rather than provoked, deliberately. There is no reliable way to
+    make ``GetProcessTimes`` fail on a handle that opened, so the honest choice
+    is a fake that fails on demand and a mirror below proving the fake can also
+    produce the opposite answer. A single-direction injection would pass just
+    as happily against a function hardwired to return True.
+    """
+    import ctypes
+
+    fake = _FakeKernel32(open_result=4321, times=_FakeGetProcessTimes(0))
+    monkeypatch.setattr(ctypes, "WinDLL", lambda *a, **k: fake)
+
+    assert guard_mod.pid_is_alive(1234) is True, (
+        "an unreadable handle is undecided, and undecided must fail CLOSED"
+    )
+    assert fake.GetProcessTimes.calls == 1, "the branch under test was never reached"
+    assert fake.CloseHandle.calls == 1, "the handle was leaked on the failure path"
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="the ctypes probe is Windows-only")
+def test_the_injected_probe_can_still_report_dead(monkeypatch) -> None:
+    """The mirror: the same fake, answering, reports a real exit as DEAD.
+
+    Without this, the test above would pass against an implementation that
+    ignored every reading and returned True unconditionally - which is exactly
+    the shape of a vacuous guard.
+    """
+    import ctypes
+
+    # The value is arbitrary and deliberately small: the probe compares the
+    # assembled timestamp against zero and nothing else, so only zero-versus-
+    # non-zero carries meaning here. A realistic 18-digit FILETIME was used
+    # first and tripped tests/test_no_pii.py's long-identifier rule, which is
+    # the guard behaving correctly - the fix is a different constant, never a
+    # narrower rule.
+    fake = _FakeKernel32(open_result=4321, times=_FakeGetProcessTimes(1, exit_raw=7))
+    monkeypatch.setattr(ctypes, "WinDLL", lambda *a, **k: fake)
+
+    assert guard_mod.pid_is_alive(1234) is False
+    assert fake.CloseHandle.calls == 1
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="the ctypes probe is Windows-only")
+def test_a_zero_exit_timestamp_reads_alive(monkeypatch) -> None:
+    """And the third reading: answered, zero timestamp, still running.
+
+    Pins the constant itself. A probe that read any successful call as "dead"
+    would pass both tests above and fail this one.
+    """
+    import ctypes
+
+    fake = _FakeKernel32(open_result=4321, times=_FakeGetProcessTimes(1, exit_raw=0))
+    monkeypatch.setattr(ctypes, "WinDLL", lambda *a, **k: fake)
+
+    assert guard_mod.pid_is_alive(1234) is True
 
 
 # ---------------------------------------------------------------------------

@@ -1973,9 +1973,11 @@ hunting for code that did not exist.
   meaning; exactly one of the two is required.
 
 **Nothing here kills anything.** Liveness is `guard.pid_is_alive`, which uses
-`OpenProcess` plus `GetExitCodeProcess` on Windows, because `os.kill(pid, 0)`
-there maps onto `TerminateProcess` - the conventional POSIX existence probe
-would kill the process it is asking about.
+`OpenProcess` plus the EXIT time out of `GetProcessTimes` on Windows, because
+`os.kill(pid, 0)` there maps onto `TerminateProcess` - the conventional POSIX
+existence probe would kill the process it is asking about. (It read
+`GetExitCodeProcess` until `OPS-18`; that sentence is corrected here rather
+than left to mislead.)
 
 ### Acceptance, with the evidence observed 2026-09-01
 
@@ -2457,7 +2459,7 @@ the mechanism test skips elsewhere. No test asserts that an UNPINNED pid reads
 free: that assertion IS the race this item opened for, so shipping it would be
 a flake dressed as a guard. It was watched by hand instead.
 
-## OPS-18. `pid_is_alive` calls a DEAD process ALIVE when it exited with 259 - OPEN
+## OPS-18. `pid_is_alive` calls a DEAD process ALIVE when it exited with 259 - CLOSED 2026-09-04
 
 Opened 2026-09-04, cycle 41, by the refutation pass of `OPS-17`, which was not
 asked about it and found it anyway.
@@ -2486,6 +2488,44 @@ every re-arm, and nothing would archive the log, the saves or the market cache.
 That is the silent outage `LL-0124` caught in production, with the check that
 caught it disarmed.
 
+**"BELIEVED ALIVE FOREVER" IS AN OVERSTATEMENT AND IS WITHDRAWN, measured the
+same day it was written.** The false ALIVE needs a live handle to the exited
+process object, and the shipped `default_spawn` drops its `Popen` at
+`return child.pid`, so in the detached topology NOTHING holds one and the pid
+frees within about a second - re-measured directly in `ops/loop/watch.py`.
+A third party holding a `PROCESS_QUERY_LIMITED_INFORMATION` handle does sustain
+it indefinitely (measured alive at t+2/5/8/11 s, flipping the instant the
+holder exits), and **nothing in this repo exits 259**: `armwatch.main()`
+returns 0 or 2 only, and `taskkill /F`, `TerminateProcess`, an uncaught
+exception and an argparse error give 1, 1, 1 and 2. So the defect is real,
+summonable and worth fixing - **but it was NOT firing in production**, and the
+item said otherwise. Fixed anyway, on the `LL-0124` principle that a disarmed
+check fires the cycle after it ships.
+
+**THE CONSUMER COUNT IN THIS ITEM WAS ALSO WRONG.** It said six; there are
+**five** - `guard.is_locked`, `guard.acquire`, `watch.armed_pid`,
+`watch.ensure_armed` and `watch.check_watcher`. Two of the six lines cited were
+not call sites at all: they are f-strings recording the ANSWER, not asking the
+question. And the list omitted `armed_pid` entirely. Third filed count wrong in
+two cycles - and the correction was itself loose on a first pass, which the
+refutation caught: it called those two lines "branches of one call", which they
+are not.
+
+**What a false ALIVE actually does, per consumer, measured against the old
+code:** `is_locked` -> True, which is the fail-closed case the docstring
+promises, unharmed. `acquire` -> raises `LockBusy`, safe-but-annoying and
+genuinely PROTECTED by fail-closed; it never kills, only declines.
+`armed_pid` -> returns the dead pid and `is_armed` -> True, unsafe but latent,
+since nothing calls it. `ensure_armed` -> refuses with "a watcher is already
+running", which is a confident falsehood and NOT fail-closed: the refusal
+guards against double-polling while the real risk is ZERO-polling.
+`check_watcher` -> worst of the five: the `DEAD` branch is skipped and every
+reachable verdict falls OUTSIDE `REARM_STATES`, so the wrap never re-arms.
+`IMPOSTOR` is UNREACHABLE, because `process_creation_time` still succeeds on
+the exited process - a held handle serves `GetProcessTimes` as happily as
+`GetExitCodeProcess` - so `_identity_matches` returns True. Both the `4e`
+identity check and the `4f` surface check are defeated by it.
+
 **Acceptance:**
 
 - A test that spawns a child exiting with 259, pins it against pid reuse, and
@@ -2509,6 +2549,192 @@ caught it disarmed.
 allocator; this is a production constant collision in a module no test helper
 touches. The two met only because `OPS-17`'s refutation needed children with
 chosen exit codes.
+
+**CLOSED 2026-09-04, cycle 42, ledger `LL-0127`.** `_windows_pid_is_alive` now
+reads the EXIT time out of `GetProcessTimes` instead of the exit CODE out of
+`GetExitCodeProcess`. The exit time is zero until the process exits and a real
+timestamp afterwards, it is a different field from the exit code so no exit
+code can impersonate it, and it is answerable under
+`PROCESS_QUERY_LIMITED_INFORMATION` - the right the module already held.
+`ops/loop/watch.py` reads the CREATION time out of the same call under exactly
+that right, so this is one idiom, not a second one.
+
+**TWO DESIGNS WERE BUILT AND A DISTINCT AGENT CHOSE BETWEEN THEM.** The
+implementing slice built `WaitForSingleObject(handle, 0)`, which has fully
+DOCUMENTED semantics and whose defence of `SYNCHRONIZE` as observational was
+correct. It lost on REACH, and the deciding number was measured:
+
+> With `SeDebugPrivilege` dropped from the probing token, **77 of the 312 pids
+> this machine can open with `PROCESS_QUERY_LIMITED_INFORMATION` DENY
+> `PQLI | SYNCHRONIZE` with `ERROR_ACCESS_DENIED`** - 24.7 percent, all service
+> processes. Every one lands on that design's fallback, which is the original
+> buggy comparison verbatim. Driven through the shipped function with
+> `SYNCHRONIZE` denied, it returned True for a child that exited 259.
+
+So that design would have shipped `OPS-18` unfixed on a quarter of the pids it
+can be asked about, in a branch its own diff never exercised - and its
+correctness would have been **a function of the launching token**, which is
+exactly the fresh-clone case this repo writes its rules for.
+
+**THE FIRST SWEEP OF THAT POPULATION READ ZERO, AND IT WAS AN ARTIFACT OF THE
+TOKEN.** This session runs with `SeDebugPrivilege` ENABLED, which bypasses the
+DACL check in `OpenProcess`, so the residual set could not have been non-empty
+no matter what the security descriptors said. A reading is a claim about the
+instrument, and here the instrument was the privilege set.
+
+**THE COST ON THE CHOSEN SIDE, written down rather than only known.** Microsoft
+documents `lpExitTime` as "If the process has not exited, the content of this
+structure is undefined." The zero is MEASURED, not promised: 0 of 312 running
+processes reported a non-zero exit `FILETIME`. That hedge is carried in
+`_windows_pid_is_alive`'s own docstring, because a guard that mis-states its
+coverage is worse than one with a declared hole (`OPS-16`).
+
+**A REJECTED THIRD DESIGN, recorded so it is not re-proposed:** cross-checking
+the exit time against `GetExitCodeProcess`, reading the time only when the code
+is 259. It sounds like belt and braces and buys nothing - **a live process
+ALWAYS reports 259**, so the undefined field is read in exactly the same cases
+either way, and the extra call reduces nothing.
+
+**THE SAFETY GUARD CHANGED AND IT WAS RE-PROVED, NOT ASSUMED.** Dropping
+`GetExitCodeProcess` made `guard`'s win32 inventory EQUAL to `watch`'s, which
+silently retired the discriminator in
+`test_the_guard_module_and_the_watch_module_differ_where_expected`. Rather than
+delete the assertion, the equality is now asserted, the two surviving
+discriminators (`os.kill`, `subprocess.Popen`) are asserted in BOTH directions,
+and the docstring states that the win32 namespace no longer discriminates at
+all. Re-proved by mutation: `_scope_source` forced to read `guard.py` for every
+path still reddens that test. **No allowlist entry was needed** - every call
+the new probe makes was already in `ALLOWED_WIN32_FUNCTIONS`.
+
+## OPS-19. `pid_is_alive` calls RUNNING processes DEAD on access-denied - OPEN
+
+Opened 2026-09-04, cycle 42. Found independently by THREE passes during
+`OPS-18` - the implementing slice, the blast-radius sweep and the adjudicator -
+which is worth noting on its own: it sat under the same twenty lines everyone
+was reading and none of them was looking for it.
+
+`_windows_pid_is_alive` returns False when `OpenProcess` yields no handle, and
+its comment reads "No such process, or it is gone and unopenable. Either way,
+not a holder worth blocking on." **That folds two different facts together.**
+`ERROR_INVALID_PARAMETER` (87) means no such process. `ERROR_ACCESS_DENIED` (5)
+means the process EXISTS and is running and this token may not ask about it.
+
+Measured: with `SeDebugPrivilege` dropped, **12 running processes read DEAD**
+through this path. `pid_is_alive`'s own docstring promises the opposite - "when
+existence cannot be determined, the answer is True, so an ambiguous case
+refuses to start rather than trampling a live loop". This is a **fail-OPEN in a
+function that documents itself as fail-closed**, and it survives `OPS-18`
+unchanged in both the shipped design and the rejected one.
+
+**Why it matters:** `guard.acquire` reclaims a lock whose owner reads dead. A
+loop running under a different token - a scheduled task, another user, an
+elevated session - could therefore have its lock stolen by a second loop, which
+is the exact "two loops interleaving commits" failure the module exists to
+prevent, and it would happen silently.
+
+**Acceptance:**
+
+- `GetLastError` is consulted after a failed `OpenProcess`, and 5 is separated
+  from 87. Access-denied returns True (cannot tell, fail closed); no-such-
+  process returns False.
+- A test WATCHED GOING RED that pins the distinction. Constructing a genuine
+  access-denied case needs care: a protected or other-user process is the
+  honest subject, and `SeDebugPrivilege` must be DROPPED from the probing token
+  or the denial cannot occur at all. If no such subject can be constructed
+  reliably on this machine, say so and pin the branch by injection instead -
+  but say which was done.
+- The docstring's fail-closed promise and the code agree afterwards. Today they
+  do not, and the docstring is the one that is right.
+
+**Not in scope:** `OPS-18`, which was the exit-code collision on the SUCCESS
+path. This is the failure path, a different mechanism, and fixing one does
+nothing for the other.
+
+## OPS-20. Nothing tests `guard.py`'s access mask, and a docstring says otherwise - OPEN
+
+Opened 2026-09-04, cycle 42, by the `OPS-18` adjudication.
+
+`tests/test_process_capability.py` checks WHICH Win32 entry points the two
+in-scope modules reach. Its own docstring says it "says nothing about the RIGHT
+an `OpenProcess` asks for", and points the reader at `tests/test_loop_watch.py`
+for that check. **That check reads `ops/loop/watch.py` only.** So the access
+mask in `ops/loop/guard.py` is tested by nothing at all, while a docstring
+tells a later session it is covered.
+
+That is precisely the `OPS-16` failure mode - a guard that MIS-states its
+coverage is worse than one with a declared hole, because the mis-statement is
+an active lie a later session will rely on. It nearly mattered this cycle: the
+rejected `OPS-18` design widened `guard.py`'s mask with `SYNCHRONIZE` and no
+test would have noticed.
+
+**Acceptance:**
+
+- The mask assertion is generalised over both files in `SCOPE` rather than
+  naming one, so adding a third in-scope module cannot silently escape it.
+- Shown RED against `_PROCESS_QUERY_LIMITED_INFORMATION | 0x0001` planted in
+  `ops/loop/guard.py` - `PROCESS_TERMINATE` is the right that must never
+  appear, so that is the mutation worth proving, not a harmless one.
+- Whatever docstring currently claims the coverage is corrected in the same
+  change, and states what IS and is NOT checked.
+
+## OPS-21. `guard.read_owner` folds four facts onto `None`, and a corrupt lock is reclaimed - OPEN
+
+Opened 2026-09-04, cycle 42, by the `OPS-18` blast-radius sweep.
+
+`read_owner` returns `None` for a missing file, unreadable JSON, a payload that
+is not a dict, and a `pid` that is not an int. `is_locked` then calls
+`pid_is_alive(None)`, which is False, so **a corrupt lock file is treated as
+unheld and is overwritten.**
+
+`LockBusy.__init__`'s own docstring already says what the intended behaviour
+is - `pid` is "None when the file was unreadable but a live owner could not be
+ruled out" - so the module has already decided that unreadable means
+cannot-tell. `read_owner` does not implement that decision. **This is fail-OPEN
+in the same module and the same direction as `OPS-19`**, reached by a different
+route.
+
+**Acceptance:**
+
+- "No lock file" stays distinguishable from "a lock file this code cannot
+  parse". A missing file is genuinely unheld; a corrupt one is not a licence to
+  take the lock.
+- A test WATCHED GOING RED that writes a corrupt lock file and asserts
+  `acquire` REFUSES rather than reclaiming it.
+- Consider whether the operator needs a way out - an unparseable lock that can
+  never be reclaimed is its own denial of service. Deleting the file is already
+  the documented escape hatch in `LockBusy`'s message, so state whether that is
+  sufficient rather than adding a flag.
+
+**Not in scope:** changing what `acquire` does with a lock whose owner is
+genuinely dead. That path is correct and is the crash-recovery behaviour.
+
+## OPS-22. `precommit_gate` matches a forbidden cmdlet as a bare substring - OPEN
+
+Opened 2026-09-04, cycle 42, by the `OPS-18` blast-radius sweep - which **it
+fired on**, blocking a legitimate command because the analysis mentioned the
+cmdlet by name.
+
+`tools/precommit_gate.py` decides with `if "<cmdlet>" in command`. A plain
+substring test cannot tell a CALL from a MENTION, so the name inside a comment,
+a string literal, a grep pattern or a docstring is blocked exactly as hard as
+an invocation. This is the same shape as `OPS-18`: **a sentinel that is also a
+legal datum.** The repo already knows the class - `lanternlight/gvas.py`'s
+`KeyMapping` refuses to fold Unreal's `"None"` string onto Python `None` for
+the same reason - and `NEXT_SESSION_PROMPT.md` already carries the symptom as a
+trap ("a grep PATTERN can trip a pre-tool hook").
+
+**Acceptance:**
+
+- A mention is distinguished from an invocation. The bar is not perfection: a
+  cheap improvement is to require the cmdlet in a command POSITION rather than
+  anywhere in the string, and to say plainly in the docstring what the check
+  can and cannot see.
+- Tests both ways, WATCHED GOING RED: a real invocation is still blocked (the
+  guard must not be weakened - this is the whole point), and a mention inside a
+  quoted string or a comment is not.
+- **The guard must not become weaker overall.** If a form cannot be
+  distinguished safely, it stays blocked and the docstring says so. A false
+  block is an annoyance; a false pass is the thing this file exists to prevent.
 
 ## 4b. Ammo-family and talent measurement - READY, cheap, needs the client
 
