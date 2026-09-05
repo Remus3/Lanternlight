@@ -84,6 +84,19 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0131 - 2026-09-05 - OPS-24 CLOSED as DECLINED - the safe narrowing would refuse to apply on 39 of this repo's last 40 commit messages
+
+**Evidence:**
+- MEASURED, not shrugged off. The only safe narrowing of rule 2 is 'skip it when the command is a lone `git commit` that cannot introduce a second command', which forces it to treat `;`, `|`, `&`, `(`, `)`, `{`, `}`, `=`, a backslash, `$(` and a backtick as disqualifying - and the commit MESSAGE is part of the same command string. Over this repo's last 40 real commit messages, 39 contain at least one of those characters, so the narrowing would decline to apply 97 percent of the time.
+- It would therefore add a branch to a guard that is now demonstrably catching four invocation spellings the old substring test missed, and buy almost nothing. The rephrase is cheaper.
+- ACCEPTANCE CRITERION 4 WAS DONE REGARDLESS OF THE DECISION: `tools/precommit_gate.py`'s docstring no longer calls the false block hypothetical. It records that the block fired within minutes of shipping, on a commit message that was never going to be executed, and carries the 39-of-40 measurement so a later session does not re-derive it.
+- `python -m pytest tests/test_precommit_gate.py` bare: 35 passed, unchanged - this cycle altered a docstring and no behaviour.
+- Full suite and merge gate run at the wrap; see the wrap note for the counts observed this run.
+
+**A DECLINE IS A RESULT, and this one was reached by measurement rather than by the shrug the item invited.** The item explicitly said declining was a good outcome, which makes it exactly the kind of decision that gets made lazily. Measuring first turned 'probably not worth it' into '97 percent of the time it would not even apply'.
+
+**THE REOPEN CONDITION IS WRITTEN DOWN so the decline does not calcify.** Reopen if a false block lands on something that CANNOT be rephrased, or if commit messages avoiding all eleven characters turn out to be common. Mere irritation is not the trigger. A decline reason goes stale faster than a count does, and this repo has paid for re-citing one.
+
 ### LL-0130 - 2026-09-04 - OPS-20 and OPS-25 CLOSED - the untested access mask now catches PROCESS_TERMINATE, and a cycle can credit both items it closed
 
 **Evidence:**

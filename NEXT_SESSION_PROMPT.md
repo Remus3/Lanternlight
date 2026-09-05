@@ -34,6 +34,29 @@ A fresh clone runs zero git hooks until that first command runs. The tracked
 
 ---
 
+## Where the last session left it - CYCLE 46
+
+`main` is at the cycle 46 wrap commit. Suite **1757 passed** in 106.36s, run
+BARE; ruff clean. Merge gate OK at 1757 against a **1757** baseline - this cycle
+changed a docstring and no behaviour, so the count is deliberately flat. Ledger
+`LL-0131`. Client **closed**. **`OPS-24` DECLINED.**
+
+**`OPS-24` was declined on a MEASUREMENT, not a shrug.** The only safe
+narrowing must treat eleven characters as disqualifying, and the commit MESSAGE
+is part of the command string: **39 of this repo's last 40 commit messages
+contain at least one of them**, so the narrowing would refuse to apply 97
+percent of the time. The reopen condition is written into the item.
+
+## READ THIS BEFORE PICKING AN ITEM
+
+**The ops backlog is now empty apart from `OPS-14`** (disk hit 100 percent
+mid-session, recovered with nothing deleted, unexplained). Nine ops items
+closed in six cycles, `OPS-16` through `OPS-25`.
+
+**THE HIGHEST-VALUE WORK NEEDS THE CLIENT AND CANNOT BE DONE FROM DISK.** If
+the client is closed and `OPS-14` does not appeal, **say so plainly and stop** -
+do not invent work to stay busy. That is the loop's own stopping rule.
+
 ## Where the last session left it - CYCLE 45
 
 `main` is at the cycle 45 wrap commit. Suite **1757 passed** in 109.39s, run
@@ -323,17 +346,10 @@ at PANTS and open Affix Details while worn - grep the log for
 Smiting or Curse. The log carries no player-facing affix, skill or item name -
 33 names tested with two positive controls - so only a hover will do.
 
-**IF THE CLIENT IS CLOSED**, the remaining ops items are `OPS-24` and
-`OPS-14`. Both are small or blocked; **if neither appeals, the honest answer is
-that the ops backlog is nearly empty and the highest-value work needs the
-client.**
+**IF THE CLIENT IS CLOSED**, the only ops item left is `OPS-14`. **If it does
+not appeal, the honest answer is that the ops backlog is EMPTY and the
+highest-value work needs the client** - say so and stop.
 
-- **`OPS-24`** - the pre-tool gate's accepted false block fired on the commit
-  that shipped it. **DECLINING THIS IS A PERFECTLY GOOD OUTCOME** and the item
-  says so: the workaround is one rephrase, weighed against a rule now
-  demonstrably catching four invocation spellings it used to miss. If you take
-  it, the test that decides safety is `<invocation> && git commit -m "..."`,
-  which must STAY blocked.
 - **`OPS-14`** - this machine's disk hit 100 percent mid-session and recovered
   with nothing deleted. Still open, still unexplained.
 
@@ -365,7 +381,8 @@ CLOSED (`LL-0109`). Item `12`'s backward half CLOSED as impossible (`LL-0110`).
 `OPS-18` CLOSED (`LL-0127`).
 `OPS-19` and `OPS-22` CLOSED (`LL-0128`).
 `OPS-21` and `OPS-23` CLOSED (`LL-0129`).
-**`OPS-20` and `OPS-25` CLOSED (`LL-0130`).**
+`OPS-20` and `OPS-25` CLOSED (`LL-0130`).
+**`OPS-24` DECLINED and CLOSED (`LL-0131`).**
 **Items 7, 11 and 12 remain OPEN and UNCREDITED - do not credit any of them.**
 
 ---

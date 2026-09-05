@@ -5,6 +5,51 @@ fidelity and archive older ones rather than deleting them.
 
 ---
 
+# Wrap 2026-09-05 - cycle 46 - `OPS-24` DECLINED on a measurement, and the ops backlog is now empty but for `OPS-14`
+
+Suite **1757 passed** in 106.36s, run BARE at the wrap. Ruff clean. Merge gate
+OK at 1757 against a **1757** baseline - this cycle changed a docstring and no
+behaviour, so the count is deliberately flat. Ledger `LL-0131`. Client
+**closed**. Watcher `ARMED` / `VERIFIED`, pid 21452.
+
+## `OPS-24` is DECLINED, and the decline was MEASURED
+
+The item invited a shrug - it said outright that declining was a good outcome -
+which makes it exactly the kind of decision that gets made lazily. So it was
+measured instead.
+
+The only SAFE narrowing of the gate's rule 2 is "skip it when the command is a
+lone `git commit` that cannot introduce a second command". That forces it to
+treat `;`, `|`, `&`, `(`, `)`, `{`, `}`, `=`, a backslash, `$(` and a backtick
+as disqualifying - and **the commit MESSAGE is part of the same command
+string.** Over this repo's last 40 real commit messages, **39 contain at least
+one of those characters**, so the narrowing would refuse to apply **97 percent**
+of the time while adding a branch to a guard now demonstrably catching four
+invocation spellings the old substring test missed.
+
+Acceptance criterion 4 was done regardless: the gate's docstring no longer
+calls the false block hypothetical, records that it fired within minutes of
+shipping on a commit message that was never going to run, and carries the
+39-of-40 measurement so nobody re-derives it. **The reopen condition is written
+down** - a false block on something that CANNOT be rephrased, or evidence that
+messages avoiding all eleven characters are common. Irritation is not the
+trigger.
+
+## WHERE THE PROJECT ACTUALLY STANDS
+
+**The ops backlog is empty apart from `OPS-14`** (this machine's disk hit 100
+percent mid-session and recovered with nothing deleted; unexplained). Nine ops
+items closed in six cycles: `OPS-16` through `OPS-25`.
+
+**The highest-value open question needs the CLIENT and cannot be advanced from
+disk.** Item 10 - the stack buff measured AT THE CEILING - is still the biggest
+thing in the project, and `FINDINGS` 11.7's headline may be an artifact of a
+buff rather than a distance term. Items 7, 11 and 12 also need the client. A
+session that finds the client closed and the ops list empty should say so
+rather than inventing work.
+
+---
+
 # Wrap 2026-09-05 - cycle 45 - `OPS-20` and `OPS-25` closed, and a restore anchor caught the merger
 
 Suite **1757 passed** in 109.39s, run BARE at the wrap. Ruff clean. Merge gate

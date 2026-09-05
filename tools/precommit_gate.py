@@ -126,6 +126,20 @@ def _forbidden_cmdlet_reason(command: str) -> str | None:
       intended trade: an annoyance costs a rephrase, a false pass costs the
       thing the rule protects.
 
+      **IT FIRED IN PRACTICE WITHIN MINUTES OF SHIPPING**, on the commit
+      MESSAGE describing this very fix - text that was never going to be
+      executed. That is recorded here rather than left sounding hypothetical.
+      ``OPS-24`` then evaluated narrowing rule 2 for a lone ``git commit`` and
+      **DECLINED IT ON A MEASUREMENT.** The only safe narrowing must refuse to
+      apply whenever the command could introduce a second command, so it must
+      treat ``;``, ``|``, ``&``, ``(``, ``)``, ``{``, ``}``, ``=``, a backslash,
+      ``$(`` and a backtick as disqualifying - and a commit MESSAGE is part of
+      that same command string. Measured over this repo's last 40 real commit
+      messages: **39 of them contain at least one of those characters**, so the
+      narrowing would decline to apply 97 percent of the time while adding a
+      branch to a guard that is now demonstrably catching four invocation
+      spellings the old substring test missed. The rephrase is cheaper.
+
     This is defence in depth against an accidental call, not a sandbox against
     a determined one. Nothing here is a substitute for the rule itself.
     """
