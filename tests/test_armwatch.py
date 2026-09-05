@@ -2100,9 +2100,19 @@ class TestBOTHCallSitesRouteThroughTheFreeze:
     ``docs/LEDGER.md`` records this repo hitting the identical two-call-site
     defect once already, on the ``4e`` heartbeat.
 
-    This is a STRUCTURAL guard, and that is a deliberate second-best. It cannot
-    prove the threaded loop behaves correctly; it proves the two call sites
-    cannot DIVERGE, which is the failure that actually happened.
+    This is a STRUCTURAL guard and a deliberate second-best. It pins that no
+    pass is recorded OUTSIDE ``record_pass``. It does not prove the threaded
+    loop behaves, and it cannot stop a change that rewrites the LOGIC rather
+    than the call - zeroing ``consecutive_failed_passes`` just before
+    ``record_pass`` bypasses the freeze and stays green.
+
+    **Its first version was weaker than that and claimed more.** It required
+    the receiver to be the name ``heartbeat``, so ``hb = heartbeat`` followed
+    by ``hb.record(...)`` walked straight past it with the suite at 1772
+    passed - a NAME check where a CAPABILITY check was needed, which is
+    ``OPS-16``'s lesson recurring inside the guard written against a
+    different recurrence. Receiver-agnostic since, and the alias bypass was
+    watched going red.
     """
 
     def _run_rolling_ast(self) -> ast.FunctionDef:
@@ -2124,21 +2134,26 @@ class TestBOTHCallSitesRouteThroughTheFreeze:
         recorder = self._nested(run_rolling, "record_pass")
         lo, hi = recorder.lineno, recorder.end_lineno
 
+        # Deliberately RECEIVER-AGNOSTIC. The first version of this guard
+        # required the receiver to be the name `heartbeat`, and the cycle 47
+        # wrap refutation walked straight past it: binding `hb = heartbeat` and
+        # calling `hb.record(...)` in poll_forever killed the freeze in the only
+        # loop production runs, and left the whole suite at 1772 passed. That is
+        # `OPS-16`'s lesson - a NAME check is not a CAPABILITY check - repeating
+        # inside the guard written to prevent a different repeat.
         direct = [
             node.lineno
             for node in ast.walk(run_rolling)
             if isinstance(node, ast.Call)
             and isinstance(node.func, ast.Attribute)
             and node.func.attr == "record"
-            and isinstance(node.func.value, ast.Name)
-            and node.func.value.id == "heartbeat"
         ]
-        assert direct, "no heartbeat.record call found at all - the pattern is wrong"
+        assert direct, "no .record( call found at all - the pattern is wrong"
         outside = [line for line in direct if not lo <= line <= hi]
         assert outside == [], (
-            f"heartbeat.record is called directly at line(s) {outside}, outside "
-            f"record_pass (lines {lo}-{hi}). Both call sites must route through the "
-            f"freeze, or one of them keeps reporting a surface that archives nothing."
+            f"a .record( call sits at line(s) {outside}, outside record_pass "
+            f"(lines {lo}-{hi}). Every pass must be recorded through the freeze, or "
+            f"a surface that archives nothing goes on reporting itself healthy."
         )
 
     def test_the_threaded_loop_records_through_record_pass(self) -> None:

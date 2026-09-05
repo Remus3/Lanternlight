@@ -240,6 +240,7 @@ KNOWN_NON_HOSTS = frozenset(
         "gvas.parse",
         "gvas.py",
         "heartbeat.json",
+        "hb.record",
         "heartbeat.record",
         "hooks.py",
         "hydra.dll",

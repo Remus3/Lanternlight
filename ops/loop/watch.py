@@ -287,7 +287,9 @@ _FILETIME_EPOCH = datetime(1601, 1, 1, tzinfo=UTC)
 #:
 #: * A false IMPOSTOR verdict re-arms ALONGSIDE a live watcher. That is the
 #:   double-traffic failure :func:`ensure_armed` exists to refuse, and
-#:   ``OPS-14`` (9.87 GB across 19,162 files) is still open.
+#:   ``OPS-14``, this machine's disk-pressure question, is still open. Its
+#:   measured tree size is deliberately NOT recited here: it has gone stale
+#:   twice already, and the dated figures live in the item.
 #: * A missed impostor leaves one poller running under a wrong name. Nothing
 #:   doubles, and the next wrap gets another chance.
 #:
