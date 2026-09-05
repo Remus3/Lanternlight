@@ -351,7 +351,14 @@ not appeal, the honest answer is that the ops backlog is EMPTY and the
 highest-value work needs the client** - say so and stop.
 
 - **`OPS-14`** - this machine's disk hit 100 percent mid-session and recovered
-  with nothing deleted. Still open, still unexplained.
+  with nothing deleted. Still open, still unexplained. **It is a QUESTION, not
+  a task**, and has no acceptance meetable from disk. Re-measured at the cycle
+  46 wrap: `C:/ll-captures` is **9.91 GB across 19,202 files**, up just 0.04 GB
+  in five days, while `C:` free fell **161.6 to 134.9 GB**. The captures took
+  **0.15 percent** of what the drive lost, so the ruling-out is now a measured
+  five-day statement rather than an inference. The slowdown probably tracks the
+  client being shut - **hypothesis, not finding**: a silently-stopped watcher
+  would look identical, and nobody has joined capture growth to play sessions.
 
 
 **Also available with the client closed:**
