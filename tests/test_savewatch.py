@@ -328,6 +328,46 @@ class TestFileVanishingBetweenListingAndCopying:
         snaps = watcher.poll_once(now=datetime(2026, 8, 9, 12, 0, 0))
         assert {s.source.name for s in snaps} == {"steady.sav"}
 
+    def test_a_failed_copy_is_RETRIED_on_the_next_pass(self, tmp_path, monkeypatch):
+        """The half of the fail-soft contract the tests above do not reach.
+
+        ``_copy_one``'s docstring promises a failed identity is deliberately
+        NOT recorded as seen, "so a transient failure gets retried on the next
+        pass rather than being silently given up on forever". Every other test
+        in this class calls ``poll_once`` exactly ONCE, so they prove the
+        failure is TOLERATED and prove nothing about the retry - the promise
+        was carried by prose alone until this test. Found by the cycle 47
+        refutation, which caught `OPS-26` citing these tests as cover for a
+        claim they do not support.
+        """
+        src_dir = tmp_path / "src"
+        src_dir.mkdir()
+        target = src_dir / "StandaloneSlot_4.sav"
+        _touch(target, b"R" * 777, mtime_ns=9_000_000_000)
+
+        watcher = savewatch.SaveWatcher(source_dir=src_dir, dest_dir=_safe_dest(tmp_path))
+
+        real_copy2 = savewatch.shutil.copy2
+        attempts = []
+
+        def _fails_once(src, dst, *a, **kw):
+            attempts.append(Path(src).name)
+            if len(attempts) == 1:
+                raise PermissionError(f"simulated transient failure: {src}")
+            return real_copy2(src, dst, *a, **kw)
+
+        monkeypatch.setattr(savewatch.shutil, "copy2", _fails_once)
+
+        first = watcher.poll_once(now=datetime(2026, 8, 9, 12, 0, 0))
+        assert first == [], "the failing copy must produce no snapshot on the first pass"
+        assert attempts == ["StandaloneSlot_4.sav"], "sanity check: the copy was attempted"
+
+        # Nothing about the source changed, so identity is unchanged. A watcher
+        # that had recorded the failed identity as seen would skip it forever.
+        second = watcher.poll_once(now=datetime(2026, 8, 9, 12, 0, 10))
+        assert len(second) == 1, "the failed identity must be retried, not given up on"
+        assert second[0].destination.read_bytes() == b"R" * 777
+
 
 class TestSnapshotFilenamesPreserveSizeAndTimestamp:
     def test_filename_contains_the_observed_size(self, tmp_path):
@@ -384,6 +424,112 @@ class TestSnapshotFilenamesPreserveSizeAndTimestamp:
         partial = watcher.poll_once(now=datetime(2026, 8, 9, 12, 0, 0))
         assert "2190" in partial[0].destination.name
         assert "44517" not in partial[0].destination.name
+
+
+class TestTheArchiveMomentIsNotTheMtime:
+    """A snapshot's mtime is the SOURCE's mtime, NOT when it was archived.
+
+    ``_copy_one`` copies with ``shutil.copy2``, which carries the source's
+    mtime across, and then ``Path.replace`` - which preserves the temporary
+    file's mtime rather than restamping it. So a snapshot lands in the
+    capture tree wearing the modification time of the game file it copied,
+    which can be days older than the copy.
+
+    That makes ``mtime`` the WRONG instrument for asking when a file entered
+    the capture tree. Measured on the real tree 2026-09-05: every one of the
+    13 files archived at local 2026-09-03 18:53:54 carries an mtime of
+    2026-08-30 or earlier, so a ``find -newermt 2026-08-31`` over the whole of
+    C:/ll-captures returns three files and NONE of the thirteen. Tree-wide
+    over all 431 watcher snapshots the worst single misdating is 25.44 days.
+    A session dating capture growth by mtime therefore misdates the watcher's
+    entire output by days, which is exactly the join ``OPS-14`` asks a future
+    session to perform.
+
+    **The stamp is not the ONLY right instrument, and an earlier draft of this
+    docstring said it was.** The file's CREATION time also records the archive
+    moment - ``copy2`` does not carry that across - and it agrees with the
+    stamp on 431 of 431 snapshots within 5 seconds, sub-second on the 13 above.
+    Prefer the stamp anyway, because creation time is not durable: copying the
+    capture tree resets it while the stamp travels in the name. Measured the
+    same day - a ``copy2`` of a snapshot kept the 2026-08-09 mtime and took a
+    fresh 2026-09-05 creation time.
+
+    **Why the trap is worse than a plain wrong answer: mtime is right MOST of
+    the time.** 260 of the 431 snapshots, 60.3 percent, have an mtime within 2
+    seconds of their stamp - the live log and the transient save are rewritten
+    by the game moments before being archived, so for those the two clocks do
+    coincide. The full error shows up only on quiescent sources, which are
+    exactly the files a growth timeline is made of. Spot-checking a few
+    snapshots is therefore likely to CONFIRM the wrong instrument.
+
+    Nothing tested this. Every existing test here pins the SOURCE's stat (see
+    TestSourceDirectoryIsNeverTouched) or the destination's NAME (see
+    TestSnapshotFilenamesPreserveSizeAndTimestamp); none of them looks at the
+    destination's mtime.
+
+    Swapping ``copy2`` for ``copy`` was watched going red before this class
+    was believed: 3 failed, 25 passed, and the destination's mtime became the
+    archive moment. **One of those three was pre-existing, and it does not
+    count as cover.** An earlier draft of this docstring claimed the swap left
+    every other test green; it does not.
+    ``TestFileVanishingBetweenListingAndCopying`` reddens because it
+    monkeypatches ``shutil.copy2`` and the mutated code stops calling its spy -
+    it fails on the spy going unused, not on the clock. Re-pointing that spy at
+    ``copy``, which is what fixing it looks like, restores green with the
+    property silently changed. So the swap is loud in a way that names the
+    wrong cause, which is worse than silence.
+    """
+
+    def test_snapshot_mtime_is_the_sources_and_not_the_archive_moment(self, tmp_path):
+        src_dir = tmp_path / "src"
+        src_dir.mkdir()
+        watcher = savewatch.SaveWatcher(source_dir=src_dir, dest_dir=_safe_dest(tmp_path))
+
+        # An mtime five days before the archive moment, mirroring the real
+        # tree: sources last written 2026-08-30, archived 2026-09-03.
+        source_mtime_ns = 1_000_000_000_000_000_000
+        target = src_dir / "StandaloneSlot_7.sav"
+        _touch(target, b"D" * 4096, mtime_ns=source_mtime_ns)
+
+        snaps = watcher.poll_once(now=datetime(2026, 9, 3, 18, 53, 54))
+        assert len(snaps) == 1, "sanity check: the pass must actually have copied something"
+        destination = snaps[0].destination
+
+        assert destination.stat().st_mtime_ns == source_mtime_ns, (
+            "the snapshot must carry the SOURCE's mtime - if this fails, mtime has "
+            "become the archive time and every capture-tree dating method that reads "
+            "the filename stamp needs revisiting"
+        )
+
+    def test_the_two_clocks_disagree_so_mtime_cannot_stand_in_for_the_stamp(self, tmp_path):
+        """The negative half: the two instruments must be distinguishable.
+
+        The test above would still pass if a source happened to be modified at
+        the instant it was archived. This one pins that they are separate
+        clocks by making them disagree on purpose, which is the property a
+        dating method actually relies on.
+        """
+        src_dir = tmp_path / "src"
+        src_dir.mkdir()
+        watcher = savewatch.SaveWatcher(source_dir=src_dir, dest_dir=_safe_dest(tmp_path))
+
+        source_mtime = datetime(2026, 8, 30, 21, 11, 46)
+        archived_at = datetime(2026, 9, 3, 18, 53, 54)
+        _touch(
+            src_dir / "StandaloneSlot_7.sav",
+            b"D" * 4096,
+            mtime_ns=int(source_mtime.timestamp() * 1_000_000_000),
+        )
+
+        destination = watcher.poll_once(now=archived_at)[0].destination
+
+        assert "20260903-185354" in destination.name, "the stamp records the ARCHIVE moment"
+        landed_mtime = datetime.fromtimestamp(destination.stat().st_mtime)
+        assert landed_mtime.date() == source_mtime.date(), "the mtime records the SOURCE moment"
+        assert (archived_at - landed_mtime).days == 3, (
+            "the two clocks must be able to disagree by days - a dating method that "
+            "reads mtime instead of the filename stamp is wrong by exactly this much"
+        )
 
 
 class TestOnePassIsSeparableFromLooping:

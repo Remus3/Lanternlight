@@ -34,6 +34,38 @@ A fresh clone runs zero git hooks until that first command runs. The tracked
 
 ---
 
+## Where the last session left it - CYCLE 47
+
+`main` is at the cycle 47 wrap commit. Suite **1760 passed** in 111.56s, run
+BARE; ruff clean. Merge gate OK at 1760 against a **1757** baseline measured
+BEFORE dispatch, which the refutation re-derived independently from a
+`git archive` extract of HEAD. Ledger `LL-0134`. Client **closed**.
+**`OPS-14`'s growth join ANSWERED. `OPS-26` FILED. Nothing was CLOSED.**
+
+**`OPS-14`'s open join is answered and it needed no correlation.** The client
+has not launched since local **2026-08-30 21:11:46** - measured twice, by a
+recursive mtime sweep of all 17 files under the game's `Saved` tree and
+independently from log CONTENT (four sessions, three of them play, plus a
+rotation-chain proof that no hidden session sits between them). The watcher
+armed FOUR times in that dead window and archived the same 13 files every time,
+byte-identical, because `_seen` is in-memory. So the item's own "up 40 files /
+0.04 GB in five days" reconciles with nothing left over: 19,162 + 13 + 13 + 13
+duplicate snapshots + 1 analysis CSV = **19,202 files**. **Not one byte is new
+game data.**
+
+**It does NOT close the watcher question, and the item says so.** "A silently
+stopped watcher would produce the same flat line" is still TRUE and cannot be
+separated while the sources are quiescent - a correct watcher and a dead one
+both write nothing. Zero archives is CONSISTENT with health, never evidence of
+it.
+
+**DATE A CAPTURE BY ITS FILENAME STAMP, NEVER BY mtime.** `copy2` carries the
+source's mtime onto the copy. Worst misdating **25.44 days**, and a
+`find -newermt 2026-08-31` over the whole tree returns three files and NONE of
+the thirteen archived on 2026-09-03. Creation time agrees with the stamp 431 of
+431 but RESETS when the tree is copied. **mtime is right 60.3 percent of the
+time**, so spot-checking confirms the wrong instrument.
+
 ## Where the last session left it - CYCLE 46
 
 `main` is at the cycle 46 wrap commit. Suite **1757 passed** in 106.36s, run
@@ -49,14 +81,24 @@ percent of the time. The reopen condition is written into the item.
 
 ## READ THIS BEFORE PICKING AN ITEM
 
-**The ops backlog is now empty apart from `OPS-14`** (disk hit 100 percent
-mid-session, recovered with nothing deleted, unexplained). **Nine** ops items
-were resolved across cycles 41 to 46: `OPS-17` through `OPS-25`. `OPS-16` closed
-in cycle 40 (`LL-0125`) and is NOT part of that run.
+**The ops backlog holds `OPS-14` and `OPS-26`.** `OPS-14` is the disk question
+(hit 100 percent mid-session, recovered with nothing deleted, unexplained); its
+capture-growth half was ANSWERED in cycle 47 and its headline half still needs
+an operator-scale scan. **`OPS-26` is new and is doable from disk**: a watcher
+whose destination stops accepting writes reads `ARMED` forever and leaves no
+trace. **Nine** ops items were resolved across cycles 41 to 46, `OPS-17` through
+`OPS-25`; `OPS-16` closed in cycle 40 (`LL-0125`) and is NOT part of that run.
 
-**THE HIGHEST-VALUE WORK NEEDS THE CLIENT AND CANNOT BE DONE FROM DISK.** If
-the client is closed and `OPS-14` does not appeal, **say so plainly and stop** -
-do not invent work to stay busy. That is the loop's own stopping rule.
+**THE HIGHEST-VALUE WORK STILL NEEDS THE CLIENT.** Item 10 is the biggest thing
+in the project and cannot be advanced from disk. If the client is closed and
+neither ops item appeals, **say so plainly and stop** - do not invent work to
+stay busy. That is the loop's own stopping rule.
+
+**`OPS-26` is the best disk-only item on the board**, and its first acceptance
+criterion is to PROVOKE the failure rather than trust the item's own reasoning.
+Read that criterion before starting: the item's four steps are each read from
+source, but the JOIN between them has never been provoked, and this repo has had
+several items whose filed mechanism did not hold.
 
 ## Where the last session left it - CYCLE 45
 
@@ -347,9 +389,10 @@ at PANTS and open Affix Details while worn - grep the log for
 Smiting or Curse. The log carries no player-facing affix, skill or item name -
 33 names tested with two positive controls - so only a hover will do.
 
-**IF THE CLIENT IS CLOSED**, the only ops item left is `OPS-14`. **If it does
-not appeal, the honest answer is that the ops backlog is EMPTY and the
-highest-value work needs the client** - say so and stop.
+**IF THE CLIENT IS CLOSED**, the ops items are `OPS-26` (new, disk-only, has a
+real acceptance) and `OPS-14` (a question, no acceptance meetable from disk).
+**Prefer `OPS-26`.** If neither appeals, the honest answer is that the
+highest-value work needs the client - say so and stop.
 
 - **`OPS-14`** - this machine's disk hit 100 percent mid-session and recovered
   with nothing deleted. Still open, still unexplained. **It is a QUESTION, not
@@ -391,12 +434,31 @@ CLOSED (`LL-0109`). Item `12`'s backward half CLOSED as impossible (`LL-0110`).
 `OPS-21` and `OPS-23` CLOSED (`LL-0129`).
 `OPS-20` and `OPS-25` CLOSED (`LL-0130`).
 **`OPS-24` DECLINED and CLOSED (`LL-0131`).**
+**`OPS-14`'s capture-growth join ANSWERED (`LL-0134`) - do not re-derive it; its
+HEADLINE half is still open.** `OPS-26` FILED, not started.
 **Items 7, 11 and 12 remain OPEN and UNCREDITED - do not credit any of them.**
 
 ---
 
 ## Verification traps that produce FALSE GREENS
 
+- **AN EMPTY GREP WITH A PASSING POSITIVE CONTROL IS STILL A CLAIM ABOUT THE
+  PATTERN.** Cycle 47 swept every tracked `.md` and `.py` whitespace-collapsed
+  and case-insensitively - the mandated method - and wrongly concluded a trap
+  was recorded nowhere. `LL-0104` had it, under "CreationTime" and "backup
+  moment" while the patterns asked about "mtime" and "archive time". The control
+  passed because the file just written matched it, so it proved the instrument
+  RAN, not that it asked the right question. **Search for the MECHANISM under
+  every name it might wear.**
+- **AN ITEM CITING A TEST AS COVER IS A FILED COUNT WEARING BETTER CLOTHES.**
+  `OPS-26` claimed two steps were tested; one was. READ the test - the failure
+  tests in `test_savewatch.py` called `poll_once` exactly once, proving
+  tolerance and nothing about the retry they were cited for.
+- **DATE A CAPTURE FILE BY ITS FILENAME STAMP, NEVER BY mtime.** `copy2` carries
+  the source's mtime across, so an archived file wears the game file's clock -
+  off by up to 25.44 days. Creation time agrees with the stamp 431 of 431 but
+  resets when the tree is copied. And mtime looks CORRECT on 60.3 percent of
+  snapshots, so a spot check will confirm the wrong instrument.
 - **`python -m pytest -q` prints NO summary line and still exits 0**, because
   `pytest.ini` already carries `-q` so a second one makes it `-qq`. Run it BARE.
 - **A filed MECHANISM is a hypothesis, exactly like a filed count.** `OPS-17`

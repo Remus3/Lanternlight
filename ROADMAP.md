@@ -3169,6 +3169,94 @@ re-proof. The merger independently made `credit` a no-op and watched
 **This item was filed after the defect had already fired TWICE** - cycles 43 and
 44 each closed two items, recorded one, and were repaired by hand.
 
+## OPS-26. A watcher that cannot WRITE reads ARMED forever and leaves no trace - OPEN
+
+Found 2026-09-05 while answering `OPS-14`'s open join. Nothing below is a
+hypothesis about the game; every step was read out of the code in this repo and
+two of them are already demonstrated by existing tests.
+
+**The chain, measured:**
+
+1. `lanternlight/savewatch.py`'s `_copy_one` catches `OSError` around
+   `shutil.copy2`, unlinks the partial, and returns `None`. Already exercised:
+   `tests/test_savewatch.py::TestFileVanishingBetweenListingAndCopying`
+   monkeypatches `copy2` to raise and asserts the pass survives it.
+2. `poll_once` adds to `self._seen` only when the copy returned a snapshot, so a
+   file whose copy fails is retried on every later pass, forever, and the
+   method's docstring promises it "never raises".
+3. `lanternlight/armwatch.py`'s `poll_forever` calls `heartbeat.record(...)`
+   **unconditionally after** `poll_once` returns. The comment beside it is
+   accurate about what it means - "the stamp claims a COMPLETED pass" - and a
+   completed pass is not an archived file.
+4. `ops/loop/watch.py`'s `default_spawn` passes
+   `stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL`, so every `say()` line
+   and every traceback from a default-spawned watcher is discarded.
+
+**So a surface whose destination stops accepting writes - a full disk, an ACL
+change, a removed drive - keeps advancing its heartbeat, keeps every surface
+inside its freshness threshold, reads `ARMED` at `check_watcher`, archives
+nothing, and records nothing anywhere.** The first condition on that list is not
+imagined: `OPS-14` records `C:` reaching 100 percent on this machine, with two
+writers dying of `ENOSPC` in the same minutes.
+
+**The module already has the right pattern for a DIFFERENT failure.** A
+`DestinationInsideRepoError` makes `poll_forever` `say()` and RETURN, which stops
+that surface's heartbeat advancing - and the comment says so outright: that is
+"what makes a stopped surface visible to a reader". One failure mode freezes the
+stamp and is visible to a cold session; the other swallows the error and is not.
+
+**It also answers the MECHANISM half of an older open question.** `LL-0124`
+records that watcher 23628 died and that "why it died is still UNMEASURED -
+nothing in this repo records a watcher's exit." The reason nothing records it is
+step 4. **THREE** launches in `C:/ll-captures` DID leave evidence, all
+hand-redirected: `2026-08-25b/armwatch.log` (566 bytes), `2026-08-30/armwatch.log`
+and `2026-08-31/armwatch.log` (562 each), the last of these alone also carrying
+an `armwatch.err`. An earlier draft of this item said ONE, and the cycle 47
+refutation counted them. The three armings SINCE - stamped `20260901-075014`,
+`20260901-202636` and `20260903-185354` - went through `default_spawn` and left
+no such file at all. **This does not say why 23628 died**, and nothing here
+recovers that. It says why the record is absent.
+
+**What is NOT measured, stated rather than implied:** nobody has provoked a
+destination that refuses writes and then watched `check_watcher` print `ARMED`.
+Step 1 has a test, step 2 has one only as of cycle 47, steps 3 and 4 are read off
+the source, and the JOIN between them is reasoning. **This item first claimed
+steps 1 and 2 were BOTH covered and that was false** - the refutation found that
+every failure test called `poll_once` exactly once, proving the failure was
+tolerated and nothing about the retry, which `_copy_one`'s own docstring
+promises. `test_a_failed_copy_is_RETRIED_on_the_next_pass` was added and watched
+going red - the mutation that moves `_seen.add` out of the success branch gave
+1 failed / 28 passed, and had been invisible to all 28 before it. **An item
+citing a test as cover is a filed count wearing better clothes: read the test.** A filed mechanism is a hypothesis - this
+repo has had three items in five cycles whose mechanism did not hold - so the
+first acceptance criterion is to provoke it, not to trust this paragraph.
+
+**Evidence the copy path is currently HEALTHY, so this is not a live incident:**
+the arming at local 2026-09-03 18:53:54 landed all 13 of its files, and all four
+arming snapshot sets on disk are byte-identical to each other by content hash.
+
+**Acceptance:**
+
+1. **Provoke it before fixing it.** Point a `SaveWatcher` at a destination that
+   refuses writes, run real passes, and record what `check_watcher` reports. If
+   it does NOT read `ARMED`, this item is refuted, and the refutation is the
+   result - write it beside the claim rather than deleting the claim.
+2. A failed copy becomes visible to a cold reader that has no console. The
+   `DestinationInsideRepoError` path is the shape to copy: freeze the surface so
+   the existing `SURFACE_STALE` machinery names it. Do NOT invent a second
+   reporting channel that `check_watcher` does not already read.
+3. **Any error record must be BOUNDED.** `OPS-14` is open precisely because this
+   machine's disk filled, and a crash-looping watcher writing an unbounded error
+   log to that disk would worsen the failure it is reporting. State the bound and
+   test it AT the bound.
+4. The guard is watched going red: break the copy, confirm the reported state
+   changes, restore, and confirm the module byte-identical by sha256.
+
+**Do NOT fix this by removing the `except OSError`.** Fail-soft is deliberate and
+correct here - a save file really does vanish mid-copy, which is the transience
+this module was built for. The defect is that the failure is INVISIBLE, not that
+it is tolerated.
+
 ## 4b. Ammo-family and talent measurement - READY, cheap, needs the client
 
 Opened 2026-08-09 after the talent and skills screens were captured. The class's
@@ -4886,7 +4974,7 @@ repository's safety lane exists to refuse.
 made unwritable and asserts the exit code is still 2, proven non-vacuous by
 restoring the current ordering and watching it go red.
 
-## OPS-14. C: hit 100% mid-session, then recovered with nothing deleted - OPEN
+## OPS-14. C: hit 100% mid-session, then recovered with nothing deleted - OPEN, growth join ANSWERED 2026-09-05
 
 Observed 2026-08-29 during item 8b. Recorded because it will hit the loop, and
 because a session that has never seen it will misdiagnose it and start deleting
@@ -4935,6 +5023,112 @@ play. **That is a hypothesis, not a finding**: nobody has correlated capture
 growth against play sessions, and a watcher that had silently stopped would
 produce the same flat line. The heartbeat says it is polling, which argues
 against that, but the two have not been joined.
+
+### JOINED 2026-09-05 - the hypothesis above is now a FINDING, and all 40 files are accounted for
+
+The join the paragraph above says nobody has done is done. It needed no client,
+and in the end it needed no correlation either - the two sides reconcile exactly.
+
+**The client has not launched since local 2026-08-30 21:11:46.** That is the
+mtime of the newest file anywhere under the game's `Saved` tree, swept
+recursively over all 17 files, with ZERO modified since 2026-08-31. It was
+derived a second time by a different instrument - log CONTENT rather than the
+filesystem: four sessions are recoverable, three of them play and one a
+24-second launch that never selected a class, spanning local 2026-08-25 18:34:46
+to 2026-08-30 21:11:43. The rotation chain closes the gaps between them: every
+launch rotates the log exactly once, each backup's filename stamp equals that
+session's close time, and no backup stamp anywhere in live or archive is
+unexplained, so no hidden session hides between them. **Sessions BEFORE
+2026-08-25 are UNMEASURED and explicitly NOT zero** - a `.sav` mtime of
+2026-08-09 09:33:03 proves at least one existed, and its log is gone.
+
+**The watcher armed four times inside that dead window and archived the same 13
+files every time.** Stamps `20260831-170906`, `20260901-075014`,
+`20260901-202636` and `20260903-185354` - each 13 files, each 13,019,536 bytes,
+and the four sets are BYTE-IDENTICAL to one another, not merely equal in total
+size. `SaveWatcher._seen` is an in-memory set, so every restart re-snapshots the
+whole source set; with the sources frozen since 2026-08-30 that yields four
+identical copies.
+
+**So this item's own "up just 0.04 GB and 40 files in five days" reconciles file
+by file with nothing left over:**
+
+| | files | running total |
+|---|---|---|
+| 2026-08-31 post-arming, as recorded above | | 19,162 |
+| arming `20260901-075014` | +13 | 19,175 - and this item records 19,175 that day |
+| arming `20260901-202636` | +13 | 19,188 |
+| arming `20260903-185354` | +13 | 19,201 |
+| `meter_transcription_cycle34.csv`, written by a session and not by the watcher | +1 | 19,202 |
+| **measured 2026-09-05 07:44 local** | | **19,202 files, 10,639,269,122 bytes, 9.9086 GiB** |
+
+Bytes: 3 x 13,019,536 + 33,233 = 39,091,841, which is the 0.04 GB. **Not one
+byte of it is new game data.** The entire five-day growth is three duplicate
+re-archives of unchanged files plus one analysis CSV.
+
+**What this closes, and what it deliberately does NOT.** The slowdown is
+explained on the SOURCE side and the explanation is measured: no watched file
+changed, so no archive was due, and zero archives is exactly what a HEALTHY
+watcher would also have produced - the observation is CONSISTENT with health,
+never evidence of it. That no longer rests on the watcher's health at all. **It does not establish that the
+watcher still works.** "A watcher that had silently stopped would produce the
+same flat line" remains TRUE and cannot be separated from a healthy one while
+the sources are quiescent, because a correct watcher and a dead one both write
+nothing. The 2026-09-03 arming landing all 13 of its files proves the copy path
+worked in THAT process at THAT moment and says nothing about any moment after
+it. That gap is filed as `OPS-26`.
+
+**The headline question is untouched by all of this** - what consumed tens of
+gigabytes still needs the operator-scale scan this item asks for.
+
+### THE INSTRUMENT: date a snapshot by its FILENAME STAMP, never by its mtime
+
+Recorded here because the obvious way to perform the join above is wrong, and
+the wrong answer looks perfectly clean.
+
+`shutil.copy2` carries the source's mtime onto the copy, so an archived file
+wears the modification time of the game file it copied rather than the moment it
+was archived. Measured tree-wide across all **431** watcher snapshots:
+
+- the worst single misdating is **25.44 days**, on
+  `20260903-185354_0_DISABLE_GPU_CRASH_DEBUGGING.txt`
+- `find -newermt 2026-08-31` over the whole tree returns **three** files and
+  **none** of the thirteen archived on 2026-09-03, so naive mtime bucketing
+  erases an entire archive session from the timeline
+- the file's CREATION time DOES record the archive moment, agreeing with the
+  stamp on **431 of 431** within 5 seconds. It is corroboration, not the
+  instrument: copying the tree resets it, while the stamp travels in the name.
+  Measured - a `copy2` of a snapshot kept its 2026-08-09 mtime and took a fresh
+  2026-09-05 creation time.
+
+**The trap is dangerous because mtime is right MOST of the time.** 260 of the
+431 snapshots, **60.3 percent**, carry an mtime within 2 seconds of their stamp:
+the live log and the transient save are rewritten by the game moments before
+being archived, so for those the two clocks genuinely coincide. Only quiescent
+sources show the error - and those are exactly what a growth timeline is made
+of. Spot-checking a handful of snapshots will therefore CONFIRM the wrong
+instrument.
+
+Pinned by `tests/test_savewatch.py::TestTheArchiveMomentIsNotTheMtime`, watched
+going red, and stated in `lanternlight/savewatch.py`'s module docstring.
+
+**The INSTRUMENT is not new here, and claiming it was would have been wrong.**
+`LL-0104` already dated this watcher's output by NTFS CreationTime - "13 files /
+13,019,536 bytes, NTFS CreationTime 07:50:14 on all 13" - and used the same move
+to correct an earlier entry, finding that a rotated game log's FILENAME carries
+the source log's time rather than the backup moment. What is new is the
+quantification, the statement that mtime is the WRONG instrument together with
+why it nonetheless looks right, the non-durability of CreationTime, and a test
+that pins it.
+
+**A sweep for prior art returned clean and the clean was FALSE.** It searched
+whitespace-collapsed and case-insensitively across every tracked `.md` and `.py`,
+which is the right method, for patterns built around "mtime" and "archive time" -
+while the prior art says "CreationTime" and "backup moment". It even carried its
+own positive control and the control PASSED, because the new file matched. **An
+empty grep is a claim about the pattern, and a positive control only proves the
+instrument runs, not that it asks the right question.** Search for the MECHANISM
+under every name it might wear, not for your own phrasing of it.
 
 The capture evidence **must not be pruned in response** - the `LL-0016`
 neighbourhood records that those directories are the only record behind several
