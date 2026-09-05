@@ -35,6 +35,7 @@ __all__ = [
     "LoopState",
     "STATE_FILENAME",
     "advance_cycle",
+    "credit",
     "default_state_path",
     "load",
     "runtime_dir",
@@ -261,6 +262,93 @@ def save(state: LoopState, path: Path | None = None) -> Path:
     return target
 
 
+def credit(
+    *items: str,
+    path: Path | None = None,
+    state: LoopState | None = None,
+) -> LoopState:
+    """Record items as completed WITHOUT moving the cycle counter - ``OPS-25``.
+
+    :func:`advance_cycle` can credit at most one item, because it infers that
+    completion from a single transition: the previous cycle's in-flight item is
+    finished when the loop moves off it. A cycle that closes TWO items therefore
+    credited one and silently lost the other. That is not hypothetical - cycle
+    43 closed ``OPS-19`` and ``OPS-22`` and recorded only ``OPS-19``; cycle 44
+    closed ``OPS-21`` and ``OPS-23`` and recorded only ``OPS-23``. Both were
+    repaired by hand, which is a step nobody will remember to take.
+
+    **Why a separate call and not another argument to** :func:`advance_cycle`.
+    An ``also_completed=[...]`` parameter on the wrap would work only if the
+    merger carried the second closure from the moment it became true to the
+    moment it wraps. That is precisely the gap both real losses fell through,
+    and this project's continuity design says a fact held in a context window is
+    a fact already lost. ``credit`` is callable the instant the second item
+    closes and writes through the same atomic path, so a session that dies
+    before its wrap still leaves an honest record. It also cannot move the
+    counter, so "one cycle, one increment" is structural here rather than a rule
+    someone has to remember to obey.
+
+    **How this composes with** ``OPS-7`` **rather than reopening it.**
+    :func:`advance_cycle` still INFERS at most one completion from a transition,
+    and the retry rule is untouched: ``X -> X`` credits nothing. ``credit`` is an
+    ASSERTION by the caller that named items are done. ``OPS-7`` was a bad
+    inference - a carry-forward read as a completion - and an assertion cannot
+    be a bad inference. Nothing here makes a carried-forward item get credited.
+
+    Ids are stored verbatim, not stripped or normalised, because
+    :func:`advance_cycle` stores ``current.item`` verbatim and the two paths
+    have to produce the same string or the de-duplication below stops matching.
+
+    **The type check is load-bearing, not decoration.** :func:`save` does not
+    validate ``completed``, but :meth:`LoopState.from_dict` does, so a single
+    non-string id - ``credit(19)`` for ``OPS-19``, say - writes a file that the
+    next :func:`load` rejects wholesale. Measured: the load returns a fresh
+    default, ``completed`` comes back empty and ``cycle`` comes back 0, so one
+    fat-fingered id destroys the entire completion record rather than adding one
+    bad row to it. Every id is therefore checked BEFORE anything is read or
+    written, so a rejected call leaves the file byte-for-byte untouched instead
+    of half-applying.
+
+    Recovery diagnostics are deliberately NOT cleared, unlike in
+    :func:`advance_cycle`. If the state file was unusable, this credit just
+    landed on a fresh default whose ``completed`` list is empty - the caller
+    needs to see that, because the returned state is the only place it shows.
+
+    Args:
+        *items: Item ids to record as completed. At least one, each a non-empty
+            string. An id already present is left alone rather than repeated.
+        path: State file to read and write. Defaults to the standard location.
+        state: Starting state. Defaults to whatever :func:`load` returns.
+
+    Returns:
+        The new, already-saved state.
+
+    Raises:
+        ValueError: If no items were passed, or an id is empty or blank.
+        TypeError: If an id is not a string.
+    """
+    if not items:
+        raise ValueError("credit() needs at least one item id; crediting nothing is a bug")
+    for candidate in items:
+        if not isinstance(candidate, str):
+            raise TypeError(
+                f"item ids must be strings, got {type(candidate).__name__}: {candidate!r}"
+            )
+        if not candidate.strip():
+            raise ValueError(f"item ids must be non-empty, got {candidate!r}")
+
+    current = state if state is not None else load(path)
+
+    completed = list(current.completed)
+    for candidate in items:
+        if candidate not in completed:
+            completed.append(candidate)
+
+    credited = dc_replace(current, completed=completed)
+    save(credited, path)
+    return credited
+
+
 def advance_cycle(
     directive: str,
     item: str | None = None,
@@ -287,6 +375,13 @@ def advance_cycle(
     to learn what is already done, skips the item, and there is no operation
     that un-completes anything. Only moving to a DIFFERENT item, or to none,
     says the previous one is finished.
+
+    **This credits at most ONE item, by design** - it infers a completion from a
+    transition, and a transition has one previous item. A cycle that closes a
+    SECOND item calls :func:`credit` at the moment that item closes; see
+    ``OPS-25`` there for why that is a separate call rather than an argument
+    here. Crediting first and advancing second is the order that survives a
+    session dying between the two.
 
     Args:
         directive: Instruction text for the new cycle.

@@ -168,9 +168,45 @@ did not have. Nothing below is claimed without a test above it.
   exactly the way ``.gl`` was hidden by the old TLD allowlist. Review belongs
   on the SETS, not on the walking logic - exactly as
   ``tests/test_source_register.py`` says of its denylist.
-* It says nothing about the RIGHT an ``OpenProcess`` asks for.
-  ``PROCESS_QUERY_LIMITED_INFORMATION`` versus ``PROCESS_TERMINATE`` is checked
-  separately, in ``tests/test_loop_watch.py``.
+* **It says nothing about the RIGHT an ``OpenProcess`` asks for.** That is
+  checked separately, by
+  ``tests/test_loop_watch.py::test_no_in_scope_module_asks_for_a_wider_process_right``,
+  which is parametrized over THIS FILE's :data:`SCOPE` and therefore covers
+  every module named here.
+
+  UNTIL ``OPS-20`` THAT SENTENCE WAS A LIE, and it is restated rather than
+  quietly fixed. The only mask check in the repo read ``ops/loop/watch.py``
+  alone, so ``ops/loop/guard.py``'s mask was tested by NOTHING while this
+  bullet told a later session it was covered - proved by set-difference:
+  planting ``_PROCESS_QUERY_LIMITED_INFORMATION | 0x0001`` in ``guard.py``
+  changed zero test outcomes. It nearly mattered in cycle 42, when the
+  rejected ``OPS-18`` design widened ``guard.py``'s mask with ``SYNCHRONIZE``.
+  That is this file's own ``THE SECOND BUG`` wearing a different hat: a guard
+  that MIS-states its coverage is worse than one that merely reads as
+  exhaustive.
+
+  What that check does and does not cover, so this bullet is not the same lie
+  in a longer form:
+
+  - CHECKED, for EVERY file in :data:`SCOPE`: each ``OpenProcess`` call must
+    pass the module's own ``_PROCESS_QUERY_LIMITED_INFORMATION`` BY NAME - an
+    integer literal, a bitwise OR folding a wider right in, or a keyword-only
+    call all fail; that name must resolve to 0x1000 at import time and be
+    assigned nothing but the literal 0x1000 anywhere in the source, including
+    inside a function; and ``PROCESS_TERMINATE``, ``PROCESS_VM_WRITE`` and
+    ``PROCESS_SUSPEND_RESUME`` must not appear in the source as text at all.
+  - NOT CHECKED: a right computed at RUNTIME, a handle reached by any route
+    other than a literal ``OpenProcess`` call, and every blindness listed
+    above - it parses the same source with the same ``ast`` and inherits all of
+    it. Its text arm is a DENYLIST of three right names and has a denylist's
+    ceiling.
+  - NOT AN ERROR THERE: a module in :data:`SCOPE` with no ``OpenProcess`` at
+    all. It has no right to get wrong, so it is CLEAN rather than red. Per-file
+    presence of a probe is pinned instead by
+    :func:`test_the_scanner_actually_saw_the_module` in THIS file, which
+    asserts ``OpenProcess`` is among each in-scope module's observed
+    capabilities - so a probe-less module added to :data:`SCOPE` reddens HERE,
+    not there.
 """
 
 from __future__ import annotations
@@ -1472,6 +1508,47 @@ def test_scope_names_files_that_exist() -> None:
         path = REPO_ROOT / relative
         assert path.is_file(), f"{path} is in SCOPE but is not a file"
         assert path.read_text(encoding="utf-8").strip(), f"{path} is empty"
+
+
+def test_the_docstring_above_names_a_mask_check_that_really_covers_scope() -> None:
+    """This module's coverage claim is machine-checked, not merely restated.
+
+    ``OPS-20`` exists because the last bullet of the docstring above said the
+    ``OpenProcess`` right was "checked separately" while the only such check
+    read one of the two in-scope files. Replacing an unverified sentence with a
+    longer unverified sentence would close nothing, so the three load-bearing
+    parts of the new claim are asserted here:
+
+    1. the docstring still NAMES the check,
+    2. that check EXISTS, and
+    3. it is parametrized over THIS file's :data:`SCOPE`, imported rather than
+       restated - a second copy of the roster is how ``ops/lanes.py`` and the
+       lane contracts drifted apart, and it would let a third in-scope module
+       escape the mask check exactly the way ``guard.py`` did.
+    """
+    named = "test_no_in_scope_module_asks_for_a_wider_process_right"
+    assert named in (__doc__ or ""), "the docstring above no longer names the mask check"
+
+    watch_tests_path = REPO_ROOT / "tests" / "test_loop_watch.py"
+    watch_tests = watch_tests_path.read_text(encoding="utf-8")
+
+    defined = [
+        node
+        for node in ast.parse(watch_tests).body
+        if isinstance(node, ast.FunctionDef) and node.name == named
+    ]
+    assert defined, f"{named} is claimed above but is not defined in {watch_tests_path}"
+
+    over_scope = any(
+        isinstance(inner, ast.Name) and inner.id == "SCOPE"
+        for decorator in defined[0].decorator_list
+        for inner in ast.walk(decorator)
+    )
+    assert over_scope, f"{named} must be parametrized over SCOPE, not over a list of its own"
+
+    assert "from test_process_capability import SCOPE" in watch_tests, (
+        "the mask check must import this file's roster rather than keep a second copy"
+    )
 
 
 def test_a_restype_assignment_is_not_read_as_an_entry_point() -> None:

@@ -18,6 +18,7 @@ process.
 """
 
 import ast
+import importlib
 import json
 import os
 import subprocess
@@ -33,6 +34,20 @@ if str(REPO_ROOT) not in sys.path:
 
 from lanternlight.savewatch import SaveWatcher  # noqa: E402
 from ops.loop import guard as guard_mod, watch as watch_mod  # noqa: E402
+
+#: The roster of modules that can hold a handle to another process lives in
+#: ``tests/test_process_capability.py`` and is IMPORTED, never restated here.
+#: ``ops/lanes.py`` and the lane contracts were bitten by a second copy of one
+#: roster; a second copy of THIS one would let a module added to the capability
+#: allowlist escape the access-mask check below, which is the hole ``OPS-20``
+#: was opened to close. pytest already prepends this directory to ``sys.path``,
+#: but the insert is explicit so the import does not depend on that - the same
+#: sibling-import shape ``tests/test_ascii_hygiene.py`` uses for ``_tracked``.
+TESTS_DIR = Path(__file__).resolve().parent
+if str(TESTS_DIR) not in sys.path:
+    sys.path.insert(0, str(TESTS_DIR))
+
+from test_process_capability import SCOPE  # noqa: E402  (sits beside this file in tests/)
 
 
 @pytest.fixture
@@ -719,7 +734,20 @@ def test_the_only_process_right_this_module_asks_for_is_query_limited_informatio
 
     ``PROCESS_QUERY_LIMITED_INFORMATION`` (0x1000) grants no power to affect
     the process - it is the weakest right that can answer "when did this
-    start?" - and it is the only right this module asks for.
+    start?" - and it is the only right ``ops/loop/watch.py`` asks for.
+
+    THIS TEST READS ``ops/loop/watch.py`` AND NOTHING ELSE, and until ``OPS-20``
+    it was the only mask check in the repo while
+    ``tests/test_process_capability.py`` told the reader the right was "checked
+    separately" here - for both of the modules in its :data:`SCOPE`. It was not:
+    ``ops/loop/guard.py``'s mask was tested by nothing, and planting
+    ``_PROCESS_QUERY_LIMITED_INFORMATION | 0x0001`` in it changed zero test
+    outcomes. It is kept, unweakened, for two reasons beyond history: it is
+    ``watch.py``'s own per-file non-vacuity anchor - the ``assert opens`` below
+    reddens if this module's probe is deleted, which the roster-wide check
+    deliberately does not do - and losing a check while replacing it is the
+    cycle-38 failure this repo has already paid for once. The roster-wide check
+    is :func:`test_no_in_scope_module_asks_for_a_wider_process_right`.
     """
     source = _module_source()
     tree = ast.parse(source)
@@ -785,6 +813,248 @@ def test_the_process_right_guard_still_accepts_the_legitimate_spelling() -> None
     calls = _open_process_calls(ast.parse(legal))
     assert calls
     assert _asks_only_for_query_limited_information(calls[0])
+
+
+# ---------------------------------------------------------------------------
+# ROADMAP ``OPS-20`` - the same mask check, over the WHOLE roster.
+#
+# Everything above this line reads ``ops/loop/watch.py``. ``ops/loop/guard.py``
+# opens a process handle too, and its mask was checked by nothing at all while
+# ``tests/test_process_capability.py``'s docstring said otherwise. That is the
+# ``OPS-16`` failure mode - a mis-stated coverage is worse than a declared
+# hole, because a later session RELIES on it, and it nearly landed: the
+# rejected ``OPS-18`` design widened ``guard.py``'s mask with ``SYNCHRONIZE``
+# and no test would have noticed.
+#
+# So the check below is parametrized over :data:`SCOPE`, imported from the file
+# that owns that roster. A third module added there cannot escape this.
+# ---------------------------------------------------------------------------
+
+#: Access rights that grant a power to AFFECT a process rather than to ask
+#: about it. Inherited verbatim from the watch-only check above, and it is a
+#: DENYLIST with a denylist's ceiling - it only refuses a spelling someone
+#: named. The structural check is the load-bearing half; this one catches the
+#: named constant arriving as text before it is ever wired to a call.
+_RIGHTS_TO_AFFECT = ("PROCESS_TERMINATE", "PROCESS_VM_WRITE", "PROCESS_SUSPEND_RESUME")
+
+#: The one right an in-scope module may ask for, by name and by value.
+_QUERY_LIMITED_NAME = "_PROCESS_QUERY_LIMITED_INFORMATION"
+_QUERY_LIMITED_VALUE = 0x1000
+
+
+def _assigned_values(tree: ast.AST, name: str) -> list[ast.expr]:
+    """Every value bound to ``name`` anywhere in ``tree``, at any nesting depth.
+
+    Module level is not special-cased on purpose. A FUNCTION-LOCAL
+    ``_PROCESS_QUERY_LIMITED_INFORMATION = 0x1F0FFF`` shadows the module
+    constant at the call site while the module attribute still reads 0x1000, so
+    a runtime check on the module alone would wave it through and the call site
+    would still spell the legal name.
+    """
+    values: list[ast.expr] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign):
+            targets: list[ast.expr] = list(node.targets)
+        elif isinstance(node, ast.AnnAssign | ast.AugAssign):
+            targets = [node.target]
+        else:
+            continue
+        if node.value is None:
+            continue
+        for target in targets:
+            if isinstance(target, ast.Name) and target.id == name:
+                values.append(node.value)
+    return values
+
+
+def _wider_right_problems(relative: str, source: str, resolved: object) -> list[str]:
+    """Every way ``source`` asks for a process right wider than query-only.
+
+    Pure over its inputs, so the logic that judges the shipped modules can be
+    replayed over synthetic source without touching a production file. That is
+    not a convenience: proving this check reddens by editing ``ops/loop/guard.py``
+    means editing a production file to test a test.
+
+    ``resolved`` is what the module's own :data:`_QUERY_LIMITED_NAME` evaluates
+    to at import time, or ``None`` when the module defines no such name. Three
+    independent halves, because each covers the others' blind spot:
+
+    1. STRUCTURAL - every ``OpenProcess`` call must pass the constant BY NAME.
+       An integer literal, a bitwise OR that folds a wider right in, or a
+       keyword-only call all fail. This is what catches
+       ``_PROCESS_QUERY_LIMITED_INFORMATION | 0x0001``.
+    2. VALUE - a call site can spell the legal name while the name means
+       something else. So the resolved value must be 0x1000, and every
+       assignment of that name in the source must be the literal 0x1000.
+    3. TEXT - the named rights to affect must not appear at all.
+
+    AN IN-SCOPE MODULE WITH NO ``OpenProcess`` IS CLEAN HERE, NOT RED. There is
+    no right to be wrong about, so a probe-less module returns an empty list;
+    a per-file "it must open something" anchor would turn every future
+    in-scope module into a false alarm. Non-vacuity is anchored once across the
+    roster by :func:`test_at_least_one_in_scope_module_opens_a_process_handle`,
+    and per file for ``watch.py`` by the ``assert opens`` above.
+    """
+    problems: list[str] = []
+    tree = ast.parse(source)
+
+    opens = _open_process_calls(tree)
+    for node in opens:
+        if not _asks_only_for_query_limited_information(node):
+            problems.append(f"{relative}:{node.lineno}: wider right: {ast.dump(node)}")
+
+    if opens and resolved != _QUERY_LIMITED_VALUE:
+        problems.append(f"{relative}: {_QUERY_LIMITED_NAME} resolves to {resolved!r}, not 0x1000")
+
+    for value in _assigned_values(tree, _QUERY_LIMITED_NAME):
+        if not (isinstance(value, ast.Constant) and value.value == _QUERY_LIMITED_VALUE):
+            problems.append(f"{relative}:{value.lineno}: {_QUERY_LIMITED_NAME} is not 0x1000")
+
+    for banned in _RIGHTS_TO_AFFECT:
+        if banned in source:
+            problems.append(f"{relative}: names {banned}, a right to affect rather than to ask")
+
+    return problems
+
+
+def _in_scope_module(relative: str):
+    """Import the module a :data:`SCOPE` path names, and prove the mapping.
+
+    The path-to-module translation is ASSERTED rather than assumed. Without
+    that assertion this check could read one file while reporting on another -
+    the same shape of lie as the docstring ``OPS-20`` was opened to correct.
+    """
+    module = importlib.import_module(relative.removesuffix(".py").replace("/", "."))
+    imported = Path(module.__file__).resolve()
+    expected = (REPO_ROOT / relative).resolve()
+    assert imported == expected, f"{relative} imports to {imported}, not {expected}"
+    return module
+
+
+def _in_scope_source(relative: str) -> str:
+    """Read an in-scope module's source from the file its module object names."""
+    return Path(_in_scope_module(relative).__file__).read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("relative", SCOPE)
+def test_no_in_scope_module_asks_for_a_wider_process_right(relative: str) -> None:
+    """No module that can hold a process handle asks for a right to affect one.
+
+    ``PROCESS_TERMINATE`` (0x0001) is the right THE HARD BOUNDARY exists to
+    keep out of this repo, so it is the mutation this check was watched going
+    red against - not a harmless bit. See ADR-001.
+    """
+    module = _in_scope_module(relative)
+    source = Path(module.__file__).read_text(encoding="utf-8")
+    resolved = getattr(module, _QUERY_LIMITED_NAME, None)
+
+    problems = _wider_right_problems(relative, source, resolved)
+    assert problems == [], "\n".join(problems)
+
+
+def test_at_least_one_in_scope_module_opens_a_process_handle() -> None:
+    """The roster-wide clean bill is a verdict, not an empty walk.
+
+    :func:`_wider_right_problems` is vacuously clean on a module with no
+    ``OpenProcess``, which is right per file and would be wrong for the whole
+    roster: if no in-scope module opened a handle at all, every parametrized
+    case above would pass while judging nothing.
+
+    Per-file presence is pinned separately and for BOTH files by
+    ``tests/test_process_capability.py::test_the_scanner_actually_saw_the_module``,
+    which asserts ``OpenProcess`` is among each module's observed capabilities.
+    Stated here rather than relied on silently: that test is parametrized over
+    the same :data:`SCOPE`, so it - not this one - is what would redden if a
+    probe-less module joined the roster.
+    """
+    counts = {
+        relative: len(_open_process_calls(ast.parse(_in_scope_source(relative))))
+        for relative in SCOPE
+    }
+    assert sum(counts.values()) > 0, f"nothing to judge across SCOPE: {counts}"
+
+
+# ---------------------------------------------------------------------------
+# The guard for the roster-wide guard, over synthetic source. The shipped
+# modules are clean, so the parametrized test above can only ever prove the
+# CURRENT text passes - it says nothing about what the check would do with a
+# badly behaved module. A negative check that has never been shown a positive
+# is decoration.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("spelling", WIDER_RIGHT_SPELLINGS)
+def test_the_roster_wide_check_rejects_every_wider_spelling(spelling: str) -> None:
+    """The same five spellings the watch-only guard is shown, through the roster check.
+
+    Replayed over the SAME corpus deliberately. Cycle 38 shipped a replacement
+    collector that silently caught LESS than the one it replaced, and the only
+    way to know a generalisation did not lose a case is to hand both the same
+    input. None of these five names a banned right as text - four spell a
+    number or an unrelated constant - so a pass here is the STRUCTURAL half
+    firing, not the substring denylist.
+    """
+    source = f"{_QUERY_LIMITED_NAME} = 0x1000\n\n\ndef probe(pid):\n    {spelling}\n"
+    assert _wider_right_problems("synthetic/wide.py", source, _QUERY_LIMITED_VALUE)
+
+
+def test_the_roster_wide_check_still_accepts_the_legitimate_probe() -> None:
+    """The mirror - a check that rejects everything is not a check.
+
+    Without this, every assertion above would still pass if
+    :func:`_wider_right_problems` were replaced by ``return ["x"]``.
+    """
+    source = (
+        f"{_QUERY_LIMITED_NAME} = 0x1000\n\n\ndef probe(pid):\n"
+        f"    kernel32.OpenProcess({_QUERY_LIMITED_NAME}, False, pid)\n"
+    )
+    assert _wider_right_problems("synthetic/legit.py", source, _QUERY_LIMITED_VALUE) == []
+
+
+def test_a_rebound_constant_is_caught_even_though_the_call_site_reads_clean() -> None:
+    """The call site spells the legal name; the name has been widened underneath it.
+
+    The structural half passes this source. Only the value half fails it, so
+    this is the case that proves the two halves are not one check written
+    twice.
+    """
+    source = (
+        f"{_QUERY_LIMITED_NAME} = 0x1000 | 0x0001\n\n\ndef probe(pid):\n"
+        f"    kernel32.OpenProcess({_QUERY_LIMITED_NAME}, False, pid)\n"
+    )
+    calls = _open_process_calls(ast.parse(source))
+    assert _asks_only_for_query_limited_information(calls[0]), "the call site must read clean"
+    assert _wider_right_problems("synthetic/rebound.py", source, 0x1001)
+
+
+def test_a_locally_shadowed_constant_is_caught_though_the_module_still_reads_0x1000() -> None:
+    """A function-local rebinding, with the module attribute left honest.
+
+    ``resolved`` is handed 0x1000 here on purpose - that is what
+    ``getattr(module, ...)`` would return for this source - so the value half's
+    runtime arm passes and only the ASSIGNMENT arm can fail it.
+    """
+    source = (
+        f"{_QUERY_LIMITED_NAME} = 0x1000\n\n\ndef probe(pid):\n"
+        f"    {_QUERY_LIMITED_NAME} = 0x1F0FFF\n"
+        f"    kernel32.OpenProcess({_QUERY_LIMITED_NAME}, False, pid)\n"
+    )
+    assert _wider_right_problems("synthetic/shadow.py", source, _QUERY_LIMITED_VALUE)
+
+
+def test_an_in_scope_module_with_no_process_handle_is_clean_rather_than_red() -> None:
+    """A module in :data:`SCOPE` that opens nothing has no right to get wrong.
+
+    Asserted rather than left as a property of the code, because the obvious
+    generalisation of the watch-only check - lifting its ``assert opens``
+    anchor into the loop - would redden on this input and turn a harmless new
+    roster member into a false alarm. A check that cries wolf gets deleted.
+    """
+    source = (
+        '"""An in-scope module that never opens a process handle."""\n\n'
+        "import json\n\n\ndef load(path):\n    return json.loads(path.read_text())\n"
+    )
+    assert _wider_right_problems("synthetic/quiet.py", source, None) == []
 
 
 def test_liveness_is_delegated_to_the_guard_rather_than_reimplemented() -> None:

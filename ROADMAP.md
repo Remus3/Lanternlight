@@ -2681,7 +2681,7 @@ shipped a branch no test reached; this is the cheap defence against a repeat.
 See that item. The implementing slice found it, could not fix it from its own
 file list, and said so.
 
-## OPS-20. Nothing tests `guard.py`'s access mask, and a docstring says otherwise - OPEN
+## OPS-20. Nothing tests `guard.py`'s access mask, and a docstring says otherwise - CLOSED 2026-09-04
 
 Opened 2026-09-04, cycle 42, by the `OPS-18` adjudication.
 
@@ -2707,6 +2707,38 @@ test would have noticed.
   appear, so that is the mutation worth proving, not a harmless one.
 - Whatever docstring currently claims the coverage is corrected in the same
   change, and states what IS and is NOT checked.
+
+**CLOSED 2026-09-04, cycle 45, ledger `LL-0130`.**
+`test_no_in_scope_module_asks_for_a_wider_process_right` is parametrized over
+`SCOPE` **imported from** `tests/test_process_capability.py` rather than
+re-listed - because a second copy of a roster is the defect `ops/lanes.py` and
+the lane contracts already paid for. A companion test asserts that the check
+the docstring NAMES actually exists, is parametrized, and imports the roster,
+so the docstring cannot drift back into being a lie without a red.
+
+**Watched RED against the right that actually matters.** The mutation is
+`_PROCESS_QUERY_LIMITED_INFORMATION | 0x0001` - `PROCESS_TERMINATE`, the one
+right this repo's hard boundary says must never appear - planted in
+`ops/loop/guard.py`. Before the change the same mutation gave `0 failed`. The
+merger re-planted it independently and watched
+`1 failed, 137 passed`, then restored `guard.py` and confirmed it byte-identical
+by sha256 with `git status` clean.
+
+**Old and new replayed over one corpus:** the new check is RED everywhere the
+old one was RED, **plus one case the old never caught** - a function-local
+shadow of the constant. That replay is the check this repo demands whenever a
+guard is rewritten, after cycle 38 shipped a replacement collector that
+silently caught less.
+
+**The false docstring bullet is rewritten** rather than deleted: it names the
+lie, records that it was proved by set-difference, and lists CHECKED /
+NOT CHECKED / NOT-AN-ERROR explicitly.
+
+**One honest limit, recorded rather than smoothed over:** a module with NO
+`OpenProcess` at all PASSES the new check, which is correct - but the
+pre-existing `test_the_scanner_actually_saw_the_module` in the sibling file
+WOULD redden on such a module. That alarm lives there, not here, and the
+docstring now says so.
 
 ## OPS-21. `guard.read_owner` folds four facts onto `None`, and a corrupt lock is reclaimed - CLOSED 2026-09-04
 
@@ -2991,7 +3023,7 @@ is cheap. Weigh that honestly against the risk of touching a guard that is now
 demonstrably catching four invocation spellings it used to miss. Declining this
 item is a perfectly good outcome.
 
-## OPS-25. A cycle that closes TWO items credits only one - OPEN
+## OPS-25. A cycle that closes TWO items credits only one - CLOSED 2026-09-04
 
 Opened 2026-09-04, cycle 44, by the merger, after it happened.
 
@@ -3026,6 +3058,43 @@ not a claim about work not done - but it is a manual step nobody will remember.
 **Worth knowing before starting:** `ops/runtime/loop_state.json` is gitignored,
 so this is local state and a wrong write is not recoverable from git. Read the
 file before writing it.
+
+**CLOSED 2026-09-04, cycle 45, ledger `LL-0130`.** A separate
+`state.credit(*items)` records completions without moving the counter.
+
+**Why a separate call and NOT an `also_completed=` argument on
+`advance_cycle`** - this is the whole design and it is worth keeping. An
+argument on the wrap only works if the merger carries the second closure from
+the moment it becomes true to the moment it wraps, **and that is precisely the
+gap both real losses fell through.** This project's continuity design says a
+fact held only in a context window is a fact already lost. `credit` is callable
+the instant the item closes, writes through the same atomic path, and
+structurally cannot move the counter.
+
+**It composes with `OPS-7` rather than reopening it.** `advance_cycle` still
+INFERS at most one completion from a transition; `credit` is an ASSERTION by
+the caller. `OPS-7` was a bad inference - a carry-forward read as a completion -
+and an assertion cannot be a bad inference. **Re-proved, not assumed:** the
+merger independently confirmed that carrying the same item forward still
+credits nothing, including when a DIFFERENT item is credited in the same cycle.
+
+**A LATENT HAZARD WAS FOUND AND GUARDED while doing it.** `save` does not
+validate `completed`, but `LoopState.from_dict` does - so a single non-string
+id reaching the file makes the next `load` reject it WHOLESALE and return a
+fresh default. Measured by the merger: `completed` comes back `[]` and `cycle`
+comes back `0`. **One fat-fingered id would destroy the entire completion
+record, not add one bad row.** Every id is therefore type-checked before
+anything is read or written, and a rejected call leaves the file byte-identical
+- also measured. The loss is at least not silent: `load` sets `recovered=True`
+with a note naming the reason.
+
+Watched red twice - `AttributeError` at TDD time, then a behavioural red on the
+append condition. **Fourteen mutations, zero survivors**, including the `OPS-7`
+re-proof. The merger independently made `credit` a no-op and watched
+`9 failed, 35 passed`.
+
+**This item was filed after the defect had already fired TWICE** - cycles 43 and
+44 each closed two items, recorded one, and were repaired by hand.
 
 ## 4b. Ammo-family and talent measurement - READY, cheap, needs the client
 
