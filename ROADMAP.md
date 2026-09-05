@@ -2708,7 +2708,7 @@ test would have noticed.
 - Whatever docstring currently claims the coverage is corrected in the same
   change, and states what IS and is NOT checked.
 
-## OPS-21. `guard.read_owner` folds four facts onto `None`, and a corrupt lock is reclaimed - OPEN
+## OPS-21. `guard.read_owner` folds four facts onto `None`, and a corrupt lock is reclaimed - CLOSED 2026-09-04
 
 Opened 2026-09-04, cycle 42, by the `OPS-18` blast-radius sweep.
 
@@ -2738,6 +2738,40 @@ route.
 
 **Not in scope:** changing what `acquire` does with a lock whose owner is
 genuinely dead. That path is correct and is the crash-recovery behaviour.
+
+**CLOSED 2026-09-04, cycle 44, ledger `LL-0129`.** A new
+`owner_of() -> int | UNREADABLE | None` classifies the lock into the three
+states it can actually be in. `read_owner`'s signature and contract are
+UNCHANGED, so its two remaining callers were left alone; `is_locked` and
+`acquire`'s refusal read the new function. `FileNotFoundError` is now the only
+`OSError` that answers "no lock" - every other one means something IS at that
+path and cannot be read.
+
+**THIS ITEM'S OWN COUNT WAS WRONG, and in a way that mattered.** It said four
+`None` cases. There are FIVE, and the item mis-identified them: the `OSError`
+arm ITSELF folded "absent" together with "something is there I cannot read",
+which is the very distinction the item existed to draw.
+
+**AND A SIXTH FACT NEVER RETURNED `None` AT ALL.** `UnicodeDecodeError` is a
+`ValueError`, not an `OSError`, so a lock file carrying one stray non-UTF-8
+byte **raised straight out** through `read_owner`, `is_locked` and `acquire`
+rather than returning anything. Measured, then fixed. Nobody had noticed a
+crash path in the loop's front door.
+
+Watched red at `28 failed, 42 passed`. **Ten mutations applied, ten caught,
+none survived** - including "fold absent INTO unreadable", which reddens the
+missing-file case and is the guard on the acceptance criterion that mattered
+most. The merger independently re-mutated the malformed-JSON arm back to `None`
+and watched `9 failed, 65 passed`.
+
+**No force flag was added, deliberately.** Two escape hatches already exist and
+both are now tested: deleting the file, which `LockBusy`'s message already
+names, and `release()`, which clears an ownerless lock without `force`.
+
+**STILL FOLDED, declared rather than left to be discovered:** a lock recording
+a READABLE but impossible pid - `0` or a negative - is returned as that pid,
+read as dead, and reclaimed like a crashed loop. The record is readable, and
+reading it is what the function promises.
 
 ## OPS-22. `precommit_gate` matches a forbidden cmdlet as a bare substring - CLOSED 2026-09-04
 
@@ -2803,7 +2837,7 @@ these calls run in, so blocking it in command position would refuse correct
 commands all day. The old check missed it too, so nothing was lost. `taskkill`
 is unaffected: no word boundary before `kill`.
 
-## OPS-23. A recycled watcher pid can now read ARMED when no watcher exists - OPEN
+## OPS-23. A recycled watcher pid can now read ARMED when no watcher exists - CLOSED 2026-09-04
 
 Opened 2026-09-04, cycle 43, by the slice that closed `OPS-19`. **It is a
 consequence of that fix, it was reported rather than hidden, and it is a narrow
@@ -2859,6 +2893,56 @@ for the lock guard, which is where the fail-closed contract is written. This
 item is about the watcher consumers drawing a different inference from the same
 reading.
 
+**CLOSED 2026-09-04, cycle 44, ledger `LL-0129`.**
+
+**THIS ITEM'S OWN HYPOTHESIS WAS MEASURED AND REFUTED - it is the third item in
+four cycles filed with a mechanism that did not hold.** The item proposed that
+"alive but creation time UNREADABLE" means the pid is not ours. **It does
+not.** `process_creation_time` returns `None` on every non-Windows platform,
+for a handle that opens but will not answer, AND for an unparseable `started`
+stamp. **The literal fix would have called every healthy watcher on POSIX an
+`IMPOSTOR` and started a second poller** - precisely the failure `ensure_armed`
+exists to refuse, and the one this repo is most afraid of. The item warned that
+its own premise was reasoning rather than measurement; that warning is what
+saved it.
+
+**What is true, measured with `SeDebugPrivilege` DROPPED and the drop
+asserted:** 40 of 40 children spawned the way `default_spawn` spawns have a
+READABLE creation time and zero denials. 12 of 307 live pids are
+alive-but-unreadable, **all** with error 5, and every one is owned by SYSTEM,
+LOCAL SERVICE, UMFD or DWM - none by this user. **With the privilege still
+held, 0 of 305 deny**, so a test hunting a real denied pid from inside pytest
+finds nothing and must inject.
+
+So the shipped rule keys on the `OpenProcess` ERROR CODE, through a new
+`pid_open_denied(pid) -> True | False | None`, and it is consulted **only when
+the identity question came back unanswerable** - never instead of the creation
+time.
+
+**`check_watcher` now carries an `identity` field** - `NOT_REACHED`,
+`VERIFIED`, `UNCHECKED` or `REFUTED` - because the old states conflated
+"identity was checked and matched" with "identity could not be checked", and
+reported the second as a confirmation. `ARMED` no longer implies a confirmed
+identity; read the field. `ensure_armed`'s refusal message no longer asserts a
+watcher is running when that is unknown.
+
+**THE `4e` GUARANTEE WAS RE-PROVED, NOT ASSUMED**, which matters because
+`IMPOSTOR` re-arms: 33 samples over 330 s against the REAL live watcher and a
+real detached child, 33 of 33 `ARMED`/`VERIFIED` and `NO_HEARTBEAT`/`VERIFIED`,
+**0 IMPOSTOR**. The merger separately drove the live watcher through the
+shipped code at the wrap and read `ARMED` / `VERIFIED`.
+
+**Eleven mutations, eleven killed**, every anchor asserted unique and the file
+restored byte-for-byte. The one that matters most is M2, the item's own literal
+hypothesis - killed by three tests. The merger independently replaced the
+denial probe with a permanent cannot-tell and watched `2 failed, 124 passed`.
+
+**STILL OPEN, stated rather than implied:** `ensure_armed` on the way IN still
+refuses for a denied pid. The message is honest now but the behaviour is
+unchanged, so the outage closes at the WRAP rather than at session entry. That
+is deliberate - a second spawn path without the identity machinery behind it is
+worse than a delayed recovery.
+
 ## OPS-24. `OPS-22`'s accepted false block fired on its own commit - OPEN
 
 Opened 2026-09-04, cycle 43, **within minutes of `OPS-22` closing**, by the
@@ -2906,6 +2990,42 @@ not a command being run. That is a distinction the gate already draws elsewhere
 is cheap. Weigh that honestly against the risk of touching a guard that is now
 demonstrably catching four invocation spellings it used to miss. Declining this
 item is a perfectly good outcome.
+
+## OPS-25. A cycle that closes TWO items credits only one - OPEN
+
+Opened 2026-09-04, cycle 44, by the merger, after it happened.
+
+`state.advance_cycle` records the single in-flight `item` as completed and then
+moves the counter. **A cycle that finishes two items therefore credits one and
+silently loses the other.** Cycle 43 closed `OPS-19` and `OPS-22`; only
+`OPS-19` reached `completed`.
+
+This is the mirror of `OPS-7`, which closed the opposite defect - crediting an
+item that was never started. Both corrupt the same record, and the record is
+the one a cold session reads to learn what is already done. **Over-crediting
+makes a session skip live work; under-crediting makes it redo closed work**,
+which is the REDISCOVERY failure this project's whole continuity design exists
+to prevent.
+
+Repaired by hand this cycle: `state.load()`, append, `state.save()`, with the
+cycle counter asserted unchanged. That is a correction of an incomplete record,
+not a claim about work not done - but it is a manual step nobody will remember.
+
+**Acceptance:**
+
+- A cycle can record more than one completed item without a manual edit and
+  without moving the counter twice. Whether that means `advance_cycle` taking a
+  sequence, or a separate `credit(item)`, is open - argue the choice.
+- **`OPS-7`'s guarantee is preserved and re-proved, not assumed.** Carrying the
+  SAME item forward must still credit nothing. That test exists; watch it stay
+  green against the new code, and watch it go RED against a deliberate break.
+- A test WATCHED GOING RED for the two-item case.
+- The manual repair above is not needed again, and `docs/HEADLESS.md`'s
+  description of the cycle loop says how multiple closures are recorded.
+
+**Worth knowing before starting:** `ops/runtime/loop_state.json` is gitignored,
+so this is local state and a wrong write is not recoverable from git. Read the
+file before writing it.
 
 ## 4b. Ammo-family and talent measurement - READY, cheap, needs the client
 

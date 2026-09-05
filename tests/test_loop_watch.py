@@ -2615,3 +2615,502 @@ def test_the_lanternlight_imports_added_for_4f_are_still_lazy() -> None:
         if isinstance(node, ast.ImportFrom) and node.module
     }
     assert not any(name.startswith("lanternlight") for name in module_level)
+
+
+# ---------------------------------------------------------------------------
+# ROADMAP OPS-23 - a recycled pid this token cannot OPEN is not the watcher
+#
+# ``OPS-19`` made an access-denied ``OpenProcess`` read ALIVE, which is right
+# for the loop lock and wrong for these consumers. Our watcher is spawned by
+# this session under this session's own token, so a RECORDED pid that has gone
+# access-denied is a pid something foreign inherited - and until this section
+# the check believed it, landed on ``NO_HEARTBEAT``, and reported ARMED with
+# nothing archiving.
+#
+# THE PREMISE, MEASURED RATHER THAN REASONED, on this machine 2026-09-05, with
+# ``SeDebugPrivilege`` REMOVED from the probing token and the removal asserted
+# (transcript: scratchpad/c44_ops23/):
+#
+#   * 40 of 40 children spawned the way ``default_spawn`` spawns - detached,
+#     new process group, DEVNULL streams - had a READABLE creation time.
+#   * The live watcher of the moment, pid 21452, read 2026-09-03T23:53:54.252209Z
+#     against a record saying 23:53:54 - 0.25 s, inside the window.
+#   * 12 of 307 live pids were alive-but-unreadable, EVERY one of them failing
+#     ``OpenProcess`` with error 5, and every one owned by SYSTEM, LOCAL
+#     SERVICE, UMFD-0/1 or DWM-1. Not one ran as this user.
+#
+# So the premise holds for the DENIED case, and only for it. It does NOT hold
+# for "creation time unreadable" in general, which is why the fix keys on the
+# error code rather than on ``process_creation_time`` returning ``None`` - see
+# ``test_a_cannot_tell_that_is_not_a_denial_still_believes_the_incumbent``.
+#
+# THE SAME SWEEP WITH THE PRIVILEGE STILL HELD FOUND 0 OF 305 DENIED. That is
+# why every test below INJECTS the denial: this suite runs under a token that
+# holds ``SeDebugPrivilege``, so there is no pid on this machine it can be
+# refused, and a test that went looking for one would pass by finding nothing.
+# ---------------------------------------------------------------------------
+
+
+class _DeniedCall:
+    """A fake ctypes entry point with a fixed result and a call count."""
+
+    def __init__(self, result):
+        self.result = result
+        self.calls = 0
+        self.restype = None
+        self.argtypes = None
+
+    def __call__(self, *args):
+        self.calls += 1
+        return self.result
+
+
+class _DeniedOpenProcess(_DeniedCall):
+    """``OpenProcess``, failing, carrying the error it left behind.
+
+    The handle and the error live on ONE object because ``GetLastError`` is
+    only meaningful immediately after the call that set it. Reading the error
+    off the same object the call went through means a probe that never
+    consulted the error cannot make these tests pass by accident, and
+    :attr:`error_reads` records that it was consulted.
+    """
+
+    def __init__(self, result, last_error):
+        super().__init__(result)
+        self.last_error = last_error
+        self.error_reads = 0
+
+    def read_last_error(self):
+        """Stand in for ``ctypes.get_last_error()``. Counts, never raises.
+
+        A spy that raised would be vacuous the moment any caller wrapped it in
+        ``except Exception`` - ``AssertionError`` is an ``Exception`` - which is
+        a trap this repo has already paid for. A counter cannot be swallowed.
+        """
+        self.error_reads += 1
+        return self.last_error
+
+
+class _DeniedKernel32:
+    def __init__(self, *, open_result, last_error):
+        self.OpenProcess = _DeniedOpenProcess(open_result, last_error)
+        self.GetProcessTimes = _DeniedCall(0)
+        self.CloseHandle = _DeniedCall(1)
+
+
+#: The two ``OpenProcess`` failure codes this section turns on, and one that is
+#: neither. Spelled out here rather than imported from the module under test:
+#: an instrument that shares a constant with the thing it measures inherits
+#: that thing's mistakes. 5 is ``ERROR_ACCESS_DENIED`` - the process EXISTS and
+#: this token may not ask. 87 is ``ERROR_INVALID_PARAMETER`` - no process bears
+#: the pid. 8 is ``ERROR_NOT_ENOUGH_MEMORY``, a real way for the call to fail
+#: while saying nothing whatever about the pid.
+_ERROR_ACCESS_DENIED = 5
+_ERROR_INVALID_PARAMETER = 87
+_ERROR_NOT_ENOUGH_MEMORY = 8
+
+#: A pid for the injected tests. The fake ignores it, so it stands for "the
+#: number in the record" and nothing else. Deliberately NOT this process's pid:
+#: our own pid is the one number that could never be denied to us, and a test
+#: that used it would read as a contradiction.
+_RECYCLED_PID = 4321
+
+
+def _deny(monkeypatch, *, last_error):
+    """Install a fake kernel32 whose ``OpenProcess`` fails with ``last_error``.
+
+    ONE fake serves both modules on purpose. ``guard.pid_is_alive`` and
+    ``watch.process_creation_time`` each build their own ``kernel32`` and each
+    call the same ``OpenProcess``, so a single injected failure reproduces the
+    whole ``OPS-23`` shape end to end - the guard reading ALIVE and the
+    creation-time probe reading nothing - rather than asserting the two halves
+    separately and hoping they meet.
+
+    ``ctypes.get_last_error`` is patched alongside ``ctypes.WinDLL``, because
+    with the library faked no real call happens and the genuine accessor would
+    hand back whatever some earlier, unrelated call left in the slot.
+    """
+    import ctypes
+
+    fake = _DeniedKernel32(open_result=0, last_error=last_error)
+    monkeypatch.setattr(ctypes, "WinDLL", lambda *a, **k: fake)
+    monkeypatch.setattr(ctypes, "get_last_error", fake.OpenProcess.read_last_error)
+    return fake
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="the ctypes probe is Windows-only")
+def test_an_alive_but_unopenable_recorded_pid_gets_a_verdict_that_rearms(
+    monkeypatch, tmp_path: Path, record_file: Path
+) -> None:
+    """The whole of ``OPS-23``, driven through the real probes.
+
+    Nothing here is stubbed above the ctypes layer: ``guard.pid_is_alive``,
+    ``watch.process_creation_time`` and the denial probe all run their real
+    code against one fake ``OpenProcess`` that fails with error 5. That is the
+    recycled pid exactly - alive by the ``OPS-19`` reading, unopenable, and
+    therefore not a process this session could have spawned.
+
+    The assertion that matters is the last one. ``IMPOSTOR`` is not the point;
+    being in :data:`REARM_STATES` is, because that is what makes the wrap put a
+    watcher back rather than hand the machine over reporting ARMED with nothing
+    archiving the log, the saves or the market cache.
+    """
+    watch_mod.write_record(_record(_RECYCLED_PID, tmp_path, started=ARMED_AT), record_file)
+    fake = _deny(monkeypatch, last_error=_ERROR_ACCESS_DENIED)
+
+    # The two readings this verdict has to reconcile, taken through the real
+    # functions rather than assumed.
+    assert guard_mod.pid_is_alive(_RECYCLED_PID) is True, "OPS-19: denied reads ALIVE"
+    assert watch_mod.process_creation_time(_RECYCLED_PID) is None, "denied tells no time"
+
+    status = watch_mod.check_watcher(
+        path=record_file,
+        heartbeat=tmp_path / "absent.json",
+        now=NOW,
+    )
+
+    assert status.state == watch_mod.STATE_IMPOSTOR, status.reason
+    assert status.armed is False, status.reason
+    assert status.state in watch_mod.REARM_STATES, status.state
+    assert fake.OpenProcess.error_reads > 0, "the error code was never consulted"
+    assert any("denied" in item.lower() for item in status.evidence), status.evidence
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="the ctypes probe is Windows-only")
+def test_a_cannot_tell_that_is_not_a_denial_still_believes_the_incumbent(
+    monkeypatch, tmp_path: Path, record_file: Path
+) -> None:
+    """The non-vacuity mirror, and the reason the fix keys on the ERROR CODE.
+
+    Same injection, same missing creation time, same ALIVE reading - only the
+    failure code differs, and it is one nobody has characterised. Nothing here
+    establishes the process is foreign, so ``4e``'s rule stands: cannot-tell
+    believes the incumbent, because a false ``IMPOSTOR`` re-arms beside a live
+    watcher.
+
+    Without this test the branch above would pass just as happily against an
+    implementation that routed EVERY unreadable creation time to ``IMPOSTOR``.
+    That implementation is the one the ``OPS-23`` item proposed, and it would
+    call a healthy watcher an impostor on every non-Windows platform and on
+    every handle that opens but will not answer.
+    """
+    watch_mod.write_record(_record(_RECYCLED_PID, tmp_path, started=ARMED_AT), record_file)
+    fake = _deny(monkeypatch, last_error=_ERROR_NOT_ENOUGH_MEMORY)
+
+    assert guard_mod.pid_is_alive(_RECYCLED_PID) is True, "uncharacterised fails CLOSED"
+    assert watch_mod.process_creation_time(_RECYCLED_PID) is None, "still no creation time"
+    assert watch_mod.pid_open_denied(_RECYCLED_PID) is None, "uncharacterised is cannot-tell"
+
+    status = watch_mod.check_watcher(
+        path=record_file,
+        heartbeat=tmp_path / "absent.json",
+        now=NOW,
+    )
+
+    assert status.state == watch_mod.STATE_NO_HEARTBEAT, status.reason
+    assert status.armed is True, status.reason
+    assert status.state not in watch_mod.REARM_STATES
+    assert status.identity == watch_mod.IDENTITY_UNCHECKED, status.identity
+    assert fake.OpenProcess.error_reads > 0, "the error code was never consulted"
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="the ctypes probe is Windows-only")
+def test_the_same_injection_with_the_gone_code_reads_dead_rather_than_impostor(
+    monkeypatch, tmp_path: Path, record_file: Path
+) -> None:
+    """The second mirror: the fake can produce the OPPOSITE reading too.
+
+    ``ERROR_INVALID_PARAMETER`` is the one code that means no process bears the
+    pid, so the guard reports DEAD and the identity question is never asked.
+    Without this, both tests above would pass against a fake that was simply
+    incapable of ever reporting a live process, which is the shape of an
+    injection that proves nothing.
+    """
+    watch_mod.write_record(_record(_RECYCLED_PID, tmp_path, started=ARMED_AT), record_file)
+    _deny(monkeypatch, last_error=_ERROR_INVALID_PARAMETER)
+
+    assert guard_mod.pid_is_alive(_RECYCLED_PID) is False
+
+    status = watch_mod.check_watcher(
+        path=record_file,
+        heartbeat=tmp_path / "absent.json",
+        now=NOW,
+    )
+
+    assert status.state == watch_mod.STATE_DEAD, status.reason
+    assert status.state in watch_mod.REARM_STATES
+    assert status.identity == watch_mod.IDENTITY_NOT_REACHED, (
+        "DEAD never reaches the identity question, and saying UNCHECKED there would "
+        "conflate 'asked and unanswerable' with 'never asked'"
+    )
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="the ctypes probe is Windows-only")
+def test_the_wrap_rearms_the_alive_but_unopenable_pid_rather_than_reporting_armed(
+    monkeypatch, tmp_path: Path, record_file: Path
+) -> None:
+    """``OPS-23``'s consequence, not just its verdict: a watcher comes back.
+
+    A verdict that re-arms is only worth something if the wrap acts on it, and
+    the wrap has one more hurdle - ``ensure_armed`` refuses when the recorded
+    pid is alive, which this one is. It re-arms only because ``IMPOSTOR``
+    passes ``disqualified_pid`` down. This asserts the record that came out,
+    not just the state that went in.
+    """
+    watch_mod.write_record(_record(_RECYCLED_PID, tmp_path, started=ARMED_AT), record_file)
+    _deny(monkeypatch, last_error=_ERROR_ACCESS_DENIED)
+
+    spawned: list[tuple] = []
+
+    def spawn_fn(dest_base, dest_root) -> int:
+        spawned.append((dest_base, dest_root))
+        return 5150
+
+    result = watch_mod.ensure_armed_at_wrap(
+        tmp_path / "captures",
+        spawn_fn=spawn_fn,
+        dest_root_fn=_dated,
+        now=NOW,
+        path=record_file,
+        heartbeat=tmp_path / "absent.json",
+    )
+
+    assert result.status.state == watch_mod.STATE_IMPOSTOR, result.reason
+    assert result.rearmed is True, result.reason
+    assert len(spawned) == 1, "the wrap did not actually start anything"
+    assert watch_mod.read_record(record_file).pid == 5150, "the record still names the old pid"
+    assert "REFUSED access" in result.reason, result.reason
+
+
+def test_pid_open_denied_answers_three_ways_and_never_guesses() -> None:
+    """The probe's own contract, against real pids where real pids exist.
+
+    ``None`` is a third answer here for the same reason it is one in
+    :func:`process_creation_time`: a probe that invented ``False`` on a pid it
+    could not evaluate would hand the identity check a clean bill it never
+    measured, and ``False`` is the answer that lets a verdict stand.
+
+    The last assertion needs a number no process bears. ``UNALLOCATABLE_PID``
+    is that number and its premise is asserted where it is defined - a pid that
+    is not a multiple of four has never named a process on NT.
+    """
+    assert watch_mod.pid_open_denied(None) is None
+    assert watch_mod.pid_open_denied(0) is None
+    assert watch_mod.pid_open_denied(-1) is None
+    assert watch_mod.pid_open_denied(True) is None
+
+    if sys.platform != "win32":
+        assert watch_mod.pid_open_denied(os.getpid()) is None, "cannot-tell off Windows"
+        return
+
+    # Our own process is the one pid that can never be refused to us, and it is
+    # the shape every watcher this module arms has: spawned by a session
+    # running under this token.
+    assert watch_mod.pid_open_denied(os.getpid()) is False
+    # Nothing bears this number, so there is nothing to be refused BY. That is
+    # a different fact from a refusal and must not read as one.
+    assert watch_mod.pid_open_denied(UNALLOCATABLE_PID) is False
+
+
+def test_check_watcher_distinguishes_a_verified_identity_from_an_unchecked_one(
+    tmp_path: Path, record_file: Path
+) -> None:
+    """``OPS-23``'s first acceptance criterion: today both reach the same branch.
+
+    Before this, a matched creation time and an unanswerable one produced the
+    same state, the same ``armed``, and the same sentence - "pid N is the
+    watcher" - so a consumer could not tell an observation from an assumption,
+    and the ARMED reason asserted "identity-confirmed" in a case where nothing
+    had been confirmed.
+
+    Both halves run through the same record and the same heartbeat, so the ONLY
+    variable is the identity probe's answer.
+    """
+    watch_mod.write_record(_record(os.getpid(), tmp_path, started=ARMED_AT), record_file)
+    beat = _heartbeat_file(tmp_path, pid=os.getpid(), written=watch_mod._stamp(NOW))
+
+    verified = watch_mod.check_watcher(
+        path=record_file,
+        heartbeat=beat,
+        now=NOW,
+        creation_time_fn=_fixed_creation(MEASURED_CREATION),
+    )
+    unchecked = watch_mod.check_watcher(
+        path=record_file,
+        heartbeat=beat,
+        now=NOW,
+        creation_time_fn=lambda pid: None,
+        denied_fn=lambda pid: None,
+    )
+
+    # Same state, same verdict - which is why the distinction had to be carried
+    # somewhere other than the state.
+    assert verified.state == watch_mod.STATE_ARMED, verified.reason
+    assert unchecked.state == watch_mod.STATE_ARMED, unchecked.reason
+    assert verified.armed is True and unchecked.armed is True
+
+    assert verified.identity == watch_mod.IDENTITY_VERIFIED
+    assert unchecked.identity == watch_mod.IDENTITY_UNCHECKED
+    assert verified.identity != unchecked.identity
+
+    # And the prose stops claiming a confirmation that never happened.
+    assert "identity-confirmed" in verified.reason, verified.reason
+    assert "identity-confirmed" not in unchecked.reason, unchecked.reason
+    assert "never confirmed, only believed" in unchecked.reason, unchecked.reason
+    assert "BELIEVED to be the watcher" in unchecked.reason, unchecked.reason
+
+
+def test_a_platform_with_no_probe_at_all_still_believes_the_incumbent(
+    tmp_path: Path, record_file: Path
+) -> None:
+    """The portability guarantee, stated as the case that would break it.
+
+    Off Windows, :func:`process_creation_time` answers ``None`` for EVERY pid
+    including a healthy watcher's, and :func:`pid_open_denied` answers ``None``
+    for the same reason. That pair is what this test injects, and the verdict
+    has to stay ARMED: a rule that read every unreadable creation time as
+    ``IMPOSTOR`` would re-arm a second poller beside every live watcher on
+    every non-Windows platform. That rule is what the ``OPS-23`` item proposed
+    and it is the half of the hypothesis that does not hold.
+    """
+    watch_mod.write_record(_record(os.getpid(), tmp_path, started=ARMED_AT), record_file)
+
+    status = watch_mod.check_watcher(
+        path=record_file,
+        heartbeat=tmp_path / "absent.json",
+        now=NOW,
+        creation_time_fn=lambda pid: None,
+        denied_fn=lambda pid: None,
+    )
+
+    assert status.state == watch_mod.STATE_NO_HEARTBEAT, status.reason
+    assert status.armed is True
+    assert status.state not in watch_mod.REARM_STATES
+    assert status.identity == watch_mod.IDENTITY_UNCHECKED
+
+
+def test_a_live_process_this_session_owns_never_reads_impostor(
+    tmp_path: Path, record_file: Path
+) -> None:
+    """The ``4e`` guarantee, re-proved against the NEW path into IMPOSTOR.
+
+    Subject: this interpreter. It is alive, it is ours, and it was started by
+    this session - the same three properties an armed watcher has. Nothing is
+    injected: the real creation-time probe and the real refusal probe both run,
+    against a record whose ``started`` is derived from the process's own real
+    creation time the way :func:`ensure_armed` derives it.
+
+    ``IMPOSTOR`` is in :data:`REARM_STATES`, so a false one here would put a
+    second poller on the same four sources - the failure ``ensure_armed``
+    exists to refuse, and the reason ``4e`` chose a 120 s window on purpose.
+
+    The wall-clock half of this - 33 samples over 330 s against the real live
+    watcher AND a real detached child, the sampling ``4f`` used - cannot live
+    in a suite that has to finish, and was run separately. See the section
+    comment above for the numbers.
+    """
+    created = watch_mod.process_creation_time(os.getpid())
+    if created is None:
+        pytest.skip("no creation-time probe on this platform; the injected tests pin the logic")
+
+    watch_mod.write_record(
+        _record(os.getpid(), tmp_path, started=watch_mod._stamp(created)), record_file
+    )
+
+    status = watch_mod.check_watcher(path=record_file, heartbeat=tmp_path / "absent.json")
+
+    assert status.state != watch_mod.STATE_IMPOSTOR, status.reason
+    assert status.state not in watch_mod.REARM_STATES, status.reason
+    assert status.identity == watch_mod.IDENTITY_VERIFIED, status.evidence
+    assert watch_mod.pid_open_denied(os.getpid()) is False
+
+
+def test_the_refusal_probe_is_never_consulted_once_identity_has_an_answer(
+    tmp_path: Path, record_file: Path
+) -> None:
+    """Structural proof that a healthy watcher cannot reach the new branch.
+
+    The test above shows one live process not reading ``IMPOSTOR``. This shows
+    WHY no live process with a readable creation time ever can: the refusal
+    probe is only asked when :func:`_identity_matches` returned ``None``, so a
+    confirmed identity and a refuted one both bypass it entirely. A spy that
+    COUNTS is used rather than one that raises, because ``AssertionError`` is
+    an ``Exception`` and a raising spy goes vacuous under any caller that
+    catches broadly - a trap this repo has already paid for.
+    """
+    watch_mod.write_record(_record(os.getpid(), tmp_path, started=ARMED_AT), record_file)
+    asked: list[int] = []
+
+    def denied_fn(pid: int):
+        asked.append(pid)
+        return True  # the answer that would flip the verdict, if it were read
+
+    inside = watch_mod.check_watcher(
+        path=record_file,
+        heartbeat=tmp_path / "absent.json",
+        now=NOW,
+        creation_time_fn=_fixed_creation(MEASURED_CREATION),
+        denied_fn=denied_fn,
+    )
+    assert inside.state == watch_mod.STATE_NO_HEARTBEAT, inside.reason
+    assert inside.identity == watch_mod.IDENTITY_VERIFIED
+    assert asked == [], "a verified identity asked the refusal probe anyway"
+
+    outside = watch_mod.check_watcher(
+        path=record_file,
+        heartbeat=tmp_path / "absent.json",
+        now=NOW,
+        creation_time_fn=_fixed_creation(datetime(2026, 9, 3, 4, 0, 0, tzinfo=UTC)),
+        denied_fn=denied_fn,
+    )
+    assert outside.state == watch_mod.STATE_IMPOSTOR, outside.reason
+    assert outside.identity == watch_mod.IDENTITY_REFUTED
+    assert "identity window" in outside.reason, (
+        "a refuted identity must keep citing the offset it measured, not a refusal "
+        "probe it never asked"
+    )
+    assert asked == [], "a refuted identity asked the refusal probe anyway"
+
+    # The mirror: the spy IS reachable, so the two empty lists above are facts
+    # about the branch and not about a probe nothing could ever call.
+    reached = watch_mod.check_watcher(
+        path=record_file,
+        heartbeat=tmp_path / "absent.json",
+        now=NOW,
+        creation_time_fn=lambda pid: None,
+        denied_fn=denied_fn,
+    )
+    assert asked == [os.getpid()], asked
+    assert reached.state == watch_mod.STATE_IMPOSTOR, reached.reason
+
+
+def test_the_refusal_to_arm_no_longer_claims_a_watcher_is_running(
+    tmp_path: Path, record_file: Path
+) -> None:
+    """``OPS-23``'s fourth acceptance criterion.
+
+    :func:`ensure_armed` reads liveness and nothing else, and since ``OPS-19``
+    liveness answers ALIVE for a pid this token may not open. So the old
+    sentence - "a watcher is already running as pid N" - asserted an identity
+    the function had never checked, and in the ``OPS-23`` case it was flatly
+    false.
+
+    The refusal itself is unchanged and must stay that way: not arming is still
+    the right call, because the cost of being wrong the other way is a second
+    poller on the same four sources while ``OPS-14`` is open.
+    """
+    watch_mod.write_record(_record(os.getpid(), tmp_path, started=ARMED_AT), record_file)
+
+    result = watch_mod.ensure_armed(
+        tmp_path / "captures",
+        spawn_fn=lambda base, root: pytest.fail("a second watcher was spawned"),
+        dest_root_fn=_dated,
+        now=NOW,
+        path=record_file,
+    )
+
+    assert result.armed is False
+    assert result.pid == os.getpid()
+    assert "a watcher is already running" not in result.reason, result.reason
+    assert "is ALIVE" in result.reason, result.reason
+    assert "NOT checked here" in result.reason, result.reason

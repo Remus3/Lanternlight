@@ -34,6 +34,36 @@ A fresh clone runs zero git hooks until that first command runs. The tracked
 
 ---
 
+## Where the last session left it - CYCLE 44
+
+`main` is at the cycle 44 wrap commit. Suite **1727 passed** in 108.09s, run
+BARE; ruff clean. Merge gate OK at 1727 against a **1683** baseline measured
+BEFORE dispatch. Ledger `LL-0129`. Client **closed**. **`OPS-21` and `OPS-23`
+CLOSED.**
+
+## THE FOUR THINGS CYCLE 44 PAID FOR
+
+1. **`OPS-23`'S OWN HYPOTHESIS WAS REFUTED BY MEASUREMENT - the THIRD item in
+   four cycles filed with a mechanism that did not hold.** "Alive but creation
+   time unreadable means not ours" is FALSE: `process_creation_time` returns
+   `None` on every non-Windows platform, for a handle that will not answer, and
+   for an unparseable `started` stamp. **The literal fix would have called
+   every healthy POSIX watcher an `IMPOSTOR` and started a second poller.** The
+   item warned its premise was reasoning, not measurement - **that warning is
+   what saved it, so keep writing it into items.**
+
+2. **A FIX FOUND A CRASH PATH IN THE LOOP'S FRONT DOOR.**
+   `UnicodeDecodeError` is a `ValueError`, not an `OSError`, so a lock file
+   with one stray non-UTF-8 byte RAISED straight out through `read_owner`,
+   `is_locked` and `acquire`.
+
+3. **FILED COUNTS WRONG IN FOUR CONSECUTIVE CYCLES.** `OPS-21` said four
+   `None` cases; there are five, and it mis-identified which.
+
+4. **CHECK A SLICE'S PARTING CLAIM.** One reported `ruff format` emitting a
+   syntax error here. **PEP 758** makes unparenthesized exception groups valid
+   in 3.14, which is this repo's floor. Refuted by parsing the output.
+
 ## Where the last session left it - CYCLE 43
 
 `main` is at the cycle 43 wrap commit. Suite **1683 passed** in 109.80s, run
@@ -264,30 +294,22 @@ at PANTS and open Affix Details while worn - grep the log for
 Smiting or Curse. The log carries no player-facing affix, skill or item name -
 33 names tested with two positive controls - so only a hover will do.
 
-**IF THE CLIENT IS CLOSED, the item is `OPS-23`**, opened by the slice that
-closed `OPS-19` and doable entirely from disk:
+**IF THE CLIENT IS CLOSED, pick from `OPS-20`, `OPS-24` or `OPS-25`.** None is
+huge; all are doable from disk.
 
-> Our watcher runs under our own token, so an access-denied RECORDED pid means
-> the pid was recycled onto a foreign process and the watcher is **GONE**.
-> Before `OPS-19` that read DEAD and re-armed. After it, `ensure_armed` refuses
-> while claiming a watcher is running, and `check_watcher` falls through the
-> identity check - `process_creation_time` returns None for the same unopenable
-> pid, and a cannot-tell identity currently reads as "incumbent believed" -
-> landing on `NO_HEARTBEAT`, **which reports ARMED**. A genuinely absent watcher
-> reads armed and nothing re-arms it.
-
-**READ THE ITEM'S OWN WARNING FIRST.** Its proposed fix - that "alive but
-creation time UNREADABLE" means the pid is not ours, so the case belongs in
-`IMPOSTOR` - is a **HYPOTHESIS written from reasoning, not measurement**.
-`OPS-17` and `OPS-18` were BOTH filed with a false mechanism. Verify the premise
-before building on it, and remember that a wrong `IMPOSTOR` re-arms a second
-poller beside a live watcher, which is the one failure `ensure_armed` exists to
-refuse.
-
-Also open and client-independent: **`OPS-20`** (nothing tests `guard.py`'s
-access mask while a docstring claims it is covered - planting `| 0x0001` in the
-mask changes ZERO test outcomes) and **`OPS-21`** (`read_owner` folds four facts
-onto `None`, so a corrupt lock file is reclaimed and overwritten).
+- **`OPS-20`** - nothing tests `ops/loop/guard.py`'s ACCESS MASK, while
+  `tests/test_process_capability.py`'s docstring says the check lives in
+  `tests/test_loop_watch.py` - which reads `watch.py` only. Proved by
+  set-difference: planting `| 0x0001` in guard's mask changes ZERO test
+  outcomes. This is the `OPS-16` sin - a guard MIS-stating its coverage - and
+  it nearly mattered in cycle 42, when a rejected design widened that mask.
+- **`OPS-25`** - `advance_cycle` credits only the single in-flight item, so a
+  cycle closing two records one. Mirror of `OPS-7`. Preserve `OPS-7`'s
+  guarantee and re-prove it.
+- **`OPS-24`** - the pre-tool gate's accepted false block fired on the commit
+  that shipped it. **Declining this item is a perfectly good outcome** - the
+  workaround is one rephrase, against a rule now demonstrably catching four
+  invocation spellings it used to miss.
 
 **Also available with the client closed:**
 
@@ -314,7 +336,8 @@ CLOSED (`LL-0109`). Item `12`'s backward half CLOSED as impossible (`LL-0110`).
 `7d` CLOSED (`LL-0119`). `4e` CLOSED (`LL-0122`). `4f` CLOSED (`LL-0123`).
 `OPS-16` CLOSED (`LL-0125`). `OPS-17` CLOSED (`LL-0126`).
 `OPS-18` CLOSED (`LL-0127`).
-**`OPS-19` and `OPS-22` CLOSED (`LL-0128`).**
+`OPS-19` and `OPS-22` CLOSED (`LL-0128`).
+**`OPS-21` and `OPS-23` CLOSED (`LL-0129`).**
 **Items 7, 11 and 12 remain OPEN and UNCREDITED - do not credit any of them.**
 
 ---
