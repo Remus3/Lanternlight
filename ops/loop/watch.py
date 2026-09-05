@@ -76,6 +76,18 @@ a strictly stronger right than the one this module is willing to acquire.
 ``PROCESS_QUERY_LIMITED_INFORMATION`` grants no power to affect the process at
 all, and it is enough to answer the question.
 
+Item ``OPS-23`` added a SECOND piece of identity evidence, because the first one
+goes silent in exactly the case that needed it. ``OPS-19`` made an access-denied
+``OpenProcess`` read ALIVE - right for the loop lock, whose contract is
+fail-closed - and the same denial leaves :func:`process_creation_time` with
+nothing to report, so a pid recycled onto a system-owned process read alive,
+told no time, and was BELIEVED. The refusal is itself the evidence: a watcher
+armed by a session running under this token is a process that session can open,
+so a recorded pid this token cannot open is not the watcher. See
+:func:`pid_open_denied`, which carries the measurement rather than the argument.
+It is consulted SECOND and never instead - the creation time still decides
+whenever it can be read.
+
 **Liveness is not function.** At the cycle 37 wrap pid 23628 was alive AND
 identity-confirmed and had archived nothing in over 24 hours. That was the
 CORRECT result - the client was closed, the sources did not change, and the
@@ -250,6 +262,14 @@ _CREATE_NEW_PROCESS_GROUP = 0x00000200
 #: ``OpenProcess``: the danger was never the call, it was the RIGHT.
 _PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 
+#: The two ``OpenProcess`` failure codes this module has to tell apart, spelled
+#: here for the reason above. 5 is ``ERROR_ACCESS_DENIED`` - the process EXISTS
+#: and this token may not ask about it. 87 is ``ERROR_INVALID_PARAMETER``,
+#: which is what Windows returns when no process bears the pid at all. Any
+#: other code is uncharacterised and is answered with cannot-tell.
+_ERROR_ACCESS_DENIED = 5
+_ERROR_INVALID_PARAMETER = 87
+
 #: Windows FILETIME counts 100-nanosecond intervals from this instant.
 _FILETIME_EPOCH = datetime(1601, 1, 1, tzinfo=UTC)
 
@@ -352,6 +372,31 @@ STATE_ARMED = "ARMED"
 #: :func:`ensure_armed_at_wrap` for why re-arming any of them would be a
 #: regression rather than a stricter check.
 REARM_STATES = frozenset({STATE_NO_RECORD, STATE_DEAD, STATE_IMPOSTOR})
+
+#: The identity question was never asked, because the verdict came first. Only
+#: ``NO_RECORD`` and ``DEAD`` carry this: there is no process to ask about.
+IDENTITY_NOT_REACHED = "NOT_REACHED"
+
+#: A creation time was read and it sits inside :data:`IDENTITY_TOLERANCE_S` of
+#: the arming stamp. The recorded pid IS the watcher.
+IDENTITY_VERIFIED = "VERIFIED"
+
+#: The question was asked and could not be answered - no creation time, or an
+#: unparseable arming stamp - and nothing established the process is foreign.
+#: The incumbent is believed, which is the cheaper error, but the belief is
+#: recorded as a belief rather than dressed up as a confirmation.
+#:
+#: This value is ``OPS-23``'s first acceptance criterion. Before it, a verified
+#: identity and an unanswerable one reached the same branch and produced the
+#: same sentence - "pid N is the watcher" - and a consumer had no way to tell
+#: an observation from an assumption.
+IDENTITY_UNCHECKED = "UNCHECKED"
+
+#: The recorded pid is provably NOT the watcher. Two disjoint observations
+#: reach this, and the reason string says which: a creation time outside the
+#: window, or a process this token cannot open at all - see
+#: :func:`pid_open_denied`.
+IDENTITY_REFUTED = "REFUTED"
 
 
 def record_path() -> Path:
@@ -636,6 +681,15 @@ def ensure_armed(
     1. A record exists and its pid is ALIVE. Nothing is spawned, nothing is
        stopped, and ``armed`` is False. Two pollers on the same four sources
        double the snapshot traffic while ``OPS-14`` is open.
+
+       LIVENESS IS THE WEAKER STATEMENT, and since ``OPS-23`` the reason string
+       says so rather than announcing that a watcher is running. This function
+       asks :func:`ops.loop.guard.pid_is_alive` and nothing else, and that
+       function answers ALIVE for a pid this token may not open - correctly,
+       for the lock it was written for. So a refusal here means "not worth the
+       risk of a second poller", not "a watcher was observed". Identity is
+       :func:`check_watcher`'s question, and ``disqualified_pid`` below is how
+       its answer gets back here.
     2. A record exists and its pid is DEAD. It is stale - the previous watcher
        is gone - so a new one is armed and ``reason`` says the record was
        stale, because "armed" and "re-armed after a crash" are different facts
@@ -679,10 +733,13 @@ def ensure_armed(
             pid=existing.pid,
             dest_root=existing.dest_root,
             reason=(
-                f"a watcher is already running as pid {existing.pid} since "
-                f"{existing.started}, archiving into {existing.dest_root}; refusing to "
-                "start a second one, which would double the snapshot traffic on the "
-                "same four sources. Nothing was stopped and nothing was changed."
+                f"pid {existing.pid}, recorded at {target} since {existing.started} as "
+                f"archiving into {existing.dest_root}, is ALIVE. Whether it is still the "
+                "watcher was NOT checked here - this call reads liveness only, and an "
+                "access-denied reading is alive - so refusing to arm on the strength of "
+                "it is a refusal to risk a second poller, not a report that a watcher is "
+                "running. Nothing was stopped and nothing was changed. The wrap-side "
+                "check re-asks the identity question and re-arms if the answer is no."
             ),
         )
 
@@ -871,6 +928,100 @@ def process_creation_time(pid: int | None) -> datetime | None:
         return None
     try:
         return _windows_process_creation_time(pid)
+    except (OSError, AttributeError, ValueError, OverflowError):
+        return None
+
+
+def _windows_pid_open_denied(pid: int) -> bool | None:
+    """Return True if ``pid`` exists and this token may not open it.
+
+    Same call, same single access right and the same ``CloseHandle``-in-finally
+    idiom as :func:`_windows_process_creation_time`; only the question differs.
+    It is asked SEPARATELY rather than folded into that function because the
+    two answers are not the same fact - "no creation time" has several causes
+    and "the open was refused" has exactly one - and ``OPS-23`` turns on
+    telling them apart.
+
+    ``use_last_error=True`` is load-bearing: ctypes swaps the thread's error
+    around the call and stashes the real one privately, so
+    ``ctypes.get_last_error`` is the accessor that answers and the system one
+    is not.
+    """
+    import ctypes
+    from ctypes import wintypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.OpenProcess.restype = wintypes.HANDLE
+    kernel32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+    kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+
+    handle = kernel32.OpenProcess(_PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+    if handle:
+        kernel32.CloseHandle(handle)
+        # It opened. Whatever else is true, this token was not refused.
+        return False
+
+    error = ctypes.get_last_error()
+    if error == _ERROR_ACCESS_DENIED:
+        return True
+    if error == _ERROR_INVALID_PARAMETER:
+        # No process bears the pid, so there is nothing to be refused BY.
+        return False
+    # Uncharacterised. There are far more than two possible codes and only one
+    # of them means refused, so inferring a refusal from an error nobody here
+    # has read would be the false IMPOSTOR this module is most afraid of.
+    return None
+
+
+def pid_open_denied(pid: int | None) -> bool | None:
+    """Is ``pid`` a process this token is REFUSED access to? Three answers.
+
+    * ``True`` - the process exists and ``OpenProcess`` failed with
+      ``ERROR_ACCESS_DENIED``.
+    * ``False`` - it opened, or no process bears the pid.
+    * ``None`` - cannot tell: not Windows, an uncharacterised failure code, or
+      a ctypes failure.
+
+    WHY A DENIAL IS EVIDENCE, and the limit of that evidence. The watcher is
+    spawned by :func:`default_spawn` from a session running under this token,
+    so a process it started is one this token can open. A RECORDED pid that has
+    gone access-denied is therefore a pid something foreign inherited.
+
+    MEASURED on this machine 2026-09-05 rather than reasoned, because
+    ``OPS-17`` and ``OPS-18`` were both filed with a mechanism that turned out
+    to be false. With ``SeDebugPrivilege`` REMOVED from the probing token and
+    the removal asserted:
+
+    * 40 of 40 children spawned the way :func:`default_spawn` spawns had a
+      readable creation time - 0 denials.
+    * 12 of 307 live pids were denied, every one with error 5, and every one
+      owned by SYSTEM, LOCAL SERVICE, UMFD-0/1 or DWM-1. None ran as this user.
+    * The live watcher of the moment, pid 21452, opened and read
+      ``2026-09-03T23:53:54.252209Z`` against a record saying ``23:53:54``.
+
+    The dropped privilege is the load-bearing half of that: the SAME sweep with
+    it still held found 0 denials of 305, because ``SeDebugPrivilege`` bypasses
+    the DACL check. A sweep run without dropping it measures a clean zero and
+    proves nothing.
+
+    WHAT THIS IS NOT. It is not a general "the creation time was unreadable"
+    test, and the difference is the whole reason this function exists rather
+    than :func:`check_watcher` keying on ``process_creation_time`` returning
+    ``None``. That returns ``None`` on every non-Windows platform for every pid
+    including a healthy watcher's, and on a handle that opens but will not
+    answer. Routing those to ``IMPOSTOR`` would re-arm a second poller beside a
+    live watcher - the one failure :func:`ensure_armed` exists to refuse.
+    """
+    if pid is None or not isinstance(pid, int) or isinstance(pid, bool) or pid <= 0:
+        return None
+    if sys.platform != "win32":
+        # POSIX ``os.kill(pid, 0)`` does raise ``PermissionError`` for a
+        # process another user owns, but this module has no POSIX watcher to
+        # calibrate that against, and an untested inference in the direction
+        # that starts a second poller is not worth the line. Cannot-tell.
+        return None
+    try:
+        return _windows_pid_open_denied(pid)
     except (OSError, AttributeError, ValueError, OverflowError):
         return None
 
@@ -1581,6 +1732,13 @@ class WatcherStatus:
             which was the falsehood ``4f`` shipped with. A surface still inside
             its grace window is not here: it has recorded nothing and proves
             nothing.
+        identity: One of the four ``IDENTITY_*`` constants, saying whether the
+            recorded pid was CONFIRMED to be the watcher, could not be checked,
+            was refuted, or was never asked about. ``OPS-23``'s first
+            acceptance criterion, and the distinction that item exists for: a
+            verified identity and an unanswerable one used to reach the same
+            branch and produce the same sentence, so an ARMED verdict could
+            rest on an assumption while reading like an observation.
     """
 
     state: str
@@ -1592,6 +1750,7 @@ class WatcherStatus:
     stale_surfaces: tuple[str, ...] = ()
     unjudged_surfaces: tuple[str, ...] = ()
     fresh_surfaces: tuple[str, ...] = ()
+    identity: str = IDENTITY_NOT_REACHED
 
     @property
     def all_surfaces_stale(self) -> bool:
@@ -1651,6 +1810,7 @@ def check_watcher(
     heartbeat: Path | None = None,
     now: datetime | None = None,
     creation_time_fn: Callable[[int], datetime | None] | None = None,
+    denied_fn: Callable[[int], bool | None] | None = None,
 ) -> WatcherStatus:
     """Ask whether the recorded watcher is really running, and really polling.
 
@@ -1661,12 +1821,29 @@ def check_watcher(
     2. ``DEAD`` - the recorded pid is not alive. NOT armed. This is the
        ``LL-0117`` failure: armed as pid 17568, two later re-arms correctly
        refused while it lived, found dead at the wrap.
-    3. ``IMPOSTOR`` - the pid IS alive but its creation time is outside
-       :data:`IDENTITY_TOLERANCE_S` of the arming stamp, so the number was
-       recycled by something unrelated. NOT armed. A check that stopped at
-       liveness would pass here, and that is the gap item ``4e`` names.
-    4. ``NO_HEARTBEAT`` - identity confirmed, but no heartbeat exists, or it is
-       unreadable, or it names a different pid. **Reported, and still ARMED.**
+    3. ``IMPOSTOR`` - the pid IS alive but it is not the watcher. NOT armed. A
+       check that stopped at liveness would pass here, and that is the gap item
+       ``4e`` names. TWO disjoint observations reach this verdict and the reason
+       string says which:
+
+       * the creation time is outside :data:`IDENTITY_TOLERANCE_S` of the
+         arming stamp, so the number was recycled by something unrelated; or
+       * this token is REFUSED access to the process, which item ``OPS-23``
+         added. A watcher armed by a session running under this token is a
+         process that session can open, so a refusal identifies the pid as
+         foreign - see :func:`pid_open_denied` for the measurement behind that
+         sentence, including the 12-of-307 sweep and the 0-of-305 one that
+         shows why the privilege has to be dropped to see any of it.
+
+       The second route exists because ``OPS-19`` made an access-denied reading
+       ALIVE. That is correct for the loop lock and it left this check with a
+       recycled pid that read alive, told no creation time, fell through to
+       ``NO_HEARTBEAT`` and reported ARMED with nothing archiving.
+    4. ``NO_HEARTBEAT`` - identity confirmed OR unanswerable, but no heartbeat
+       exists, or it is unreadable, or it names a different pid. **Reported,
+       and still ARMED.** Which of those two identity readings it was is on
+       :attr:`WatcherStatus.identity`, and it used to be on neither the status
+       nor the prose.
     5. ``STALE`` - identity confirmed, heartbeat present, and the COMBINED
        ``written`` stamp has not advanced within
        :data:`HEARTBEAT_STALE_AFTER_S`. Nothing is flushing at all.
@@ -1729,6 +1906,18 @@ def check_watcher(
     flushing; a consumer switching on ``state`` alone cannot tell it from one
     wedged thread and has to read that flag.
 
+    FIFTH CAVEAT, item ``OPS-23``, and it is a limit rather than a hazard. The
+    refusal route into ``IMPOSTOR`` catches a recycled pid only when the new
+    occupant belongs to a token this one may not open. A recycled pid that
+    lands on ANOTHER process of our own still reads ``NO_HEARTBEAT``, and so
+    does every recycled pid on a platform with no probe. Those are unchanged,
+    they are still silent, and the only thing that closes them is the creation
+    time - which is why the refusal is consulted second and never instead.
+    What is caught, and was not, is the case the item was opened for: alive,
+    unopenable, no usable heartbeat. The test that pins it is
+    ``test_an_alive_but_unopenable_recorded_pid_gets_a_verdict_that_rearms``,
+    and it was watched failing with ``NO_HEARTBEAT`` before the branch existed.
+
     Args:
         path: Arming record. Defaults to :func:`record_path`.
         heartbeat: Heartbeat file. Defaults to :func:`heartbeat_path`.
@@ -1736,6 +1925,9 @@ def check_watcher(
         creation_time_fn: ``(pid) -> datetime | None``. Defaults to
             :func:`process_creation_time`. Injected by tests so the verdict can
             be pinned on a platform without the probe.
+        denied_fn: ``(pid) -> bool | None``. Defaults to
+            :func:`pid_open_denied`. Consulted ONLY when the identity question
+            could not be answered, and only its ``True`` changes anything.
 
     Returns:
         A :class:`WatcherStatus`. Nothing is spawned and nothing is stopped.
@@ -1744,6 +1936,7 @@ def check_watcher(
     beat = Path(heartbeat) if heartbeat is not None else heartbeat_path()
     when = _now() if now is None else _as_utc(now)
     creation_of = process_creation_time if creation_time_fn is None else creation_time_fn
+    denied_of = pid_open_denied if denied_fn is None else denied_fn
 
     evidence: list[str] = [f"arming record: {target}"]
 
@@ -1755,6 +1948,7 @@ def check_watcher(
             dest_root=None,
             evidence=tuple(evidence),
             heartbeat_age_s=None,
+            identity=IDENTITY_NOT_REACHED,
             reason=(
                 f"no usable watcher record at {target}, so nothing is archiving the log, "
                 "the saves or the market cache. Arming one is the whole point of handing "
@@ -1774,6 +1968,7 @@ def check_watcher(
             dest_root=record.dest_root,
             evidence=tuple(evidence),
             heartbeat_age_s=None,
+            identity=IDENTITY_NOT_REACHED,
             reason=(
                 f"the watcher recorded at {target} as pid {record.pid}, archiving into "
                 f"{record.dest_root} since {record.started}, is NOT running. This is the "
@@ -1801,6 +1996,7 @@ def check_watcher(
             dest_root=record.dest_root,
             evidence=tuple(evidence),
             heartbeat_age_s=None,
+            identity=IDENTITY_REFUTED,
             reason=(
                 f"pid {record.pid} is alive but it is NOT the watcher recorded at "
                 f"{target}: that process started {created.isoformat()} while the record "
@@ -1812,9 +2008,39 @@ def check_watcher(
         )
 
     if verdict is None:
+        # ROADMAP OPS-23. Cannot-tell is still the cheaper error to make, but
+        # it is not the only reading available: a pid this token cannot OPEN is
+        # positively not a process this session spawned, and our watcher is
+        # always one this session spawned. That is a second observation about
+        # the same pid, and it refutes rather than merely fails to confirm.
+        denied = denied_of(record.pid)
+        if denied is True:
+            evidence.append(
+                f"identity: OpenProcess on pid {record.pid} was DENIED to this token, so "
+                "the process is not one this session spawned and cannot be the watcher"
+            )
+            return WatcherStatus(
+                state=STATE_IMPOSTOR,
+                pid=record.pid,
+                dest_root=record.dest_root,
+                evidence=tuple(evidence),
+                heartbeat_age_s=None,
+                identity=IDENTITY_REFUTED,
+                reason=(
+                    f"pid {record.pid} is alive but it is NOT the watcher recorded at "
+                    f"{target}: this token is REFUSED access to it, and a watcher armed "
+                    "by a session running under this token is a process that session can "
+                    "open. The number was recycled onto something foreign, and nothing is "
+                    f"archiving into {record.dest_root}. Re-arm. (Liveness alone says yes "
+                    "here, because an access-denied reading is ALIVE for the loop lock - "
+                    "that is right for the lock and wrong for this question, which is the "
+                    "whole of OPS-23.)"
+                ),
+            )
         evidence.append(
-            "identity: process creation time unavailable, so identity could be neither "
-            "confirmed nor refuted; the incumbent is believed, which is the cheaper error"
+            "identity: process creation time unavailable and the process was not found "
+            "to be one this token is refused, so identity could be neither confirmed nor "
+            "refuted; the incumbent is BELIEVED, which is the cheaper error"
         )
     else:
         offset = abs((created - started).total_seconds())
@@ -1824,15 +2050,28 @@ def check_watcher(
             f"{IDENTITY_TOLERANCE_S:.0f} s window"
         )
 
-    confirmed = (
-        f"pid {record.pid} is the watcher recorded at {target}, archiving into "
-        f"{record.dest_root} since {record.started}"
-    )
+    identity = IDENTITY_UNCHECKED if verdict is None else IDENTITY_VERIFIED
+
+    # The one sentence every remaining verdict is built on, and it must not
+    # claim more than was observed. It used to read "pid N IS the watcher" on
+    # both paths, so a NO_HEARTBEAT or ARMED verdict resting on nothing but
+    # liveness said the same words as one resting on a matched creation time.
+    if identity == IDENTITY_VERIFIED:
+        confirmed = (
+            f"pid {record.pid} is the watcher recorded at {target}, archiving into "
+            f"{record.dest_root} since {record.started}"
+        )
+    else:
+        confirmed = (
+            f"pid {record.pid} is alive and is BELIEVED to be the watcher recorded at "
+            f"{target}, archiving into {record.dest_root} since {record.started} - its "
+            "identity could not be checked, only its liveness"
+        )
 
     payload = read_heartbeat(beat)
     if payload is None:
         why = "there is no file there" if not beat.exists() else "it is unreadable"
-        return _no_heartbeat(record, beat, evidence, confirmed, why)
+        return _no_heartbeat(record, beat, evidence, confirmed, why, identity)
 
     beat_pid = payload.get("pid")
     if isinstance(beat_pid, int) and not isinstance(beat_pid, bool) and beat_pid != record.pid:
@@ -1843,13 +2082,14 @@ def check_watcher(
             confirmed,
             f"it names pid {beat_pid}, not {record.pid}, so its freshness says nothing "
             "about this process",
+            identity,
         )
 
     written_text = payload.get("written")
     written = _parse_stamp(written_text)
     if written is None:
         return _no_heartbeat(
-            record, beat, evidence, confirmed, "it carries no readable 'written' stamp"
+            record, beat, evidence, confirmed, "it carries no readable 'written' stamp", identity
         )
 
     age = (when - written).total_seconds()
@@ -1877,6 +2117,7 @@ def check_watcher(
             dest_root=record.dest_root,
             evidence=tuple(evidence),
             heartbeat_age_s=age,
+            identity=identity,
             reason=(
                 f"{confirmed}, but its heartbeat at {beat} has not advanced since "
                 f"{written_text} - {age:.0f} s ago, past the "
@@ -1902,6 +2143,7 @@ def check_watcher(
             dest_root=record.dest_root,
             evidence=tuple(evidence),
             heartbeat_age_s=age,
+            identity=identity,
             reason=_surface_stale_reason(
                 report, confirmed=confirmed, beat=beat, written_text=written_text, age=age
             ),
@@ -1909,6 +2151,15 @@ def check_watcher(
             unjudged_surfaces=report.unjudged,
             fresh_surfaces=report.fresh,
         )
+
+    # The closing sentence has to match what was actually observed. "Alive,
+    # identity-confirmed, and still polling" was printed on both identity paths
+    # before OPS-23, which made it a false sentence on the unchecked one.
+    armed_tail = (
+        "Alive, identity-confirmed, and still polling."
+        if identity == IDENTITY_VERIFIED
+        else "Alive and still polling; its identity was never confirmed, only believed."
+    )
 
     unjudged_note = ""
     if report.unjudged:
@@ -1923,11 +2174,11 @@ def check_watcher(
         dest_root=record.dest_root,
         evidence=tuple(evidence),
         heartbeat_age_s=age,
+        identity=identity,
         reason=(
             f"{confirmed}; its heartbeat at {beat} was written {written_text}, "
             f"{age:.0f} s ago, inside the {HEARTBEAT_STALE_AFTER_S:.0f} s threshold, and "
-            f"every judged surface is inside its own. Alive, identity-confirmed, and still "
-            f"polling.{unjudged_note}"
+            f"every judged surface is inside its own. {armed_tail}{unjudged_note}"
         ),
         unjudged_surfaces=report.unjudged,
         fresh_surfaces=report.fresh,
@@ -1940,6 +2191,7 @@ def _no_heartbeat(
     evidence: list[str],
     confirmed: str,
     why: str,
+    identity: str,
 ) -> WatcherStatus:
     """Build the ``NO_HEARTBEAT`` status, which is still ARMED.
 
@@ -1947,6 +2199,12 @@ def _no_heartbeat(
     an unreadable one, one belonging to a different pid - all land on the same
     verdict and must not drift apart. The verdict is the point: an absent
     heartbeat is an absent OBSERVATION, not an absent watcher.
+
+    ``identity`` is carried through rather than assumed, because this state is
+    where ``OPS-23`` landed: a recycled pid with no heartbeat reached here and
+    was reported ARMED. It no longer reaches here when the process is provably
+    foreign - see :func:`pid_open_denied` - but it still can when identity is
+    merely unanswerable, and a consumer deserves to be told which it read.
     """
     evidence.append(f"heartbeat: {beat} - {why}")
     return WatcherStatus(
@@ -1955,6 +2213,7 @@ def _no_heartbeat(
         dest_root=record.dest_root,
         evidence=tuple(evidence),
         heartbeat_age_s=None,
+        identity=identity,
         reason=(
             f"{confirmed}. No usable heartbeat at {beat} - {why} - so whether it is "
             "still POLLING cannot be told from here. It is ARMED and nothing is "
@@ -1974,6 +2233,7 @@ def ensure_armed_at_wrap(
     path: Path | None = None,
     heartbeat: Path | None = None,
     creation_time_fn: Callable[[int], datetime | None] | None = None,
+    denied_fn: Callable[[int], bool | None] | None = None,
 ) -> WrapResult:
     """Re-check the watcher on the way OUT, and re-arm only when nothing polls.
 
@@ -2014,6 +2274,8 @@ def ensure_armed_at_wrap(
         path: Arming record. Defaults to :func:`record_path`.
         heartbeat: Heartbeat file. Defaults to :func:`heartbeat_path`.
         creation_time_fn: ``(pid) -> datetime | None`` identity probe.
+        denied_fn: ``(pid) -> bool | None`` refusal probe, item ``OPS-23``.
+            Passed straight through to :func:`check_watcher`.
 
     Returns:
         A :class:`WrapResult` whose ``rearmed`` is True only if THIS call
@@ -2024,6 +2286,7 @@ def ensure_armed_at_wrap(
         heartbeat=heartbeat,
         now=now,
         creation_time_fn=creation_time_fn,
+        denied_fn=denied_fn,
     )
 
     if status.state not in REARM_STATES:

@@ -180,11 +180,32 @@ and cause a re-arm; the other four are reported and left alone:
 |---|---|---|
 | `NO_RECORD` | No usable arming record exists. | Yes |
 | `DEAD` | The recorded pid is not alive. | Yes |
-| `IMPOSTOR` | The pid is alive, but its process creation time does not match the arming record's `started` stamp - an unrelated process inherited a recycled pid. | Yes |
-| `NO_HEARTBEAT` | Identity is confirmed but no heartbeat file exists. Counted ARMED. | No |
+| `IMPOSTOR` | The pid is alive but is NOT the recorded watcher - either its creation time contradicts the record's `started` stamp, or the pid cannot be opened at all by a token that can open every process it spawns, which means a foreign process inherited a recycled pid. | Yes |
+| `NO_HEARTBEAT` | The pid is alive and no heartbeat file exists. Counted ARMED. | No |
 | `STALE` | Identity is confirmed and a heartbeat file exists, but it has not advanced within `HEARTBEAT_STALE_AFTER_S` = **900 s**, which is 3 x the slowest poll interval (300 s, the `logs` surface). One missed pass is noise - a slow disk, a machine that slept - three consecutive ones are a pattern. | No |
 | `SURFACE_STALE` | The combined stamp is inside its threshold, but at least one INDIVIDUAL surface has stopped advancing against its own poll interval - or never recorded a pass at all. The status names which. | No |
 | `ARMED` | Identity is confirmed and the heartbeat is fresh. | No |
+
+**A SEVENTH PIECE OF INFORMATION RIDES ALONGSIDE THE STATE: `identity`.**
+Added by `OPS-23`, because the states above conflated "identity was CHECKED and
+matched" with "identity could not be checked at all", and the second was being
+reported as a confirmation. It reads `NOT_REACHED` (liveness settled it first),
+`VERIFIED`, `UNCHECKED` or `REFUTED`. **A verdict of `ARMED` no longer implies
+the identity was confirmed** - read the field rather than inferring it, and
+note that the reason string now says which of the two happened.
+
+**Why `IMPOSTOR` gained a second route, and why it is NOT simply "creation time
+unreadable".** That was the fix `OPS-23` proposed and MEASUREMENT REFUTED it:
+`process_creation_time` returns `None` on every non-Windows platform, for a
+handle that opens but will not answer, and for an unparseable `started` stamp -
+so the literal rule would call every healthy POSIX watcher an `IMPOSTOR` and
+start a second poller, which is the one failure `ensure_armed` exists to
+refuse. The shipped rule keys on the `OpenProcess` ERROR CODE instead, and is
+consulted ONLY when the identity question came back unanswerable. Measured with
+`SeDebugPrivilege` dropped: 40 of 40 children spawned the way `default_spawn`
+spawns are readable, while 12 of 307 live pids are alive-but-denied and every
+one of those is owned by SYSTEM, LOCAL SERVICE, UMFD or DWM - never by this
+user.
 
 **`NO_HEARTBEAT` and `STALE` are reported, never re-armed, and nothing is ever
 killed for either one.** A second poller on the same four sources doubles the

@@ -5,6 +5,71 @@ fidelity and archive older ones rather than deleting them.
 
 ---
 
+# Wrap 2026-09-04 - cycle 44 - `OPS-21` and `OPS-23` closed, and an item's own fix would have started a second poller
+
+Suite **1727 passed** in 108.09s, run BARE at the wrap. Ruff clean. Merge gate
+OK at 1727 collected against a **1683** baseline measured with `--collect-only`
+BEFORE any slice was dispatched. Ledger `LL-0129`. Client **closed** all
+session. Watcher `ARMED` / `VERIFIED`, pid 21452, driven through the new code.
+
+## THE FOUR THINGS CYCLE 44 PAID FOR
+
+1. **`OPS-23`'S OWN HYPOTHESIS WAS MEASURED AND REFUTED - the THIRD item in
+   four cycles filed with a mechanism that did not hold.** It proposed that
+   "alive but creation time UNREADABLE" means the pid is not ours. It does not:
+   `process_creation_time` returns `None` on every non-Windows platform, for a
+   handle that opens but will not answer, AND for an unparseable `started`
+   stamp. **The literal fix would have called every healthy watcher on POSIX an
+   `IMPOSTOR` and started a second poller** - the exact failure `ensure_armed`
+   exists to refuse. **The item WARNED that its premise was reasoning rather
+   than measurement, and that warning is what saved it. Keep writing it.**
+
+2. **A FIX FOUND A CRASH PATH IN THE LOOP'S FRONT DOOR.** Beyond the fail-open
+   `OPS-21` was filed for, `UnicodeDecodeError` is a `ValueError`, not an
+   `OSError`, so a lock file with one stray non-UTF-8 byte **RAISED** straight
+   out through `read_owner`, `is_locked` and `acquire`. Nobody had noticed.
+
+3. **FILED COUNTS HAVE NOW BEEN WRONG IN FOUR CONSECUTIVE CYCLES.** `OPS-21`
+   said four `None` cases; there are five, and it mis-identified them - the
+   `OSError` arm ITSELF folded "absent" with "something is there I cannot
+   read", which is the very distinction the item existed to draw.
+
+4. **A SLICE'S PARTING CLAIM WAS CHECKED AND REFUTED.** It reported that
+   `ruff format` emits a syntax error on this repo's `guard.py`. It does not:
+   **PEP 758** makes unparenthesized exception groups valid in Python 3.14, and
+   `pyproject.toml` declares `requires-python = ">=3.14"` with ruff targeting
+   `py314`. Confirmed by parsing the reformatted file. A false defect report
+   costs the next session a hunt.
+
+## What shipped
+
+`check_watcher` now carries an **`identity`** field - `NOT_REACHED`,
+`VERIFIED`, `UNCHECKED`, `REFUTED` - because the old states conflated "identity
+was checked and matched" with "identity could not be checked" and reported the
+second as a confirmation. **`ARMED` no longer implies a confirmed identity.**
+The `IMPOSTOR` route keys on the `OpenProcess` ERROR CODE via a new
+`pid_open_denied`, consulted ONLY when identity came back unanswerable.
+Measured with `SeDebugPrivilege` dropped: 40/40 own children readable, 12/307
+live pids alive-but-denied and every one owned by SYSTEM, LOCAL SERVICE, UMFD
+or DWM. With the privilege HELD, 0 of 305 deny - so a test hunting a real
+denied pid from inside pytest finds nothing and must inject.
+
+`guard.owner_of()` splits the lock into three states; `read_owner`'s contract
+is unchanged so its two remaining callers were untouched.
+
+**`4e` re-proved rather than assumed**, because `IMPOSTOR` re-arms: 33 samples
+over 330 s against the REAL live watcher, 33/33, **0 IMPOSTOR**.
+
+## Still open, stated rather than implied
+
+`ensure_armed` on the way IN still refuses for a denied pid - honest message,
+unchanged behaviour - so the outage closes at the WRAP, not at session entry.
+A lock recording a READABLE but impossible pid (`0`, negative) is still
+reclaimed like a dead owner. **`OPS-25`** is new: `advance_cycle` credits only
+one item, so cycle 43's two closures recorded one. Repaired by hand.
+
+---
+
 # Wrap 2026-09-04 - cycle 43 - `OPS-19` and `OPS-22` closed, and an annoyance was hiding four false passes
 
 Suite **1683 passed** in 109.80s, run BARE at the wrap. Ruff clean. Merge gate

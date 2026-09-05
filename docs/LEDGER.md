@@ -84,6 +84,30 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0129 - 2026-09-04 - OPS-21 and OPS-23 CLOSED - a crash path in the loop's front door, and an item whose own fix would have started a second poller
+
+**Evidence:**
+- `ops/loop/guard.py`: a new `owner_of() -> int | UNREADABLE | None` splits the lock file into the three states it can be in. `read_owner`'s contract is UNCHANGED, so its two remaining callers were untouched. `FileNotFoundError` is now the only `OSError` that answers 'no lock'.
+- `ops/loop/watch.py`: `check_watcher` gained an `identity` field - `NOT_REACHED`, `VERIFIED`, `UNCHECKED`, `REFUTED` - and a new `pid_open_denied(pid)` consulted ONLY when the identity question came back unanswerable. `ARMED` no longer implies a confirmed identity.
+- Full suite `1727 passed in 109.22s`, run BARE. Merge gate OK against a 1683 baseline measured with `--collect-only` BEFORE dispatch. Ruff clean. `tests/test_process_capability.py` unaffected at 74 passed - the new probe reuses `OpenProcess` and `CloseHandle`, both already in the allowlist.
+- OPS-21 RED at `28 failed, 42 passed`; 10 mutations applied, 10 caught, 0 survived. The merger independently re-mutated the malformed-JSON arm back to `None` and watched `9 failed, 65 passed`. Collected 40 before, 74 after.
+- OPS-23 RED at `assert 'NO_HEARTBEAT' == 'IMPOSTOR'`; 11 mutations, 11 killed, file restored byte-for-byte. The merger independently replaced the denial probe with a permanent cannot-tell and watched `2 failed, 124 passed`. Collected 116 before, 126 after.
+- THE `4e` GUARANTEE RE-PROVED RATHER THAN ASSUMED, which matters because `IMPOSTOR` re-arms: 33 samples over 330 s against the REAL live watcher and a real detached child, 33 of 33 `ARMED`/`VERIFIED` and `NO_HEARTBEAT`/`VERIFIED`, 0 IMPOSTOR. The merger separately drove the live watcher through the shipped code and read `ARMED` / `VERIFIED`.
+
+**`OPS-23`'S OWN HYPOTHESIS WAS MEASURED AND REFUTED - the third item in four cycles filed with a mechanism that did not hold.** It proposed that 'alive but creation time UNREADABLE' means the pid is not ours. It does not: `process_creation_time` returns None on every non-Windows platform, for a handle that opens but will not answer, AND for an unparseable `started` stamp. **The literal fix would have called every healthy watcher on POSIX an IMPOSTOR and started a second poller** - the exact failure `ensure_armed` exists to refuse. The item WARNED that its premise was reasoning rather than measurement, and that warning is what saved it. Keep writing that warning.
+
+**What is true, measured with `SeDebugPrivilege` DROPPED and the drop ASSERTED:** 40 of 40 children spawned the way `default_spawn` spawns have a readable creation time and zero denials; 12 of 307 live pids are alive-but-denied and every one is owned by SYSTEM, LOCAL SERVICE, UMFD or DWM, never by this user. With the privilege still held, 0 of 305 deny - so a test hunting a real denied pid from inside pytest finds nothing and must inject.
+
+**`OPS-21` FOUND A CRASH PATH NOBODY HAD NOTICED.** Beyond the fail-open it was filed for, `UnicodeDecodeError` is a `ValueError`, not an `OSError`, so a lock file carrying one stray non-UTF-8 byte RAISED straight out through `read_owner`, `is_locked` and `acquire` rather than returning anything. That is the loop's front door.
+
+**AND `OPS-21`'S OWN COUNT WAS WRONG IN THE WAY THAT MATTERED.** It said four `None` cases; there are five, and it mis-identified them - the `OSError` arm ITSELF folded 'absent' together with 'something is there I cannot read', which is the very distinction the item existed to draw. Filed counts have now been wrong in four consecutive cycles.
+
+**A CLAIM FROM A SLICE WAS CHECKED AND REFUTED.** It reported that `ruff format` emits `except OSError, ValueError:` - 'a syntax error' - on this repo's `guard.py`. It is NOT an error: PEP 758 makes unparenthesized exception groups valid in Python 3.14, and `pyproject.toml` declares `requires-python = ">=3.14"` with ruff targeting `py314`. Confirmed by parsing the reformatted file. A false defect report costs the next session a hunt, so it is recorded as refuted rather than passed on.
+
+**A CONTINUITY DEFECT IN THE LOOP MACHINERY ITSELF, filed as `OPS-25`.** `advance_cycle` credits the single in-flight item, so cycle 43 - which closed `OPS-19` AND `OPS-22` - recorded only one. Repaired by hand with the cycle counter asserted unchanged. It is the mirror of `OPS-7`: over-crediting makes a session skip live work, under-crediting makes it redo closed work, and REDISCOVERY is the failure this project's continuity design exists to prevent.
+
+**STILL OPEN AND STATED RATHER THAN IMPLIED.** `ensure_armed` on the way IN still refuses for a denied pid - the message is honest now, the behaviour is unchanged - so the outage closes at the WRAP, not at session entry. Deliberate: a second spawn path without the identity machinery is worse than a delayed recovery. And in `guard.py`, a lock recording a READABLE but impossible pid (`0`, negative) is still reclaimed like a dead owner.
+
 ### LL-0128 - 2026-09-04 - OPS-19 and OPS-22 CLOSED - a fail-open in the lock guard, and an ergonomic fix that closed four false passes in a safety guard
 
 **Evidence:**

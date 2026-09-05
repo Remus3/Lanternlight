@@ -703,14 +703,227 @@ def test_stale_lock_whose_pid_is_gone_is_reclaimed(lock_path: Path) -> None:
     assert guard_mod.read_owner(lock_path) == os.getpid()
 
 
-def test_unreadable_lock_file_is_treated_as_stale(lock_path: Path) -> None:
-    # A lock truncated by a power loss has no recoverable owner. Blocking on it
-    # forever would need an operator, which is the thing we are avoiding.
-    lock_path.write_text("{not json", encoding="utf-8")
+# ---------------------------------------------------------------------------
+# a corrupt lock is not an absent one - OPS-21
+# ---------------------------------------------------------------------------
+
+#: Every shape of lock file that exists on disk and carries no readable owner
+#: pid. Each is a separate way for the file to survive a crash without
+#: surviving intact, and every one of them used to be reclaimed in silence:
+#: ``read_owner`` answered ``None``, ``pid_is_alive(None)`` answered False, and
+#: ``acquire`` unlinked a lock it had not read and took it.
+#:
+#: The last entry is not a JSON defect at all. ``UnicodeDecodeError`` is a
+#: ``ValueError``, not an ``OSError``, and the old ``except`` clause named
+#: ``json.JSONDecodeError`` specifically - so a lock file carrying one stray
+#: non-UTF-8 byte did not return ``None``, it RAISED out through
+#: ``read_owner``, ``is_locked`` and ``acquire``. Measured on this machine
+#: before the fix.
+_CORRUPT_LOCKS = [
+    pytest.param(b"", id="empty file"),
+    pytest.param(b"\x00" * 64, id="NUL bytes - a power-loss truncation"),
+    pytest.param(b"{not json", id="truncated JSON"),
+    pytest.param(b"[1, 2, 3]", id="valid JSON, not an object"),
+    pytest.param(b'"loop"', id="valid JSON, a bare string"),
+    pytest.param(b"null", id="valid JSON null"),
+    pytest.param(b'{"label": "loop"}', id="an object with no pid at all"),
+    pytest.param(b'{"pid": "1234"}', id="pid is a string"),
+    pytest.param(b'{"pid": true}', id="pid is a bool"),
+    pytest.param(b'{"pid": 12.5}', id="pid is a float"),
+    pytest.param(b'{"pid": null}', id="pid is null"),
+    pytest.param(b'{"pid": 1234, "label": "\xff\xfe"}', id="not valid UTF-8"),
+]
+
+
+@pytest.mark.parametrize("body", _CORRUPT_LOCKS)
+def test_a_corrupt_lock_is_unreadable_and_read_owner_still_answers_None(
+    body: bytes, lock_path: Path
+) -> None:
+    """The classifier separates the fact; ``read_owner``'s contract does not move.
+
+    ``read_owner`` is called from four places and asserted on in a dozen tests,
+    so it keeps returning ``int | None`` exactly as before. The new bit - file
+    present but unreadable, as against file absent - is carried by
+    :func:`guard.owner_of`, and nothing that only wants a pid has to care.
+    """
+    lock_path.write_bytes(body)
+
+    assert guard_mod.owner_of(lock_path) is guard_mod.UNREADABLE
     assert guard_mod.read_owner(lock_path) is None
 
-    guard_mod.acquire(lock_path)
+
+@pytest.mark.parametrize("body", _CORRUPT_LOCKS)
+def test_a_corrupt_lock_file_makes_acquire_refuse(body: bytes, lock_path: Path) -> None:
+    """The consumer, which is the only reason the classifier matters.
+
+    A lock file this code cannot parse is not a licence to take the lock. The
+    owner may be alive and mid-commit; the file simply no longer says so. That
+    is the undecided case, and ``OPS-19`` already settled which way undecided
+    resolves in this module: refusing to start beats trampling a live loop.
+
+    The refusal must also leave the evidence alone - an ``acquire`` that
+    refused and then unlinked the file would be the same defect with an extra
+    step.
+    """
+    lock_path.write_bytes(body)
+
+    with pytest.raises(LockBusy) as excinfo:
+        guard_mod.acquire(lock_path)
+
+    assert excinfo.value.pid is None
+    assert excinfo.value.path == lock_path
+    assert lock_path.read_bytes() == body, "the corrupt lock was overwritten"
+
+
+def test_a_lock_path_that_cannot_be_opened_at_all_is_unreadable(lock_path: Path) -> None:
+    """The ``OSError`` arm, which no JSON payload can reach.
+
+    A directory where the lock file should be is the cheapest real way to make
+    ``read_text`` fail with something that is not ``FileNotFoundError`` - it
+    raises ``PermissionError`` on Windows and ``IsADirectoryError`` on POSIX,
+    and both mean the same thing here: something IS at that path and this code
+    cannot read it. ``FileNotFoundError`` is the only ``OSError`` that is
+    allowed to answer "absent", and this test is what stops that clause being
+    widened back to a bare ``except OSError``.
+    """
+    lock_path.mkdir()
+
+    assert guard_mod.owner_of(lock_path) is guard_mod.UNREADABLE
+    assert guard_mod.read_owner(lock_path) is None
+    assert guard_mod.is_locked(lock_path) is True
+
+
+@pytest.mark.parametrize("impossible", [0, -1, -4321])
+def test_a_readable_but_impossible_pid_is_still_folded_with_a_dead_owner(
+    impossible: int, lock_path: Path
+) -> None:
+    """The case this fix deliberately does NOT close, pinned so the claim is checkable.
+
+    ``owner_of``'s docstring says a lock recording a pid that is readable but
+    impossible - zero or negative - is returned as that pid and reclaimed like
+    a crashed loop. A sentence like that is worth nothing unheld by a test:
+    cycle 42 shipped three docstring sentences that were simply false. So this
+    is what the module does today, asserted rather than described.
+
+    Why it is left alone: the record IS readable, and reading it is the whole
+    of what ``owner_of`` promises. ``_write_lock`` cannot produce such a file -
+    it writes ``os.getpid()`` - so reaching it takes a hand edit or a
+    corruption that damaged the number while leaving the JSON intact. Closing
+    it means deciding that ``read_owner`` may withhold a pid it successfully
+    read, which is a wider contract change than ``OPS-21`` asked for.
+    """
+    lock_path.write_text(
+        json.dumps({"pid": impossible, "acquired": "2026-09-04T00:00:00+00:00", "label": "odd"}),
+        encoding="utf-8",
+    )
+
+    assert guard_mod.owner_of(lock_path) == impossible
+    assert guard_mod.read_owner(lock_path) == impossible
+    assert guard_mod.pid_is_alive(impossible) is False
+    assert guard_mod.is_locked(lock_path) is False
+
+    assert guard_mod.acquire(lock_path) == lock_path
     assert guard_mod.read_owner(lock_path) == os.getpid()
+
+
+def test_is_locked_calls_a_corrupt_lock_held(lock_path: Path) -> None:
+    lock_path.write_text("{not json", encoding="utf-8")
+    assert guard_mod.is_locked(lock_path) is True
+
+
+def test_is_locked_is_false_when_there_is_no_lock_file(lock_path: Path) -> None:
+    """The mirror. Fail-closed must not become fail-shut."""
+    assert not lock_path.exists()
+    assert guard_mod.is_locked(lock_path) is False
+
+
+def test_a_missing_lock_file_is_still_free_to_take(lock_path: Path) -> None:
+    """The case that must not break, stated on its own so a break is obvious.
+
+    Folding "unreadable" into "absent" was the defect. Folding "absent" into
+    "unreadable" would be a worse one - the loop could never start at all, on a
+    machine that has never run it.
+    """
+    assert not lock_path.exists()
+    assert guard_mod.owner_of(lock_path) is None
+
+    assert guard_mod.acquire(lock_path) == lock_path
+    assert guard_mod.read_owner(lock_path) == os.getpid()
+
+
+def test_a_lock_that_vanishes_before_we_read_it_is_still_free_to_take(
+    monkeypatch, lock_path: Path
+) -> None:
+    """Absent-at-read-time is absent, not unreadable, and the race is real.
+
+    ``acquire`` learns the file exists from a ``FileExistsError`` and then
+    reads it in a separate call. The incumbent can release between the two, and
+    the second loop is then entitled to the lock. A refusal keyed on
+    "``read_owner`` said None" would have wedged on that benign race; a refusal
+    keyed on "the file is there and I cannot read it" does not.
+    """
+    real_write = guard_mod._write_lock
+    calls: list[Path] = []
+
+    def flaky_write(target: Path, pid: int, label: str) -> None:
+        calls.append(target)
+        if len(calls) == 1:
+            # Someone else held it a moment ago and has since let it go.
+            raise FileExistsError(17, "File exists", str(target))
+        real_write(target, pid, label)
+
+    monkeypatch.setattr(guard_mod, "_write_lock", flaky_write)
+
+    assert guard_mod.acquire(lock_path) == lock_path
+    assert calls == [lock_path, lock_path], "the bounded retry did not happen"
+    assert guard_mod.read_owner(lock_path) == os.getpid()
+
+
+def test_deleting_a_corrupt_lock_file_clears_it(lock_path: Path) -> None:
+    """The operator's way out, tested rather than asserted in prose.
+
+    An unparseable lock that could never be cleared would be its own denial of
+    service, so the escape hatch is load-bearing. It is the one
+    :class:`LockBusy` already documents, it needs no new flag, and it is
+    exactly as destructive as it looks: it removes a FILE, never a process.
+    """
+    lock_path.write_bytes(b"{not json")
+    with pytest.raises(LockBusy):
+        guard_mod.acquire(lock_path)
+
+    lock_path.unlink()
+
+    assert guard_mod.acquire(lock_path) == lock_path
+    assert guard_mod.read_owner(lock_path) == os.getpid()
+
+
+def test_release_still_clears_an_unreadable_lock(lock_path: Path) -> None:
+    """The second way out: the programmatic one, unchanged by this fix.
+
+    ``release`` refuses only when the file names an owner that is somebody
+    else. A corrupt lock names nobody, so any claimant may clear it and no
+    ``force=True`` is needed. That is deliberate - it is what keeps the refusal
+    above recoverable from inside Python.
+    """
+    lock_path.write_bytes(b"{not json")
+
+    assert guard_mod.release(lock_path) is True
+    assert not lock_path.exists()
+
+
+def test_lock_busy_for_an_unreadable_owner_says_so_and_names_the_way_out(
+    lock_path: Path,
+) -> None:
+    """The message is the whole operator interface for this refusal."""
+    lock_path.write_bytes(b"{not json")
+
+    with pytest.raises(LockBusy) as excinfo:
+        guard_mod.acquire(lock_path)
+
+    message = str(excinfo.value)
+    assert "unreadable owner record" in message
+    assert "delete the" in message and "lock file" in message
+    assert str(lock_path) in message
 
 
 def test_release_removes_our_own_lock(lock_path: Path) -> None:

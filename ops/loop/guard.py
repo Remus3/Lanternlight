@@ -65,6 +65,21 @@ bypasses the DACL check in ``OpenProcess`` and sees zero denials, so the same
 sweep run from an elevated session reads 0 of 338 and proves nothing. Widening
 the probe's reach was judged worth more than trading a measured-but-undocumented
 zero for a documented constant that cannot be asked for a quarter of them.
+
+``OPS-21`` is a fail-OPEN in the same direction as ``OPS-19``, and the only one
+of the three items above that never reaches Windows at all - it is in the
+reading of the lock FILE. (``OPS-18`` was not a fail-open: reading 259 as alive
+made the guard refuse to start, which is the safe direction and merely
+permanent.) ``read_owner`` answered ``None`` for a missing file and for a
+corrupt one alike - truncated by a power loss, holding valid JSON that is not
+an object, holding a ``pid`` that is not an integer - and ``pid_is_alive(None)``
+is False, so ``acquire`` unlinked and retook a lock it had failed to read. The
+owner may have been alive and mid-commit; the file had simply stopped saying
+so. :func:`owner_of` now separates the two, because they are opposite facts: no
+lock file is genuinely unheld and must stay takeable, or a fresh machine could
+never start a loop, while an unparseable one rules nothing out.
+:func:`read_owner` keeps its old ``int | None`` contract for callers that only
+want a pid.
 """
 
 from __future__ import annotations
@@ -79,10 +94,12 @@ from pathlib import Path
 
 __all__ = [
     "LOCK_FILENAME",
+    "UNREADABLE",
     "LockBusy",
     "acquire",
     "default_lock_path",
     "is_locked",
+    "owner_of",
     "pid_is_alive",
     "read_owner",
     "release",
@@ -112,6 +129,30 @@ _ERROR_INVALID_PARAMETER = 87
 #: 100-nanosecond intervals since 1601 - and no exit CODE is involved, which is
 #: the whole of ``OPS-18``.
 _NOT_EXITED = 0
+
+
+class _UnreadableOwner:
+    """Type of :data:`UNREADABLE`, kept private so the sentinel is a singleton.
+
+    A distinct type rather than a magic pid: no integer is free to mean "the
+    file is there and says nothing", ``None`` is already spoken for by "there
+    is no file", and a sentinel that is neither cannot be compared equal to
+    either by accident.
+    """
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return "UNREADABLE"
+
+
+#: A lock file EXISTS at the path and no owner pid can be recovered from it.
+#: This is the ``OPS-21`` fact, and it is not the same fact as ``None``: an
+#: absent lock is genuinely unheld and must stay takeable, while an unparseable
+#: one may perfectly well belong to a live loop that is mid-commit. Only
+#: :func:`owner_of` returns it; :func:`read_owner` keeps folding it into
+#: ``None`` for callers that only ever wanted a pid.
+UNREADABLE = _UnreadableOwner()
 
 
 class LockBusy(RuntimeError):
@@ -298,31 +339,101 @@ def pid_is_alive(pid: int | None) -> bool:
     return True
 
 
-def read_owner(path: Path | None = None) -> int | None:
-    """Return the pid recorded in the lock file, or ``None``.
+def owner_of(path: Path | None = None) -> int | _UnreadableOwner | None:
+    """Classify the lock file into the three states it can actually be in.
 
-    ``None`` covers every unreadable case - no file, invalid JSON, missing or
-    non-integer ``pid`` - because the caller treats them identically.
+    This is the ``OPS-21`` split. :func:`read_owner` answered ``None`` for a
+    missing file and for a corrupt one alike, :func:`pid_is_alive` answers
+    False for ``None``, and :func:`acquire` therefore unlinked and retook a
+    lock whose contents it had failed to read - a fail-OPEN in the same module
+    and the same direction as ``OPS-19``, reached by a different route.
+
+    Returns:
+        The recorded pid; ``None`` when there is no lock file at all; and
+        :data:`UNREADABLE` when a lock file is THERE and no owner pid can be
+        recovered from it.
+
+    ``FileNotFoundError`` is the only ``OSError`` that answers ``None``. Every
+    other one - a directory in the lock's place, a permission failure, an I/O
+    error - means something IS at that path and this code cannot read it, which
+    is the undecided case, not the empty one.
+
+    ``ValueError`` covers two arrivals, and the second is why it is spelled
+    that way rather than as ``json.JSONDecodeError``. Invalid JSON is one.
+    ``UnicodeDecodeError`` is the other: it is a ``ValueError``, NOT an
+    ``OSError``, so a lock file carrying one stray non-UTF-8 byte used to raise
+    straight out through :func:`read_owner`, :func:`is_locked` and
+    :func:`acquire` rather than returning anything at all. Measured on this
+    machine, and it is the fifth fact in an item that named four.
+
+    What is NOT separated here, said plainly rather than left to be discovered:
+    a lock recording a readable but impossible pid - ``0`` or a negative - is
+    returned as that pid, and :func:`pid_is_alive` calls it dead, so it is
+    reclaimed exactly like a crashed loop. That fold is deliberate, because the
+    record IS readable and reading it is what this function promises; it is not
+    fixed here.
     """
     target = Path(path) if path is not None else default_lock_path()
     try:
-        payload = json.loads(target.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+        body = target.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        # The genuinely unheld case, and the normal one on a fresh machine.
         return None
+    except (OSError, ValueError):
+        # Something is at that path and it cannot be read.
+        return UNREADABLE
+    try:
+        payload = json.loads(body)
+    except ValueError:
+        # json.JSONDecodeError is a ValueError; naming the base catches a
+        # malformed document and nothing else, since body is already str.
+        return UNREADABLE
     if not isinstance(payload, dict):
-        return None
+        return UNREADABLE
     pid = payload.get("pid")
     if not isinstance(pid, int) or isinstance(pid, bool):
-        return None
+        return UNREADABLE
     return pid
 
 
+def read_owner(path: Path | None = None) -> int | None:
+    """Return the pid recorded in the lock file, or ``None``.
+
+    ``None`` still covers every case that yields no pid - no file, unreadable
+    bytes, invalid JSON, a payload that is not an object, a missing or
+    non-integer ``pid``. That fold is kept on purpose, because widening this
+    return type would have made every caller decide a question most of them do
+    not ask. Two in-module callers are left and neither needs the distinction:
+    :func:`acquire`'s lost-the-race branch, which reports whatever the winner
+    wrote, and :func:`release`, whose ownership test reads ``None`` as "names
+    nobody, so anyone may clear it" - the escape hatch, not an oversight. The
+    distinction ``OPS-21`` needed lives in :func:`owner_of`, and :func:`is_locked`
+    and :func:`acquire`'s refusal path are what read it.
+
+    One behaviour did change here: a lock file that is not valid UTF-8 used to
+    raise ``UnicodeDecodeError`` out of this function. It now returns ``None``,
+    which is what the sentence above always claimed.
+    """
+    owner = owner_of(path)
+    return owner if isinstance(owner, int) else None
+
+
 def is_locked(path: Path | None = None) -> bool:
-    """Return True if a lock file exists and its owner is still alive."""
-    target = Path(path) if path is not None else default_lock_path()
-    if not target.exists():
-        return False
-    return pid_is_alive(read_owner(target))
+    """Return True if a lock file exists and its owner cannot be ruled out.
+
+    Three states collapse to two here, and which way the middle one falls is
+    the point: no file is False, a readable owner is that owner's liveness, and
+    a file this code cannot parse is True. Fail-closed, matching
+    :func:`pid_is_alive`'s own promise for an undecidable pid.
+
+    The absent case is answered by :func:`owner_of` itself rather than by a
+    prior ``exists()`` check, so there is no window in which the file is seen
+    and then read as something else.
+    """
+    owner = owner_of(path)
+    if owner is UNREADABLE:
+        return True
+    return pid_is_alive(owner)
 
 
 def _write_lock(target: Path, pid: int, label: str) -> None:
@@ -351,6 +462,15 @@ def acquire(path: Path | None = None, *, pid: int | None = None, label: str = "l
     if a second attempt still collides, another process won the race fairly and
     the correct answer is to decline.
 
+    A lock file that exists and cannot be PARSED is a different matter and is
+    refused (``OPS-21``). It is not evidence that anybody is gone - the owner
+    may be alive and mid-commit, the file simply no longer says so - and
+    reclaiming it was a fail-OPEN. The operator's way out is the one
+    :class:`LockBusy` already names: delete the file. No force flag is added
+    here, because one already exists in :func:`release` and because a flag that
+    means "take the lock anyway" is the exact thing this module refuses to
+    decide on an unattended loop's behalf.
+
     Args:
         path: Lock file to take. Defaults to :func:`default_lock_path`.
         pid: Owner pid to record. Defaults to this process.
@@ -361,7 +481,9 @@ def acquire(path: Path | None = None, *, pid: int | None = None, label: str = "l
         The path of the lock now held.
 
     Raises:
-        LockBusy: The lock is held by a live process. Nothing is terminated.
+        LockBusy: The lock is held by a live process, or by an owner record
+            this code cannot read. Nothing is terminated in either case, and
+            the lock file is left exactly as it was found.
     """
     target = Path(path) if path is not None else default_lock_path()
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -373,7 +495,15 @@ def acquire(path: Path | None = None, *, pid: int | None = None, label: str = "l
     except FileExistsError:
         pass
 
-    existing = read_owner(target)
+    existing = owner_of(target)
+    if existing is UNREADABLE:
+        # Undecidable, so it is not ours to take. Note what this branch does
+        # NOT catch: `owner_of` answers None if the file vanished between the
+        # failed create above and this read, and that IS free to take - the
+        # incumbent released it in the gap. Keying the refusal on "the file is
+        # there and I cannot read it" rather than on "no pid came back" is what
+        # keeps that benign race working.
+        raise LockBusy(target, None)
     if pid_is_alive(existing):
         raise LockBusy(target, existing)
 
@@ -401,6 +531,13 @@ def release(path: Path | None = None, *, pid: int | None = None, force: bool = F
     Returns:
         True if a lock file was removed, False if there was nothing to remove
         or it belonged to someone else.
+
+    Unchanged by ``OPS-21``, and load-bearing because of it: the refusal
+    :func:`acquire` now raises for an unreadable lock has to be recoverable
+    from inside Python, or an unparseable file would be its own denial of
+    service. A corrupt lock names nobody, ``read_owner`` answers ``None``, the
+    ownership test below passes, and any claimant may clear it without
+    ``force``. That is the second way out; deleting the file is the first.
     """
     target = Path(path) if path is not None else default_lock_path()
     if not target.exists():
