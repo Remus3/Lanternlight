@@ -38,9 +38,12 @@ recording, so it falls out of its own freshness window.
    drove the synchronous branch, because a poll interval is not injectable.
    **Reverting the THREADED call site alone left the ENTIRE suite at 1769
    passed.** This repo has hit the identical two-call-site defect once already,
-   on the `4e` heartbeat. Now guarded by an AST test asserting both call sites
-   route through `record_pass` - which says outright that it proves they cannot
-   DIVERGE, not that the threaded loop behaves.
+   on the `4e` heartbeat. Now guarded by an AST test asserting every pass is
+   recorded through `record_pass`. **That guard's FIRST version was a placebo**
+   - it keyed on the receiver being named `heartbeat`, so `hb = heartbeat` then
+   `hb.record(...)` walked past it with the suite green at 1772. Caught by the
+   WRAP refutation, not this one. Receiver-agnostic now, alias bypass watched
+   red. It still does not prove the threaded loop BEHAVES.
 
 2. **A DELIBERATE DESIGN DECISION WAS MEASURED AND WAS WRONG.** The first cut
    left the failure count alone on an idle pass, with a comment arguing for it.
@@ -69,6 +72,17 @@ recording, so it falls out of its own freshness window.
   which is how it was noticed. Use `write_bytes`.
 - **`grep -c` on a token is not a count of assertions**, and neither is any
   other occurrence count. See item 4 above.
+
+## THE FIX IS NOT RUNNING - the most important line in this entry
+
+The live watcher, pid 21452, started `2026-09-03T23:53:54Z`, about **39 hours
+before the fix commit**, so the process polling this machine is executing the
+OLD `armwatch.py`. It cannot be upgraded from a session: `ensure_armed` refuses
+a second poller while one is alive, there is no stop path by design, and
+**nothing here may kill it**. The fix takes effect at the next watcher restart,
+which only the operator can cause. Until then a refused destination on THIS
+machine still reads `ARMED`. Found by the WRAP refutation - zero documents said
+it before this one, and a committed fix had been reported as a working one.
 
 ## What is left
 

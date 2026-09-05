@@ -363,11 +363,20 @@ python -c "from ops.loop import watch; s=watch.check_watcher(); print(s.state); 
 ```
 
 **The live watcher is pid 21452, armed 2026-09-03 into
-`C:\ll-captures\2026-09-03`.** At the cycle 41 wrap it read **`ARMED`** with all
-four surfaces fresh and 44106 passes reported. Any document naming **23628** is
-stale - that one DIED and was replaced (`LL-0124`), and **why it died is still
-UNMEASURED and is a real open question.** Nothing in this repo records a
-watcher's exit.
+`C:\ll-captures\2026-09-03`.** At the cycle 47 wrap it read **`ARMED` /
+`VERIFIED`** with a fresh heartbeat. Any document naming **23628** is stale -
+that one DIED and was replaced (`LL-0124`), and **why it died is still
+UNMEASURED**, though `OPS-26` now records the MECHANISM: `default_spawn` sends
+both streams to the null device, so nothing can record a watcher's exit.
+
+**THE RUNNING WATCHER PREDATES THE `OPS-26` FIX AND DOES NOT HAVE IT.** Pid
+21452 started `2026-09-03T23:53:54Z`, about 39 hours before the fix commit, so
+the process polling this machine is executing the OLD `armwatch.py`. It cannot
+be upgraded from a session - `ensure_armed` refuses a second poller while one is
+alive, there is no stop path by design, and **nothing here may kill it**. The
+fix takes effect at the next restart, which only the operator can cause. Until
+then a refused destination on THIS machine still reads `ARMED`. **Do not treat
+that as a defect to fix - it is a deployment gap, and it is recorded.**
 
 What each state means: `ARMED` is fine. `NO_HEARTBEAT` means a watcher armed
 before the heartbeat shipped - correct, and it must NOT be re-armed, because a
@@ -437,7 +446,8 @@ CLOSED (`LL-0109`). Item `12`'s backward half CLOSED as impossible (`LL-0110`).
 **`OPS-24` DECLINED and CLOSED (`LL-0131`).**
 **`OPS-14`'s capture-growth join ANSWERED (`LL-0134`) - do not re-derive it; its
 HEADLINE half is still open.**
-**`OPS-26` PROVOKED, FIXED and CLOSED (`LL-0135`).**
+**`OPS-26` PROVOKED, FIXED and CLOSED (`LL-0135`), with the wrap corrections in
+`LL-0136` - do not re-litigate it, but note the fix is NOT yet running.**
 **Items 7, 11 and 12 remain OPEN and UNCREDITED - do not credit any of them.**
 
 ---
@@ -459,6 +469,15 @@ HEADLINE half is still open.**
 - **A COMMENT ARGUING FOR A DESIGN CHOICE IS NOT EVIDENCE THE CHOICE IS RIGHT.**
   A deliberate, reasoned decision to leave a failure count alone on idle passes
   froze a surface permanently. Measure the choice, do not justify it.
+- **AN AST GUARD THAT KEYS ON A NAME IS A PLACEBO.** The cycle 47 guard required
+  the receiver to be called `heartbeat`, so `hb = heartbeat` then `hb.record(...)`
+  walked past it with the suite green at 1772. That is `OPS-16`'s lesson
+  recurring INSIDE the guard written against a different recurrence. Check the
+  CAPABILITY, not the spelling - `tests/test_process_capability.py` is the shape
+  that works.
+- **A COMMITTED FIX IS NOT A DEPLOYED FIX.** The `OPS-26` fix is in `main` and is
+  NOT in the running watcher, which started 39 hours earlier. Ask what the live
+  process actually loaded, not what the repo says.
 
 - **AN EMPTY GREP WITH A PASSING POSITIVE CONTROL IS STILL A CLAIM ABOUT THE
   PATTERN.** Cycle 47 swept every tracked `.md` and `.py` whitespace-collapsed

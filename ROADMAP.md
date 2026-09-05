@@ -3384,10 +3384,22 @@ Every measurement in the first cut survived. Four things it ASSERTED did not.
    identical two-call-site defect once already, on the `4e` heartbeat. Now
    guarded structurally by `TestBOTHCallSitesRouteThroughTheFreeze`, which walks
    the AST and asserts every `heartbeat.record` call sits inside `record_pass` -
-   the same technique `tests/test_process_capability.py` uses. That guard is a
-   deliberate second-best: it cannot prove the threaded loop BEHAVES correctly,
-   only that the two call sites cannot diverge, which is the failure that
-   actually happened.
+   the same technique `tests/test_process_capability.py` uses.
+
+   **The first version of that guard was a PLACEBO and the wrap refutation
+   walked past it.** It required the receiver to be the name `heartbeat`, so
+   binding `hb = heartbeat` and calling `hb.record(...)` in `poll_forever`
+   killed the freeze in the only loop production runs and left the whole suite
+   at **1772 passed**. That is `OPS-16`'s lesson - a NAME check is not a
+   CAPABILITY check - recurring INSIDE the guard written to stop a different
+   recurrence. It is now receiver-agnostic: any `.record(` outside
+   `record_pass` fails it, and the alias bypass was watched going red.
+
+   **Even so it is a second-best and the claim is now narrower than it was.**
+   It pins that no pass is recorded outside `record_pass`. It does NOT prove
+   the threaded loop behaves, and it cannot stop a change that rewrites the
+   logic instead of the call - zeroing `consecutive_failed_passes` before
+   `record_pass` also bypasses the freeze and also stays green.
 
 2. **THE FREEZE WAS STICKY, and the stickiness was DELIBERATE and wrong.** The
    first cut left the count alone on an idle pass, reasoning in a comment that a
@@ -3439,10 +3451,17 @@ and none were archived - and attributes no cause.
 - **`logs` is slow to report by construction** - 10 minutes to freeze, 21 to be
   named - because the alternative is a wall-clock threshold that would have to
   exceed 300 s to spare it a single ordinary pass.
-- **No behavioural test drives the threaded loop.** The AST guard covers
-  divergence, not behaviour. Driving it for real costs 9 s of wall clock per
-  freeze and was judged not worth it; the end-to-end evidence is the provocation
-  above, run by hand.
+- **No behavioural test drives the threaded loop.** The AST guard covers the
+  CALL, not the behaviour, and not the logic behind it. Driving the loop for
+  real costs 9 s of wall clock per freeze and was judged not worth it; the
+  end-to-end evidence is the provocation above, run by hand.
+- **THE FIX IS NOT RUNNING.** The live watcher, pid 21452, started
+  2026-09-03T23:53:54Z - about 39 hours BEFORE the fix commit - so the process
+  polling this machine right now is executing the OLD `armwatch.py`. It cannot
+  be upgraded from a session: `ensure_armed` refuses to start a second poller
+  while one is alive, and this project has no stop path by design. **The fix
+  takes effect at the next watcher restart, which only the operator can cause.**
+  Until then a refused destination on THIS machine still reads `ARMED`.
 
 **Do NOT fix this by removing the `except OSError`.** Fail-soft is deliberate and
 correct here - a save file really does vanish mid-copy, which is the transience
@@ -5993,8 +6012,9 @@ roster in `ops/lanes.py` disagreed. What actually worked was a split - ingest
 built the artifact, safety owned the detectors and held the veto. Read the
 roster, not this file, for who owns a path.
 
-Item 4 is closed. `4c`'s entry point is closed; arming it AUTOMATICALLY is now
-item `4d`, which is OPEN and needs no client. Item 3 is closed.
+Item 4 is closed. `4c`'s entry point is closed; arming it AUTOMATICALLY was
+item `4d`, which CLOSED 2026-09-01 (`LL-0104`) - this line called it OPEN long
+after it shut and was corrected at the cycle 47 wrap. Item 3 is closed.
 
 Each lane now carries its own queue in `lanes/<lane_id>.STATE.json`, so the
 right way to pick work is to read the state file of the lane that owns the

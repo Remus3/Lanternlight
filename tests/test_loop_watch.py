@@ -326,8 +326,10 @@ def test_ensure_armed_refuses_a_second_watcher_when_the_recorded_pid_is_alive(
 ) -> None:
     """Two pollers on the same four sources double the snapshot traffic.
 
-    ``OPS-14`` is open (9.87 GB across 19,162 files), so the refusal is a
-    disk-budget property, not just tidiness.
+    ``OPS-14``, the disk-pressure question, is open, so the refusal is a
+    disk-budget property and not just tidiness. The capture tree's size is
+    deliberately not recited here - it has gone stale twice, and the dated
+    measurements live in the item.
     """
     incumbent = _record(os.getpid(), tmp_path, started="2026-09-01T09:00:00+00:00")
     watch_mod.write_record(incumbent, record_file)
