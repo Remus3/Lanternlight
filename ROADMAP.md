@@ -2955,13 +2955,43 @@ names, which were consistent with system services - `csrss`, `dwm`,
 `fontdrvhost`, `WUDFHost`, `dasHost`, `WmiPrvSE` - **plus one `pythonw.exe`
 that could not be attributed to an owner at all.**
 
-That last one is worth keeping in view rather than rounding away: `pythonw.exe`
-is the interpreter this project's own tooling runs under, so the denied set is
-not cleanly "other people's processes". It does not overturn `OPS-23`, whose
-fix rests on the 40-of-40 reading that children spawned the way `default_spawn`
-spawns are always READABLE by us - a positive property of our own children, not
-a negative one about everyone else's. But **do not re-cite the ownership
-sentence as measured.**
+It does not overturn `OPS-23`, whose fix rests on the 40-of-40 reading that
+children spawned the way `default_spawn` spawns are always READABLE by us - a
+positive property of our own children, not a negative one about everyone
+else's.
+
+**AND THAT WITHDRAWAL ITSELF OVER-CORRECTED - amended 2026-09-05, `LL-0133`.**
+It said the ownership was something "the instrument could never have seen" and
+told the reader not to re-cite it as measured. **That is too strong. The fact
+was UNMEASURED, not UNMEASURABLE.**
+
+Dropping `SeDebugPrivilege` really does remove every attribution route tried
+from inside that same process - `tasklist /V`, WMI `GetOwner`, `GetOwnerSid`
+and `Get-Process -IncludeUserName` all came back empty or `rc=2`, 13 of 13. But
+a DIFFERENT probe, run from an elevated shell that had NOT dropped the
+privilege, attributed **all 13** with one WMI `GetOwner` call - `NT
+AUTHORITY\SYSTEM`, `Window Manager\DWM-1`, `Font Driver Host\UMFD-0`, `NT
+AUTHORITY\NETWORK SERVICE`. Re-derived by hand at the wrap on the same classes
+of process.
+
+**So the original sentence was right about the answer and wrong about having
+earned it**, and the correction was wrong in the other direction. Both are
+confident claims that outrun their evidence. **When an instrument cannot see
+something, ask whether a DIFFERENT instrument can before calling it
+unknowable** - here the very act that produced the denial was the act that
+removed attribution, which made "cannot see" feel like "cannot be seen".
+
+**The `pythonw.exe` suspicion is also resolved, and it was resolvable all
+along.** In the wrap's snapshot that process was owned by `NT
+AUTHORITY\SYSTEM` and was a SIBLING project's daemon on this machine - not
+Lanternlight's tooling, and nothing this repo starts. (Its name and path are
+deliberately not recorded here: this repo is public and the neighbouring
+projects may not be.) That is a different snapshot from the original 12, so it
+cannot speak for that exact pid - but the correction preserved a suspicion it
+could have checked, which is the same failure again.
+
+`OPS-23` is untouched by any of this. Its fix rests on the 40-of-40 reading
+that children spawned the way `default_spawn` spawns are always READABLE by us.
 
 So the shipped rule keys on the `OpenProcess` ERROR CODE, through a new
 `pid_open_denied(pid) -> True | False | None`, and it is consulted **only when
