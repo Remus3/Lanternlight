@@ -186,6 +186,52 @@ DEST_DATE_FORMAT = "%Y-%m-%d"
 #: ``lanternlight``, never the reverse.
 HEARTBEAT_FLUSH_INTERVAL_S = 30.0
 
+#: Consecutive refused passes before a surface stops recording - ``OPS-26``.
+#:
+#: A frozen surface is how a refused destination becomes visible to a cold
+#: reader. It reuses the machinery ``check_watcher`` ALREADY consults rather
+#: than adding a channel it does not read. Measured on the FIXED code, threaded,
+#: every copy refused with ENOSPC: ``ARMED`` at 5 s and 40 s, then
+#: ``SURFACE_STALE`` NAMING ``savegames`` at 78 s and 88 s, with zero files
+#: archived throughout. An earlier version of this note cited 75 s and 85 s
+#: instead - those are from the PRE-FIX provocation, where a surface's thread
+#: had DIED, which reaches a different branch of the reader (never-recorded
+#: rather than frozen-stamp) and so was never evidence for this mechanism.
+#:
+#: WHY 3 AND NOT 1: one failure is the NORMAL case this watcher was built for.
+#: A save file vanishing mid-copy fails exactly one pass and is then not
+#: offered again, because ``_entry_identity`` returns ``None`` once it is gone.
+#: Firing on a single failure would cry wolf on the transience the module
+#: exists to capture.
+#:
+#: WHY THIS IS SAFE DURING PLAY, measured rather than assumed: the game does
+#: NOT hold its log exclusively. The real archive carries ten consecutive log
+#: snapshots at the 300 s cadence straight through a play session -
+#: ``20260830-003030`` to ``20260830-011530``, inside a session running local
+#: 00:20:37 to 01:24:23 - so a persistently refused surface is not something
+#: ordinary play produces.
+#:
+#: STATED COST, recomputed after the cycle 47 refutation found the first
+#: version of this note wrong in both figures. The first pass happens at t=0,
+#: so the third falls at ``2 x poll``, not ``3 x poll``: ``logs`` at 300 s
+#: freezes 10 minutes in, not 15. And the staleness window runs from the LAST
+#: RECORDED stamp - pass two, at t=300 s - not from the freeze, so
+#: ``SURFACE_STALE`` arrives at 300 + 960 = 1260 s, 21 minutes, not 31. This
+#: reports in tens of minutes, not seconds, and that is deliberate: a threshold
+#: in wall-clock seconds would have to exceed 300 s to spare ``logs`` a single
+#: ordinary pass.
+#:
+#: WHAT THIS NUMBER IS NOT JUSTIFIED BY, stated rather than implied: the ten
+#: log snapshots above are all ``logs``. They say nothing about the 3 s
+#: surfaces, where three passes is about six seconds. What makes that tolerable
+#: is not the count but the WINDOW - a frozen surface is only REPORTED once its
+#: own staleness threshold has also elapsed, measured at 78 s for ``savegames``
+#: against a 69 s threshold - so a transient has to persist for well over a
+#: minute to be reported at all. If a save file is ever measured locked for
+#: longer than that, this number needs revisiting and the reopen condition is
+#: this paragraph.
+FAILING_PASSES_BEFORE_SURFACE_FREEZES = 3
+
 
 @dataclass(frozen=True)
 class WatchPlan:
@@ -403,9 +449,16 @@ class Heartbeat:
     def record(self, surface: str, poll_seconds: float | None = None) -> None:
         """Count one COMPLETED poll pass for ``surface``, flushing if due.
 
-        Called after ``poll_once`` returns, whatever it returned. Treating an
-        empty pass differently from a productive one is precisely the defect
-        this class exists to remove.
+        Called after ``poll_once`` returns. An EMPTY pass is not treated
+        differently from a productive one - that conflation is the defect this
+        class exists to remove, and an idle watcher must not look wedged.
+
+        Since `OPS-26` the caller no longer calls this on every pass: a surface
+        that has files to copy and archives none of them for
+        ``FAILING_PASSES_BEFORE_SURFACE_FREEZES`` passes running stops being
+        recorded, so it falls out of its own freshness window. That is a
+        decision made in ``run_rolling.record_pass``, not here - this method
+        still counts every pass it is given.
 
         The FIRST record always writes, before the throttle has anything to
         measure against. An absent heartbeat file is ambiguous with "armed
@@ -771,9 +824,16 @@ def run_rolling(
     ``heartbeat`` is optional and defaults to ``None``, which is the shape
     every caller before ROADMAP 4e used: with it absent this function builds
     nothing, writes nothing, and makes no syscall it did not make before.
-    Given one, every surface records a pass against it AFTER ``poll_once``
-    returns - whatever ``poll_once`` returned - because a pass that copied
-    nothing is exactly as much evidence of liveness as one that copied a log.
+    Given one, a surface records a pass against it AFTER ``poll_once``
+    returns, because a pass that copied nothing is exactly as much evidence of
+    liveness as one that copied a log. **With one exception, added by
+    `OPS-26`:** a surface that had files to copy and archived none of them for
+    ``FAILING_PASSES_BEFORE_SURFACE_FREEZES`` consecutive passes stops being
+    recorded, so a watcher that is running but archiving nothing stops reading
+    ARMED. See ``record_pass``, which BOTH shapes below must route through -
+    reverting either call site alone leaves the other reporting a dead surface
+    as healthy, and that is guarded structurally in
+    ``TestBOTHCallSitesRouteThroughTheFreeze``.
     A bounded run flushes once at the end, and so does an interrupted
     threaded one, since the throttle exists to cap a rate and a run that is
     over has no rate left to cap. BOTH shapes hand the surface's own
@@ -790,6 +850,44 @@ def run_rolling(
         plan = surface.plan
         say(f"armed {plan.name}: {plan.source} -> {plan.dest} every {plan.poll_seconds:g}s")
 
+    frozen: set[str] = set()
+
+    def record_pass(surface: _RollingSurface) -> None:
+        """Record one completed pass, unless this surface's copies are refused.
+
+        `OPS-26`. A surface whose destination refuses every copy stops
+        recording, so it falls out of its own freshness window and ``4f``'s
+        per-surface staleness NAMES it at the wrap. Without this the pass is
+        recorded regardless, which is exactly how a watcher archiving nothing
+        went on reading ``ARMED`` with all four surfaces fresh.
+
+        Everything here stays behind ``heartbeat is not None``, because this
+        function's contract is that a caller which passes no heartbeat gets the
+        behaviour it had before one existed - no writes and no output.
+        """
+        if heartbeat is None:
+            return
+        name = surface.plan.name
+        failures = surface.watcher.consecutive_failed_passes
+        if failures >= FAILING_PASSES_BEFORE_SURFACE_FREEZES:
+            if name not in frozen:
+                frozen.add(name)
+                # Says what was OBSERVED, not what caused it. The count cannot
+                # tell a refusing destination from an unreadable source, and
+                # the cycle 47 refutation found the earlier wording - "has been
+                # refused" - mis-reporting a locked SOURCE file as a
+                # destination fault. What is true either way is that files were
+                # offered and none were archived.
+                say(
+                    f"{name} archived nothing on {failures} consecutive passes that had "
+                    f"files to copy - freezing its heartbeat so the wrap check names it"
+                )
+            return
+        if name in frozen:
+            frozen.discard(name)
+            say(f"{name} is archiving again - resuming its heartbeat")
+        heartbeat.record(name, surface.plan.poll_seconds)
+
     if max_passes is not None:
         for _ in range(max_passes):
             now = now_fn()
@@ -797,8 +895,7 @@ def run_rolling(
                 if surface.retarget(now):
                     say(f"rolled {surface.plan.name} over to {surface.plan.dest}")
                 surface.watcher.poll_once(now=now)
-                if heartbeat is not None:
-                    heartbeat.record(surface.plan.name, surface.plan.poll_seconds)
+                record_pass(surface)
         if heartbeat is not None:
             heartbeat.flush()
         return [surface.watcher for surface in surfaces]
@@ -818,9 +915,10 @@ def run_rolling(
             # After the pass, never before: the stamp claims a COMPLETED pass.
             # A surface whose thread returned above (a destination that has
             # acquired a git checkout) correctly stops advancing here, which
-            # is what makes a stopped surface visible to a reader.
-            if heartbeat is not None:
-                heartbeat.record(surface.plan.name, surface.plan.poll_seconds)
+            # is what makes a stopped surface visible to a reader. Since
+            # `OPS-26` a surface whose copies are being REFUSED stops advancing
+            # too, through the same reader and without dying - see record_pass.
+            record_pass(surface)
             sleep_fn(surface.plan.poll_seconds)
 
     threads = [

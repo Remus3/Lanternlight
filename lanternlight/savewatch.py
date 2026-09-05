@@ -177,6 +177,13 @@ class SaveWatcher:
         self.source_dir = Path(source_dir)
         self.dest_dir = dest_resolved
         self._seen: set[tuple[str, int, int]] = set()
+        #: Consecutive passes that attempted at least one copy and landed none
+        #: - `OPS-26`. This is the only thing separating a REFUSED destination
+        #: from an idle one, and the layer above freezes a surface's heartbeat
+        #: on it. A vanished save file yields exactly one failing pass and then
+        #: stops being offered at all; a refused destination fails every pass
+        #: forever. See TestAPersistentlyRefusedDestinationIsCounted.
+        self.consecutive_failed_passes = 0
 
     def poll_once(self, *, now: datetime | None = None) -> list[Snapshot]:
         """Do exactly one listing-and-copy pass. Never raises.
@@ -204,6 +211,7 @@ class SaveWatcher:
             # PermissionError from a locked-down ACL.
             return taken
 
+        attempted = 0
         for src in entries:
             ident = _entry_identity(src)
             if ident is None:
@@ -211,10 +219,35 @@ class SaveWatcher:
             if ident in self._seen:
                 continue
             name, size, mtime_ns = ident
+            attempted += 1
             snap = self._copy_one(src, name=name, size=size, mtime_ns=mtime_ns, when=when)
             if snap is not None:
                 self._seen.add(ident)
                 taken.append(snap)
+
+        # Only a pass that TRIED and landed nothing counts against the surface.
+        # An idle pass RESETS, and an earlier draft of this line did the
+        # opposite on the reasoning that a destination breaking while nothing
+        # changed should still accumulate evidence. **That was wrong and the
+        # cycle 47 refutation measured it**: three transient failures followed
+        # by a quiet source left the count pinned at 3 through recovery and 200
+        # idle passes, so the surface stayed frozen forever. On sources measured
+        # quiescent for five days straight that is a permanent false alarm.
+        #
+        # Resetting costs nothing real. While nothing is changing there is
+        # nothing to archive, so a broken destination is losing no data; the
+        # moment content appears the copies fail again and the count climbs
+        # again from zero. The trade is a few passes of delay against an alarm
+        # that never clears, which is the never-cry-wolf direction this check
+        # already takes elsewhere.
+        #
+        # One landed copy also clears it, even if another failed in the same
+        # pass: the destination demonstrably works, so that failure is about
+        # the file rather than the destination.
+        if attempted and not taken:
+            self.consecutive_failed_passes += 1
+        else:
+            self.consecutive_failed_passes = 0
 
         return taken
 
@@ -229,16 +262,29 @@ class SaveWatcher:
         this case, so a transient failure gets retried on the next pass
         rather than being silently given up on forever.
         """
-        self.dest_dir.mkdir(parents=True, exist_ok=True)
         target = self.dest_dir / f"{_stamp(when)}_{size}_{name}"
         tmp_target = self.dest_dir / f"{target.name}.part"
         try:
+            # Inside the try since `OPS-26`. It used to sit above it, so a
+            # destination that refused the mkdir - one that has become a FILE,
+            # or an unwritable parent - raised straight out through poll_once,
+            # whose docstring promises it never raises, and killed the polling
+            # thread. Provoked in the real threaded shape before this moved.
+            self.dest_dir.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, tmp_target)
+            # Inside the try as well, and for the same reason. Measured: with
+            # the target carrying an ordinary Windows read-only attribute,
+            # `replace` raises PermissionError [WinError 5] straight out
+            # through poll_once and leaks the .part behind it. Found by the
+            # cycle 47 refutation AFTER the mkdir move had been called a fix
+            # for "poll_once never raises" - moving one of two raising calls
+            # and declaring the promise kept is exactly the half-fix this
+            # repo keeps paying for.
+            tmp_target.replace(target)
         except OSError:
             with contextlib.suppress(OSError):
                 tmp_target.unlink(missing_ok=True)
             return None
-        tmp_target.replace(target)
         return Snapshot(source=src, destination=target, size=size, mtime_ns=mtime_ns)
 
     def run(
