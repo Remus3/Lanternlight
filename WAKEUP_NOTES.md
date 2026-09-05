@@ -166,12 +166,18 @@ Measured with `SeDebugPrivilege` dropped: 40/40 own children readable, 12/307
 live pids alive-but-denied. With the privilege HELD, 0 of 305 deny - so a test
 hunting a real denied pid from inside pytest finds nothing and must inject.
 
-**The ownership half of that reading is WITHDRAWN** - `tasklist /V` returns
-`N/A` for exactly those pids once the privilege is dropped, so nobody could
-have seen the owner. Image names were consistent with system services, plus one
-unattributed `pythonw.exe`, which is the interpreter this project's own tooling
-runs under. `OPS-23`'s fix is unaffected: it rests on the 40-of-40 reading that
-our OWN children are always readable, not on a claim about everyone else's.
+**The ownership half of that reading was WITHDRAWN** - `tasklist /V` returns
+`N/A` for exactly those pids once the privilege is dropped. `OPS-23`'s fix is
+unaffected: it rests on the 40-of-40 reading that our OWN children are always
+readable, not on a claim about everyone else's.
+
+**That withdrawal OVER-CORRECTED and is itself amended (`LL-0133`).** The owner
+was UNMEASURED, not unmeasurable: dropping the privilege removes every
+attribution route from inside that process, but an elevated shell that has NOT
+dropped it attributes all 13 with one WMI `GetOwner` call. **When an instrument
+cannot see something, ask whether a different instrument can before calling it
+unknowable.** The `pythonw.exe` was a sibling project's daemon running as
+SYSTEM - not this project's tooling.
 
 `guard.owner_of()` splits the lock into three states; `read_owner`'s contract
 is unchanged so its two remaining callers were untouched.

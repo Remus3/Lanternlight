@@ -84,6 +84,23 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0133 - 2026-09-05 - CORRECTS LL-0132 - the withdrawal over-corrected, and an unmeasured fact was declared unmeasurable
+
+**Evidence:**
+- `LL-0132` withdrew `LL-0129`'s ownership claim on the grounds that it was something 'the instrument could never have seen', and told the reader not to re-cite it as measured. **Too strong.** The fact was UNMEASURED, not UNMEASURABLE.
+- Dropping `SeDebugPrivilege` does remove every attribution route tried from inside that same process - `tasklist /V`, WMI `GetOwner`, `GetOwnerSid` and `Get-Process -IncludeUserName` all returned empty or `rc=2`, 13 of 13, with the removal ASSERTED by re-reading `TokenPrivileges`. That half stands.
+- But a DIFFERENT probe, run from an elevated shell that had NOT dropped the privilege, attributed ALL 13 with one WMI `GetOwner` call. Re-derived by hand at the wrap against the same classes of process: `csrss` -> `NT AUTHORITY\\SYSTEM`, `dwm` -> `Window Manager\\DWM-1`, `fontdrvhost` -> `Font Driver Host\\UMFD-0`, `WmiPrvSE` -> `NT AUTHORITY\\NETWORK SERVICE`, every one `rc=0`.
+- The unattributed `pythonw.exe` is also resolved, and was resolvable all along: in the wrap's snapshot it was owned by `NT AUTHORITY\\SYSTEM` and belonged to a SIBLING project's daemon on this machine - not this project's tooling, and nothing this repo starts. Its name and path are deliberately NOT recorded: this repo is public and the neighbouring projects may not be. It is a different snapshot from the original 12, so it cannot speak for that exact pid.
+- Amended adjacent to the claim in `ROADMAP.md`, `WAKEUP_NOTES.md` and `docs/HEADLESS.md`. Suite `1757 passed in 113.69s`, run BARE at the wrap; ruff clean; merge gate OK at 1757.
+
+**AN OVER-CORRECTION IS AS BAD AS THE OVERSTATEMENT, and this one was worse in one respect:** it told a future session that a measurable fact was unknowable, which would stop anyone bothering to measure it. The original sentence was right about the ANSWER and wrong about having earned it; the correction was wrong in the other direction. Both are confident claims that outrun their evidence.
+
+**THE TRAP HAS A NAME NOW: the act that produced the observation was the act that destroyed the attribution.** Dropping the privilege is what made the pid deny, and it is also what made the owner unreadable - so 'I cannot see it' felt like 'it cannot be seen'. **When an instrument cannot see something, ask whether a DIFFERENT instrument can before calling it unknowable.** One WMI call from a shell that had kept the privilege answered it in full.
+
+**AND THE CORRECTION PRESERVED A SUSPICION IT COULD HAVE RESOLVED.** `LL-0132` kept, and even emphasised, that one denied `pythonw.exe` 'could not be attributed at all' and that this mattered because `pythonw.exe` is the interpreter this project's tooling runs under. One call would have shown it was a neighbour's daemon running as SYSTEM. A hedge that could be checked and was not is not caution, it is an unfinished measurement wearing caution's clothes.
+
+**Found by the refutation pass on the CORRECTION COMMIT itself.** The first wrap refutation cleared the session's engineering and found two documentation defects; the fixes for those went in unreviewed, and a second pass aimed only at that commit found this. **A correction that is itself wrong looks settled**, which is what makes reviewing corrections worth the round trip.
+
 ### LL-0132 - 2026-09-05 - WRAP: the refutation found a ten-id range described as nine, and an ownership claim the instrument could never have seen
 
 **Evidence:**
