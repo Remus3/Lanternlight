@@ -14,6 +14,24 @@ observed generation - identity is ``(name, size, mtime_ns)`` - so a caller
 never has to guess whether the copy it has is the final one; the size is
 embedded in the snapshot's own filename.
 
+DATING A SNAPSHOT: use the FILENAME STAMP, never the mtime. ``copy2`` carries
+the source's mtime onto the copy, so a snapshot lands in the capture tree
+wearing the modification time of the game file it copied, which can be days
+older than the copy itself. Measured on the real tree 2026-09-05: all 13 files
+archived at local 2026-09-03 18:53:54 carry an mtime of 2026-08-30 or earlier,
+so a ``find -newermt 2026-08-31`` over the whole of ``C:/ll-captures`` returns
+three files and none of those thirteen, and tree-wide across all 431 snapshots
+the worst misdating is 25.44 days.
+
+The file's CREATION time does record the archive moment - it agrees with the
+stamp on 431 of 431 - but it is not durable: copying the tree resets it, while
+the stamp travels in the name. And mtime agrees with the stamp on 60.3 percent
+of snapshots anyway, because the live log and the transient save are rewritten
+moments before being archived, so spot-checking a few files will tend to
+CONFIRM the wrong instrument. See
+``tests/test_savewatch.py::TestTheArchiveMomentIsNotTheMtime``, which pins both
+clocks and was watched going red.
+
 Two things this module refuses to do, both load-bearing:
 
 1. It never writes to, deletes from, or otherwise modifies the source

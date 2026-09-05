@@ -5,6 +5,93 @@ fidelity and archive older ones rather than deleting them.
 
 ---
 
+# Wrap 2026-09-05 - cycle 47 - `OPS-14`'s growth join ANSWERED, and the refutation refused the merge on prose three times
+
+Suite **1760 passed** in 111.56s, run BARE at the wrap. Ruff clean. Merge gate
+OK at 1760 against a **1757** baseline measured with `--collect-only` BEFORE any
+slice was dispatched - and the refutation re-derived that baseline independently
+from a `git archive` extract of HEAD and also got 1757. Ledger `LL-0134`. Client
+**closed** all session. Watcher `ARMED` / identity confirmed, pid 21452.
+**`OPS-14`'s growth join is ANSWERED and `OPS-26` is FILED. Nothing was CLOSED.**
+
+## `OPS-14`'s open join is answered, and it needed no correlation
+
+The item said "nobody has correlated capture growth against play sessions". The
+correlation turned out to be unnecessary - the two sides reconcile file by file.
+
+**The client has not launched since local 2026-08-30 21:11:46.** Measured twice
+by different instruments: the newest mtime anywhere under the game's `Saved`
+tree across all 17 files, with zero modified since 2026-08-31; and independently
+from log CONTENT, four recoverable sessions - three play, one 24-second launch
+that never selected a class - running local 2026-08-25 18:34:46 to 2026-08-30
+21:11:43, with a rotation-chain proof that no hidden session sits between them.
+**Sessions before 2026-08-25 are UNMEASURED and explicitly not zero.**
+
+**The watcher armed four times inside that dead window and archived the SAME 13
+files every time** - byte-identical sets of 13,019,536 bytes, because
+`SaveWatcher._seen` is in-memory, so every restart re-snapshots everything.
+
+**So the item's own "up 40 files / 0.04 GB in five days" reconciles with nothing
+left over:** 19,162 + 13 + 13 + 13 duplicate snapshots + 1 analysis CSV =
+**19,202 files, 10,639,269,122 bytes**. **Not one byte of it is new game data.**
+
+**What it does NOT close, and this is written into the item rather than implied:**
+"a watcher that had silently stopped would produce the same flat line" is still
+TRUE and cannot be separated while the sources are quiescent - a correct watcher
+and a dead one both write nothing. Zero archives is CONSISTENT with health,
+never evidence of it. The headline question, what consumed tens of gigabytes, is
+untouched and still needs the operator-scale scan.
+
+## THE FOUR THINGS CYCLE 47 PAID FOR
+
+1. **AN ITEM CITING A TEST AS COVER IS A FILED COUNT WEARING BETTER CLOTHES.**
+   `OPS-26` claimed two of its four steps had tests behind them. One did. Every
+   failure test in `test_savewatch.py` calls `poll_once` exactly ONCE, so they
+   prove the failure is TOLERATED and say nothing about the RETRY that
+   `_copy_one`'s own docstring promises in prose. The item drew an explicit
+   tested-versus-reasoned line and then put a step on the wrong side of its own
+   line. **Fixed by ADDING the test, not by weakening the claim** - and the
+   mutation that catches it was invisible to all 28 tests before it existed.
+
+2. **AN EMPTY GREP WITH A PASSING POSITIVE CONTROL IS STILL A CLAIM ABOUT THE
+   PATTERN.** A sweep of every tracked `.md` and `.py`, whitespace-collapsed and
+   case-insensitive - the method this repo mandates - concluded the mtime-dating
+   trap was recorded NOWHERE. `LL-0104` records it, dating these very snapshots
+   by NTFS CreationTime. The patterns asked about "mtime" and "archive time";
+   the prior art says "CreationTime" and "backup moment". **The control PASSED,
+   because the newly written file matched it** - so it proved the instrument
+   RAN, not that it asked the right question.
+
+3. **mtime IS THE WRONG INSTRUMENT FOR DATING A CAPTURE, and it is right 60
+   percent of the time.** `copy2` carries the source's mtime onto the copy.
+   Worst misdating **25.44 days**, and `find -newermt 2026-08-31` over the whole
+   tree returns three files and NONE of the thirteen archived on 2026-09-03.
+   Creation time agrees with the filename stamp on 431 of 431 but RESETS when
+   the tree is copied, so the STAMP is the durable instrument. 260 of 431
+   snapshots carry an mtime within 2 s of their stamp, because the live log and
+   the transient save are rewritten moments before archiving - so
+   **spot-checking a few files CONFIRMS the wrong instrument.**
+
+4. **A COUNT OF ONE WAS WRONG.** `OPS-26` said one launch in `C:/ll-captures`
+   left watcher output; three did. Found by SWEEPING for the filename rather
+   than reading the one directory that happened to be open already.
+
+## `OPS-26` is FILED and is the successor question
+
+A watcher whose destination stops accepting writes reads `ARMED` forever and
+leaves no trace: `_copy_one` swallows `OSError`, `poll_once` retries it
+silently, `poll_forever` records the heartbeat UNCONDITIONALLY after every pass,
+and `default_spawn` sends both streams to `DEVNULL`. That is precisely
+`OPS-14`'s own disk-full scenario. It also answers the MECHANISM half of
+`LL-0124`'s "nothing in this repo records a watcher's exit" - the record is
+absent because the streams are discarded.
+
+**Its first acceptance criterion is to PROVOKE it, not to trust the write-up.**
+The four steps are each read from source, but the JOIN between them is
+reasoning, and the item says so in those words.
+
+---
+
 # Wrap 2026-09-05 - cycle 46 - `OPS-24` DECLINED on a measurement, and the ops backlog is now empty but for `OPS-14`
 
 Suite **1757 passed** in 106.36s, run BARE at the wrap. Ruff clean. Merge gate
