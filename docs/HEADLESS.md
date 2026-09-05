@@ -213,9 +213,12 @@ start a second poller, which is the one failure `ensure_armed` exists to
 refuse. The shipped rule keys on the `OpenProcess` ERROR CODE instead, and is
 consulted ONLY when the identity question came back unanswerable. Measured with
 `SeDebugPrivilege` dropped: 40 of 40 children spawned the way `default_spawn`
-spawns are readable, while 12 of 307 live pids are alive-but-denied and every
-one of those is owned by SYSTEM, LOCAL SERVICE, UMFD or DWM - never by this
-user.
+spawns are readable, while 12 of 307 live pids are alive-but-denied. (An
+earlier draft added that every denied pid was owned by a system account; that
+is WITHDRAWN, because `tasklist /V` returns `N/A` for those pids once the
+privilege is dropped, so the owner was never visible. The rule rests on the
+40-of-40 reading about our OWN children, which is a positive property and does
+not need the other half.)
 
 **`NO_HEARTBEAT` and `STALE` are reported, never re-armed, and nothing is ever
 killed for either one.** A second poller on the same four sources doubles the

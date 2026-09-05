@@ -2941,10 +2941,27 @@ saved it.
 **What is true, measured with `SeDebugPrivilege` DROPPED and the drop
 asserted:** 40 of 40 children spawned the way `default_spawn` spawns have a
 READABLE creation time and zero denials. 12 of 307 live pids are
-alive-but-unreadable, **all** with error 5, and every one is owned by SYSTEM,
-LOCAL SERVICE, UMFD or DWM - none by this user. **With the privilege still
-held, 0 of 305 deny**, so a test hunting a real denied pid from inside pytest
-finds nothing and must inject.
+alive-but-unreadable, **all** with error 5. **With the privilege still held,
+0 of 305 deny**, so a test hunting a real denied pid from inside pytest finds
+nothing and must inject.
+
+**A CLAIM MADE HERE IS WITHDRAWN TO WHAT THE INSTRUMENT COULD ACTUALLY SEE.**
+This paragraph said every denied pid was "owned by SYSTEM, LOCAL SERVICE, UMFD
+or DWM - none by this user". The wrap refutation could not confirm it, and
+neither could the original measurement: **once `SeDebugPrivilege` is dropped,
+`tasklist /V` returns `N/A` for exactly those pids.** The owner column is
+unreadable for the same reason the process is. What IS supportable is the image
+names, which were consistent with system services - `csrss`, `dwm`,
+`fontdrvhost`, `WUDFHost`, `dasHost`, `WmiPrvSE` - **plus one `pythonw.exe`
+that could not be attributed to an owner at all.**
+
+That last one is worth keeping in view rather than rounding away: `pythonw.exe`
+is the interpreter this project's own tooling runs under, so the denied set is
+not cleanly "other people's processes". It does not overturn `OPS-23`, whose
+fix rests on the 40-of-40 reading that children spawned the way `default_spawn`
+spawns are always READABLE by us - a positive property of our own children, not
+a negative one about everyone else's. But **do not re-cite the ownership
+sentence as measured.**
 
 So the shipped rule keys on the `OpenProcess` ERROR CODE, through a new
 `pid_open_denied(pid) -> True | False | None`, and it is consulted **only when

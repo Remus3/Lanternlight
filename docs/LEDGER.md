@@ -84,6 +84,22 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0132 - 2026-09-05 - WRAP: the refutation found a ten-id range described as nine, and an ownership claim the instrument could never have seen
+
+**Evidence:**
+- CORRECTS `LL-0129`. That entry said the 12 alive-but-denied pids were 'every one owned by SYSTEM, LOCAL SERVICE, UMFD or DWM, never by this user'. **The instrument could not see that.** Once `SeDebugPrivilege` is dropped, `tasklist /V` returns `N/A` for exactly those pids - the owner column is unreadable for the same reason the process is. Withdrawn in `ROADMAP.md`, `WAKEUP_NOTES.md` and `docs/HEADLESS.md` adjacent to the claim; this entry is the ledger's correction, because entries are never edited.
+- What IS supportable is the image names, consistent with system services - `csrss`, `dwm`, `fontdrvhost`, `WUDFHost`, `dasHost`, `WmiPrvSE` - **plus one `pythonw.exe` that could not be attributed at all**, which matters because that is the interpreter this project's own tooling runs under. `OPS-23` is unaffected: its fix rests on the 40-of-40 reading that children spawned the way `default_spawn` spawns are always READABLE by us, a positive property of our own children rather than a negative claim about everyone else's.
+- `NEXT_SESSION_PROMPT.md` and `WAKEUP_NOTES.md` both said 'Nine ops items closed in six cycles, OPS-16 through OPS-25'. **That range is TEN ids**, and `OPS-16` closed in cycle 40 under `LL-0125`, one commit BEFORE this session. The count was right and the range was wrong; both now read `OPS-17` through `OPS-25` and say explicitly that `OPS-16` is not part of the run.
+- Wrap refutation independently re-derived the load-bearing numbers with `SeDebugPrivilege` DROPPED and the drop ASSERTED: 0 of 311 live processes report a non-zero exit FILETIME (filed: 0 of 312); 13 access-denied pids, 13 of 13 still enumerated 0.5 s later, and `pid_is_alive` now calls 0 of 13 dead; 39 of 40 commit messages reproduces exactly. `SYNCHRONIZE` denial came back 82 of 311 = 26.4 percent against the filed 77 of 312 = 24.7 percent - the phenomenon reproduces, the integer is a population snapshot.
+- It also broke all eight CLOSED items in a scratch clone: **15 mutations, 15 caught, 0 survivors**, every anchor asserted `count == 1`, and `C:\Lanternlight` `git status` empty throughout.
+- Suite `1757 passed in 111.14s`, run BARE at the wrap and read off the summary line; the refutation's independent bare run agreed at `1757 passed in 111.22s`. Ruff clean. Merge gate OK at 1757.
+
+**THE DEFECT THE REFUTATION FOUND WAS A FILED RANGE - the fifth filed count wrong in six cycles**, and this one was written by the merger in a HAND-OFF document, which is the worst place for it: a cold session reads that file first and would have been told a closure happened in a window that did not contain it. The loop state's own directive had it right, so the two records disagreed.
+
+**AND THE OTHER FINDING IS THE SAME SHAPE AS CYCLE 42's.** A sentence asserted something no instrument had measured - not a wrong number, but a claim whose evidence could not exist. Dropping the privilege is precisely what makes the owner unreadable, so the measurement that produced the denial also destroyed the ability to attribute it. **An instrument that can see X often cannot see Y, and the write-up is where that gets forgotten.**
+
+**A NIT WORTH KEEPING:** `ops/loop/watch.py` dates a measurement 2026-09-05 while `LL-0129` and its commit are dated 2026-09-04. Both are honest - the work straddled the UTC midnight - but a reader comparing them will see two dates for one fact. Not corrected, because the ledger is append-only and the code comment is the one that is UTC-correct.
+
 ### LL-0131 - 2026-09-05 - OPS-24 CLOSED as DECLINED - the safe narrowing would refuse to apply on 39 of this repo's last 40 commit messages
 
 **Evidence:**

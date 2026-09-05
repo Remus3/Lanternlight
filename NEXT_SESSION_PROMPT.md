@@ -50,8 +50,9 @@ percent of the time. The reopen condition is written into the item.
 ## READ THIS BEFORE PICKING AN ITEM
 
 **The ops backlog is now empty apart from `OPS-14`** (disk hit 100 percent
-mid-session, recovered with nothing deleted, unexplained). Nine ops items
-closed in six cycles, `OPS-16` through `OPS-25`.
+mid-session, recovered with nothing deleted, unexplained). **Nine** ops items
+were resolved across cycles 41 to 46: `OPS-17` through `OPS-25`. `OPS-16` closed
+in cycle 40 (`LL-0125`) and is NOT part of that run.
 
 **THE HIGHEST-VALUE WORK NEEDS THE CLIENT AND CANNOT BE DONE FROM DISK.** If
 the client is closed and `OPS-14` does not appeal, **say so plainly and stop** -
