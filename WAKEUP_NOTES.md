@@ -5,6 +5,89 @@ fidelity and archive older ones rather than deleting them.
 
 ---
 
+# Wrap 2026-09-04 - cycle 42 - `OPS-18` closed, and the refutation REFUSED THE MERGE
+
+Suite **1647 passed** in 105.24s, run BARE at the wrap. Ruff clean. Merge gate
+OK at 1647 collected against a **1637** baseline measured with `--collect-only`
+BEFORE any slice was dispatched. Ledger `LL-0127`. Client **closed** all
+session. Watcher `ARMED`, pid 21452.
+
+**`OPS-18` is CLOSED.** `_windows_pid_is_alive` now reads the EXIT time out of
+`GetProcessTimes` instead of comparing `GetExitCodeProcess` against
+`STILL_ACTIVE` (259), which is also a legal exit code. Zero until the process
+exits, a timestamp afterwards, a different field from the exit code, under the
+right the module already held. **No new capability and no allowlist entry.**
+
+## THE FIVE THINGS CYCLE 42 PAID FOR
+
+1. **THE REFUTATION REFUSED THE MERGE, and it was right. Third cycle running
+   that it caught what the suite could not.** It found THREE FALSE SENTENCES in
+   the shipped `guard.py` docstring - the `OPS-16` failure mode reproduced
+   verbatim inside the fix that replaced it. One of them asserted the exact
+   OPPOSITE of `OPS-19`, filed in the same commit. Every "this is caught"
+   sentence needs something behind it, and a docstring written the same hour as
+   the code is not exempt.
+
+2. **THE FAIL-CLOSED PROMISE WAS GUARDED BY NOTHING.** The refutation flipped
+   the `GetProcessTimes`-failure branch to fail OPEN and the suite stayed green
+   at 221 passed, rc=0. Three injected tests now pin it and the same mutation
+   reddens. **The branch nobody tested was the one carrying the promise the
+   whole module rests on.**
+
+3. **A DISTINCT ADJUDICATOR CHANGED THE OUTCOME.** The implementing slice built
+   `WaitForSingleObject`, argued it well, and was CORRECT that `SYNCHRONIZE` is
+   observational. It lost on REACH: with `SeDebugPrivilege` dropped, **77 of
+   312 openable pids DENY `PQLI | SYNCHRONIZE`** - all service processes - and
+   every one lands on that design's fallback, which is the original buggy
+   comparison verbatim. It would have shipped the item unfixed on a quarter of
+   the pids it can be asked about, and **its correctness would have been a
+   function of the launching token.**
+
+4. **A READING IS A CLAIM ABOUT THE INSTRUMENT - THIS TIME A PRIVILEGE SET.**
+   The first sweep of that population read ZERO denials, because this session
+   holds `SeDebugPrivilege`, which bypasses the DACL check in `OpenProcess`.
+   The adjudicator caught its own artifact. Second cycle running - last time it
+   was a held handle.
+
+5. **THE PII BACKSTOP FIRED ON THE FIX'S OWN FIXTURE, correctly.** A realistic
+   18-digit `FILETIME` used as test data matched the long-identifier rule. The
+   value was arbitrary, so the CONSTANT changed and the rule did not.
+   **Narrowing a redaction guard to make a test pass is the one move that is
+   never available.**
+
+## The defect was real and summonable but was NOT firing
+
+Written down because the item claimed otherwise and the claim is withdrawn
+adjacent to it in `ROADMAP.md`. A false ALIVE needs a live handle to the exited
+process object, and the shipped `default_spawn` drops its `Popen` at
+`return child.pid`, so nothing in the detached topology holds one. Nothing here
+exits 259 either: `armwatch.main()` returns 0 or 2, and `taskkill /F`,
+`TerminateProcess`, an uncaught exception and an argparse error give 1, 1, 1
+and 2. Fixed anyway, on the `LL-0124` principle that a disarmed check fires the
+cycle after it ships.
+
+**The consumer count in the item was also wrong** - it said six, there are
+five - and the first CORRECTION of it was itself loose. Third filed count wrong
+in two cycles.
+
+## FOUR NEW ITEMS, none folded into `OPS-18`
+
+- **`OPS-19`** - `pid_is_alive` calls RUNNING processes DEAD on access-denied.
+  Measured: 13 pids denied, all 13 still running half a second later, all 13
+  reported dead. A **fail-OPEN in a function documented as fail-closed**, found
+  independently by three passes and untouched by this fix. This is the biggest
+  of the four.
+- **`OPS-20`** - nothing tests `guard.py`'s access mask while a docstring says
+  it is covered. Proved by set-difference: planting `| 0x0001` in the mask
+  changes ZERO test outcomes.
+- **`OPS-21`** - `read_owner` folds four facts onto `None`, so a corrupt lock
+  file is reclaimed and overwritten.
+- **`OPS-22`** - `precommit_gate` matches a forbidden cmdlet as a bare
+  substring, so a MENTION is blocked like a CALL. It fired on the sweep that
+  found it. Same sentinel-is-also-a-legal-datum shape as `OPS-18` itself.
+
+---
+
 # Wrap 2026-09-04 - cycle 41 - `OPS-17` closed, and the item's own mechanism was false
 
 Suite **1637 passed** in 107.04s, run BARE at the wrap and read off the summary

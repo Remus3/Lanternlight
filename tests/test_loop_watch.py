@@ -98,9 +98,13 @@ def _dead_pid() -> int:
     child - would make the pid read as ALIVE and break all four callers. A
     reaped child with an open handle is the one state that is both: gone, and
     not reissuable. (``python -c ""`` exits ``0``, which is what makes the
-    reaped half readable: ``guard.pid_is_alive`` calls a process alive when
-    ``GetExitCodeProcess`` reports ``STILL_ACTIVE``, ``259``, so a child that
-    chose that exit code would read as alive forever.)
+    reaped half readable. That USED to matter for a second reason: the guard
+    called a process alive when ``GetExitCodeProcess`` reported
+    ``STILL_ACTIVE``, ``259``, so a child that chose 259 as its exit code read
+    as alive for as long as anything held its process object open - which a
+    pinned child does. ``OPS-18`` removed that trap: the guard now reads the
+    exit TIME, so any exit code is safe here. The exit-0 child is kept because
+    it is the cheapest thing to spawn, not because it is load-bearing.)
 
     THE PIN IS A WINDOWS PROPERTY AND DOES NOT EXIST ON POSIX, written down
     rather than implied. There ``wait()`` reaps the zombie and frees the pid
@@ -786,9 +790,9 @@ def test_the_process_right_guard_still_accepts_the_legitimate_spelling() -> None
 def test_liveness_is_delegated_to_the_guard_rather_than_reimplemented() -> None:
     """``os.kill(pid, 0)`` maps onto ``TerminateProcess`` on Windows CPython.
 
-    The guard already solved that with ``OpenProcess`` plus
-    ``GetExitCodeProcess``. Re-deriving a probe here is how the trap gets
-    walked into twice.
+    The guard already solved that with ``OpenProcess`` plus the exit time out
+    of ``GetProcessTimes`` - it read ``GetExitCodeProcess`` until ``OPS-18``.
+    Re-deriving a probe here is how the trap gets walked into twice.
 
     Also structural, and it shares the denylist shape above: the scan below
     forbids exactly the call NAME ``kill``, so ``getattr(os, "kill")(pid, 0)``
@@ -799,7 +803,7 @@ def test_liveness_is_delegated_to_the_guard_rather_than_reimplemented() -> None:
     a look-alike - but identity is not a call-graph proof: nothing here shows
     this module actually CALLS it anywhere, only that the name resolves
     correctly if it is used. A private probe rebuilt from the same
-    ``OpenProcess``/``GetExitCodeProcess`` pair the guard already uses, kept
+    ``OpenProcess``/``GetProcessTimes`` pair the guard already uses, kept
     local and never named ``kill``, satisfies every assertion below - and
     ``tests/test_process_capability.py`` does not close this one either,
     since it permits this module the same ``OpenProcess`` right the guard

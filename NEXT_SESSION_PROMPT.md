@@ -34,6 +34,62 @@ A fresh clone runs zero git hooks until that first command runs. The tracked
 
 ---
 
+## Where the last session left it - CYCLE 42
+
+`main` is at the cycle 42 wrap commit. Suite **1647 passed** in 105.24s, run
+BARE at the wrap; ruff clean. Merge gate OK at 1647 collected against a **1637**
+baseline measured with `--collect-only` BEFORE any slice was dispatched. Ledger
+`LL-0127`. Client **closed** all session.
+
+### ROADMAP `OPS-18` is CLOSED
+
+`_windows_pid_is_alive` now reads the EXIT time out of `GetProcessTimes`
+instead of comparing `GetExitCodeProcess` against `STILL_ACTIVE` (259), which
+is also a legal exit code. Zero until the process exits, a timestamp
+afterwards, a different field from the exit code, under the right the module
+already held. **No new capability and no allowlist entry.**
+
+## THE FIVE THINGS CYCLE 42 PAID FOR
+
+1. **THE REFUTATION REFUSED THE MERGE, and it was right. Third cycle running
+   that it caught what the suite could not.** Three FALSE SENTENCES in the
+   shipped `guard.py` docstring - the `OPS-16` failure mode reproduced verbatim
+   inside the fix that replaced it. One asserted the exact OPPOSITE of
+   `OPS-19`, filed in the same commit. **A docstring written the same hour as
+   the code is not exempt from needing evidence.**
+
+2. **THE FAIL-CLOSED PROMISE WAS GUARDED BY NOTHING.** Flipping the
+   `GetProcessTimes`-failure branch to fail OPEN left the suite green at 221
+   passed, rc=0. Three injected tests now pin it. The branch nobody tested was
+   the one carrying the promise the whole module rests on.
+
+3. **A DISTINCT ADJUDICATOR CHANGED THE OUTCOME.** The implementing slice built
+   `WaitForSingleObject` and argued it well. It lost on REACH: with
+   `SeDebugPrivilege` dropped, **77 of 312 openable pids DENY
+   `PQLI | SYNCHRONIZE`**, and every one lands on that design's fallback, which
+   is the original buggy comparison verbatim. Its correctness would have been a
+   function of the LAUNCHING TOKEN.
+
+4. **A READING IS A CLAIM ABOUT THE INSTRUMENT - this time a PRIVILEGE SET.**
+   The first sweep read ZERO denials because this session holds
+   `SeDebugPrivilege`, which bypasses the DACL check in `OpenProcess`. Second
+   cycle running; last time it was a held handle.
+
+5. **THE PII BACKSTOP FIRED ON THE FIX'S OWN FIXTURE, correctly.** An 18-digit
+   `FILETIME` used as test data matched the long-identifier rule. The value was
+   arbitrary, so the CONSTANT changed and the rule did not. **Narrowing a
+   redaction guard to make a test pass is never available.**
+
+### The defect was real and summonable but was NOT firing
+
+The item claimed otherwise and the claim is withdrawn adjacent to it. A false
+ALIVE needs a live handle to the exited process object, and `default_spawn`
+drops its `Popen` at `return child.pid`. Nothing here exits 259 either:
+`armwatch.main()` returns 0 or 2. Fixed anyway, on the `LL-0124` principle that
+a disarmed check fires the cycle after it ships. **The item's consumer count
+was also wrong - six claimed, five real - and the first correction of it was
+itself loose.**
+
 ## Where the last session left it - CYCLE 41
 
 `main` is at the cycle 41 wrap commit. Suite **1637 passed** in 107.04s, run
@@ -178,29 +234,34 @@ at PANTS and open Affix Details while worn - grep the log for
 Smiting or Curse. The log carries no player-facing affix, skill or item name -
 33 names tested with two positive controls - so only a hover will do.
 
-**IF THE CLIENT IS CLOSED, the item is `OPS-18`**, opened this cycle by the
-`OPS-17` refutation and fully doable from disk:
+**IF THE CLIENT IS CLOSED, the item is `OPS-19`**, opened by the `OPS-18`
+refutation and fully doable from disk. It is the biggest of the four new items:
 
-> `ops/loop/guard.py` decides liveness with `GetExitCodeProcess` compared
-> against `STILL_ACTIVE`, which is **259**. **259 is also a legal exit code**,
-> so a process that exits with 259 is reported **ALIVE**. Measured twice
-> independently: exit codes 0, 1, 42, 258 and 260 all read correctly dead;
-> **259 read ALIVE 5 of 5.**
+> `_windows_pid_is_alive` returns False when `OpenProcess` yields no handle,
+> folding TWO different facts together. `ERROR_INVALID_PARAMETER` (87) means no
+> such process. **`ERROR_ACCESS_DENIED` (5) means the process EXISTS and is
+> RUNNING and this token may not ask about it.** Measured with
+> `SeDebugPrivilege` dropped: **13 running processes read DEAD**, all 13 still
+> enumerated half a second later.
 
-It matters because `ensure_armed` refuses to start a watcher while the recorded
-pid reads alive, so a watcher that exited with 259 would be believed alive
-forever and nothing would archive the log, the saves or the market cache - the
-silent outage `LL-0124` caught in production, with the check that caught it
-disarmed.
+`pid_is_alive`'s own docstring promises the opposite - undecidable means True.
+So this is a **fail-OPEN in a function that documents itself as fail-closed**,
+and `guard.acquire` reclaims a lock whose owner reads dead. A loop running
+under a different token could have its lock stolen, silently, which is the
+"two loops interleaving commits" failure the module exists to prevent.
 
-Full acceptance is in `ROADMAP.md`. The important differences from `OPS-17`:
-**the symptom is summonable on demand here, so a mechanism-only test is NOT
-good enough** - watch it go red against today's `guard.py` first. And the
-fail-closed promise in `pid_is_alive`'s docstring must be PRESERVED: when
-existence genuinely cannot be determined the answer stays True, or the loop
-guard starts trampling live loops, which is a worse bug than the one being
-fixed. Whatever call you add must be declared in the `OPS-16` allowlist in
-`tests/test_process_capability.py` with the right it asks for argued.
+Full acceptance is in `ROADMAP.md`. The trap to plan for: **you must DROP
+`SeDebugPrivilege` from the probing token or the denial cannot occur at all** -
+an elevated session bypasses the DACL check and measures zero. If no reliable
+access-denied subject can be constructed, pin the branch by injection and SAY
+which you did. `tests/test_loop_guard.py` now has a working injection idiom
+(a fake `kernel32` via `monkeypatch.setattr(ctypes, "WinDLL", ...)`) - reuse it.
+
+Three smaller items are also open and client-independent: `OPS-20` (nothing
+tests `guard.py`'s access mask while a docstring claims it is covered),
+`OPS-21` (`read_owner` folds four facts onto `None`, so a corrupt lock file is
+reclaimed) and `OPS-22` (`precommit_gate` matches a forbidden cmdlet as a bare
+substring, so a MENTION is blocked like a CALL).
 
 **Also available with the client closed:**
 
@@ -225,7 +286,8 @@ CLOSED (`LL-0109`). Item `12`'s backward half CLOSED as impossible (`LL-0110`).
 `7c`'s orange pair DONE (`LL-0112`), its two defence-in-depth gaps CLOSED
 (`LL-0115`/`0116`), and its registration search DONE as consensus (`LL-0118`).
 `7d` CLOSED (`LL-0119`). `4e` CLOSED (`LL-0122`). `4f` CLOSED (`LL-0123`).
-`OPS-16` CLOSED (`LL-0125`). **`OPS-17` CLOSED (`LL-0126`).**
+`OPS-16` CLOSED (`LL-0125`). `OPS-17` CLOSED (`LL-0126`).
+**`OPS-18` CLOSED (`LL-0127`).**
 **Items 7, 11 and 12 remain OPEN and UNCREDITED - do not credit any of them.**
 
 ---
@@ -237,6 +299,21 @@ CLOSED (`LL-0109`). Item `12`'s backward half CLOSED as impossible (`LL-0110`).
 - **A filed MECHANISM is a hypothesis, exactly like a filed count.** `OPS-17`
   named the wrong trigger and a fix aimed at it would have changed nothing.
   Re-measure a mechanism before building against it, not just an acceptance.
+- **A DOCSTRING WRITTEN THE SAME HOUR AS THE CODE STILL NEEDS EVIDENCE.**
+  Cycle 42 shipped three false sentences in a brand-new docstring, one of them
+  asserting the opposite of an item filed in the same commit. This is `OPS-16`'s
+  lesson and it recurs because a fresh docstring feels verified and is not.
+- **A CAVEAT DROPPED FROM THE ARTIFACT IS A LIE IN THE ARTIFACT.** A measured
+  "77 of 312" was true only with `SeDebugPrivilege` DROPPED. The roadmap carried
+  the condition; the shipped docstring did not.
+- **YOUR TOKEN IS PART OF YOUR INSTRUMENT.** A session holding
+  `SeDebugPrivilege` bypasses the DACL check in `OpenProcess` and measures ZERO
+  access denials, so any process-rights sweep run from here is an artifact
+  unless the privilege is explicitly dropped first.
+- **The branch carrying a module's central promise is often the one no test
+  reaches.** Mutate the FAIL path, not only the success path.
+- **`test_no_pii.py` fires on long digit runs, including innocent ones** - an
+  18-digit `FILETIME` fixture tripped it. Change the CONSTANT, never the rule.
 - **An enumerated inventory is a filed count.** `OPS-17` named one file and
   there were two. Sweep for the pattern; do not trust the item's list.
 - **Your own probe can be the broken instrument.** Binding `proc._handle` into

@@ -1409,17 +1409,34 @@ def test_the_guard_module_and_the_watch_module_differ_where_expected() -> None:
 
     If both files were scanned through the same stale path - or if
     :func:`_scope_source` silently read one file twice - these two inventories
-    would be identical. They are not: only ``guard`` probes with
-    ``GetExitCodeProcess`` and ``os.kill``, and only ``watch`` spawns.
+    would be identical.
+
+    THE WIN32 NAMESPACE NO LONGER DISCRIMINATES AT ALL, and that is stated
+    here rather than left as a quietly deleted assertion. ``OPS-18`` replaced
+    ``guard``'s ``GetExitCodeProcess`` reading with the exit time out of
+    ``GetProcessTimes`` - the same call ``watch`` already made - so the two
+    win32 inventories are now EQUAL. What still tells the files apart is
+    ``os.kill``, which only ``guard`` reaches, and ``subprocess.Popen``, which
+    only ``watch`` reaches. **If a later change makes those two match as well,
+    this test goes vacuous without failing**, so the equality below is asserted
+    rather than assumed and a drift in either file is visible.
     """
     guard_seen = observed_capabilities(_scope_source("ops/loop/guard.py"))
     watch_seen = observed_capabilities(_scope_source("ops/loop/watch.py"))
 
-    assert "GetExitCodeProcess" in guard_seen["win32"]
+    # Equal since OPS-18, and pinned so a drift in either file is visible.
+    assert (
+        guard_seen["win32"]
+        == watch_seen["win32"]
+        == {"OpenProcess", "GetProcessTimes", "CloseHandle"}
+    )
+
+    # The two discriminators that survive. These now carry the whole of this
+    # test's stated purpose, so both directions are asserted rather than one.
     assert "kill" in guard_seen["os"]
     assert guard_seen["subprocess"] == set()
 
-    assert "GetProcessTimes" in watch_seen["win32"]
+    assert "kill" not in watch_seen["os"]
     assert watch_seen["subprocess"] == {"Popen"}
     assert "subprocess" in watch_seen["imports"]
 

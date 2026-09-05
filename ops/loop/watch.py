@@ -34,8 +34,11 @@ POSIX existence probe, but on Windows CPython ``os.kill`` maps onto
 ``TerminateProcess`` for any signal other than the two console-control events,
 so the conventional "harmless" probe would kill the process it is asking about.
 :func:`ops.loop.guard.pid_is_alive` already solves that with ``OpenProcess``
-plus ``GetExitCodeProcess``. This module imports it rather than writing a
-second one, because a trap that is solved once is still a trap the second time.
+plus the EXIT time out of ``GetProcessTimes`` - it read the exit CODE until
+``OPS-18``, which is a ``DWORD`` overloaded with both a real code and 259 for
+"has not exited", and 259 is itself a legal exit code. This module imports it
+rather than writing a second one, because a trap that is solved once is still a
+trap the second time.
 
 CAVEAT, written down rather than only thought: an unreadable record reads as
 "nothing armed", so a record corrupted by a power loss mid-write leads to a
