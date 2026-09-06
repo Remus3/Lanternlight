@@ -3492,7 +3492,7 @@ correct here - a save file really does vanish mid-copy, which is the transience
 this module was built for. The defect is that the failure is INVISIBLE, not that
 it is tolerated.
 
-## OPS-27. Nothing is written when the context is about to COMPACT - OPEN, not started
+## OPS-27. Nothing is written when the context is about to COMPACT - OPEN, criterion 1 MET 2026-09-06, headline REFRAMED
 
 Filed 2026-09-05 while assessing `github.com/affaan-m/ECC` for reuse. **Idea only
 - no code, prose or configuration was taken from it.** That project is
@@ -3569,6 +3569,96 @@ had several whose premise did not hold.
 empty when it was filed and the highest-value work needs the client. If
 criterion 1 cannot be met in reasonable time, the honest outcome is to close
 this as REFUTED and say the existing design already covered it.
+
+### CRITERION 1 MET 2026-09-06 - the claim is CONFIRMED and the headline is REFUTED
+
+The paragraph above says "nobody has shown that a mid-cycle compaction actually
+LOSES anything today" and calls the filed mechanism a hypothesis. It is no
+longer one. **It needed no contrivance** - the measurement below was taken
+against the LIVE state of cycle 49 at the moment three agents were mid-flight on
+`OPS-28`, `OPS-29` and `OPS-30`, dispatched in orchestrated parallel on disjoint
+file sets.
+
+**What was measured, all at that same instant:**
+
+- `ops/runtime/loop_state.json` read `item = None`, `cycle = 49`, and
+  `updated = 2026-09-06T21:22:42+00:00` - a stamp from BEFORE the dispatch.
+- No `lanes/*.STATE.json` carried an `in_flight`, `current_item` or
+  `dispatched` field. Grepped by name; none matched.
+- `git status --short` was **EMPTY**. The agents had not yet written, so the
+  working tree carried no trace of them either.
+- `ops/runtime/` and `lanes/` grepped for "in flight" and "in-flight" returned
+  nothing.
+
+So every surface this project designates as continuity - loop state, lane state,
+git - agreed that NOTHING was in progress, while three agents were actively
+editing the repository.
+
+**The loss, stated precisely.** A session resuming from disk at that instant
+reads four facts: cycle 49, no item in flight, a clean tree, and a ROADMAP
+saying `OPS-28`, `OPS-29` and `OPS-30` are `OPEN, not started`. **Every one of
+those readings is individually TRUE and the conclusion they compose is FALSE.**
+The recovering session's correct-looking next action is to dispatch those three
+items - on top of the three still running and still writing. Two sets of agents
+would edit the same files with no knowledge of each other.
+
+**The loss is therefore not a FACT, it is the INTERLOCK**, and its failure mode
+is a write collision rather than an absence. That distinction matters for the
+fix: a snapshot of facts does not restore an interlock.
+
+### The headline is too narrow, and this is the part worth keeping
+
+This item is headed "about to COMPACT" and proposes a `PreCompact` hook. The
+measurement says the gap is wider than its own headline: **nothing is written
+when work is DISPATCHED.** Compaction is one of the ways that fact is lost. A
+session crash, an interrupt, a machine reboot, or simply running out of context
+lose exactly the same thing, and **a compaction hook covers none of them.**
+
+A write at dispatch time covers all of them. It needs no hook, no new event
+registration and no new dependency, and it goes through
+`ops/loop/state.save` - which is already atomic and which criterion 4 requires
+anyway. So the item's CLAIM is confirmed and its proposed MECHANISM is the
+narrowest available fix. That is the `OPS-26` shape exactly: the provocation
+confirmed one half and refuted the headline.
+
+**Criteria 2 and 5 are consequently NOT moot but are CONDITIONAL** - they bind
+only if a hook is adopted after all. Do not quietly drop them by choosing the
+no-hook fix; record that the choice is what retired them. Criterion 7 still
+needs its explicit decision either way.
+
+### A structural finding - the schema cannot express this project's own default
+
+`LoopState.item` is `str | None`. **Singular.** `CLAUDE.md`'s Session Default
+says every session is "orchestrated, multi-agent, parallel" and that this "is
+the baseline, not an escalation". The state schema therefore CANNOT record the
+project's own default working shape - at best it names one slice of three.
+
+**This is precisely the defect `OPS-25` closed on the other side of the cycle.**
+`advance_cycle` could credit at most one item, so a cycle closing two lost one,
+and `credit(*items)` generalised completion from one to many. **The in-flight
+field was never generalised the same way.** Dispatch carries the one-to-many
+defect that completion carried, and nobody had filed it.
+
+### A third candidate, deliberately NOT promoted
+
+The merge-gate baseline - `1781`, measured this session before dispatch - lives
+only in the merger's context. `merge_gate.verify(baseline=...)` takes it as a
+parameter and persists nothing, and `CLAUDE.md` forbids storing it as a constant
+because "a count checked into a file goes stale and becomes a confident lie".
+
+**This is a real exposure but a weaker one, and the distinction is the point:**
+the baseline is RE-DERIVABLE, by collecting at HEAD in a clean tree. It is
+expensive, and a recovering session does not know it needs to, but it is not
+destroyed. Promoting it to the headline would be the confident overstatement
+this repo keeps correcting.
+
+One design note if a fix ever does store it. A CYCLE-SCOPED baseline carrying
+the commit it was measured at is **not** the object `CLAUDE.md` forbids. That
+rule forbids a constant checked into a file with no commit attached, which
+cannot know it has gone stale. A baseline stamped `e806747` plus a timestamp
+can only ever be RECOGNISED as stale, never silently believed - so if it is
+stored, the commit is stored with it and it is read only while that commit still
+matches.
 
 ## OPS-28. Provenance is DOCUMENT-scoped, so an extracted number arrives naked - OPEN, not started
 
