@@ -105,8 +105,8 @@ use a count from this file; it is stale by construction.
 
 ## State at the 2026-09-06 wrap
 
-Suite **1772 passed**, exit 0, run with -p no:cacheprovider. Collected 1772.
-Ruff **All checks passed**. Ledger LL-0139. Client **closed** all session; no
+Suite **1781 passed**, exit 0, run with -p no:cacheprovider. Collected 1781.
+Ruff **All checks passed**. Ledger LL-0139, corrected by LL-0140. Client **closed** all session; no
 game process was touched. Watcher **ARMED**, pid 21452, identity VERIFIED,
 heartbeat 23 s old, all four surfaces fresh.
 

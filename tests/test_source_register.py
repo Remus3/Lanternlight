@@ -90,6 +90,11 @@ KNOWN_NON_HOSTS = frozenset(
         # domain, and a ledger entry that names the file it added should
         # not have to avoid saying its name.
         "CITATION.cff",
+        # Module paths, filenames and an API name quoted by `LL-0140`.
+        "pytest.importorskip",
+        "surfaces.py",
+        "sys.meta",
+        "tests.yml",
         "attribution.commit",
         "attribution.pr",
         "config.yml",

@@ -7,9 +7,10 @@ fidelity and archive older ones rather than deleting them.
 
 # Wrap 2026-09-06 - cycle 48 - GitHub-side visibility built and PROVEN green, and the CI it created immediately found a real defect
 
-Suite **1772 passed** in 181.74s, exit 0, run with `-p no:cacheprovider`.
-Collected **1772**, unchanged from the pre-work baseline. Ruff **All checks
-passed**. Ledger `LL-0139`. Client **closed** all session; no game process was
+Suite **1781 passed**, exit 0, run with `-p no:cacheprovider`. Collected
+**1781** - up exactly 9 from the 1772 baseline, and the 9 are the new guards
+in `tests/test_repo_surfaces.py`. Ruff **All checks passed**. Ledger `LL-0139`,
+corrected by `LL-0140` after the refutation refused the merge. Client **closed** all session; no game process was
 touched. Watcher **`ARMED`**, pid 21452, identity VERIFIED, heartbeat 23 s old,
 all four surfaces fresh.
 
