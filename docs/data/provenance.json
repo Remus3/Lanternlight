@@ -1,0 +1,443 @@
+{
+  "schema_version": 1,
+  "purpose": "Row-scoped provenance for numbers an outside consumer would lift out of this project's tables. GENERATED from the markdown named below, which stays authoritative - a drift between the two is a failing test, not a fork. Do not hand-edit.",
+  "generated_from": [
+    {
+      "document": "docs/AFFIXES.md",
+      "role": "authoritative"
+    },
+    {
+      "document": "docs/OBSERVED_IDS.md",
+      "role": "authoritative"
+    }
+  ],
+  "current_builds": [
+    {
+      "scheme": "steam_buildid",
+      "buildid": "24813185",
+      "observed_on": "2026-08-25",
+      "source": "docs/OBSERVED_IDS.md"
+    },
+    {
+      "scheme": "client_version",
+      "buildid": "1.0.15",
+      "build_date": "20260826170036",
+      "observed_on": "2026-08-30",
+      "source": "docs/AFFIXES.md"
+    }
+  ],
+  "patches": [
+    {
+      "at": "2026-08-19T08:06:36Z",
+      "source": "docs/OBSERVED_IDS.md",
+      "note": "a record observed before this instant was read on a game that has since changed"
+    }
+  ],
+  "records": [
+    {
+      "record_id": "observed_ids.class_id.10",
+      "subject": "classId 10",
+      "source": {
+        "document": "docs/OBSERVED_IDS.md",
+        "anchor": "Class ids",
+        "authority": "the markdown table is authoritative"
+      },
+      "source_row": [
+        "10",
+        "**Mercenary**",
+        "pixel-joined, 2026-08-09"
+      ],
+      "values": {
+        "class_id": 10,
+        "class": "Mercenary"
+      },
+      "method": "pixel-joined, 2026-08-09",
+      "observed_on": "2026-08-09",
+      "observed_on_basis": "row",
+      "build": {
+        "scheme": "steam_buildid",
+        "buildid": "24619162"
+      },
+      "claim_type": "first_party_observed",
+      "reconfirmations": [],
+      "reconfirmations_basis": "the document states that none of these ids has been re-confirmed on the current build; measured empty, not unchecked",
+      "superseded_by_patch_at": "2026-08-19T08:06:36Z"
+    },
+    {
+      "record_id": "observed_ids.class_id.11",
+      "subject": "classId 11",
+      "source": {
+        "document": "docs/OBSERVED_IDS.md",
+        "anchor": "Class ids",
+        "authority": "the markdown table is authoritative"
+      },
+      "source_row": [
+        "11",
+        "**Sorcerer**",
+        "pixel-joined, 2026-08-09"
+      ],
+      "values": {
+        "class_id": 11,
+        "class": "Sorcerer"
+      },
+      "method": "pixel-joined, 2026-08-09",
+      "observed_on": "2026-08-09",
+      "observed_on_basis": "row",
+      "build": {
+        "scheme": "steam_buildid",
+        "buildid": "24619162"
+      },
+      "claim_type": "first_party_observed",
+      "reconfirmations": [],
+      "reconfirmations_basis": "the document states that none of these ids has been re-confirmed on the current build; measured empty, not unchecked",
+      "superseded_by_patch_at": "2026-08-19T08:06:36Z"
+    },
+    {
+      "record_id": "observed_ids.class_id.12",
+      "subject": "classId 12",
+      "source": {
+        "document": "docs/OBSERVED_IDS.md",
+        "anchor": "Class ids",
+        "authority": "the markdown table is authoritative"
+      },
+      "source_row": [
+        "12",
+        "**Blackarrow**",
+        "pixel-joined AND operator-attested - the committed character logged `classId 12`"
+      ],
+      "values": {
+        "class_id": 12,
+        "class": "Blackarrow"
+      },
+      "method": "pixel-joined AND operator-attested - the committed character logged `classId 12`",
+      "observed_on": "2026-08-09",
+      "observed_on_basis": "document_default",
+      "build": {
+        "scheme": "steam_buildid",
+        "buildid": "24619162"
+      },
+      "claim_type": "first_party_observed",
+      "reconfirmations": [],
+      "reconfirmations_basis": "the document states that none of these ids has been re-confirmed on the current build; measured empty, not unchecked",
+      "superseded_by_patch_at": "2026-08-19T08:06:36Z"
+    },
+    {
+      "record_id": "observed_ids.class_id.13",
+      "subject": "classId 13",
+      "source": {
+        "document": "docs/OBSERVED_IDS.md",
+        "anchor": "Class ids",
+        "authority": "the markdown table is authoritative"
+      },
+      "source_row": [
+        "13",
+        "**Shadowstrix**",
+        "pixel-joined, 2026-08-09"
+      ],
+      "values": {
+        "class_id": 13,
+        "class": "Shadowstrix"
+      },
+      "method": "pixel-joined, 2026-08-09",
+      "observed_on": "2026-08-09",
+      "observed_on_basis": "row",
+      "build": {
+        "scheme": "steam_buildid",
+        "buildid": "24619162"
+      },
+      "claim_type": "first_party_observed",
+      "reconfirmations": [],
+      "reconfirmations_basis": "the document states that none of these ids has been re-confirmed on the current build; measured empty, not unchecked",
+      "superseded_by_patch_at": "2026-08-19T08:06:36Z"
+    },
+    {
+      "record_id": "observed_ids.class_id.14",
+      "subject": "classId 14",
+      "source": {
+        "document": "docs/OBSERVED_IDS.md",
+        "anchor": "Class ids",
+        "authority": "the markdown table is authoritative"
+      },
+      "source_row": [
+        "14",
+        "**Seer**",
+        "pixel-joined, 2026-08-09"
+      ],
+      "values": {
+        "class_id": 14,
+        "class": "Seer"
+      },
+      "method": "pixel-joined, 2026-08-09",
+      "observed_on": "2026-08-09",
+      "observed_on_basis": "row",
+      "build": {
+        "scheme": "steam_buildid",
+        "buildid": "24619162"
+      },
+      "claim_type": "first_party_observed",
+      "reconfirmations": [],
+      "reconfirmations_basis": "the document states that none of these ids has been re-confirmed on the current build; measured empty, not unchecked",
+      "superseded_by_patch_at": "2026-08-19T08:06:36Z"
+    },
+    {
+      "record_id": "observed_ids.class_id.15",
+      "subject": "classId 15",
+      "source": {
+        "document": "docs/OBSERVED_IDS.md",
+        "anchor": "Class ids",
+        "authority": "the markdown table is authoritative"
+      },
+      "source_row": [
+        "15",
+        "**Withered Knight**",
+        "by elimination plus sidebar order; the ROLE panel for it was not captured"
+      ],
+      "values": {
+        "class_id": 15,
+        "class": "Withered Knight"
+      },
+      "method": "by elimination plus sidebar order; the ROLE panel for it was not captured",
+      "observed_on": "2026-08-09",
+      "observed_on_basis": "document_default",
+      "build": {
+        "scheme": "steam_buildid",
+        "buildid": "24619162"
+      },
+      "claim_type": "first_party_observed",
+      "reconfirmations": [],
+      "reconfirmations_basis": "the document states that none of these ids has been re-confirmed on the current build; measured empty, not unchecked",
+      "superseded_by_patch_at": "2026-08-19T08:06:36Z"
+    },
+    {
+      "record_id": "affixes.ranged_ladder.lv1",
+      "subject": "Ranged affix, Lv. 1",
+      "source": {
+        "document": "docs/AFFIXES.md",
+        "anchor": "Affix Level ladder, stated",
+        "authority": "the markdown table is authoritative"
+      },
+      "source_row": [
+        "Lv. 1",
+        "+1.6%",
+        "+1.6%",
+        "-"
+      ],
+      "values": {
+        "level": 1,
+        "physical_damage_pct": 1.6,
+        "magic_damage_pct": 1.6,
+        "effective_range_pct": 0
+      },
+      "method": "in-game item tooltip, affix detail panel, read off a passive screen capture of the operator's own display (frame `f0749_00.47.32`)",
+      "observed_on": "2026-08-30",
+      "observed_on_basis": "section heading",
+      "build": {
+        "scheme": "client_version",
+        "buildid": "1.0.15",
+        "build_date": "20260826170036",
+        "established": "wall-clock join of the frame time to the `Version` line of the same-session log, both transcribed in the source document; NOT read off the frame itself"
+      },
+      "claim_type": "game_stated",
+      "reconfirmations": [],
+      "reconfirmations_basis": "no re-reading of this tooltip has been recorded since the date above; measured empty, not unchecked"
+    },
+    {
+      "record_id": "affixes.ranged_ladder.lv2",
+      "subject": "Ranged affix, Lv. 2",
+      "source": {
+        "document": "docs/AFFIXES.md",
+        "anchor": "Affix Level ladder, stated",
+        "authority": "the markdown table is authoritative"
+      },
+      "source_row": [
+        "Lv. 2",
+        "+3.2%",
+        "+3.2%",
+        "-"
+      ],
+      "values": {
+        "level": 2,
+        "physical_damage_pct": 3.2,
+        "magic_damage_pct": 3.2,
+        "effective_range_pct": 0
+      },
+      "method": "in-game item tooltip, affix detail panel, read off a passive screen capture of the operator's own display (frame `f0749_00.47.32`)",
+      "observed_on": "2026-08-30",
+      "observed_on_basis": "section heading",
+      "build": {
+        "scheme": "client_version",
+        "buildid": "1.0.15",
+        "build_date": "20260826170036",
+        "established": "wall-clock join of the frame time to the `Version` line of the same-session log, both transcribed in the source document; NOT read off the frame itself"
+      },
+      "claim_type": "game_stated",
+      "reconfirmations": [],
+      "reconfirmations_basis": "no re-reading of this tooltip has been recorded since the date above; measured empty, not unchecked"
+    },
+    {
+      "record_id": "affixes.ranged_ladder.lv3",
+      "subject": "Ranged affix, Lv. 3",
+      "source": {
+        "document": "docs/AFFIXES.md",
+        "anchor": "Affix Level ladder, stated",
+        "authority": "the markdown table is authoritative"
+      },
+      "source_row": [
+        "Lv. 3",
+        "+4.8%",
+        "+4.8%",
+        "-"
+      ],
+      "values": {
+        "level": 3,
+        "physical_damage_pct": 4.8,
+        "magic_damage_pct": 4.8,
+        "effective_range_pct": 0
+      },
+      "method": "in-game item tooltip, affix detail panel, read off a passive screen capture of the operator's own display (frame `f0749_00.47.32`)",
+      "observed_on": "2026-08-30",
+      "observed_on_basis": "section heading",
+      "build": {
+        "scheme": "client_version",
+        "buildid": "1.0.15",
+        "build_date": "20260826170036",
+        "established": "wall-clock join of the frame time to the `Version` line of the same-session log, both transcribed in the source document; NOT read off the frame itself"
+      },
+      "claim_type": "game_stated",
+      "reconfirmations": [],
+      "reconfirmations_basis": "no re-reading of this tooltip has been recorded since the date above; measured empty, not unchecked"
+    },
+    {
+      "record_id": "affixes.ranged_ladder.lv4",
+      "subject": "Ranged affix, Lv. 4",
+      "source": {
+        "document": "docs/AFFIXES.md",
+        "anchor": "Affix Level ladder, stated",
+        "authority": "the markdown table is authoritative"
+      },
+      "source_row": [
+        "Lv. 4",
+        "+6.4%",
+        "+6.4%",
+        "-"
+      ],
+      "values": {
+        "level": 4,
+        "physical_damage_pct": 6.4,
+        "magic_damage_pct": 6.4,
+        "effective_range_pct": 0
+      },
+      "method": "in-game item tooltip, affix detail panel, read off a passive screen capture of the operator's own display (frame `f0749_00.47.32`)",
+      "observed_on": "2026-08-30",
+      "observed_on_basis": "section heading",
+      "build": {
+        "scheme": "client_version",
+        "buildid": "1.0.15",
+        "build_date": "20260826170036",
+        "established": "wall-clock join of the frame time to the `Version` line of the same-session log, both transcribed in the source document; NOT read off the frame itself"
+      },
+      "claim_type": "game_stated",
+      "reconfirmations": [],
+      "reconfirmations_basis": "no re-reading of this tooltip has been recorded since the date above; measured empty, not unchecked"
+    },
+    {
+      "record_id": "affixes.ranged_ladder.lv5",
+      "subject": "Ranged affix, Lv. 5",
+      "source": {
+        "document": "docs/AFFIXES.md",
+        "anchor": "Affix Level ladder, stated",
+        "authority": "the markdown table is authoritative"
+      },
+      "source_row": [
+        "Lv. 5",
+        "+8%",
+        "+8%",
+        "+12%"
+      ],
+      "values": {
+        "level": 5,
+        "physical_damage_pct": 8.0,
+        "magic_damage_pct": 8.0,
+        "effective_range_pct": 12.0
+      },
+      "method": "in-game item tooltip, affix detail panel, read off a passive screen capture of the operator's own display (frame `f0749_00.47.32`)",
+      "observed_on": "2026-08-30",
+      "observed_on_basis": "section heading",
+      "build": {
+        "scheme": "client_version",
+        "buildid": "1.0.15",
+        "build_date": "20260826170036",
+        "established": "wall-clock join of the frame time to the `Version` line of the same-session log, both transcribed in the source document; NOT read off the frame itself"
+      },
+      "claim_type": "game_stated",
+      "reconfirmations": [],
+      "reconfirmations_basis": "no re-reading of this tooltip has been recorded since the date above; measured empty, not unchecked"
+    },
+    {
+      "record_id": "affixes.ranged_ladder.lv6",
+      "subject": "Ranged affix, Lv. 6",
+      "source": {
+        "document": "docs/AFFIXES.md",
+        "anchor": "Affix Level ladder, stated",
+        "authority": "the markdown table is authoritative"
+      },
+      "source_row": [
+        "Lv. 6",
+        "+9.6%",
+        "+9.6%",
+        "+12%"
+      ],
+      "values": {
+        "level": 6,
+        "physical_damage_pct": 9.6,
+        "magic_damage_pct": 9.6,
+        "effective_range_pct": 12.0
+      },
+      "method": "in-game item tooltip, affix detail panel, read off a passive screen capture of the operator's own display (frame `f0749_00.47.32`)",
+      "observed_on": "2026-08-30",
+      "observed_on_basis": "section heading",
+      "build": {
+        "scheme": "client_version",
+        "buildid": "1.0.15",
+        "build_date": "20260826170036",
+        "established": "wall-clock join of the frame time to the `Version` line of the same-session log, both transcribed in the source document; NOT read off the frame itself"
+      },
+      "claim_type": "game_stated",
+      "reconfirmations": [],
+      "reconfirmations_basis": "no re-reading of this tooltip has been recorded since the date above; measured empty, not unchecked"
+    },
+    {
+      "record_id": "affixes.ranged_ladder.lv7",
+      "subject": "Ranged affix, Lv. 7",
+      "source": {
+        "document": "docs/AFFIXES.md",
+        "anchor": "Affix Level ladder, stated",
+        "authority": "the markdown table is authoritative"
+      },
+      "source_row": [
+        "Lv. 7",
+        "+11.2%",
+        "+11.2%",
+        "+12%"
+      ],
+      "values": {
+        "level": 7,
+        "physical_damage_pct": 11.2,
+        "magic_damage_pct": 11.2,
+        "effective_range_pct": 12.0
+      },
+      "method": "in-game item tooltip, affix detail panel, read off a passive screen capture of the operator's own display (frame `f0749_00.47.32`)",
+      "observed_on": "2026-08-30",
+      "observed_on_basis": "section heading",
+      "build": {
+        "scheme": "client_version",
+        "buildid": "1.0.15",
+        "build_date": "20260826170036",
+        "established": "wall-clock join of the frame time to the `Version` line of the same-session log, both transcribed in the source document; NOT read off the frame itself"
+      },
+      "claim_type": "game_stated",
+      "reconfirmations": [],
+      "reconfirmations_basis": "no re-reading of this tooltip has been recorded since the date above; measured empty, not unchecked"
+    }
+  ]
+}

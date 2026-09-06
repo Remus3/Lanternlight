@@ -1,13 +1,22 @@
 # Mistfall Hunter third-party ecosystem survey
 
-Surveyed 2026-08-09, eleven days after the 2026-07-29 launch. Steam appid 3282300,
-dev Bellring Games, pub Skystone Games. Official Steam page confirms: price
-$22.49 (10% off $24.99), review score 65% positive of 4,675 English-language
-reviews / 10,424 total, rated "Mixed" as of this survey. Official site
-mistfallhunter.com confirmed live (copyright line "(c) 2024 Bellring Games,
-Mistfall Hunter" - note the year does not match the 2026 launch, likely stale
-boilerplate rather than a hostile domain, since it links out to the real Steam
-store page and the studio's real Discord/X/YouTube/Facebook accounts).
+Surveyed 2026-08-09, eleven days after the 2026-07-29 launch. **Re-surveyed
+2026-09-06 for the GitHub-code section only** (`ROADMAP.md` OPS-29) - see
+"GitHub ecosystem re-survey, 2026-09-06 (OPS-29)" below, right before
+"Overlays and the safety gate", for the method and the result, before trusting
+that table or the license-gate conclusions that depend on it. Everything
+outside that section - sections 1-10 below and the source register - reflects
+only the original 2026-08-09 pass and has not been re-walked as of this
+correction.
+
+Steam appid 3282300, dev Bellring Games, pub Skystone Games. Official Steam
+page confirms: price $22.49 (10% off $24.99), review score 65% positive of
+4,675 English-language reviews / 10,424 total, rated "Mixed" as of the
+2026-08-09 survey. Official site mistfallhunter.com confirmed live (copyright
+line "(c) 2024 Bellring Games, Mistfall Hunter" - note the year does not match
+the 2026 launch, likely stale boilerplate rather than a hostile domain, since
+it links out to the real Steam store page and the studio's real
+Discord/X/YouTube/Facebook accounts).
 
 Ground-truth check that shapes every judgement below: Bellring's own Steam
 patch notes (fetched directly from steamcommunity.com/app/3282300/allnews and
@@ -77,6 +86,7 @@ are not restated here.
 | `mistfallhunter.grandwiki.com` | Wiki-farm template; its "mined fields" language reads as multi-game boilerplate, **not** a decryption claim, and is uncorroborated | T4 | Cross-check only | Section 8 below |
 | `grandwiki.com` | The multi-game wiki-HOSTING PLATFORM behind the per-title subdomain above, not a Mistfall Hunter source in itself. Cited once in section 8, as the reason the "mined fields" wording reads as templated boilerplate rather than a datamining claim | **Not a source - platform context** | Ecosystem context only. Any assessment of wiki CONTENT belongs on the `mistfallhunter.grandwiki.com` row above, never on this one - a parent host and its subdomain are different operators | Section 8 below |
 | `mistfall.market` | Watching the player-run Auction House UI. No market API exists | T4 | Price bands as a dated snapshot, never as a spec | Section 7 below |
+| `mistfall-builder.github.io` | **NOT ASSESSED - registered, not vetted.** Found 2026-09-06 by the `OPS-29` re-survey and known only AT ONE REMOVE: `lReDragol/Mistfall-Build-Manager` fetches a community-maintained JSON build database from a mirror of it. Nobody here has opened the site, read its sourcing, or established who runs it | **Unassessed - no tier.** An absent tier is not a low one, and the two must not be conflated | **Nothing at all.** It is listed so a later session finds a row instead of re-deriving the question, which is the whole purpose of this register. Assess it before citing it for anything, and replace this holding row when someone does | The `OPS-29` re-survey, 2026-09-06 |
 | `th.gl` | Established multi-game overlay and companion platform, checked by name | **A measured negative** | Corroborates the gap: it lists 33 titles and Mistfall Hunter is not among them, a second independent confirmation that no safe-pattern companion tool exists for this game. Evidence about the ECOSYSTEM, never about game mechanics | Section 6 below |
 | `mobalytics.gg` | Established outlet | T3 | Tier context. **Access is unresolved:** four research passes report HTTP 403, one claims full fetches. This conflict is load-bearing for `CLASSES.md` C1 | `CLASSES.md` T3, C1 |
 | KeenGamer, Destructoid, GameRant, FandomWire, GameSpot, GamingBolt, Deltia's Gaming, Pro Game Guides, Worthplaying | Dated and bylined, frequently uncited on mechanics | T3 | Context and dated claims. GameSpot's tier list is beta-era (2026-06-17) and stale on its own date | `CLASSES.md` T3 |
@@ -357,6 +367,98 @@ Real and active:
 - A Twitch category for the game exists (twitch.tv/directory/category/
   mistfall-hunter); not further characterized.
 
+## GitHub ecosystem re-survey, 2026-09-06 (OPS-29)
+
+`ROADMAP.md` OPS-29 measured the 2026-08-09 survey below as 28 days stale and,
+worse, found it had missed a repository that predated the survey by a week
+(`inf1nit3/mistfall-hunter-helper`, pushed 2026-08-02) - a completeness defect
+in the search method, not just staleness. Acceptance criterion 1 required
+establishing the method's recall before trusting any refreshed table.
+
+**Recall check, done first, before any new row was written.** Tool: `gh` CLI,
+authenticated (`gh auth status` confirmed before starting). The plain
+free-text query
+
+    gh search repos "mistfall hunter" --limit 100 --json fullName,description,pushedAt,license,stargazersCount,url
+
+returned 31 results, no pagination needed - well under the cap - and
+`inf1nit3/mistfall-hunter-helper` is one of them. **The method's recall is
+sound; criterion 1 passes.** Note for the next session: `gh search repos
+--json` uses the field name `license`, not `licenseInfo` (that name is only
+valid for `gh repo view --json`); the first attempt at the query above errored
+on this and would have read as a false "nothing found" if not re-run with the
+right field name. Best guess, unconfirmed (the original survey's exact
+command is not preserved anywhere to check), for why 2026-08-09 missed the
+repo anyway: `gh search repos --topic mistfall-hunter` returns only 8 results
+and does not include it (no topic tag set) - if the original pass relied on
+the topic search alone, that fully explains the gap without any defect in
+`gh` itself.
+
+**Full method - every query run, for the next session to tell a stale table
+from a narrow one:** `gh search repos "mistfall hunter" --limit 100` (31 hits,
+the recall-probe query above); `gh search repos --topic mistfall-hunter
+--limit 100` (8 hits); `gh search repos "mistfallhunter" --limit 100`, no
+space (11 hits); `gh search repos "Mistfall Hunter" in:description --limit
+100` (22 hits); `gh search repos "mistfall" in:name --limit 100` (100 hits,
+capped - mostly about 50 organizations whose only repo is a default `.github`
+community-health file, all created in a cluster in December 2025, before the
+game's 2026-07-29 launch, read as speculative name-squatting rather than
+tools, plus a handful of confirmed-unrelated same-word projects: a Chinese
+farming RPG, a Neovim colorscheme, an unrelated THREE.js game literally
+titled "MistFall", a narrative game, a food-delivery tutorial repo);
+`gh search repos "Bellring"` (developer name, 50 hits, all unrelated
+real-world bell-ringing hobby repos - zero signal, a negative control);
+`gh search code "3282300"` (the Steam appid, 50 hits, all coincidental
+substring matches in stock-ticker/scientific-data files plus this repo's own
+tracked files - zero new repos, a second negative control). Across the five
+repo-search queries: 104 distinct repository names, 46 of them genuinely
+about this game after removing the squatted placeholder orgs and the
+confirmed-unrelated namesakes - up from about 11 GitHub repos individually
+named in the 2026-08-09 survey's own table and source list below.
+
+**Eight repositories were given full treatment** (data source, ADR-001
+classification, license read from the raw LICENSE file's copyright line, not
+a badge) and are folded into the table below: the three OPS-29 named by name
+(`inf1nit3/mistfall-hunter-helper`, `WdThing/mistfall-hunter-optimizer`,
+`lReDragol/Mistfall-Build-Manager`), a fourth MIT-licensed equipment optimizer
+the same queries turned up (`VBenevides/mistfall-hunter-optimizer`, which
+bears directly on the license-gate correction below), and four more
+trainer/overlay-category repositories relevant to the safety classification
+(`karenwrightt146/Mistfall-Hunter-Extraction-Assistant`,
+`nick-code-ops1904y5/Mistfall-Hunter-Trainer`,
+`Groskiwi/Mistfall-Hunter-Overdrive`, and
+`mammothbrew/Mistfall-Hunter-External-Menu-2026`). Roughly 38 more names
+turned up that are, on a name/description check, more instances of the
+fan-guide/wiki/tier-list/build-preview pattern sections 1-4 above already
+cover in depth, plus one real-money trading site and one more DPI-circumvention
+fork (neither a game-data tool) - not individually re-classified here, per
+this item's own instruction not to let a stale-table fix become a rolling
+competitor watch. Named, not silently dropped, for whoever picks this up
+next: `viridi0618/mistfallhuntergg-wiki`, `hbbt3245471-crypto/mistfallhq`,
+`nicheacquired-svg/mistfall-hunter-guide`, `dangdomune-netizen/
+mistfall-hunter-guide`, `duanjun02-blip/mistfall-hunter`,
+`Kristenqingran/buildcodex-gamesites`, `Nuco1231231321/mistfallhunterwiki`,
+`TianyeChen233/mistfall-hunter-atlas`, `JasonRNaujok/
+Mistfall-Hunters-toolsite`, `lightyfly/MistfallHunterSite`,
+`jack-yi/mistfall-hunter`, `norrishui-cmd/Mistfall-Hunter`,
+`HankDevZ/mistfallhunter`, `zhuifengfishi/mistfallhunter`,
+`rickmff/mistfallhunter-build`, `Mistfall-Builder/mistfall-builder.github.io`
+(and two more repos previewing the same site), `zyli5313/
+mistfall-hunter-stun-calculator`, `zyli5313/mistfall-hunter-class-picker`,
+`kaynai/mistfall-hunter-trader` (real-money FX/PayPal/Alipay trading, out of
+scope for a game-data survey), `DreamerNazar/Zapret_GAMER-` (another DPI fork,
+same non-game-data category as the zapret fork already in the table below),
+and `warflash/mistfall-hunter-data` (bare, no description). Also checked:
+`squiglesquigles/mistfall-calc` - genuinely game-related (scrapes MistfallDB
+into a local gear/affix calculator, same data-provenance pattern as the
+VBenevides row below) but no description, no LICENSE (404 on the API,
+all-rights-reserved default), low visibility - not given full treatment.
+
+**This re-survey does not authorise vendoring anything.** A permissive
+license makes a lift permitted, never advisable - `LL-0137` already declined a
+cleared MIT repo on fitness grounds alone, and that precedent governs every
+MIT repository found below just as much as it governed guo812's.
+
 ## Overlays and the safety gate
 
 | Tool | How it gets data | Classification | License |
@@ -367,10 +469,18 @@ Real and active:
 | mistfall-hunter-esp (github.com/mistfall-hunter-esp) | Self-described: "see enemies, loot & traps through walls," radar overlay, "precision aimbot," claims "fully undetected" | **BANNABLE** - memory read and/or render hook for ESP, input synthesis for aimbot | Not visible |
 | Mistfall-Hunter-Mod-Menu (github.com/toothflowcurse) | Name and topic tag match the trainer/mod-menu category; README returned 404 on fetch | **UNKNOWN**, leans BANNABLE by category convention - not independently confirmed | Not visible |
 | Mistfall-Hunter-Executor-2026 (github.com/leonb-dev1903i8) | No description available; "Executor" is the standard naming convention for script-injection cheat loaders in this genre | **UNKNOWN**, leans BANNABLE by naming convention only - not independently confirmed | Not visible |
+| Mistfall-Hunter-Extraction-Assistant (github.com/karenwrightt146) - found 2026-09-06, OPS-29 | Own words: "reads game memory"; distributed as a password-protected Releases ZIP with the password published in plaintext in the README (a known technique for evading GitHub/antivirus content scanning); the repo's own "open source, for transparency" helper script has no memory-access code at all - it only prints the same marketing bullets as the README | **BANNABLE** - memory read by its own words, and independently a probable malware-distribution pattern, not merely a trainer | No LICENSE file found |
+| Mistfall-Hunter-Trainer (github.com/nick-code-ops1904y5) - found 2026-09-06, OPS-29 | Self-described Player/Enemy/Treasure/Loot ESP (names, distance, HP bars, off-screen snaplines) plus an "anti-detect system" | **BANNABLE** by own advertised functionality - memory read plus overlay render, same pattern as mistfall-hunter-esp above | No LICENSE file found. Also measured: the entire repository is one README with no code or binary of any kind - unconfirmed as functional software at all |
+| Mistfall-Hunter-Overdrive (github.com/Groskiwi) - found 2026-09-06, OPS-29 | Self-described live modification of health/stamina, game time scale, pickup values and fog-of-war, rendered via an in-game overlay icon | **BANNABLE-if-functional** by own advertised functionality | No LICENSE file found. Independently measured: the repository's only real activity is a scheduled GitHub Actions workflow that commits a random timestamp under a randomly generated commit message every hour, solely to fake an active-development signal - it contains no trainer implementation of any kind |
+| Mistfall-Hunter-External-Menu-2026 (github.com/mammothbrew, and a duplicate under an org of the same name) - found 2026-09-06, OPS-29 | Advertises an "external overlay" reading player info plus loot and relic tracking | **UNKNOWN** - the advertised functionality would be BANNABLE if real, but every source file in the repo (six different languages) is trivial, unrelated boilerplate (e.g. a clamp-a-number function); its "download" buttons all point to one external URL-shortener link, not fetched by this survey. Reads as a search-ranking or malware-funnel shell rather than confirmed software either way | **MIT**, copyright "mammothbrew" 2026 - confirmed by fetching the raw LICENSE file. The license is clean regardless of the functionality doubt |
 | Cheat storefronts (multiple vendor domains, not linked per instructions) | Advertise ESP/aimbot for this game | **BANNABLE** by their own advertised functionality | N/A, commercial, closed |
 | TH.GL (th.gl) | Established multi-game overlay platform | **N/A - does not support this game** (checked by name, absent from its 33-title list) | N/A |
 | MistfallDB, Gyldforge, MistfallHunter.app, Grand Wiki, Gamer Guides, mistfallhunterguide.org, etc. | Plain websites - browser tab only, no local install, no game-process contact of any kind | **SAFE-PATTERN by default (trivially so: they never touch the process)**, but see the data-provenance caveats above | Closed-source web services; no public repos found for most |
-| guo812/mistfall-hunter-tools (github.com/guo812) | Static Next.js/Cloudflare Workers site, "10 tools, 58 routes," reads no game data at runtime, is itself a fan-data front end | **SAFE-PATTERN** (it is a website, same as above) | **MIT**, copyright "guo812 (via ShipSolo main assistant)" 2026 - confirmed by fetching the raw LICENSE file. No contradicting license field in package.json (which simply omits one, not a conflict) |
+| guo812/mistfall-hunter-tools (github.com/guo812) | Static Next.js/Cloudflare Workers site, "10 tools, 58 routes," reads no game data at runtime, is itself a fan-data front end | **SAFE-PATTERN** (it is a website, same as above) | **MIT**, copyright "guo812 (via ShipSolo main assistant)" 2026 - confirmed by fetching the raw LICENSE file. No contradicting license field in package.json (which simply omits one, not a conflict). Re-confirmed unchanged 2026-09-06 |
+| mistfall-hunter-helper (github.com/inf1nit3) - found 2026-09-06, OPS-29 | Static React/Vite tier-list and tips site deployed to Vercel; bundled static data, no live game contact of any kind | **SAFE-PATTERN** (it is a website, same as above) | No LICENSE file found |
+| mistfall-hunter-optimizer (github.com/WdThing) - found 2026-09-06, OPS-29 | Static HTML page running a Go-compiled WASM equipment optimizer client-side; the user manually enters gear/affix values into the page's own form | **SAFE-PATTERN** (browser tab only) | **MIT**, copyright "WdThing" 2026 - confirmed by fetching the raw LICENSE file |
+| Mistfall-Build-Manager (github.com/lReDragol) - found 2026-09-06, OPS-29 | PySide6 desktop app; downloads a community-maintained JSON build database from a `mistfall-builder.github.io` mirror and lets the player assemble/decode shareable build codes offline. Source read directly (9,170 lines): no memory-read, process, save-file or screen-capture API of any kind referenced anywhere in it | **SAFE-PATTERN** - confirmed by reading the actual source, not just the (near-empty) README | **MIT**, copyright "lReDragol" 2026 - confirmed by fetching the raw LICENSE file |
+| mistfall-hunter-optimizer (github.com/VBenevides) - found 2026-09-06, OPS-29 | Go equipment/gem optimizer (CLI, Wails desktop GUI, and a WASM browser build); its own README states the item/gem data "is based on MistfallDB... not affiliated with or maintained by the MistfallDB team" | **SAFE-PATTERN** - one-time offline extraction from a website into a local SQLite snapshot, then pure local computation | **MIT**, copyright "Vinicius Benevides" 2026 - confirmed by fetching the raw LICENSE file, and independently restated in the README's own License section |
 | Fork-zapret-for-MistfallHunter (github.com/mihael13400-collab) | DPI-circumvention network tool for regional ISP blocking, not a game-data tool | **Out of scope / does not touch game process** - noted, not classified | Not checked, irrelevant to vendoring |
 
 Overall pattern for the license gate: **no repository found in this survey
@@ -379,11 +489,28 @@ AGPL, or BUSL-1.1 turned up), so the specific traps CLAUDE.md warns about
 (contradictory MIT-vs-UNLICENSED, unrendered `{{ organization }}` templates,
 undisclosed co-authors) did not have a case to test against. Most repos simply
 have no LICENSE file at all (default all-rights-reserved, not vendorable
-regardless of the bannable-technique question). The one exception, guo812's
-MIT-licensed tools repo, is clean and Apache-2.0-compatible - but it is a
-website's frontend code, not something Lanternlight has a use for, and its
-underlying data carries the same unverified-fan-data caveat as every other
-site in this survey.
+regardless of the bannable-technique question). **Re-confirmed 2026-09-06
+(OPS-29): still true after a materially wider GitHub search (46 game-related
+repositories checked, up from about 11) - zero copyleft licenses turned up in
+either pass.** `OPS-28` and the licensing discussion that leaned on "nothing
+here is copyleft" remain correctly supported.
+
+~~The one exception, guo812's MIT-licensed tools repo, is clean and
+Apache-2.0-compatible - but it is a website's frontend code, not something
+Lanternlight has a use for, and its underlying data carries the same
+unverified-fan-data caveat as every other site in this survey.~~ **Corrected
+2026-09-06 (OPS-29): guo812 is not the only exception - it is one of five.**
+Four more MIT-licensed repositories turned up in the same re-survey with
+clean, non-template copyright lines: `WdThing/mistfall-hunter-optimizer`,
+`lReDragol/Mistfall-Build-Manager`, `VBenevides/mistfall-hunter-optimizer`,
+and `mammothbrew/Mistfall-Hunter-External-Menu-2026` (this last one's actual
+functionality is separately in serious doubt - see the table above). None of
+the five is being proposed for vendoring - a permissive license makes a lift
+permitted, never advisable, and `LL-0137` already declined a cleared MIT repo
+on fitness grounds alone. All five carry the same unverified-fan-data caveat
+as every other source in this survey for anything they embed, and two of them
+(VBenevides directly, lReDragol by way of its downloaded database) are
+explicit about depending on MistfallDB's own undisclosed-methodology data.
 
 ## What does NOT exist
 
@@ -435,12 +562,18 @@ Lanternlight's own observation before any figure is recorded in OBSERVED_IDS.md.
    between versions, never *the value itself*. Still the correct source for
    canonical names (classes, zones, NPCs like the Returner Woodling) and for
    patch-version bookkeeping.
-4. **guo812/mistfall-hunter-tools** (MIT license, confirmed) - the only
-   permissively-licensed repository found in the entire survey. Worth a look
-   purely as a UI/structure reference (Next.js tools/tier-list layout) if
+4. **guo812/mistfall-hunter-tools** (MIT license, confirmed) -
+   ~~the only permissively-licensed repository found in the entire survey~~.
+   **Corrected 2026-09-06 (OPS-29): one of five now known** - see "GitHub
+   ecosystem re-survey" above for `WdThing/mistfall-hunter-optimizer`,
+   `lReDragol/Mistfall-Build-Manager`, `VBenevides/mistfall-hunter-optimizer`,
+   and `mammothbrew/Mistfall-Hunter-External-Menu-2026`. Worth a look purely
+   as a UI/structure reference (Next.js tools/tier-list layout) if
    Lanternlight ever wants prior art for its own dashboard scaffolding - never
    for its embedded game data, which carries the same unverified-fan-data
-   caveat as everything else here.
+   caveat as everything else here. The same never-for-data, maybe-for-
+   structure caveat applies equally to the four other MIT repositories found
+   in the re-survey - none of the five is being vendored (`LL-0137`).
 
 Nothing in this survey should be trusted for a cooldown, a damage coefficient,
 or a stealth duration. Per the measurement doctrine, those stay unmeasured
@@ -484,6 +617,16 @@ GitHub / code:
 - https://github.com/guo812/mistfall-hunter-tools (+ raw LICENSE, raw package.json)
 - https://github.com/mihael13400-collab/Fork-zapret-for-MistfallHunter
 - https://github.com/senlingll/mistfallloadouts.blog (found via search, not independently fetched)
+
+GitHub / code - added 2026-09-06, OPS-29 (see "GitHub ecosystem re-survey" above for the queries):
+- https://github.com/inf1nit3/mistfall-hunter-helper
+- https://github.com/WdThing/mistfall-hunter-optimizer (+ raw LICENSE)
+- https://github.com/lReDragol/Mistfall-Build-Manager (+ raw LICENSE, raw mistfall_build_manager.py source)
+- https://github.com/VBenevides/mistfall-hunter-optimizer (+ raw LICENSE)
+- https://github.com/karenwrightt146/Mistfall-Hunter-Extraction-Assistant (+ raw mistfall_helper.py source)
+- https://github.com/nick-code-ops1904y5/Mistfall-Hunter-Trainer
+- https://github.com/Groskiwi/Mistfall-Hunter-Overdrive (+ raw .github/workflows/gaBeObJKBcWTfZ.yml)
+- https://github.com/mammothbrew/Mistfall-Hunter-External-Menu-2026 (+ raw LICENSE, raw src/ and scripts/ files)
 
 Community:
 - https://discordbotlist.com/servers/mistfallhunter

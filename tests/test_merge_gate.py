@@ -269,3 +269,253 @@ class TestAgainstTheRealSuite:
         # count, which CLAUDE.md forbids precisely because it goes stale.
         assert total > 0
         assert total == sum(merge_gate.parse_collect_counts(proc.stdout).values())
+
+
+# Captured VERBATIM on 2026-09-06 from a pytest run deliberately aborted with
+# MemoryError inside the terminal-summary phase. Two things about it matter:
+# the run printed NO stats line at all, and the FAILURES section echoed this
+# file's own sample data - "182 passed in 0.78s" is a literal in SUMMARY_PASS
+# above. A parser that greps the whole blob reads that echo as the summary.
+ABORTED_IN_TERMINAL_SUMMARY = (
+    "..FF                                                           [100%]\r\n"
+    "================================= FAILURES ==================================\r\n"
+    "___________________________ test_first_failure ______________________________\r\n"
+    "tests/test_sample.py:13: in test_first_failure\r\n"
+    '    assert SUMMARY_PASS == "sentinel-one"\r\n'
+    "E   AssertionError: assert '........ [10...ed in 0.78s' == 'sentinel-one'\r\n"
+    "E     - sentinel-one\r\n"
+    "E     + ........ [100%]\r\n"
+    "E     + 182 passed in 0.78s\r\n"
+    "========================= short test summary info ===========================\r\n"
+    "FAILED tests/test_sample.py::test_first_failure - AssertionError\r\n"
+    "Traceback (most recent call last):\r\n"
+    '  File "conftest.py", line 41, in pytest_terminal_summary\r\n'
+    "    raise MemoryError()\r\n"
+    "MemoryError\r\n"
+)
+
+# Captured VERBATIM on 2026-09-06 from a pytest run aborted with MemoryError
+# inside _pytest/_code/source.py getstatementrange_ast -> ast.parse, which is
+# the exact site ROADMAP OPS-30 path 1 records. Four tests, two of which fail.
+# pytest still printed a stats line - and it counts only the tests it got
+# through before the abort, so it says "2 passed" and names no failure at all.
+ABORTED_MID_RUN_TRUNCATED_SUMMARY = (
+    "..Traceback (most recent call last):\r\n"
+    '  File "_pytest/_code/source.py", line 191, in getstatementrange_ast\r\n'
+    '    astnode = ast.parse(content, "source", "exec")\r\n'
+    "MemoryError\r\n"
+    "INTERNALERROR> Traceback (most recent call last):\r\n"
+    "INTERNALERROR>   MemoryError\r\n"
+    "\r\n"
+    "2 passed in 0.08s\r"
+)
+
+# Measured on 2026-09-06 from a clean full run of this repository. pytest
+# appends a wall-clock suffix once a run passes a minute, so the summary line
+# is NOT simply "<n> passed in <x>s" and a parser that assumes it is will stop
+# recognising this repository's own green runs.
+REAL_LONG_RUN_SUMMARY = "1781 passed in 111.56s (0:01:51)\r"
+
+
+class TestSummaryLineIsAnchoredNotGrepped:
+    """The summary must be read off a summary LINE, not grepped out of the blob.
+
+    ``tests/test_merge_gate.py`` carries "182 passed in 0.78s" as sample data,
+    so any pytest run that renders a failure in this file echoes a
+    summary-shaped string into its own output. A whole-blob search cannot tell
+    that echo apart from the real thing, and on an aborted run there is no real
+    thing to outrank it.
+    """
+
+    def test_echoed_sample_data_is_not_mistaken_for_a_summary(self):
+        result = merge_gate.parse_summary(ABORTED_IN_TERMINAL_SUMMARY)
+        assert not result.found
+        assert result.passed is None
+
+    def test_a_summary_under_the_equals_banner_is_still_found(self):
+        text = "=================== 1 failed, 3 passed in 0.05s ===================\r"
+        result = merge_gate.parse_summary(text)
+        assert result.found
+        assert result.passed == 3
+        assert result.failed == 1
+
+    def test_the_wall_clock_suffix_on_a_long_run_is_still_a_summary(self):
+        result = merge_gate.parse_summary(REAL_LONG_RUN_SUMMARY)
+        assert result.found
+        assert result.passed == 1781
+        assert result.failed == 0
+
+    def test_the_last_summary_line_wins_over_an_earlier_echo(self):
+        text = "E     + 182 passed in 0.78s\r\n5 passed in 0.30s\r"
+        result = merge_gate.parse_summary(text)
+        assert result.passed == 5
+
+    def test_no_tests_ran_is_a_summary_not_an_absence(self):
+        result = merge_gate.parse_summary("no tests ran in 0.01s\r")
+        assert result.found
+        assert result.passed == 0
+
+
+class TestARunThatDidNotCompleteIsNeverSignedOff:
+    """ROADMAP OPS-30 criterion 4, mechanised.
+
+    A pytest run can abort and STILL print a well-formed stats line, because
+    the line counts what the run got through rather than what it was asked to
+    do. The measured case says "2 passed" for a run of four tests, two of them
+    failing, that died with MemoryError and exited 3. Text alone cannot refute
+    that; the exit code can.
+    """
+
+    def test_a_truncated_summary_from_an_aborted_run_is_a_finding(self):
+        run = merge_gate.RunResult(text=ABORTED_MID_RUN_TRUNCATED_SUMMARY, returncode=3)
+        findings = merge_gate.check_run_completed(run)
+        assert findings
+        kinds = {f.kind for f in findings}
+        assert "internal-error" in kinds
+
+    def test_a_nonzero_exit_under_a_spotless_summary_is_a_finding(self):
+        # No INTERNALERROR marker at all - the exit code is the only witness.
+        run = merge_gate.RunResult(text="2 passed in 0.08s\r", returncode=3)
+        findings = merge_gate.check_run_completed(run)
+        assert findings
+        assert any(f.kind == "exit-mismatch" for f in findings)
+        assert any("3" in f.detail for f in findings)
+
+    def test_a_clean_green_run_produces_no_findings(self):
+        run = merge_gate.RunResult(text=REAL_LONG_RUN_SUMMARY, returncode=0)
+        assert merge_gate.check_run_completed(run) == []
+
+    def test_a_summaryless_run_is_a_finding(self):
+        run = merge_gate.RunResult(text="......\r\n", returncode=1)
+        findings = merge_gate.check_run_completed(run)
+        assert any(f.kind == "no-summary" for f in findings)
+
+    def test_an_ordinary_test_failure_is_reported_as_a_failure_not_a_crash(self):
+        # exit 1 with failures counted is pytest working correctly. It is a
+        # finding, but it must not be dressed up as an aborted run.
+        run = merge_gate.RunResult(text="2 failed, 2 passed in 0.08s\r", returncode=1)
+        findings = merge_gate.check_run_completed(run)
+        kinds = {f.kind for f in findings}
+        assert "failed" in kinds
+        assert "exit-mismatch" not in kinds
+        assert "no-summary" not in kinds
+
+    def test_errors_are_reported_separately_from_failures(self):
+        run = merge_gate.RunResult(text="1 failed, 2 errors in 0.5s\r", returncode=1)
+        kinds = {f.kind for f in merge_gate.check_run_completed(run)}
+        assert kinds == {"failed", "errors"}
+
+
+def _write_suite_that_dies_with_memoryerror(root):
+    """Build a real, runnable pytest project that aborts the way OPS-30 did.
+
+    The injection point is the one the ROADMAP measured: MemoryError raised at
+    ``_pytest/_code/source.py`` ``getstatementrange_ast`` -> ``ast.parse``,
+    scoped to that module's own ``ast`` lookup so collection and the assertion
+    rewriter are untouched. The project has four tests, two of which fail, so
+    a run that aborts while rendering the first failure reports "2 passed".
+    """
+    (root / "tests").mkdir(parents=True, exist_ok=True)
+    (root / "pytest.ini").write_text(
+        "[pytest]\n"
+        "testpaths = tests\n"
+        "python_files = test_*.py\n"
+        "addopts = -q --tb=short -r fE\n",
+        encoding="utf-8",
+    )
+    (root / "conftest.py").write_text(
+        "import ast as _realast\n"
+        "import _pytest._code.source as _src\n"
+        "\n"
+        "\n"
+        "class _Shim:\n"
+        "    def __getattr__(self, name):\n"
+        "        return getattr(_realast, name)\n"
+        "\n"
+        "    def parse(self, *args, **kwargs):\n"
+        "        raise MemoryError()\n"
+        "\n"
+        "\n"
+        "_src.ast = _Shim()\n",
+        encoding="utf-8",
+    )
+    (root / "tests" / "test_x.py").write_text(
+        "def test_ok_one():\n"
+        "    assert 1 == 1\n"
+        "\n"
+        "\n"
+        "def test_ok_two():\n"
+        "    assert 2 == 2\n"
+        "\n"
+        "\n"
+        "def test_bad_one():\n"
+        "    assert 1 == 2\n"
+        "\n"
+        "\n"
+        "def test_bad_two():\n"
+        "    assert 3 == 4\n",
+        encoding="utf-8",
+    )
+
+
+class TestVerifyAgainstASuiteThatReallyDies:
+    """End to end, with a real subprocess - not a simulated blob.
+
+    ROADMAP OPS-30 criterion 4 says a gate that reports success on a run which
+    died without a trustworthy summary is a worse defect than the MemoryError
+    itself. This is that check, run against a suite that actually dies.
+    """
+
+    def test_verify_refuses_a_suite_that_aborted_with_memoryerror(self, tmp_path):
+        _write_suite_that_dies_with_memoryerror(tmp_path)
+        report = merge_gate.verify(baseline=4, root=tmp_path)
+        assert report.collected == 4, "the collect pass must still see 4 tests"
+        assert not report.ok, f"gate signed off on an aborted run: {report.format()}"
+        kinds = {f.kind for f in report.findings}
+        assert kinds & {"internal-error", "exit-mismatch", "no-summary"}
+
+
+class TestTheExitCodeIsActuallyCarried:
+    """``check_run_completed`` is only as good as the code handed to it.
+
+    Every other test in this file constructs :class:`RunResult` by hand, so
+    all of them stay green if ``_run`` quietly reports 0 for every invocation -
+    which is exactly what the old code did by discarding ``proc.returncode``.
+    This runs a real pytest subprocess and reads the code back, so the wiring
+    between the subprocess and the guard is itself under test.
+    """
+
+    def _project(self, root, body):
+        (root / "tests").mkdir(parents=True, exist_ok=True)
+        (root / "pytest.ini").write_text(
+            "[pytest]\ntestpaths = tests\npython_files = test_*.py\naddopts = -q\n",
+            encoding="utf-8",
+        )
+        (root / "tests" / "test_x.py").write_text(body, encoding="utf-8")
+
+    def test_a_failing_suite_reports_exit_1_not_0(self, tmp_path):
+        self._project(tmp_path, "def test_bad():\n    assert 1 == 2\n")
+        run = merge_gate.suite_result(root=tmp_path)
+        assert run.returncode == 1, f"exit code lost: {run!r}"
+        assert merge_gate.parse_summary(run.text).failed == 1
+
+    def test_a_passing_suite_reports_exit_0(self, tmp_path):
+        self._project(tmp_path, "def test_good():\n    assert 1 == 1\n")
+        run = merge_gate.suite_result(root=tmp_path)
+        assert run.returncode == 0
+        assert merge_gate.parse_summary(run.text).passed == 1
+
+    def test_a_usage_error_reports_its_own_code_not_a_guess(self, tmp_path):
+        # A rootdir with no tests at all exits 5 (no tests collected). Any
+        # code other than 0 or 1 means the run never reached the end, and the
+        # gate has to be able to see it.
+        (tmp_path / "tests").mkdir()
+        (tmp_path / "pytest.ini").write_text(
+            "[pytest]\ntestpaths = tests\npython_files = test_*.py\naddopts = -q\n",
+            encoding="utf-8",
+        )
+        run = merge_gate.suite_result(root=tmp_path)
+        assert run.returncode == 5
+        assert any(
+            f.kind == "exit-mismatch" for f in merge_gate.check_run_completed(run)
+        )

@@ -53,6 +53,8 @@ Touch these paths and nothing else. Every other path in the repository belongs t
 - `tests/test_savewatch*.py`
 - `tests/test_armwatch*.py`
 - `tests/fixtures/**`
+- `lanternlight/provenance.py`
+- `tests/test_provenance.py`
 - `lanes/ingest.*`
 
 

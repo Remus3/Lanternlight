@@ -87,6 +87,12 @@ meaning: the row says where levels ARE, not where they CAN BE.
 | Lv. 6 | +9.6% | +9.6% | +12% |
 | Lv. 7 | +11.2% | +11.2% | +12% |
 
+Each of these seven rows is also emitted row-by-row, carrying its own build,
+method, date and reconfirmation status, into the generated provenance dataset
+under `docs/data/`. Lifting the table alone loses all four, which is what
+`OPS-28` was filed about. **That emission is GENERATED and this table is
+authoritative** - a drift between the two is a failing test, not a fork.
+
 The damage figures are exactly `1.6% * level`. Effective Range appears at Lv. 5
 and is flat `+12%` through Lv. 7, which is what "upon reaching a certain level"
 in the effect text refers to.

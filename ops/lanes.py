@@ -307,6 +307,18 @@ LANES: tuple[Lane, ...] = (
             "tests/test_savewatch*.py",
             "tests/test_armwatch*.py",
             "tests/fixtures/**",
+            # The row-scoped provenance emitter - `OPS-28`. Placed here with a
+            # STATED tension rather than a silent fit: this lane's mandate says
+            # readers of a surface THE GAME WRITES, and `provenance.py` reads
+            # this repo's own markdown instead. It sits here because the
+            # alternative is worse - `research` owns the measured record but
+            # explicitly WRITES NO CODE, so the module cannot live there, and
+            # no other lane is closer. What genuinely matches is this lane's
+            # forbidden note, "never emits a value it did not measure", which
+            # is the entire purpose of the module. If a lane is ever added for
+            # the corpus-as-data, move this and delete this comment.
+            "lanternlight/provenance.py",
+            "tests/test_provenance.py",
             "lanes/ingest.*",
         ),
     ),
@@ -354,6 +366,11 @@ LANES: tuple[Lane, ...] = (
             "docs/CLASS_RESEARCH.md",
             "docs/ECOSYSTEM.md",
             "docs/adr/**",
+            # The EMITTED measured record - `OPS-28`. Data, not code, so it
+            # lands squarely inside this lane's "own the measured record"
+            # mandate and clear of its no-code rule. The emitter itself is
+            # owned by `ingest`; see the note there for why the pair is split.
+            "docs/data/**",
             "lanes/research.*",
         ),
         forbidden_note="Writes no code. Findings only.",

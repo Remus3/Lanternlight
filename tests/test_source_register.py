@@ -107,6 +107,45 @@ KNOWN_NON_HOSTS = frozenset(
         "attribution.pr",
         "config.yml",
         "observation.yml",
+        # Filenames and a JS LIBRARY quoted by the `OPS-29` re-survey, none a
+        # source. Every one was read in context before being added here.
+        #
+        # `THREE.js` is the 3D library, named only to identify a
+        # confirmed-UNRELATED same-word game the search turned up.
+        # `gaBeObJKBcWTfZ.yml` is a GitHub Actions workflow FILENAME inside a
+        # surveyed repository, quoted as evidence of a fake-commit-activity
+        # job.
+        #
+        # `helper.py` and `manager.py` are the TRUNCATED forms of
+        # `mistfall_helper.py` and `mistfall_build_manager.py`, two source
+        # files fetched and read during the licence and ADR-001 gate. The
+        # module docstring already warns that `_` is excluded from a label so
+        # an underscored name truncates at the last dotted pair - these are
+        # that behaviour, and the truncated form is what the failure names
+        # and therefore what has to be listed.
+        "THREE.js",
+        "gaBeObJKBcWTfZ.yml",
+        "helper.py",
+        "manager.py",
+        # Dotted CODE IDENTIFIERS and FILENAMES quoted by `LL-0142` through
+        # `LL-0145`, none a source. This is the FOURTH time this guard has
+        # fired on a ledger entry naming the things the entry is about, which
+        # is the guard working: an entry that closed a defect in
+        # `merge_gate` and shipped a provenance emitter cannot describe
+        # either without writing their dotted names down.
+        #
+        # `LoopState.item` is a dataclass field, `build.buildid` a JSON field
+        # path inside the emitted record, `proc.returncode` a subprocess
+        # attribute, and `pytest.cacheprovider.json.dumps` the truncated form
+        # of `_pytest.cacheprovider.json.dumps` - truncated because a label
+        # excludes the leading `_`. `provenance.py` and `provenance.json` are
+        # this repo's own new files.
+        "LoopState.item",
+        "build.buildid",
+        "proc.returncode",
+        "provenance.json",
+        "provenance.py",
+        "pytest.cacheprovider.json.dumps",
         "00.42.52.png",
         "10.png",
         "19.02.51.472.png",

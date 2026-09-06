@@ -5,6 +5,96 @@ fidelity and archive older ones rather than deleting them.
 
 ---
 
+# Wrap 2026-09-06 - cycle 49 - the disk-only backlog is CLEARED, and the merge gate itself was signing off on runs that never completed
+
+Suite **1849 passed** in 118.20s, exit 0, run with `-p no:cacheprovider`.
+Collected **1849** - up exactly 68 from the 1781 baseline measured before
+dispatch, and the 68 are the new guards in `tests/test_provenance.py` (53) and
+`tests/test_merge_gate.py` (15). **No test was deleted or weakened.** Ruff
+**All checks passed**.
+
+**The suite went red once on the way here and the redness was the process
+working.** The final run before this one failed
+`tests/test_source_register.py` on six host-shaped tokens - `LoopState.item`,
+`build.buildid`, `proc.returncode`, `provenance.json`, `provenance.py` and
+`pytest.cacheprovider.json.dumps` - every one of them written by the ledger
+entries for this very cycle. That is the **fourth** time this guard has fired
+on a ledger entry naming the things the entry is about. Writing the ledger
+BEFORE the final run is what catches it; the rule is not optional.
+
+**Three roadmap items CLOSED - `OPS-28`, `OPS-29`, `OPS-30` - and `OPS-27`'s
+criterion 1 discharged.** Ledger `LL-0142` through `LL-0145`. Client **closed**
+all session, verified with a process-NAME filter and a control that cannot fail
+(`CONTROL_self = 8`, `CLIENT_hits = 0`, no process matching `mist`, no Steam);
+**no game process was touched**. Watcher `ARMED`, pid **31168** - the one
+restarted at the cycle 48 wrap, not a new one - identity VERIFIED, all four
+surfaces fresh. **The restart was NOT repeated.**
+
+## The finding that matters more than the three closures
+
+**`merge_gate.verify` was passing VACUOUSLY on runs that never completed.**
+This project's entire re-probe doctrine routes through that function, and it
+could read a pass count out of a `FAILURES` body.
+
+Reproduced by the merger independently against the version at HEAD, not
+relayed: `parse_summary`, given a blob with **no summary line**, whose failure
+trace merely QUOTED a sample `182 passed in 12.00s`, returned `found=True` and
+`passed=182`. That 182 was `tests/test_merge_gate.py`'s own sample data echoed
+back. A second route: an aborted run exits **3** and still prints a
+well-formed stats line counting what it got through, and the gate answered
+`OK`.
+
+`OPS-30` was filed as a MemoryError item. The MemoryError turned out to be the
+symptom that exposed the real defect, and the item's own filed assumption -
+that these failures "at least fail loudly" - was **wrong**, now corrected in
+place rather than edited away.
+
+**STANDING RISK, and the next session should know it:** every merge-gate
+sign-off taken before this cycle rests on the broken parser. Nothing is known
+to have been mis-signed, and **nothing has been re-audited.**
+
+## What the parallel shape actually cost and caught
+
+Three slices on disjoint file sets, plus the merger. It worked, and the two
+things it caught are worth carrying:
+
+- **A slice's own report can be clean and still leave the tree red.** `OPS-29`
+  ran only the ASCII guard - all its brief asked for - and its new citations
+  reddened `tests/test_source_register.py` with five host-shaped tokens. **That
+  gap was the dispatching prompt's, not the agent's.** Tell a doc-editing slice
+  to run the guards that READ `docs/`, not just the ASCII one.
+- **Disjoint FILE sets are not a disjoint SUITE.** `OPS-28`'s run saw ten
+  transient `test_merge_gate.py` failures from `OPS-30` mid-edit. Nobody was at
+  fault; the shared object is the suite. Tell every slice to separate
+  "expected, caused by another lane" from "mine".
+
+## Two merger self-corrections, recorded because both are this repo's own rules
+
+- A grep for `Copyright (c)` returned **0** and nearly produced a false
+  negative on `OPS-29`'s licence criterion. The reads were there under
+  different wording. **An empty grep is a claim about your pattern** - and here
+  it caught the merger, not an agent.
+- A `sha256` of a working file after a break-and-restore did **not** match, and
+  the cause was CRLF-to-LF normalisation, not lost content. `.gitattributes`
+  pins `*.md text eol=lf`; `git diff --numstat` read `161/18`, exactly the
+  slice's `160/18` plus one row. **The wrong object had been hashed** - the
+  blob is what ships.
+
+## What is left
+
+**The disk-only backlog is empty** except `OPS-27`'s implementation, which is
+specified and deliberately unstarted. Its shape changed: the fix is a write at
+**DISPATCH**, not a `PreCompact` hook, because a crash, an interrupt or a
+reboot lose the identical fact and a compaction hook covers none of them. And
+`LoopState.item` is **singular**, so the schema cannot express the parallel
+default `CLAUDE.md` mandates - the same one-to-many defect `OPS-25` fixed for
+crediting.
+
+Everything else needs the client open or an operator-scale disk scan.
+`NEXT_SESSION_PROMPT.md` carries the blocked-first list.
+
+---
+
 # Wrap 2026-09-06 - cycle 48 - GitHub-side visibility built and PROVEN green, and the CI it created immediately found a real defect
 
 Suite **1781 passed**, exit 0, run with `-p no:cacheprovider`. Collected

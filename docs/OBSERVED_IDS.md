@@ -43,6 +43,13 @@ space wrong fails closed and looks exactly like "the game stopped emitting it".
 
 **Complete. 10-15, ascending, matching the in-game sidebar order top to bottom.**
 
+These six rows are also emitted row-by-row into the generated provenance
+dataset under `docs/data/`, where each one carries the buildid, the observation
+date and the never-reconfirmed status that the paragraphs above hold for the
+whole document. **The markdown here is authoritative** - the emission is
+generated from it, and a drift between the two is a failing test rather than a
+fork (`OPS-28`).
+
 ### Method - how "pixel-joined" was established
 
 The log emits `setClassGender inclassid ==NN` with a UTC timestamp. A passive

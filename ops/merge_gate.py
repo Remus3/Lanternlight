@@ -7,7 +7,7 @@ a regression. ``CLAUDE.md`` already states the rule ("never trust a subagent's
 claim"), but a rule that lives only in prose is a rule that gets skipped at
 exactly the moment it matters. This is the mechanical version.
 
-Three probes, each aimed at a distinct way a "done" claim goes wrong.
+Four probes, each aimed at a distinct way a "done" claim goes wrong.
 
 **The file was never delivered.** :func:`check_claimed_paths` asks the
 filesystem, not the agent. It separates *missing* from *empty* from *not a
@@ -28,6 +28,32 @@ summary line was printed" from "zero tests passed". Those are different facts,
 and a gate that conflates them will approve a run that crashed during
 collection.
 
+**The suite ran, aborted, and lied about it.** This is the subtlest of the
+four and it was measured on 2026-09-06 while answering ``ROADMAP`` item
+``OPS-30``. A ``pytest`` run that dies part-way - the measured cause was
+``MemoryError`` inside ``_pytest/_code/source.py`` ``getstatementrange_ast`` -
+can still print a perfectly well-formed stats line, because that line counts
+what the run GOT THROUGH rather than what it was asked to do. A four-test
+project with two failing tests aborted with ``MemoryError``, exited 3, and
+printed ``2 passed in 0.08s``. The old gate read that and reported
+``merge gate: OK``. Two independent defects made that possible and both are
+fixed here:
+
+- :func:`parse_summary` used to search the whole blob for ``N passed``. This
+  very repository's ``tests/test_merge_gate.py`` carries ``182 passed in
+  0.78s`` as sample data, so any run that renders a failure in that file
+  echoes a summary-shaped string into its own output. The parser now anchors
+  on a real summary LINE, scanning upward from the end.
+- ``_run`` threw away the process exit code, which was the one witness that
+  could not be faked by text. :class:`RunResult` keeps it and
+  :func:`check_run_completed` refuses any run whose exit code contradicts its
+  own summary.
+
+The residual hole is named rather than hidden: a test that PRINTS a
+summary-shaped line, in a run that then aborts after that print, would still
+be read as a summary. The exit-code check is what covers that case, which is
+why both checks exist rather than either alone.
+
 The baseline is deliberately a **parameter, not a stored constant.** A count
 checked into the repo goes stale and becomes a confident lie - ``CLAUDE.md``
 forbids restating suite counts for exactly that reason. The caller measures
@@ -41,6 +67,11 @@ call ``str.splitlines()`` and index:
   trailing newline at all
 - ``--collect-only -q`` prints a per-file ``path: count`` list and **no grand
   total**, so the total must be summed
+
+A third shape was measured on 2026-09-06 and matters to the anchored parser:
+once a run passes a minute, pytest appends a wall-clock suffix, so this
+repository's own green line reads ``1781 passed in 111.56s (0:01:51)`` rather
+than the ``<n> passed in <x>s`` a parser would naively assume.
 
 Nothing here shells out unless you ask it to: the parsers are pure functions
 over text, so they are testable without running a suite inside a suite.
@@ -58,14 +89,19 @@ from pathlib import Path
 __all__ = [
     "Finding",
     "GateReport",
+    "RunResult",
     "SummaryResult",
     "check_claimed_paths",
     "check_per_file_counts",
+    "check_run_completed",
     "check_test_count",
     "collect_output",
+    "collect_result",
+    "find_summary_line",
     "parse_collect_counts",
     "parse_summary",
     "suite_output",
+    "suite_result",
     "total_collected",
     "verify",
 ]
@@ -80,6 +116,41 @@ _COLLECT_RE = re.compile(r"^(?P<path>\S.*?):[ \t]*(?P<count>\d+)[ \t]*$")
 _PASSED_RE = re.compile(r"(?<!\w)(\d+) passed(?!\w)")
 _FAILED_RE = re.compile(r"(?<!\w)(\d+) failed(?!\w)")
 _ERROR_RE = re.compile(r"(?<!\w)(\d+) errors?(?!\w)")
+
+# pytest's final stats line, and nothing that merely resembles one. Measured
+# shapes this must accept, all on this machine:
+#
+#   "182 passed in 0.78s"                      -q, short run
+#   "1781 passed in 111.56s (0:01:51)"         -q, run long enough for a clock
+#   "= 1 failed, 3 passed in 0.05s ="          default verbosity, banner
+#   "no tests ran in 0.01s"                    empty selection
+#
+# and must REJECT, because it is echoed test data rather than a summary:
+#
+#   "E     + 182 passed in 0.78s"
+#
+# The load-bearing parts are the anchors. ``^`` and ``$`` mean the line has to
+# BE the stats line rather than contain one, and the ``in <duration>s`` tail is
+# what a quoted fragment of sample data does not carry on its own.
+_SUMMARY_LINE_RE = re.compile(
+    r"^(?P<stats>(?:no tests ran|\d+ [a-z]+)(?:,\s*\d+ [a-z]+)*)"
+    r"\s+in\s+\d+(?:\.\d+)?s"
+    r"(?:\s*\(\d+:\d{2}:\d{2}\))?$"
+)
+
+#: Marker pytest prints when it aborts inside its own machinery.
+_INTERNAL_ERROR_MARKER = "INTERNALERROR"
+
+# pytest's documented exit codes. Only 0 (everything passed) and 1 (tests
+# failed) describe a run that reached the end; the rest mean it did not.
+_EXIT_MEANING = {
+    0: "all tests passed",
+    1: "tests failed",
+    2: "interrupted",
+    3: "internal error",
+    4: "usage error",
+    5: "no tests collected",
+}
 
 
 @dataclass(frozen=True)
@@ -108,6 +179,19 @@ class SummaryResult:
     passed: int | None
     failed: int | None
     errors: int | None
+
+
+@dataclass(frozen=True)
+class RunResult:
+    """The two things a pytest invocation tells you, kept together.
+
+    Text alone is not enough. A run that aborts can still print a plausible
+    stats line, so the exit code is carried alongside it rather than discarded
+    - it is the only witness the output cannot contradict.
+    """
+
+    text: str
+    returncode: int
 
 
 @dataclass(frozen=True)
@@ -156,25 +240,127 @@ def total_collected(text: str) -> int:
     return sum(parse_collect_counts(text).values())
 
 
+def find_summary_line(text: str) -> str | None:
+    """Return pytest's stats line, or ``None`` if the run never printed one.
+
+    Scans upward from the end, because the stats line is the last thing a
+    completed run writes and because anything summary-shaped further up is by
+    definition not it.
+
+    This used to be a search over the whole blob, and that was a real defect
+    rather than a theoretical one: ``tests/test_merge_gate.py`` carries
+    ``182 passed in 0.78s`` as measured sample data, so a run that renders a
+    failure in that file prints a summary-shaped string of its own. On
+    2026-09-06 a run aborted by ``MemoryError`` in the terminal-summary phase
+    printed no stats line at all and the old parser answered ``182 passed``,
+    read out of the FAILURES section.
+    """
+    for line in reversed(_clean_lines(text or "")):
+        candidate = line.strip().strip("=").strip()
+        match = _SUMMARY_LINE_RE.match(candidate)
+        if match is not None:
+            return match["stats"]
+    return None
+
+
 def parse_summary(text: str) -> SummaryResult:
     """Read pytest's final summary line.
 
     Handles the measured local shape - CR-terminated, no trailing newline -
     and returns ``found=False`` with ``None`` counts when no summary was
     printed at all.
+
+    The counts are read out of the stats line only, never out of the
+    surrounding output. See :func:`find_summary_line` for why that distinction
+    is load-bearing.
     """
-    blob = text or ""
-    passed = _PASSED_RE.search(blob)
-    failed = _FAILED_RE.search(blob)
-    errors = _ERROR_RE.search(blob)
-    if passed is None and failed is None and errors is None:
+    stats = find_summary_line(text)
+    if stats is None:
         return SummaryResult(found=False, passed=None, failed=None, errors=None)
+    passed = _PASSED_RE.search(stats)
+    failed = _FAILED_RE.search(stats)
+    errors = _ERROR_RE.search(stats)
     return SummaryResult(
         found=True,
         passed=int(passed[1]) if passed else 0,
         failed=int(failed[1]) if failed else 0,
         errors=int(errors[1]) if errors else 0,
     )
+
+
+def check_run_completed(
+    run: RunResult, summary: SummaryResult | None = None
+) -> list[Finding]:
+    """Refuse to sign off on a run that did not finish the way it claims to.
+
+    ``ROADMAP`` item ``OPS-30`` criterion 4 in mechanical form. Three distinct
+    ways a run fails to be trustworthy, each with its own slug:
+
+    ``no-summary``
+        No stats line at all. The run did not complete; that is not the same
+        fact as completing with zero passes.
+    ``internal-error``
+        pytest printed ``INTERNALERROR``, so it aborted inside its own
+        machinery. It may still have printed a stats line afterwards; that
+        line is a partial count, not a verdict.
+    ``exit-mismatch``
+        The exit code and the summary disagree. pytest exits 0 only when
+        everything passed and 1 only when tests failed; any other code means
+        the run did not reach the end, and a summary claiming a clean sweep
+        under a non-zero code is the exact shape of the measured near miss.
+
+    ``failed`` and ``errors`` are reported here too, so one function answers
+    "is this run's own account of itself believable, and what did it say".
+    """
+    resolved = parse_summary(run.text) if summary is None else summary
+    findings: list[Finding] = []
+
+    if _INTERNAL_ERROR_MARKER in (run.text or ""):
+        findings.append(
+            Finding(
+                kind="internal-error",
+                detail=(
+                    "pytest printed INTERNALERROR - it aborted inside its own "
+                    "machinery, so any count it printed afterwards is a partial "
+                    "tally rather than a result"
+                ),
+            )
+        )
+
+    if not resolved.found:
+        findings.append(
+            Finding(
+                kind="no-summary",
+                detail=(
+                    "pytest printed no summary line - the suite did not complete, "
+                    "which is not the same as completing with zero passes"
+                ),
+            )
+        )
+        return findings
+
+    failed = resolved.failed or 0
+    errors = resolved.errors or 0
+    clean_exit = run.returncode == 0 and not failed and not errors
+    failing_exit = run.returncode == 1 and (failed or errors)
+    if not (clean_exit or failing_exit):
+        findings.append(
+            Finding(
+                kind="exit-mismatch",
+                detail=(
+                    f"pytest exited {run.returncode} "
+                    f"({_EXIT_MEANING.get(run.returncode, 'unknown code')}) but its "
+                    f"summary reports {failed} failed and {errors} error(s) - the "
+                    "run did not end the way its own summary says it did"
+                ),
+            )
+        )
+
+    if failed:
+        findings.append(Finding(kind="failed", detail=f"{failed} test(s) failed"))
+    if errors:
+        findings.append(Finding(kind="errors", detail=f"{errors} test error(s)"))
+    return findings
 
 
 def check_test_count(current: int, baseline: int | None) -> list[Finding]:
@@ -342,8 +528,13 @@ def check_claimed_paths(
     return findings
 
 
-def _run(args: Sequence[str], root: Path, timeout: int) -> str:
-    """Run a command and return stdout+stderr, never raising on exit code."""
+def _run(args: Sequence[str], root: Path, timeout: int) -> RunResult:
+    """Run a command and return its output AND exit code, never raising.
+
+    The exit code is not incidental. A pytest run that aborts can still print
+    a plausible stats line, so the code is the only part of the answer the
+    text cannot contradict.
+    """
     proc = subprocess.run(
         list(args),
         cwd=root,
@@ -352,17 +543,30 @@ def _run(args: Sequence[str], root: Path, timeout: int) -> str:
         timeout=timeout,
         check=False,
     )
-    return (proc.stdout or "") + (proc.stderr or "")
+    return RunResult(
+        text=(proc.stdout or "") + (proc.stderr or ""),
+        returncode=proc.returncode,
+    )
+
+
+def collect_result(root: Path = REPO_ROOT, timeout: int = 300) -> RunResult:
+    """Run ``pytest --collect-only -q`` and return its output and exit code."""
+    return _run([sys.executable, "-m", "pytest", "--collect-only", "-q"], root, timeout)
+
+
+def suite_result(root: Path = REPO_ROOT, timeout: int = 900) -> RunResult:
+    """Run the full suite and return its output and exit code."""
+    return _run([sys.executable, "-m", "pytest"], root, timeout)
 
 
 def collect_output(root: Path = REPO_ROOT, timeout: int = 300) -> str:
     """Run ``pytest --collect-only -q`` and return its raw output."""
-    return _run([sys.executable, "-m", "pytest", "--collect-only", "-q"], root, timeout)
+    return collect_result(root=root, timeout=timeout).text
 
 
 def suite_output(root: Path = REPO_ROOT, timeout: int = 900) -> str:
     """Run the full suite and return its raw output."""
-    return _run([sys.executable, "-m", "pytest"], root, timeout)
+    return suite_result(root=root, timeout=timeout).text
 
 
 def verify(
@@ -377,29 +581,16 @@ def verify(
     """
     findings: list[Finding] = list(check_claimed_paths(claimed_paths, root=root))
 
+    # A collect pass that dies returns no per-file lines, so the total comes
+    # back as 0 and check_test_count reports the drop. That is why there is no
+    # separate exit-code probe here: the count guard already refuses it, and
+    # with no baseline the no-baseline finding refuses it instead.
     collected = total_collected(collect_output(root=root))
     findings.extend(check_test_count(collected, baseline))
 
-    summary = parse_summary(suite_output(root=root))
-    if not summary.found:
-        findings.append(
-            Finding(
-                kind="no-summary",
-                detail=(
-                    "pytest printed no summary line - the suite did not complete, "
-                    "which is not the same as completing with zero passes"
-                ),
-            )
-        )
-    else:
-        if summary.failed:
-            findings.append(
-                Finding(kind="failed", detail=f"{summary.failed} test(s) failed")
-            )
-        if summary.errors:
-            findings.append(
-                Finding(kind="errors", detail=f"{summary.errors} test error(s)")
-            )
+    run = suite_result(root=root)
+    summary = parse_summary(run.text)
+    findings.extend(check_run_completed(run, summary))
 
     return GateReport(
         ok=not findings,

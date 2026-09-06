@@ -3660,7 +3660,7 @@ can only ever be RECOGNISED as stale, never silently believed - so if it is
 stored, the commit is stored with it and it is read only while that commit still
 matches.
 
-## OPS-28. Provenance is DOCUMENT-scoped, so an extracted number arrives naked - OPEN, not started
+## OPS-28. Provenance is DOCUMENT-scoped, so an extracted number arrives naked - CLOSED 2026-09-06
 
 Filed 2026-09-06 out of an operator licensing question - whether relicensing
 would make this project's measured numbers distinguishable from fandom-wiki
@@ -3749,7 +3749,47 @@ withdrawn misreadings are the most valuable content in them and do not belong in
 a data file. The emission is for the NUMBERS a consumer would lift, not for the
 reasoning that produced them.
 
-## OPS-29. The ecosystem survey is 28 days stale AND was incomplete on the day it ran - OPEN, not started
+### CLOSED 2026-09-06 - ledger `LL-0144`, all six criteria met
+
+**Criterion 1 first, and the loss is real.** Both tables lifted
+programmatically, rows only. The `AFFIXES.md` ranged-damage ladder answers
+**0 of 4** - no build, no method, no date, no reconfirmation status. The
+`OBSERVED_IDS.md` class-id table, the GOOD case, still loses **2 of 4**,
+because the buildid and the never-reconfirmed-since-2026-08-19 warning live in
+prose ABOVE the table and vanish on extraction.
+
+**The withdrawn misreading was not repeated.** `AFFIXES.md` is recorded as
+well-sourced in prose - headed "stated", citing frame `f0749`, quoting the
+tooltip. The defect is provenance that does not TRAVEL, exactly as filed.
+
+Ten named required fields; `build` is SCHEME-TAGGED, because merging Steam
+depot ids with client `Version` strings would itself be the confident-wrong the
+doctrine forbids. Staleness is answerable from the data alone WITHIN a scheme,
+with a third `undetermined` bucket - folding "cannot tell" into "current" is
+how a stale number gets republished as fresh.
+
+**The round trip READS and never regenerates**
+(`tests/test_provenance.py:131`), because a regenerating test would compare the
+file to itself. Verified in source by the merger, not relayed.
+
+Merger re-probe: the three files exist and are non-empty, `test_provenance.py`
+**53 passed**, collected moved **1781 -> 1849** with no drop, and the new
+public surface was checked as one - `test_no_pii.py` **42 passed** plus an
+independent sweep for SteamID64, 32-char hex ids, IPv4 literals and user paths
+finding **0 of each**.
+
+**A trap worth keeping:** a first header cell is NOT unique - three tables open
+with `classId` and five with `Level` - so selecting a table on it lifts the
+wrong one. Match the full header tuple.
+
+**Ownership was SPLIT rather than taken as requested.** `docs/data/**` to
+`research`, which owns the measured record and where data sits clear of its
+no-code rule; the emitter to `ingest`, with the tension written into the roster
+because `ingest`'s mandate says readers of surfaces the GAME writes and this
+reads our own markdown. It sits there because `research` explicitly writes no
+code and no lane is closer.
+
+## OPS-29. The ecosystem survey is 28 days stale AND was incomplete on the day it ran - CLOSED 2026-09-06
 
 Filed 2026-09-06 while measuring GitHub-side visibility levers. The survey was
 not the subject; it fell out of a `gh search repos` run and is recorded here
@@ -3808,7 +3848,44 @@ the license gate and the safety classification honest, not to track rivals. If
 the re-run finds nothing that changes either, close it as such and say the
 picture was stable.
 
-## OPS-30. `pytest` dies with MemoryError in TWO different internal paths - OPEN, not started
+### CLOSED 2026-09-06 - ledger `LL-0143`, all five criteria met
+
+**Criterion 1 passed, and the merger re-ran it rather than relaying it.**
+`gh search repos "mistfall hunter" --limit 100` returns **31** results and
+contains `inf1nit3/mistfall-hunter-helper` at index 6, with `WdThing` and
+`lReDragol` alongside it. Recall is sound.
+
+**The miss mechanism, measured independently:** `gh search repos --topic
+mistfall-hunter` returns only **8** and does NOT contain `inf1nit3`. A
+topic-only method is SUFFICIENT to explain the 2026-08-09 gap. It is not proof
+that was the method used - the original command is not preserved anywhere, and
+the document says so rather than implying more.
+
+Criterion 2: **12 BANNABLE** and **8 SAFE-PATTERN** against `ADR-001`; licences
+read by named copyright LINE, each confirmed by fetching the raw LICENSE file,
+with a `package.json` cross-check on `guo812`. Criterion 3: the
+"only permissively-licensed repository" claim is struck through VISIBLY and
+corrected to five; the no-copyleft claim is RE-CONFIRMED across the wider set,
+so the conclusion `OPS-28` leaned on still holds. Criterion 4: the re-survey
+date and all seven queries with their hit counts. Criterion 5: stated, citing
+`LL-0137`'s decline-on-FIT precedent.
+
+Coverage moved from about 11 tracked GitHub repositories to **46** confirmed
+about this game, 8 given full treatment.
+
+**A DEFECT THE SLICE'S OWN REPORT DID NOT CATCH**, found by the merge re-probe:
+the new citations reddened `tests/test_source_register.py` with **5**
+unregistered host-shaped tokens. Four were not sources and went to
+`KNOWN_NON_HOSTS` after being read in context - `THREE.js`,
+`gaBeObJKBcWTfZ.yml`, and `helper.py` / `manager.py`, the TRUNCATED forms of
+`mistfall_helper.py` and `mistfall_build_manager.py`, which is the documented
+behaviour that a label excludes `_`. The fifth,
+`mistfall-builder.github.io`, is a GENUINE host and got a register row marked
+**NOT ASSESSED - no tier**, because it is known only at one remove and an
+absent tier is not a low one. **The guard was watched going RED** - deleting
+that row failed the test naming exactly one host - then restored to green.
+
+## OPS-30. `pytest` dies with MemoryError in TWO different internal paths - CLOSED 2026-09-06, and the finding was the GATE
 
 Filed 2026-09-06. The suite is this project's primary gate, and twice in one
 session it failed to produce a summary line at all - not because a test failed,
@@ -3855,6 +3932,69 @@ hitting 100 percent mid-session. The two may share a cause.
    passing vacuously when the suite dies without printing a summary. If it
    reports success on a summary-less run, that is a worse defect than the
    MemoryError and takes priority.
+
+### CLOSED 2026-09-06 - ledger `LL-0145`. Criterion 4 outranked the headline, and it was right to
+
+**`merge_gate.verify` PASSED VACUOUSLY on an aborted run, by two independent
+routes.** This is the whole item. The MemoryError is the symptom that exposed
+it; the gate is the defect.
+
+**The merger reproduced it independently against the version at HEAD.**
+`parse_summary`, given a blob with NO summary line whose `FAILURES` body merely
+QUOTED a sample `182 passed in 12.00s`, returned `found=True` and
+`passed=182`. The count it reported had never been a summary at all - it was
+`tests/test_merge_gate.py`'s own sample data echoed back through a failure
+trace.
+
+**This item's own filed assumption was WRONG and is corrected here rather than
+edited away.** It said these failures produce "no count, and an exit code that
+is not 0, so they at least fail loudly". Route 1 aborts, exits **3**, and still
+prints a well-formed stats line counting what the run got through - so the gate
+answered `OK`.
+
+Two defects, both fixed: `parse_summary` searched the WHOLE blob, and `_run`
+DISCARDED `proc.returncode`. Now `RunResult(text, returncode)`, an anchored
+`find_summary_line` requiring the `in <dur>s` tail, and `check_run_completed`
+emitting `internal-error` / `no-summary` / `exit-mismatch`. Public signatures
+are unchanged, because `verify` is quoted in `CLAUDE.md` and in eight lane
+contracts.
+
+**Merger adversarial probe of the FIXED gate, all three observed directly:**
+the decoy blob is refused; an aborted run that still prints a stats line is
+flagged `internal-error` + `exit-mismatch`; and an ordinary clean run is still
+accepted, so the fix is not a false positive that would block good work.
+
+**Criterion 3 honoured by changing NOTHING.** `pytest.ini` carries no new flag.
+Criterion 3 demands a flag be justified against the criterion 2 measurement,
+and that measurement says the RUN is not the problem: peak RSS of a full run is
+**137.8 MB**, while the machine has `AutomaticManagedPagefile = False`, a
+pagefile FIXED at 16,000 MB, and 34,805 MB committed against a 48,267 MB limit
+under dozens of concurrent python processes - all re-measured by the merger.
+Ruled out and recorded: `-p no:cacheprovider` (silences path 2, costs `--lf`),
+`--tb=no` (silences path 1, discards the failure list), both together, pagefile
+resizing (a machine setting, not a repo one), and dispatch concurrency (a real
+lever, wrong file set). `LL-0136` already records one placebo flag; this
+avoids a second.
+
+**A LIMIT STATED RATHER THAN DROPPED:** path 2 did NOT reproduce NATURALLY,
+twice - the cache was already populated and full runs with it completed clean.
+It was reproduced by injection at `_pytest.cacheprovider.json.dumps` and the
+shape confirmed, which is weaker than a natural reproduction and is recorded as
+such.
+
+**`OPS-14` join answered:** the MemoryError and the disk exhaustion do NOT
+share a cause. A FIXED pagefile makes free disk space irrelevant to the commit
+limit, and C: has 298.1 GB free while commit sits at 34,805 of 48,267 MB.
+
+**A guard that was DECORATION, caught at birth:** discarding the exit code
+initially produced **0 red** under mutation. Three subprocess tests were added
+and it now produces 2 red.
+
+**STANDING RISK, recorded because it is why this item mattered.** Every
+merge-gate sign-off taken BEFORE this fix rests on a parser that could read a
+count out of a run that never completed. Nothing is known to have been
+mis-signed, and **nothing has been re-audited.** That is an open exposure, not
+a reassurance.
 
 ## 4b. Ammo-family and talent measurement - READY, cheap, needs the client
 
