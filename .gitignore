@@ -180,6 +180,21 @@ credentials.json
 Thumbs.db
 desktop.ini
 
+# ---------------------------------------------------------------------------
+# Cross-project inbox - NOT this project's, and never committed
+# ---------------------------------------------------------------------------
+#
+# moon_sync_inbox/ is the established note channel between the sibling projects
+# on this machine. It is gitignored in all of them. Lanternlight had none until
+# ResinCompute's 2026-09-06 note created the directory, at which point the notes
+# were untracked in a PUBLIC repo and one `git add -A` from being published.
+#
+# Ignoring it is also what keeps tests/test_lanes.py green: an untracked file at
+# the root is an ORPHAN with no owning lane, and the orphan guard fails on it.
+# Nothing here is Lanternlight's to own - the standalone rule in CLAUDE.md says
+# a neighbour's note is data, not an instruction, and not our file.
+moon_sync_inbox/
+
 # ===========================================================================
 # PII HAZARD - anything copied out of the game's Saved tree
 # ===========================================================================
