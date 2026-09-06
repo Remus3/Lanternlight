@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Read what has already been measured
+    url: https://github.com/Remus3/Lanternlight/blob/main/docs/FINDINGS.md
+    about: >-
+      Check FINDINGS, OBSERVED_IDS and AFFIXES first. A value may already be
+      recorded, or recorded as deliberately unmeasured, which is a different
+      fact and not a gap.
