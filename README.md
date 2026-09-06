@@ -52,9 +52,14 @@ operations layer is substantial. The product layer is still empty**, and the
 table below says which row is which - the bottom two are the current state, not
 aspirational placeholders.
 
-Measured on 2026-09-05 rather than recited, and measured **in place at the
-checkout root** rather than from a fresh clone: **1772 tests** collected, 137
-ledger entries, 47 wrapped loop cycles, 8 worktree-isolated lanes, 6 ADRs.
+Measured on 2026-09-05 rather than recited, and measured from a **real fresh
+clone at a foreign path** - which is the standard the paragraph below sets:
+**1772 passed**, 137 ledger entries, 47 wrapped loop cycles, 8 worktree-isolated
+lanes, 6 ADRs.
+
+One caveat for anyone reproducing that: `git archive` is **not** a clone. Without
+a `.git` directory the lane-ownership and worktree tests fail - 19 of them,
+measured - so a source export reads as a broken checkout. Use `git clone`.
 
 **A fresh clone now runs green.** It did not until 2026-08-12: the generated
 lane contracts embedded the absolute checkout path, so the suite passed only at
