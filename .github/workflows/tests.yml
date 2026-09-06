@@ -10,11 +10,31 @@
 # ctypes.wintypes, and its overlay is a Win32 window. A Linux job would be
 # testing something nobody runs.
 #
-# No dependency install step. pyproject.toml declares `dependencies = []` and
-# the suite assumes no pytest plugin, so the only third-party package that
-# appears anywhere is Pillow, and every use of it sits behind
-# `pytest.importorskip("PIL")`. If this job ever needs a `pip install`, that is
-# a fact worth noticing rather than papering over.
+# WHY PILLOW IS INSTALLED HERE AND NOT DECLARED IN pyproject.toml
+# ---------------------------------------------------------------
+# The first run of this workflow failed, and it failed usefully:
+# tests/test_vision_meter.py::TestTheCommittedFixture
+# ::test_a_clone_can_verify_a_SUCCESSFUL_read_not_only_refusals died on
+# `ModuleNotFoundError: No module named 'PIL'`. That test's own docstring says
+# "Never skips" - it exists precisely to prove a FRESH CLONE can perform a real
+# read against the committed fixture rather than only verifying refusals. So
+# the correct response was to give the clone Pillow, never to skip the test.
+# Every other Pillow use in the suite does sit behind
+# `pytest.importorskip("PIL")`; this one is deliberately not one of them.
+#
+# It is installed here rather than added to pyproject.toml because that file
+# has NO [build-system] table, by a documented decision: Lanternlight runs from
+# a checkout, not a wheel, and the file says an optional-dependencies table
+# nothing can consume would "advertise a packaging story that does not exist".
+# So `dependencies = []` stays literally true of the core, and the vision
+# path's one real requirement is declared where it is actually installed.
+#
+# WHAT THE BADGE DOES AND DOES NOT MEAN
+# -------------------------------------
+# A runner has no Mistfall Hunter install, no save tree and none of the
+# operator's reference captures, so several dozen tests SKIP here that pass on
+# a developer machine. Green means the machine-independent suite passes on a
+# clean checkout. It does not mean the capture-joined tests ran.
 
 name: tests
 
@@ -32,14 +52,16 @@ jobs:
   pytest:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      # Pinned to exact tags, not moving majors. v4/v5 were also emitting a
+      # Node 20 deprecation warning on this runner image.
+      - uses: actions/checkout@v7.0.1
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7.0.0
         with:
           python-version: '3.14'
 
-      - name: Install pytest
-        run: python -m pip install --upgrade pip pytest
+      - name: Install test dependencies
+        run: python -m pip install --upgrade pip pytest pillow
 
       - name: Report the collected count before running
         run: python -m pytest --collect-only 2>&1 | tail -3
