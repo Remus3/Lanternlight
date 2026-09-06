@@ -19,8 +19,18 @@
 # "Never skips" - it exists precisely to prove a FRESH CLONE can perform a real
 # read against the committed fixture rather than only verifying refusals. So
 # the correct response was to give the clone Pillow, never to skip the test.
-# Every other Pillow use in the suite does sit behind
-# `pytest.importorskip("PIL")`; this one is deliberately not one of them.
+#
+# CORRECTION, 2026-09-06, from a refutation pass. An earlier version of this
+# comment claimed every OTHER Pillow use sits behind
+# `pytest.importorskip("PIL")`. That was FALSE. Measured by blocking PIL at
+# sys.meta_path and running the whole suite: SEVEN tests need Pillow, not one.
+# Six of them reach it indirectly through `read_panel()`, which does an
+# unguarded `from PIL import Image` at lanternlight/vision_meter.py:694, and
+# they are gated only by `_require_capture()` - a DIRECTORY-EXISTENCE skip, not
+# an import guard. They skip on a runner because the capture set is absent, not
+# because Pillow is optional to them. `tests/test_vision_meter.py:59` holds the
+# only `importorskip` in the entire test tree. Installing pillow here is
+# therefore load-bearing for more than the one named test.
 #
 # It is installed here rather than added to pyproject.toml because that file
 # has NO [build-system] table, by a documented decision: Lanternlight runs from

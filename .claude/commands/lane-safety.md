@@ -44,6 +44,7 @@ Touch these paths and nothing else. Every other path in the repository belongs t
 - `tests/test_precommit_gate.py`
 - `tests/test_process_capability.py`
 - `tests/test_source_register.py`
+- `tests/test_repo_surfaces.py`
 - `tests/test_tracked_walker.py`
 - `tests/_tracked.py`
 - `tools/ascii_check.py`

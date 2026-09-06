@@ -5,6 +5,70 @@ fidelity and archive older ones rather than deleting them.
 
 ---
 
+# Wrap 2026-09-06 - cycle 48 - GitHub-side visibility built and PROVEN green, and the CI it created immediately found a real defect
+
+Suite **1772 passed** in 181.74s, exit 0, run with `-p no:cacheprovider`.
+Collected **1772**, unchanged from the pre-work baseline. Ruff **All checks
+passed**. Ledger `LL-0139`. Client **closed** all session; no game process was
+touched. Watcher **`ARMED`**, pid 21452, identity VERIFIED, heartbeat 23 s old,
+all four surfaces fresh.
+
+**NOTHING ON THE ROADMAP WAS CLOSED.** This session was operator-directed work
+that is not a roadmap item, plus three new items filed. `OPS-27`, `OPS-28`,
+`OPS-29` and `OPS-30` are all OPEN and NOT STARTED.
+
+## What the session actually was
+
+It began as a licensing question - MIT versus Apache-2.0 - and the honest
+answer was that neither prevents what the operator wanted prevented, because
+**facts are not copyrightable**. That produced `OPS-28`: a licence cannot
+protect a measured number, and this project's provenance is excellent at
+DOCUMENT scope and absent at ROW scope, so a lifted table arrives with no
+build, method or date and is indistinguishable from a wiki fabrication.
+
+The operator then redirected to GitHub-side visibility, which was measured
+rather than guessed: **zero topics, zero releases, no `.github/`, no CI, no
+citation file, community health 42 percent**, and the repo sitting at index 30
+of the first 100 results for a plain text search of the game name. The topic
+`mistfall-hunter` carried only **7 repositories**, most of them trainers
+advertising God Mode and process-memory reads.
+
+## The part worth carrying forward
+
+**The CI that was built this session failed on its first run, and the failure
+was the point.** `test_a_clone_can_verify_a_SUCCESSFUL_read_not_only_refusals`
+died on `ModuleNotFoundError: No module named 'PIL'`. That test's docstring
+says "Never skips" because it exists to prove a FRESH CLONE can perform a real
+read rather than only verify refusals - and it had just proved the opposite.
+The fix was to give the clone Pillow, never to skip the test. `pyproject.toml`
+still says `dependencies = []`, correctly, because it has no `[build-system]`
+table by a documented decision.
+
+**The badge was withheld until the run was green.** Committing it alongside the
+workflow would have shipped red.
+
+**A near miss worth remembering:** the `OPS-29` commit quoted a pass count from
+a run that had already died with `MemoryError` before printing a summary. The
+number happened to be right, confirmed by re-running, but it was asserted
+before it was observed. `OPS-30` exists because of that.
+
+**Also caught only by the full suite:** editing `ops/lanes.py` left the
+rendered lane contract stale and reddened `tests/test_lane_contract.py`. A
+targeted run of `tests/test_lanes.py` had passed 192/192 moments earlier.
+
+## What is left
+
+Four disk-only items, none started: `OPS-27`, `OPS-28`, `OPS-29`, `OPS-30`.
+Everything else needs the client open or an operator-scale disk scan.
+`NEXT_SESSION_PROMPT.md` carries the full blocked-first list and a suggested
+three-slice parallel shape.
+
+**Standing blocker, unchanged:** the `OPS-26` fix is committed but NOT running.
+Watcher pid 21452 predates it by 39 hours and only an operator restart deploys
+it.
+
+---
+
 # Wrap 2026-09-05 - cycle 47 continued - `OPS-26` CLOSED, and the refutation found the fix's own production path untested
 
 Suite **1772 passed** in 188.39s, run BARE at the wrap. Ruff clean. Merge gate

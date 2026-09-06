@@ -125,6 +125,7 @@ commercially active; that is the whole record.
 | `reddit.com` / `old.reddit.com` r/MistfallHunter | Player community | T2 testimony if a thread is read directly. **Not fetchable from this environment** - every figure in this repo about it is secondhand and marked so |
 | `steamcommunity.com/.../discussions` | Player threads | T2 first-party player evidence. Thread ids are omitted repo-wide because 18-digit runs trip the `LONG_ID` redaction guard |
 | `twitch.tv` category | Streams | Not characterised |
+| `shields.io` | Third-party badge image service | **Deliberately NOT used.** Named here only because `LL-0139` records the decision to keep the README's only badge first-party, so the page pulls no image from a third party |
 | `github.com` | Code hosting | The license gate, and the overlays-and-safety-gate table below. `api.githubcopilot.com` appears in the ledger as tooling, not as a game source |
 
 ### Conflicts between documents, recorded rather than smoothed

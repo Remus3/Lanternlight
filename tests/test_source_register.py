@@ -85,6 +85,15 @@ HOST_SHAPED = re.compile(r"(?:[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\.)+[A-Za-
 #: read before it was added. See the module docstring before extending it.
 KNOWN_NON_HOSTS = frozenset(
     {
+        # Filenames and config KEYS quoted by `LL-0139`, not sources. The
+        # host-shaped pattern cannot tell `attribution.commit` from a
+        # domain, and a ledger entry that names the file it added should
+        # not have to avoid saying its name.
+        "CITATION.cff",
+        "attribution.commit",
+        "attribution.pr",
+        "config.yml",
+        "observation.yml",
         "00.42.52.png",
         "10.png",
         "19.02.51.472.png",
