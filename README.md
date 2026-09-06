@@ -47,7 +47,14 @@ from "measured zero". See [ADR-005](docs/adr/ADR-005-omit-rather-than-guess.md).
 
 ## Status
 
-Honest as of 2026-08-12. This project is days old and most of it does not exist.
+Honest as of 2026-09-05, 27 days after the first commit. **The measurement and
+operations layer is substantial. The product layer is still empty**, and the
+table below says which row is which - the bottom two are the current state, not
+aspirational placeholders.
+
+Measured on 2026-09-05 rather than recited, and measured **in place at the
+checkout root** rather than from a fresh clone: **1772 tests** collected, 137
+ledger entries, 47 wrapped loop cycles, 8 worktree-isolated lanes, 6 ADRs.
 
 **A fresh clone now runs green.** It did not until 2026-08-12: the generated
 lane contracts embedded the absolute checkout path, so the suite passed only at
@@ -71,8 +78,8 @@ onward are measured from a fresh clone at a foreign path.
 | Log parsing | **Early** | `lanternlight.logparse` reads the surfaces named above |
 | Redaction | **Hardened** | Sees through base64, hex and raw UTF-16, scans binaries, and refuses to certify what it cannot assess. `ROADMAP.md` item 0 |
 | Market cache | **Parser done** | `AvgPrice_937566.ini` filled. `lanternlight.avgprice` parses it; watcher not built |
-| Save watcher | **Done** | `lanternlight.savewatch` snapshots every generation of every save, refuses any destination inside a repo working directory, and never writes to the source |
-| Session watcher | **Done, armed from the session start-up step** | `lanternlight.armwatch` arms all four capture surfaces from one command: `python -m lanternlight.armwatch --dest-base C:/ll-captures`. Pass the BASE, not a dated path - it derives `<base>/<local date>` every pass and retargets at midnight, so an archive never claims to cover a day it does not. `ops.loop.watch` arms it as part of starting a session and refuses to start a second. `ROADMAP.md` item 4d, closed 2026-09-01 |
+| Save watcher | **Done** | `lanternlight.savewatch` snapshots every generation of every save, refuses any destination inside a repo working directory, and never writes to the source. Since `OPS-26`, a destination that refuses writes stops the surface reporting itself healthy instead of archiving nothing in silence - it was PROVOKED before it was fixed, and the provocation refuted half the item as filed. **Date a snapshot by its filename stamp, never its mtime:** `shutil.copy2` carries the source's mtime onto the copy, so an archived file wears the game file's clock - off by up to **25.44 days** on the real tree, and right on 60.3 percent of snapshots, which is what makes a spot check confirm the wrong instrument |
+| Session watcher | **Done, armed from the session start-up step** | `lanternlight.armwatch` arms all four capture surfaces from one command: `python -m lanternlight.armwatch --dest-base C:/ll-captures`. Pass the BASE, not a dated path - it derives `<base>/<local date>` every pass and retargets at midnight, so an archive never claims to cover a day it does not. `ops.loop.watch` arms it as part of starting a session and refuses to start a second, never terminating anything. Its wrap-side check reports seven states and NAMES the surface that stopped; since `OPS-26` a surface whose copies are being refused stops advancing too, so a watcher that is running but archiving nothing no longer reads healthy. `ROADMAP.md` items 4d (closed 2026-09-01), 4e, 4f and `OPS-26` |
 | Dungeon data | **Prologue measured** | Lifecycle, escape portals, loot, death and escape states all observed. `docs/FINDINGS.md` section 9 |
 | Raid / PvP data | **Solo measured, PvP unmeasured** | Solo explores are now measured at non-zero `matchId`, which **refutes** the old assumption that a non-zero `matchId` means a matchmade run. No run with another player has been observed |
 | GVAS `.sav` reader | **Done, one gap named** | Every save parses with zero undecoded bytes, including 263 captured generations of the transient run-scoped save. Natively serialised structs (`Vector`, `Rotator`, `Quat`, `Vector2D`) are handed back verbatim and **named** undecoded rather than guessed - `Vector` and `Rotator` share a width, so only the name separates them. Published parsers do not work on this build - UE 5.4+ changed the property tag |

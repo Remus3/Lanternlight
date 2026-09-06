@@ -3468,6 +3468,78 @@ correct here - a save file really does vanish mid-copy, which is the transience
 this module was built for. The defect is that the failure is INVISIBLE, not that
 it is tolerated.
 
+## OPS-27. Nothing is written when the context is about to COMPACT - OPEN, not started
+
+Filed 2026-09-05 while assessing an external repo for reuse. **Idea only - no
+code, prose or configuration was taken from it.** The external project is
+MIT-licensed with a single named holder, so the license gate would have allowed
+a lift; it was declined on fit, not on licence, and the whole assessment is in
+`LL-0137`.
+
+**This project's central claim is that continuity lives on disk and never in a
+context window.** `CLAUDE.md` says it, `docs/HEADLESS.md` builds on it, and
+`/continue` exists to prove it. Compaction is the moment that claim is tested,
+and it is the one moment nothing is written.
+
+**What is MEASURED:**
+
+- `.claude/settings.json` wires exactly two hook events, `PreToolUse` and
+  `PostToolUse`. There is no `SessionStart` and no `PreCompact`. Read
+  2026-09-05, and the file parses - which is worth stating because a
+  single-backslash Windows path makes it invalid JSON, no hook registers, and
+  nothing warns.
+- The harness DOES offer the events. First-party docs list `PreCompact`
+  ("before context compaction", matchers `manual` and `auto`), `PostCompact`,
+  and `SessionStart` (matchers `startup`, `resume`, `clear`, `compact`,
+  `fork`). **`SessionStart` carrying a `compact` matcher is the more
+  interesting half**: it means a session resuming FROM a compaction can be told
+  so, which is the recovery side rather than the save side.
+- `ops.loop.state.save` is already atomic - a uniquely named temp file in the
+  target's own directory, flushed and fsynced, then `Path.replace`. Any fix
+  writes through it and needs no new writer and no new dependency.
+
+**What is NOT measured, and it is the whole risk in this item:** nobody has
+shown that a mid-cycle compaction actually LOSES anything today. `OPS-25`
+already moved crediting to `state.credit(*items)` at the instant an item
+closes, precisely so a fact is never held only in a context window - which
+attacks the same failure from the other end. So the residual exposure may be
+small, or may be nil. **A filed mechanism is a hypothesis**, and this repo has
+had several whose premise did not hold.
+
+**Acceptance:**
+
+1. **DEMONSTRATE THE LOSS BEFORE BUILDING ANYTHING.** Provoke or contrive a
+   mid-cycle compaction and identify something concrete that does not survive
+   it, given `OPS-25`'s credit-at-closure and `/continue`'s reconciliation. **If
+   nothing is lost, this item is REFUTED and the refutation is the result** -
+   write it beside the claim rather than deleting the claim. `OPS-26` was filed
+   with the same criterion first and it paid: the provocation confirmed half the
+   item and refuted the headline.
+2. A hook that fires during compaction must not be able to break the session.
+   Prove a raising hook is harmless rather than assuming it - and note the
+   suite's own precedent that a raising spy is vacuous under fail-soft code,
+   because `AssertionError` is an `Exception`.
+3. **Nothing written may carry conversation content, log content or PII.** This
+   repo is public, `ADR-004` makes redaction mandatory, and a snapshot taken
+   automatically at an arbitrary moment is exactly the shape that leaks. If the
+   only safe snapshot is "the loop state as it already stands", say so and write
+   only that.
+4. Whatever is written goes through the existing atomic writer in
+   `ops/loop/state.py`. No second writer, no new dependency.
+5. **Assert `.claude/settings.json` PARSES after the edit**, in a test, not by
+   eye. A hook that never registers because the JSON is invalid is
+   indistinguishable from a hook that never fires, and nothing warns.
+6. The guard is watched going red: break the registration or the write and
+   confirm a test reddens, then restore and confirm byte-identical by sha256.
+7. Decide explicitly whether `SessionStart` with matcher `compact` is in scope,
+   and record the decision either way. Saving without a matching recovery path
+   is half a feature.
+
+**Do NOT reach for this because it sounds tidy.** The backlog was deliberately
+empty when it was filed and the highest-value work needs the client. If
+criterion 1 cannot be met in reasonable time, the honest outcome is to close
+this as REFUTED and say the existing design already covered it.
+
 ## 4b. Ammo-family and talent measurement - READY, cheap, needs the client
 
 Opened 2026-08-09 after the talent and skills screens were captured. The class's

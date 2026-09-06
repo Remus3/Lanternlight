@@ -10,7 +10,8 @@ fidelity and archive older ones rather than deleting them.
 Suite **1772 passed** in 188.39s, run BARE at the wrap. Ruff clean. Merge gate
 OK at 1772 against the **1760** baseline standing at the previous commit. Ledger
 `LL-0135`. Client **closed**. Watcher `ARMED` / identity confirmed, pid 21452.
-**`OPS-26` CLOSED. The ops backlog is back to `OPS-14` alone.**
+**`OPS-26` CLOSED. The ops backlog is `OPS-14`, plus `OPS-27` filed after the
+wrap from an external-repo assessment.**
 
 ## It was PROVOKED before it was fixed, and the provocation SPLIT the item
 
@@ -86,7 +87,7 @@ it before this one, and a committed fix had been reported as a working one.
 
 ## What is left
 
-**The ops backlog is `OPS-14` alone**, and its capture-growth half was answered
+**The ops backlog is `OPS-14` and `OPS-27`.** `OPS-14`'s capture-growth half was answered
 earlier this cycle; the headline half needs an operator-scale disk scan and is
 not a session task. **Everything else of value needs the CLIENT** - item 10, the
 stack buff at the ceiling, is still the biggest thing in the project.
