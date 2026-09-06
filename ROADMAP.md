@@ -3635,6 +3635,65 @@ withdrawn misreadings are the most valuable content in them and do not belong in
 a data file. The emission is for the NUMBERS a consumer would lift, not for the
 reasoning that produced them.
 
+## OPS-29. The ecosystem survey is 28 days stale AND was incomplete on the day it ran - OPEN, not started
+
+Filed 2026-09-06 while measuring GitHub-side visibility levers. The survey was
+not the subject; it fell out of a `gh search repos` run and is recorded here
+because a stale competitive picture is what makes a project re-derive a
+conclusion it already reached.
+
+**What is MEASURED, 2026-09-06:**
+
+- `docs/ECOSYSTEM.md` line 3 states it was **surveyed 2026-08-09**. That is 28
+  days ago and eleven days after the game's launch, so it describes the
+  launch-week ecosystem, not the current one.
+- Three functionally adjacent GitHub repositories appear in **zero tracked
+  files** in this repo. Checked by name against every tracked file, not by
+  reading the survey table:
+  - `WdThing/mistfall-hunter-optimizer` - "Equipment optimizer for Mistfall
+    Hunter", pushed 2026-09-01. This is Emberforge's own problem domain.
+  - `lReDragol/Mistfall-Build-Manager` - "Build manager for Mistfall Hunter",
+    pushed 2026-09-01.
+  - `inf1nit3/mistfall-hunter-helper` - community tier list, pushed
+    **2026-08-02**.
+- **The third one is the finding, not the first two.** `inf1nit3` predates the
+  2026-08-09 survey by a week, so it was missed rather than being new. That
+  makes this a COMPLETENESS defect in the survey method, not only a staleness
+  problem, and re-running the same method would miss it again.
+- `docs/ECOSYSTEM.md` currently asserts that `guo812/mistfall-hunter-tools` is
+  "the only permissively-licensed repository found in the entire survey" and
+  that no copyleft repository turned up at all. Neither claim has been checked
+  against the three repositories above - none of them has had its LICENSE read.
+
+**Why it matters beyond tidiness.** `OPS-28` and the licensing discussion that
+produced it both leaned on the survey's finding that nothing in this ecosystem
+is copyleft. That conclusion may still hold, but it currently rests on a survey
+that provably missed at least one repository inside its own window.
+
+**Acceptance:**
+
+1. **Establish the search method's recall before trusting a re-run.** Whatever
+   method is used must find `inf1nit3/mistfall-hunter-helper`, which the
+   2026-08-09 method did not. If a re-run still misses it, the method is the
+   defect and the re-run is worthless - say so rather than shipping a refreshed
+   table.
+2. Each newly found repository gets the same treatment the existing table gives:
+   how it gets data, a BANNABLE / SAFE-PATTERN classification against
+   `ADR-001`, and a license read **by copyright LINE**, not by badge.
+3. The two claims quoted above are either re-confirmed against the new set or
+   corrected in place, with the correction visible rather than a silent rewrite.
+4. `ECOSYSTEM.md` carries a survey date that is updated when it is re-run, and
+   states the METHOD used, so the next session can tell a stale table from a
+   narrow one.
+5. **This item does not authorise vendoring anything.** A permissive license
+   makes a lift permitted, never advisable - `LL-0137` declined a cleared MIT
+   repo on FIT and that distinction is the precedent.
+
+**Do NOT let this become a rolling competitor watch.** The survey exists to keep
+the license gate and the safety classification honest, not to track rivals. If
+the re-run finds nothing that changes either, close it as such and say the
+picture was stable.
+
 ## 4b. Ammo-family and talent measurement - READY, cheap, needs the client
 
 Opened 2026-08-09 after the talent and skills screens were captured. The class's
