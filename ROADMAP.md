@@ -3694,6 +3694,54 @@ the license gate and the safety classification honest, not to track rivals. If
 the re-run finds nothing that changes either, close it as such and say the
 picture was stable.
 
+## OPS-30. `pytest` dies with MemoryError in TWO different internal paths - OPEN, not started
+
+Filed 2026-09-06. The suite is this project's primary gate, and twice in one
+session it failed to produce a summary line at all - not because a test failed,
+but because pytest itself ran out of memory doing bookkeeping.
+
+**What is MEASURED, both on 2026-09-06, same machine, same interpreter
+(`Python314`), 1772 tests collected:**
+
+1. **Traceback rendering.** With two tests failing, `python -m pytest` aborted
+   with `INTERNALERROR> MemoryError` inside
+   `_pytest/_code/source.py: getstatementrange_ast` -> `ast.parse`. No summary
+   line, no failure list. `--tb=no -rf` then completed normally and reported
+   `2 failed, 1770 passed`.
+2. **Cache serialization.** With ZERO tests failing, the run aborted with
+   `MemoryError ... when serializing list item 1050` in the JSON encoder - the
+   `.pytest_cache` node-id write. Again no summary line.
+   `-p no:cacheprovider` then completed normally and reported `1772 passed`.
+
+**Why this is a gate defect and not a nuisance.** `CLAUDE.md` already records
+that `-q` prints no summary and still exits 0, and the whole merge-gate design
+assumes the summary line is readable. These two failures produce the same
+outcome by a different route: **no count, and an exit code that is not 0**, so
+they at least fail loudly. The hazard is the near miss - this session committed
+`OPS-29` quoting a pass count from a run that had died before printing one. The
+number was later confirmed correct by re-running, but it was asserted before it
+was observed, which is precisely the failure `CLAUDE.md` names.
+
+**Do NOT close this by adding `-p no:cacheprovider` to `pytest.ini` and calling
+it fixed.** That silences path 2 and leaves path 1, and neither addresses why a
+1772-test run exhausts memory on a machine where `OPS-14` already recorded C:
+hitting 100 percent mid-session. The two may share a cause.
+
+**Acceptance:**
+
+1. Reproduce each path deliberately rather than waiting for it. Path 2 needs
+   only a full run with a populated cache; path 1 needs a failing test whose
+   source file is large.
+2. Establish whether this is memory pressure on the machine or an unbounded
+   structure in the run - measure peak RSS of a full run and say which.
+3. If a flag or setting is adopted, it is justified against the measurement in
+   (2), and the item records what was ruled out. A flag chosen because it made
+   the symptom stop is a placebo, and `LL-0136` already records one of those.
+4. `merge_gate.verify` is checked against this: confirm it FAILS rather than
+   passing vacuously when the suite dies without printing a summary. If it
+   reports success on a summary-less run, that is a worse defect than the
+   MemoryError and takes priority.
+
 ## 4b. Ammo-family and talent measurement - READY, cheap, needs the client
 
 Opened 2026-08-09 after the talent and skills screens were captured. The class's
