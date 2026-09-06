@@ -3470,11 +3470,17 @@ it is tolerated.
 
 ## OPS-27. Nothing is written when the context is about to COMPACT - OPEN, not started
 
-Filed 2026-09-05 while assessing an external repo for reuse. **Idea only - no
-code, prose or configuration was taken from it.** The external project is
-MIT-licensed with a single named holder, so the license gate would have allowed
-a lift; it was declined on fit, not on licence, and the whole assessment is in
-`LL-0137`.
+Filed 2026-09-05 while assessing `github.com/affaan-m/ECC` for reuse. **Idea only
+- no code, prose or configuration was taken from it.** That project is
+MIT-licensed, `Copyright (c) 2026 Affaan Mustafa`, a real named holder rather
+than an unrendered template, with `package.json` agreeing - so the license gate
+would have ALLOWED a lift. It was declined on FIT, not on licence. The whole
+assessment is in `LL-0137`.
+
+**The repo is NAMED here deliberately.** An earlier draft of this item and of
+`LL-0137` cleared "an external repo" without saying which, which makes the
+licence clearance unverifiable by anyone reading it later - the entire point of
+the gate is a durable record of WHAT was cleared. Caught by the wrap refutation.
 
 **This project's central claim is that continuity lives on disk and never in a
 context window.** `CLAUDE.md` says it, `docs/HEADLESS.md` builds on it, and

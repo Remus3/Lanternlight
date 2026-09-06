@@ -96,10 +96,13 @@ operator-scale disk scan and is not a session task.** `OPS-26` closed in cycle
 `OPS-17` through `OPS-26`; `OPS-16` closed in cycle 40 (`LL-0125`) and is NOT
 part of that run.
 
-**SO THERE IS NO DISK-ONLY OPS WORK LEFT, and the highest-value work needs the
-CLIENT.** Item 10 - the stack buff measured at the ceiling - is the biggest
-thing in the project. If the client is closed, **say so plainly and stop** - do
-not invent work to stay busy. That is the loop's own stopping rule.
+**`OPS-27` IS THE ONLY DISK-ONLY ITEM, and the highest-value work still needs the
+CLIENT.** Item 10 - the stack buff measured at the ceiling - is the biggest thing
+in the project. This line said there was NO disk-only work left, which was true
+for about two hours before `OPS-27` was filed in the same session; corrected at
+the second wrap. If the client is closed and `OPS-27` does not appeal, **say so
+plainly and stop** - do not invent work to stay busy. That is the loop's own
+stopping rule.
 
 ## Where the last session left it - CYCLE 45
 
@@ -399,11 +402,12 @@ at PANTS and open Affix Details while worn - grep the log for
 Smiting or Curse. The log carries no player-facing affix, skill or item name -
 33 names tested with two positive controls - so only a hover will do.
 
-**IF THE CLIENT IS CLOSED**, the only ops item is `OPS-14`, which is a QUESTION
-with no acceptance meetable from disk - its one disk-measurable half was
-answered in cycle 47. **`OPS-27` is the only disk-only item**, filed 2026-09-05
-from an external-repo assessment (`LL-0137`): nothing is written when the context
-is about to COMPACT, and `.claude/settings.json` wires no `PreCompact` hook.
+**IF THE CLIENT IS CLOSED**, two ops items are open. **`OPS-27` is the only
+DISK-ONLY one** - `OPS-14` is a QUESTION with no acceptance meetable from disk,
+its one disk-measurable half having been answered in cycle 47. `OPS-27` was filed
+2026-09-05 out of an assessment of `github.com/affaan-m/ECC` (`LL-0137`, idea
+only, nothing vendored): nothing is written when the context is about to COMPACT,
+and `.claude/settings.json` wires no `PreCompact` hook.
 **Read its first acceptance criterion before starting** - it requires
 DEMONSTRATING that a compaction actually loses something, and names refutation as
 an acceptable outcome, because `OPS-25` may already have closed the same gap from
