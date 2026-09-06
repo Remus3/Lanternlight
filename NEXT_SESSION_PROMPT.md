@@ -88,7 +88,7 @@ percent of the time. The reopen condition is written into the item.
 
 ## READ THIS BEFORE PICKING AN ITEM
 
-**The ops backlog is `OPS-14` ALONE.** It is the disk question - `C:` hit 100
+**The ops backlog is `OPS-14` and `OPS-27`.** `OPS-14` is the disk question - `C:` hit 100
 percent mid-session and recovered with nothing deleted, unexplained. Its
 capture-growth half was ANSWERED in cycle 47; **the headline half needs an
 operator-scale disk scan and is not a session task.** `OPS-26` closed in cycle
@@ -401,8 +401,14 @@ Smiting or Curse. The log carries no player-facing affix, skill or item name -
 
 **IF THE CLIENT IS CLOSED**, the only ops item is `OPS-14`, which is a QUESTION
 with no acceptance meetable from disk - its one disk-measurable half was
-answered in cycle 47. **The honest answer is that the ops backlog is done and
-the highest-value work needs the client** - say so and stop.
+answered in cycle 47. **`OPS-27` is the only disk-only item**, filed 2026-09-05
+from an external-repo assessment (`LL-0137`): nothing is written when the context
+is about to COMPACT, and `.claude/settings.json` wires no `PreCompact` hook.
+**Read its first acceptance criterion before starting** - it requires
+DEMONSTRATING that a compaction actually loses something, and names refutation as
+an acceptable outcome, because `OPS-25` may already have closed the same gap from
+the other end. If that cannot be shown, close it as REFUTED. Otherwise the honest
+answer is that the highest-value work needs the client - say so and stop.
 
 - **`OPS-14`** - this machine's disk hit 100 percent mid-session and recovered
   with nothing deleted. Still open, still unexplained. **It is a QUESTION, not

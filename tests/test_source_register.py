@@ -167,6 +167,7 @@ KNOWN_NON_HOSTS = frozenset(
         "README.md",
         "RESEARCH.md",
         "ROADMAP.md",
+        "SECURITY.md",
         "SEscapePortalSpawner.initialize",
         "STATE.json",
         "Scav.sav",
