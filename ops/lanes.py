@@ -112,6 +112,11 @@ CROSS_CUTTING: frozenset[str] = frozenset(
         "BACKLOG.md",
         "LICENSE",
         "NOTICE",
+        # Makes a public attribution claim, exactly like LICENSE and NOTICE,
+        # and GitHub renders it as a "Cite this repository" button. It names
+        # the author and the version a citation should point at, so no single
+        # lane may edit it.
+        "CITATION.cff",
         "pyproject.toml",
         "pytest.ini",
         "ruff.toml",
@@ -249,6 +254,13 @@ LANES: tuple[Lane, ...] = (
             "tools/ascii_check.py",
             "tools/precommit_gate.py",
             ".githooks/**",
+            # CI runs this repo's own hygiene suite on a machine nobody
+            # owns, and the issue form is the redaction gate applied to
+            # INBOUND data - a stranger pasting a raw log publishes their
+            # own SteamID64 and IP-derived location. ADR-004 puts
+            # third-party PII in this lane's scope, not only the
+            # operator's, so both belong here.
+            ".github/**",
             "scripts/install_hooks.py",
             "lanes/safety.*",
         ),

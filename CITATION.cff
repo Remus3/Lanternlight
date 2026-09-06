@@ -1,0 +1,40 @@
+cff-version: 1.2.0
+title: Lanternlight
+message: >-
+  If you use Lanternlight, or cite a number measured by it, please cite the
+  release you actually read. Every figure this project publishes is tied to a
+  specific game build, and a build that has been patched is a different
+  measurement.
+type: software
+authors:
+  - name: Moonbeam
+repository-code: https://github.com/Remus3/Lanternlight
+license: Apache-2.0
+version: 0.1.0
+date-released: '2026-09-06'
+abstract: >-
+  A companion and analysis project for the extraction ARPG Mistfall Hunter
+  (Steam appid 3282300) that never touches the game process. The game ships
+  kernel-level anti-cheat, so Lanternlight injects nothing, reads no process
+  memory, captures no network traffic and hooks no swapchain. It derives
+  everything from files the game itself writes into user-writable space - a
+  live-appending log, plain GVAS save files and a market price cache - plus
+  passive capture of the operator's own screen.
+
+  Its purpose is measurement. No cooldowns, damage coefficients or stealth
+  durations have been published for this game, and the fan sites that quote
+  such numbers cross-copy each other rather than measuring. Lanternlight's
+  Emberforge engine is built on the opposite rule: omit rather than guess, keep
+  an unmeasured value distinguishable from a measured zero, and record how each
+  observation was established at the moment it is made.
+
+  Not affiliated with Bellring Games, Skystone Games or Valve.
+keywords:
+  - mistfall-hunter
+  - game-companion
+  - anti-cheat-safe
+  - unreal-engine
+  - gvas
+  - log-parsing
+  - theorycrafting
+  - measurement

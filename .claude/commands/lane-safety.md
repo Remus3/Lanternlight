@@ -49,6 +49,7 @@ Touch these paths and nothing else. Every other path in the repository belongs t
 - `tools/ascii_check.py`
 - `tools/precommit_gate.py`
 - `.githooks/**`
+- `.github/**`
 - `scripts/install_hooks.py`
 - `lanes/safety.*`
 

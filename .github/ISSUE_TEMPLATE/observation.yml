@@ -1,0 +1,109 @@
+name: Measured observation
+description: Report something you measured in Mistfall Hunter, with how you established it.
+title: "[observation] "
+labels: ["observation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Read this first - it is about YOUR privacy, not ours
+
+        **Do not paste a raw game log.** `MistfallHunter.log` carries your own
+        SteamID64, your Steam persona name, GSDK openID and userId values, an
+        Epic Online Services ProductUserId, and a geolocation resolved from
+        your public IP address. Pasting one into a public issue publishes all
+        of that permanently - closing the issue does not unpublish it.
+
+        Quote the single line you mean, with identifiers replaced by `REDACTED`,
+        or describe the value in words. That is always enough.
+
+        ## Why the fields below are required
+
+        Nobody has published real numbers for this game, and the fan sites that
+        quote them copy each other rather than measuring. A number without a
+        build, a method and a date is indistinguishable from an invented one -
+        so this project records all three for every value, including its own.
+        An observation missing them cannot be used, however correct it is.
+
+  - type: input
+    id: buildid
+    attributes:
+      label: Steam buildid
+      description: >-
+        Steam client -> Library -> Mistfall Hunter -> Properties -> Updates.
+        A value measured on a patched build is a different measurement, not a
+        confirmation.
+      placeholder: "24813185"
+    validations:
+      required: true
+
+  - type: input
+    id: observed
+    attributes:
+      label: Date observed
+      description: The date you actually saw it, not the date you are filing.
+      placeholder: "2026-09-06"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: method
+    attributes:
+      label: How did you establish it?
+      description: >-
+        The method matters more than the number. "Read off the screen" and
+        "read out of the log" fail in completely different ways.
+      options:
+        - Read from an in-game tooltip or panel
+        - Read from a line the game wrote to its own log
+        - Joined a screenshot to a log line by wall-clock time
+        - Timed it by hand over repeated attempts
+        - Inferred from other measured values
+        - Something else, described below
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What did you measure?
+      description: >-
+        The value, the thing it belongs to, and the units. If a field was
+        absent rather than zero, say absent - they are different facts.
+      placeholder: >-
+        Ranged Damage affix, Lv. 5: Physical Damage +8%, Magic Damage +8%,
+        Effective Range +12%. Effective Range showed no value below Lv. 5.
+    validations:
+      required: true
+
+  - type: textarea
+    id: confidence
+    attributes:
+      label: What would make you doubt it?
+      description: >-
+        Sample size, anything that could have confounded it, whether you saw it
+        once or repeatedly. A stated weakness is worth more than a confident
+        round number - this project withdraws its own readings in public when
+        they turn out wrong.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Before submitting
+      options:
+        - label: >-
+            This report contains no raw log excerpt, and no SteamID, persona
+            name, platform id or IP-derived location - mine or anyone else's.
+          required: true
+        - label: >-
+            I measured this myself in-game. I did not copy it from a wiki or
+            fan site.
+          required: true
+        - label: >-
+            I did not use any tool that reads or writes the game's memory,
+            hooks its rendering, or injects into its process. Mistfall Hunter
+            ships kernel-level anti-cheat and this project will not accept data
+            obtained that way.
+          required: true

@@ -1,0 +1,49 @@
+# Lanternlight - continuous integration.
+#
+# This runs the same command a developer runs: `python -m pytest` from the
+# repository root, bare. Not `-q`. pytest.ini already carries `-q` in addopts,
+# so a second one makes it `-qq`, which prints NO SUMMARY LINE AT ALL and still
+# exits 0. A CI job that cannot print its own count is a green tick with
+# nothing behind it.
+#
+# Windows-only on purpose. This project reads a Windows game's files, imports
+# ctypes.wintypes, and its overlay is a Win32 window. A Linux job would be
+# testing something nobody runs.
+#
+# No dependency install step. pyproject.toml declares `dependencies = []` and
+# the suite assumes no pytest plugin, so the only third-party package that
+# appears anywhere is Pillow, and every use of it sits behind
+# `pytest.importorskip("PIL")`. If this job ever needs a `pip install`, that is
+# a fact worth noticing rather than papering over.
+
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Install pytest
+        run: python -m pip install --upgrade pip pytest
+
+      - name: Report the collected count before running
+        run: python -m pytest --collect-only 2>&1 | tail -3
+        shell: bash
+
+      - name: Run the suite
+        run: python -m pytest
