@@ -3546,6 +3546,95 @@ empty when it was filed and the highest-value work needs the client. If
 criterion 1 cannot be met in reasonable time, the honest outcome is to close
 this as REFUTED and say the existing design already covered it.
 
+## OPS-28. Provenance is DOCUMENT-scoped, so an extracted number arrives naked - OPEN, not started
+
+Filed 2026-09-06 out of an operator licensing question - whether relicensing
+would make this project's measured numbers distinguishable from fandom-wiki
+content. It would not, and the licence half is settled below so nobody reopens
+it. What survived the question is a real defect that is not about licensing at
+all.
+
+**The claim: provenance here is excellent at DOCUMENT scope and absent at ROW
+scope.** An outside consumer does not read the document. It lifts the table.
+
+**What is MEASURED, all read 2026-09-06:**
+
+- `docs/OBSERVED_IDS.md` is the good case. The class-id table carries a per-row
+  `How established` column (`pixel-joined, 2026-08-09`, and for id `12` an
+  operator attestation), a buildid, and an explicit warning that every id was
+  read on `24619162` and that NONE has been reconfirmed since the
+  2026-08-19T08:06:36Z patch.
+- `docs/CLASSES.md` publishes the T0-T3 trust tier table, so a reader can rank a
+  claim without asking.
+- `docs/AFFIXES.md` is the exposed case. The ranged-damage ladder is four
+  columns - `Level`, `Physical Damage`, `Magic Damage`, `Effective Range` - and
+  seven rows of percentages. Nothing in the TABLE names a method, a frame or a
+  build.
+- **A first reading of this filed `AFFIXES.md` as under-sourced. That was WRONG
+  and is withdrawn.** The provenance is there: the section is headed `Affix
+  Level ladder, stated`, it cites frame `f0749`, it quotes the in-game tooltip
+  it came from, and it records its own withdrawn misreading of the Level
+  Distribution row. The defect is not missing provenance. It is provenance that
+  does not TRAVEL. Recorded rather than quietly corrected, because the wrong
+  first reading is the one a future session is most likely to repeat.
+- Repo composition: 1943 KB of tracked markdown against 1911 KB of Python. The
+  corpus is half this project by weight.
+
+**Why extraction is the case that matters.** Seven rows of percentages copied
+out of `AFFIXES.md` cannot answer which build they were read on, by what method,
+on what date, or whether the 2026-08-19 patch invalidated them. Downstream they
+are indistinguishable from a wiki number, and a stranger is CORRECT to treat
+them that way. Worse, they launder: the number gets reposted, a third site cites
+the repost, and this project's own measurement re-enters the ecosystem as an
+uncited claim it then has to compete with. `docs/ECOSYSTEM.md` already records
+that the launch-window sites cross-copy each other verbatim.
+
+**Why this is NOT a licensing item, recorded so it is not re-litigated.** Facts
+are not copyrightable - `Feist v. Rural Telephone` (US, 1991) refused
+sweat-of-the-brow protection - so `Lv. 5 = +8%` carries the same nil copyright
+status whether it was measured off `f0749` or invented over lunch. A licence
+protects the prose, the arrangement and the analysis; it does not protect the
+number. The EU sui generis database right (Directive 96/9/EC) is the one
+exception and reaches only EU-based consumers. **This paragraph is a
+REFERENCE-tier claim, not a measurement, and it is not legal advice** - it is
+here to stop a cold session concluding that a relicence would fix anything
+below. Measured the same day and pointing the same way: `docs/ECOSYSTEM.md`
+records that the ecosystem survey found NO copyleft or
+source-available-restrictive repository at all, so tightening this project's
+outbound licence would also unblock nothing to ingest.
+
+**Acceptance:**
+
+1. **DEMONSTRATE THE LOSS BEFORE BUILDING ANYTHING.** Extract one published
+   table the way an outside consumer would - the rows and nothing else - and
+   show it cannot answer build, method, date, or reconfirmed-since-patch. **If
+   the extracted rows DO carry that, this item is REFUTED and the refutation is
+   the result**, written beside the claim rather than replacing it. `OPS-26` and
+   `OPS-27` were both filed with this criterion first and it paid.
+2. A record schema with NAMED required fields, and a test that reddens when a
+   record omits one.
+3. A missing measurement is ABSENT, never `null`, `0` or `-1`, and `unmeasured`
+   stays distinguishable from `measured zero`
+   ([ADR-005](docs/adr/ADR-005-omit-rather-than-guess.md)). A test pins both,
+   because conflating them is how a build engine starts lying.
+4. Migrate at least the `OBSERVED_IDS.md` class-id table and the `AFFIXES.md`
+   ranged-damage ladder, and **round-trip both**: a test reads the markdown AND
+   the emitted file and fails when a value differs. The emission must not become
+   a second source of truth - a drift between them is a failing test, not a
+   fork.
+5. The guard is watched going RED: delete one record's buildid, confirm the test
+   fails, restore, confirm green, and report what was seen. A guard that stays
+   green when the behaviour it protects is deleted is decoration, not a test.
+6. A staleness query is answerable from the data alone - "every record read on a
+   build that is no longer current". Today that fact is a paragraph in
+   `OBSERVED_IDS.md` that only a human reader can act on.
+
+**Do NOT migrate the whole corpus.** Two tables prove the schema. `AFFIXES.md`
+and `FINDINGS.md` are 2325 and 2901 lines whose narrative is the point - the
+withdrawn misreadings are the most valuable content in them and do not belong in
+a data file. The emission is for the NUMBERS a consumer would lift, not for the
+reasoning that produced them.
+
 ## 4b. Ammo-family and talent measurement - READY, cheap, needs the client
 
 Opened 2026-08-09 after the talent and skills screens were captured. The class's
