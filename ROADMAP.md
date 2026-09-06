@@ -3463,6 +3463,30 @@ and none were archived - and attributes no cause.
   takes effect at the next watcher restart, which only the operator can cause.**
   Until then a refused destination on THIS machine still reads `ARMED`.
 
+### DEPLOYED 2026-09-06 - the fix is finally RUNNING
+
+The paragraph above stood true for three days: the fix was committed and the
+process executing it was not. On operator instruction the stale watcher was
+terminated with `taskkill /F /PID 21452` and re-armed through
+`watch.ensure_armed`, which took the documented `DEAD` -> re-arm path rather
+than anything bespoke. New watcher **pid 31168**, started 2026-09-06T21:44:34Z,
+`ARMED` with identity `VERIFIED` and all four surfaces reporting.
+
+**The deployment is verified structurally, not by provocation.** The new
+process is spawned from `guard.REPO_ROOT` and imports
+`lanternlight/armwatch.py`, which is byte-identical to HEAD and carries
+`FAILING_PASSES_BEFORE_SURFACE_FREEZES = 3`. The freeze was NOT re-provoked
+against the live archive, because doing so means deliberately refusing writes
+on the operator's real capture tree; the provocation is this item's own
+acceptance and was met at fix time.
+
+**A trap found while doing it, worth more than the restart.** `taskkill /F`
+issued from Git Bash FAILS SILENTLY-ish: MSYS path conversion rewrites `/F`
+into `F:/` and the command errors with `Invalid argument/option - 'F:/'`,
+killing nothing. `check_watcher()` then still answered `ARMED` - correctly -
+so the only signal that nothing happened was reading the taskkill output
+itself. Issue it from PowerShell, or with `MSYS_NO_PATHCONV=1`.
+
 **Do NOT fix this by removing the `except OSError`.** Fail-soft is deliberate and
 correct here - a save file really does vanish mid-copy, which is the transience
 this module was built for. The defect is that the failure is INVISIBLE, not that

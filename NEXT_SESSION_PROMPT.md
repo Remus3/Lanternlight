@@ -23,13 +23,14 @@ stale and this project's own rule is that a filed count is a hypothesis.
 
 ### BLOCKED - list these first, and do not start them
 
-- **THE OPS-26 FIX IS COMMITTED BUT NOT RUNNING.** The live watcher is pid
-  21452, started 2026-09-03T23:53:54Z, roughly 39 hours BEFORE the fix commit,
-  so the process polling this machine is executing the OLD armwatch.py. It
-  cannot be upgraded from a session: ensure_armed refuses to start a second
-  poller while one is alive, and this project has no stop path by design. Only
-  an operator restart deploys it. Until then a refused destination still reads
-  ARMED. Report this; do not try to fix it, and never kill anything.
+- **RESOLVED 2026-09-06 - the OPS-26 fix is now LIVE.** This blocker stood for
+  three days and is gone. On operator instruction the stale watcher (pid 21452,
+  started 2026-09-03T23:53:54Z, ~39 hours before the fix commit) was terminated
+  with `taskkill /F /PID` and re-armed via `watch.ensure_armed`. New watcher is
+  **pid 31168**, started 2026-09-06T21:44:34Z, ARMED, identity VERIFIED, all
+  four surfaces reporting. It imports `lanternlight/armwatch.py` identical to
+  HEAD, which carries `FAILING_PASSES_BEFORE_SURFACE_FREEZES = 3`. The pass
+  counter restarted at 0 from 176,739 - that is the restart, not a fault.
 - **OPS-14** - open QUESTION, no acceptance meetable from disk. Its
   capture-growth half was answered in cycle 47; the headline needs an
   operator-scale disk scan.

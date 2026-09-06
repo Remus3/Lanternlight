@@ -156,8 +156,19 @@ Related traps this repo has already hit or inherited:
   and does not strip one - the rule is simply that you do not write one.
 - **Atomic writes only** for anything a reader might poll:
   `tmp.write_text(...); tmp.replace(target)`.
-- **Never `Stop-Process`.** If a process genuinely must die, `taskkill /F /PID`.
+- **Never `Stop-Process`.** If a process genuinely must die, `taskkill /F /PID`,
+  and **issue it from PowerShell, not Git Bash**. MSYS path conversion rewrites
+  the `/F` flag into `F:/`, so the command dies with
+  `Invalid argument/option - 'F:/'` and kills NOTHING. Measured 2026-09-06
+  restarting the capture watcher: the follow-up `check_watcher()` still answered
+  `ARMED` - correctly, the process really was alive - so the only evidence the
+  kill had not happened was reading taskkill's own output. This is the
+  `grep -iF` lesson in a second tool: a claim about the TOOL wearing the costume
+  of a claim about the world. `MSYS_NO_PATHCONV=1` also works.
   The loop guard never kills anything; it only refuses to start.
+  Note that `tools/precommit_gate.py` blocks any shell command merely QUOTING
+  the forbidden cmdlet name, an accepted false positive recorded in `OPS-24`.
+  Write such prose with an editor tool, not a heredoc.
 - **Redact before anything leaves the machine.** The game log carries the
   operator's SteamID64, Steam persona, GSDK openID and userId, an EOS
   ProductUserId, and IP-resolved geolocation. `lanternlight/redact.py` is the only

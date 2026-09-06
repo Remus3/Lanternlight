@@ -64,9 +64,12 @@ Everything else needs the client open or an operator-scale disk scan.
 `NEXT_SESSION_PROMPT.md` carries the full blocked-first list and a suggested
 three-slice parallel shape.
 
-**Standing blocker, unchanged:** the `OPS-26` fix is committed but NOT running.
-Watcher pid 21452 predates it by 39 hours and only an operator restart deploys
-it.
+**The standing `OPS-26` blocker is CLEARED**, on operator instruction after the
+wrap. Pid 21452 was terminated with `taskkill /F /PID` and re-armed as **pid
+31168**; ARMED, identity VERIFIED, all four surfaces reporting, importing code
+identical to HEAD. Deployment is verified STRUCTURALLY - the freeze behaviour
+itself was not re-provoked on the live archive, and the provocation is
+`OPS-26`'s own acceptance, already met at fix time.
 
 ---
 

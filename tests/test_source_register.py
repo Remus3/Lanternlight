@@ -90,6 +90,14 @@ KNOWN_NON_HOSTS = frozenset(
         # domain, and a ledger entry that names the file it added should
         # not have to avoid saying its name.
         "CITATION.cff",
+        # Dotted PYTHON PATHS quoted by `LL-0141`. The host-shaped pattern
+        # truncates at the first label pair, so `guard.pid_is_alive` is seen
+        # as `guard.pid` and `watch.ensure_armed` as `watch.ensure` - the
+        # TRUNCATED form is what any failure message names, and therefore
+        # what has to be listed here.
+        "guard.REPO",
+        "guard.pid",
+        "watch.ensure",
         # Module paths, filenames and an API name quoted by `LL-0140`.
         "pytest.importorskip",
         "surfaces.py",

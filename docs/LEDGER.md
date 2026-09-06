@@ -84,6 +84,22 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0141 - 2026-09-06 - The OPS-26 fix is LIVE after three days - the stale watcher was restarted on operator instruction, and the kill silently did nothing the first time
+
+**Evidence:**
+- Old watcher pid 21452, created 2026-09-03T23:53:54Z, confirmed by `wmic` to be `python -m lanternlight.armwatch --dest-base C:/ll-captures --heartbeat ...` - the recorded watcher, not an impostor. `guard.pid_is_alive(21452)` is now False.
+- Killed with `taskkill /F /PID 21452` from PowerShell. `check_watcher()` then returned `DEAD`, the documented re-arm state, and `watch.ensure_armed('C:/ll-captures')` took the ordinary stale-record path: `armed=True`, `pid 31168`, dated root correctly rolled from `C:/ll-captures/2026-09-03` to `C:/ll-captures/2026-09-06`.
+- New watcher VERIFIED, not merely spawned: pid 31168 created 2026-09-06T21:44:34Z with argv identical to the old one; `check_watcher()` -> `ARMED`, identity `VERIFIED`, heartbeat 8 s old; all FOUR surfaces reporting (logs, savedroot, savegames, standalonelevel), none stale, none unjudged. Watched them come up 1/4 -> 4/4 within 20 s rather than assuming they would.
+- Deployment verified STRUCTURALLY: the child is spawned with `cwd=guard.REPO_ROOT` and imports `lanternlight/armwatch.py`, which `git diff --quiet HEAD` reports byte-identical to HEAD and which carries `FAILING_PASSES_BEFORE_SURFACE_FREEZES = 3` at line 233. The fix commit `104c316` is an ancestor of HEAD.
+- SAFETY CHECKED BEFORE KILLING, not after: `savewatch.py` copies via `shutil.copy2` to a temp then `replace`, so a hard kill mid-copy leaves at most a stray temp file and never a truncated snapshot; and the module only ever reads `source_dir`, so the game's save tree could not be damaged. The heartbeat write is atomic by the same pattern.
+- The pass counter restarted at 0 from 176,739. That is the restart, not a fault, and it is recorded here so a later reader does not treat it as one.
+
+THE FIRST KILL SILENTLY DID NOTHING, and the shape of that failure is the durable finding. `taskkill /F /PID 21452` issued from Git Bash is rewritten by MSYS path conversion into `F:/` and fails with `Invalid argument/option - 'F:/'`. The follow-up `check_watcher()` then answered `ARMED` - CORRECTLY, because the watcher genuinely was still alive - so the state check gave no signal that anything had gone wrong. The only evidence was taskkill's own output. This is the repo's existing `grep -iF` lesson in a second tool: a claim about the TOOL wearing the costume of a claim about the world. `CLAUDE.md` now carries it beside the never-kill-by-cmdlet rule.
+A SECOND TOOL FINDING, met while writing the first one up. `tools/precommit_gate.py` BLOCKED the heredoc that was documenting the rule, because the text quotes the forbidden cmdlet name and the gate cannot tell prose from a command. That is `OPS-24`'s accepted false positive firing in production for the second recorded time - the first was on its own commit. It was worked around with an editor tool, never by weakening the gate. `CLAUDE.md` now warns about it at the same bullet.
+A THIRD trap, recorded because it corrupted this very entry TWICE before it would save. A Windows path written with a \ before a date inside a non-raw Python string makes \202 an OCTAL escape, which is U+0082, and the ledger's own ASCII guard rejected the entry both times. The guard worked exactly as intended. Build such text with forward slashes, raw strings, or chr(92) - and note the entry describing the trap fell into it on the retry.
+NOT DONE, deliberately: the freeze behaviour was not re-provoked against the live archive. Doing so means deliberately refusing writes on the operator's real capture tree while it is the only copy. Provocation is `OPS-26`'s own acceptance and was met at fix time; what was unverified was DEPLOYMENT, and deployment is what this entry establishes.
+`ROADMAP.md` `OPS-26` keeps its original 'THE FIX IS NOT RUNNING' paragraph and gains a DEPLOYED section beneath it, rather than having the stale claim edited away. The paragraph was true for three days and the record should show that it was.
+
 ### LL-0140 - 2026-09-06 - The refutation pass REFUSED the LL-0139 merge and was right twice - a false Pillow claim was already committed to a public file, and the new surfaces shipped with zero guards
 
 **Evidence:**
