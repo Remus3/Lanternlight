@@ -107,9 +107,9 @@ use a count from this file; it is stale by construction.
 ## State at the 2026-09-06 wrap
 
 Suite **1781 passed**, exit 0, run with -p no:cacheprovider. Collected 1781.
-Ruff **All checks passed**. Ledger LL-0139, corrected by LL-0140. Client **closed** all session; no
-game process was touched. Watcher **ARMED**, pid 21452, identity VERIFIED,
-heartbeat 23 s old, all four surfaces fresh.
+Ruff **All checks passed**. Ledger LL-0141. Client **closed** all session; no game
+process was touched. Watcher **ARMED**, pid **31168** - the one restarted this
+session, not the old 21452 - identity VERIFIED, all four surfaces fresh.
 
 **If pytest dies with MemoryError and prints no summary, that is OPS-30, not a
 test failure.** Re-run with `-p no:cacheprovider --tb=no -rf`. A run that dies
@@ -126,7 +126,7 @@ this project already did once and had to correct.
   windows-latest and installs pillow, because the never-skips test
   test_a_clone_can_verify_a_SUCCESSFUL_read_not_only_refusals proved a fresh
   clone could not perform a real read without it. Do not "fix" a CI failure by
-  skipping a test. CI reports 1745 passed / 27 skipped; the skips are the
+  skipping a test. CI reports 1753 passed / 28 skipped; the skips are the
   machine-dependent ones, and green does NOT mean the capture-joined tests ran.
 - **.github is owned by the safety lane; CITATION.cff is CROSS_CUTTING.** A new
   file at the repo root with no owner FAILS tests/test_lanes.py.
