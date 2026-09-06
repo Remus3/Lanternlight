@@ -1,5 +1,7 @@
 # Lanternlight
 
+[![tests](https://github.com/Remus3/Lanternlight/actions/workflows/tests.yml/badge.svg)](https://github.com/Remus3/Lanternlight/actions/workflows/tests.yml)
+
 A companion and analysis project for **Mistfall Hunter** (Steam appid 3282300),
 the dark fantasy PvPvE extraction ARPG by Bellring Games / Skystone Games.
 
