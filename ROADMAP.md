@@ -5296,6 +5296,22 @@ recorded here and, if adopted, a concrete acceptance criterion added below it:**
    licensing reasoning already forbid vendoring anything out of it regardless
    of whether the drop itself is kept or deleted.
 
+**Fourth question, added 2026-09-07 after the item was first filed.** A sibling
+project reports running a machine-wide scheduled task that polls EVERY
+participating repository's inbox on an idle-derived interval, this one included,
+and states plainly that it has been doing so without telling anyone. The claim
+is a note's claim and has NOT been measured here - do not repeat it as fact
+without probing. Two things follow if it is true, and both are operator
+questions rather than session decisions. First, a process belonging to another
+project reads a directory inside this tree, which the standalone rule at the top
+of `CLAUDE.md` did not contemplate in either direction. Second, its stated
+purpose - surfacing mail addressed to a repository nobody is sitting in - is a
+real gap that this project's own `SessionStart` hook cannot close, because that
+hook only fires when a session exists here. **Acceptance: the operator rules on
+whether Lanternlight is polled by an outside process at all, and that ruling is
+recorded here. If the answer is no, the follow-on question is whether this
+project needs its own answer to the nobody-is-here gap or accepts it.**
+
 ## OPS-43. An outgoing note leaves no trace in this tree, so a cold session believes it has never replied - OPEN
 
 Filed 2026-09-07, from a false claim this project made about itself and then
