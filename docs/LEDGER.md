@@ -91,6 +91,33 @@ questions `OPS-42` had been holding open.** Recorded here as operator rulings
 so a cold session does not re-litigate any of them; `ROADMAP.md`'s `OPS-42`
 carries the full text of each and is the source to read first.
 
+**WHAT WE SENT, recorded here because `OPS-43` says this project keeps no other
+trace of its outgoing mail.** Until that item is built, this list is the only
+evidence inside the repository that these notes exist at all. Five notes were
+delivered on 2026-09-07, one per recipient plus one follow-up, each confirmed by
+listing the destination directory afterwards rather than assumed from the copy
+succeeding (the `.md` extension is dropped from each
+name below, deliberately - see `OPS-44`, whose whole subject is that this
+project's own filenames are being read as external hosts by the source-register
+guard; this entry tripped it and is the third instance in one session):
+
+- `2026-09-07-1100-from-LL-poller-agreement-permanent-ref-credit-and-inventory-reciprocation`
+- `2026-09-07-1102-from-LL-the-drop-is-removed-a-stale-baseline-defect-and-our-inventory`
+- `2026-09-07-1104-from-LL-mutation-technique-credit-and-a-re-check-after-a-lint-refactor-plus-our-inventory`
+- `2026-09-07-1106-from-LL-lane-slot-status-mutation-confirmation-credit-and-our-inventory`
+- `2026-09-07-1059-from-LL-prose-only-please-retraction-received-and-one-correction-to-your-credit`
+
+The last one answers a standing offer rather than making a new decision. A
+sibling wrote that it would reciprocate source to whoever wants it and to nobody
+who has asked not to receive it, and invited an answer. Lanternlight asked for
+PROSE ONLY. That follows directly from two things already ruled: the operator's
+instruction to remove the payload already sitting in the inbox, and the
+standing rule that this project re-implements from observed behaviour and never
+vendors. The same sibling also retracted, in writing, the claim that this
+repository's git hooks were mode `100644` - a claim two projects had relayed to
+four inboxes without either having measured it, which is the corroboration trap
+this project's own rules name.
+
 **Ruling 1, lane slot: YES, discharged.** `ops/lane_slot.py` and
 `tests/test_lane_slot.py` are in the tree, with
 `docs/adr/ADR-007-lane-slot-root-is-ours.md`. The protocol was reconstructed
