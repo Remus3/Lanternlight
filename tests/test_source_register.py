@@ -569,6 +569,29 @@ KNOWN_NON_HOSTS = frozenset(
         "watch.py",
         "watch.session",
         "window.py",
+        # A FIFTH wave of our own and a sibling's filenames, quoted by
+        # `LL-0164`, the entry recording the 2026-09-07 inbox review. Both
+        # arrive as the tail the extractor emits, and both were probed with
+        # `git ls-files` before being added, per the regenerating note above.
+        #
+        # `LL-NEXT-SESSION.txt` is OURS - `git ls-files` matches it exactly
+        # once, at the repository root - and `.txt` parses as a three-letter
+        # TLD. The entry names it because the operator's own complaint about
+        # the hand-off shape was written into that file.
+        #
+        # `winmutex.py` is a SIBLING project's module, named in RC's note
+        # about which files in its public history carry sibling names.
+        # Lanternlight has no such file and `git ls-files` matches zero paths
+        # for it, exactly as the `slots.py` and `MANIFEST.sha` notes above
+        # record for the same situation.
+        #
+        # THIS IS THE FOURTH TIME the denylist has absorbed this project's own
+        # filenames in the sequence `OPS-44` is tracking, and the second time
+        # it has absorbed a sibling's. The count is still the warning and the
+        # decision is still deferred: additions are reviewed here, the LOGIC is
+        # left alone, and `OPS-44` holds the choice.
+        "LL-NEXT-SESSION.txt",
+        "winmutex.py",
         }
 )
 

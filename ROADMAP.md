@@ -5474,6 +5474,18 @@ Inside this repository there is therefore no artifact showing that any reply was
 ever sent, and `moon_sync_inbox/` is gitignored, so git history does not carry
 one either.
 
+**MEASURED 2026-09-07 17:38, so the item is no longer arguing from a single
+anecdote.** NINETEEN unique `from-LL-*` notes exist across the four sibling
+inboxes. FIVE of them appear anywhere in `docs/LEDGER.md`. **FOURTEEN leave no
+trace whatsoever in this repository.** Per-inbox delivery counts are LW 7,
+CS 9, RC 9, RSC 9 - thirty four deliveries in total. A cold session reading
+only its own disk therefore undercounts this project's replies by nearly four
+to one, and the whole 0800-0803 wave plus the 0810 correction are among the
+invisible fourteen. Method, so it can be re-derived rather than trusted: list
+each sibling `moon_sync_inbox/*from-LL-*`, strip the extension, sort unique,
+then fixed-string grep each name against `docs/LEDGER.md`. Recorded in
+`LL-0164`.
+
 The consequence is not hypothetical and is not merely cosmetic. A session
 reading only its own disk observes no outgoing mail and concludes, correctly
 from its evidence and wrongly in fact, that this project has been silent on the
@@ -5566,6 +5578,18 @@ Either option closes this item once implemented and its guard is watched red
 under mutation before being believed, per this project's standing rule. Doing
 nothing is not a third option - the count itself is the warning the guard's own
 comment already gives, and it will not stop growing on its own.
+
+**FOURTH INSTANCE, 2026-09-07 17:50.** The ledger entry recording that session's
+inbox review (`LL-0164`) reddened this guard on its first post-edit run, with two
+tokens: `LL-NEXT-SESSION.txt`, which is OURS and which `git ls-files` matches
+exactly once at the repository root, and `winmutex.py`, which is a SIBLING's
+module that `git ls-files` matches zero times. Both were vetted and added to
+`KNOWN_NON_HOSTS`, the LOGIC was left alone, and the choice this item holds is
+still not made. The count now stands at four waves of our own filenames and two
+of a sibling's. The denylist addition was PROVEN load-bearing rather than
+assumed: the guard was watched green, `winmutex.py` was removed with the
+mutation asserted to have applied, the guard was watched RED, the token was
+restored, and the guard was watched green again.
 
 ## OPS-45. No Stop-hook transcript-claim auditor exists in this tree - OPEN
 
@@ -5669,6 +5693,93 @@ design. `docs/INVENTORY.md` previously billed this guard as catching "any module
 outside the two allowlisted ones acquiring a process handle at all"; that
 sentence was false as written and is corrected to what the guard actually does
 plus these two limits.
+
+## OPS-47. A sibling's PUBLIC git history carries this project's name, and only the operator can decide whether to ask for it out - OPEN, HOLDS A PENDING OPERATOR DECISION
+
+Filed 2026-09-07 while reviewing `moon_sync_inbox/` under the standing
+`OPS-34` instruction. It is recorded here rather than answered in session
+because requesting a cross-project action is an operator ruling, and this
+session told the reporting sibling in writing that the question had been filed
+as one. That sentence is only true if this item exists.
+
+**DO NOT ANSWER THIS ITEM YOURSELF.** A session that decides it has broken the
+same rule `OPS-42` was created to protect.
+
+### What the sibling reported
+
+Riot Commander (RC) sent two notes on 2026-09-07 that read as a contradiction
+and are not one. The 1300 note retracted an earlier "RC is public" claim and
+reported the repository measured PRIVATE, which was correct when written. The
+1515 note reported it measured PUBLIC, by `gh` and by an unauthenticated
+`curl` returning 200. RC states explicitly that 1515 supersedes 1300's STATUS
+LINE only and that 1300's reasoning still stands. The mechanism in between was
+a delete-and-recreate under the same name rather than a force-push, chosen
+because `refs/pull/N/head` is permanent and cannot be rewritten; 13 pull
+requests and 1 issue were destroyed deliberately as the cost of that.
+
+RC then reports that its now-public history carries **eleven sibling-name hits
+across eight historical blob versions of two files**, `ops/loop/slots.py` (7)
+and `ops/loop/winmutex.py` (4). Current tips are clean; the rewrite skipped
+those blobs deliberately by a content marker. **RC's note does not break the
+eleven down per name**, so how many are "Lanternlight" is UNKNOWN and must not
+be assumed to be all, some, or none of them.
+
+Nothing here is our source code. The exposure is our NAME appearing in a
+sibling's comments, in blob versions that a clone of a public repository can
+still reach.
+
+### What this session did and did not do
+
+- Did: answered RC's other ask by measurement. **No document in this tree ever
+  carried the false "RC is public" claim.** Method: a whitespace-collapsed
+  sweep of 25 Markdown and text files under `docs/` plus `ROADMAP.md`,
+  `CLAUDE.md`, `README.md`, `WAKEUP_NOTES.md` and `LL-NEXT-SESSION.txt`,
+  collapsed first because this repository's prose is hard-wrapped near 80
+  columns and a line-oriented matcher misses a wrapped sentence. Three raw hits
+  came back and all three were false positives - each was our own sentence
+  saying that THIS repository is public and Apache-2.0.
+- Did: told RC plainly that we are not answering the scrub question in session,
+  and asked RC for the per-name breakdown of the eleven, since that number is
+  the first thing the operator will want.
+- Did NOT: request, agree to, or decline a scrub.
+- Did NOT: read RC's tree to verify the eleven. The count is RC's claim about
+  RC's repository, unmeasured here, and this project does not read sibling
+  trees.
+
+### The question for the operator, stated so it can be answered yes or no
+
+**Does Lanternlight want its name removed from Riot Commander's public git
+history?** RC has offered to take the request to its own operator. RC states
+the work is expensive on its side and that its operator would have to authorise
+it there as well, so a yes is a request, not an instruction, and may be
+declined upstream.
+
+Context the operator may want before ruling, none of it decided here:
+
+- The exposure is a project name in a comment, not source, not credentials, and
+  not the operator's personal identifiers. `ADR-004` redaction and `OPS-40`
+  account-name work covered a different and more serious class.
+- This repository is public and names every sibling and its port block in
+  `CLAUDE.md` already, so a scrub of RC's history does not make the association
+  unobservable.
+- RSC's 0725 note argues the opposite direction: that a port table naming
+  every sibling is a stable join key that de-anonymises a fleet from a public
+  source. That argument is unmeasured here and is NOT a finding.
+
+### Acceptance
+
+1. The operator's ruling is recorded IN THIS ITEM, in their words, with the
+   date. Silence is not a ruling and is not recorded as one.
+2. If the ruling is YES, a note stating the request is delivered to
+   `C:\Riot Commander\moon_sync_inbox\`, delivery is confirmed by listing the
+   destination afterwards rather than assumed from the write succeeding, and
+   the note's name is recorded here and in the ledger - because until `OPS-43`
+   lands, a delivered note leaves no other trace in this repository.
+3. If the ruling is NO, that is recorded here with the same weight, so a later
+   session does not re-open it as though it had never been asked.
+4. Either way, RC's per-name breakdown of the eleven hits is recorded here if
+   RC supplies it, or its absence is recorded if RC does not. The item is not
+   closed on a number nobody has.
 
 ## 4b. Ammo-family and talent measurement - READY, cheap, needs the client
 
