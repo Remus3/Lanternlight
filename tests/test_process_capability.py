@@ -1,4 +1,4 @@
-"""Capability ALLOWLIST over the two modules that can hold a process handle.
+"""Capability ALLOWLIST over every module that can hold a process handle.
 
 ROADMAP ``OPS-16``, opened by the refutation pass of ledger ``LL-0122`` and
 widened by a second refutation pass over this file's own first version, which
@@ -126,10 +126,35 @@ did not have. Nothing below is claimed without a test above it.
 
 * **It reads SOURCE. It runs nothing.** Every statement it makes is about what
   the text says, never about what the process did.
-* **It is scoped to the two files in :data:`SCOPE`.** A call into any OTHER
-  module that does the killing is invisible to it. Adding a third module that
-  can acquire a handle to another process means adding it to :data:`SCOPE`
-  here; nothing detects that omission for you.
+* **It is scoped to the modules in :data:`SCOPE`.** A call into any OTHER
+  module that does the killing is invisible to it.
+
+  UNTIL ``OPS-46`` THAT ROSTER WAS A HAND-TYPED TUPLE, and this bullet said
+  adding a third module meant editing it and that nothing would detect the
+  omission. That prediction came true within the day. ``ops/lane_slot.py``
+  landed calling ``kernel32.OpenProcess``, was never added, and widening its
+  access mask to ``PROCESS_ALL_ACCESS`` left this file,
+  ``tests/test_loop_watch.py`` and ``tests/test_lane_slot.py`` entirely green.
+  So :data:`SCOPE` is now DERIVED - every published ``.py`` outside the test
+  tree whose parsed source names one of :data:`PROCESS_HANDLE_APIS` - and
+  :data:`REQUIRED_SCOPE` is a floor beneath it rather than the whole roster.
+
+  What that buys and what it does not:
+
+  - A new module that spells ``OpenProcess`` the ordinary way joins the roster
+    with no edit, on the day it is written rather than the day after it is
+    committed, because the shared walker lists untracked-but-not-ignored files.
+  - :data:`PROCESS_HANDLE_APIS` IS A DENYLIST OF NAMES and inherits a
+    denylist's ceiling. A handle acquired through a spelling nobody listed -
+    an assembled attribute name, an undocumented NT entry point nobody wrote
+    down, a C extension - is not refused, it is simply never examined. Widening
+    this set is how that gap closes, and it is a set a human reviews.
+  - The TEST TREE is excluded, because these files quote every forbidden
+    spelling as fixture source. A test that opened a real process handle would
+    therefore not be examined.
+  - The floor cannot mask a dead derivation:
+    :func:`test_the_derivation_finds_every_module_in_the_floor` asserts the
+    derivation finds every floor member unaided.
 * A subprocess that runs a SCRIPT which kills is invisible. The argv allowlist
   proves the interpreter is ours; it proves nothing about what that interpreter
   is asked to run.
@@ -212,6 +237,8 @@ did not have. Nothing below is claimed without a test above it.
 from __future__ import annotations
 
 import ast
+import sys
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import NamedTuple
@@ -220,10 +247,154 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
-#: The modules in scope: the only two in this repo that can acquire a handle to
-#: another process. See "WHAT THIS GUARD IS BLIND TO" - a third such module is
-#: unchecked until it is added HERE.
-SCOPE = ("ops/loop/guard.py", "ops/loop/watch.py")
+#: ``tests/_tracked.py`` sits beside this file and owns the one file walker the
+#: repo-wide guards share. pytest already prepends this directory to
+#: ``sys.path``, but the insert is explicit so the import does not depend on
+#: that - the same shape ``tests/test_loop_watch.py`` uses to import
+#: :data:`SCOPE` back out of here.
+TESTS_DIR = Path(__file__).resolve().parent
+if str(TESTS_DIR) not in sys.path:
+    sys.path.insert(0, str(TESTS_DIR))
+
+import _tracked  # noqa: E402  (sits beside this file in tests/)
+
+# ---------------------------------------------------------------------------
+# THE ROSTER, AND WHY IT IS DERIVED RATHER THAN TYPED OUT.
+#
+# ``SCOPE`` was a hand-maintained two-entry tuple, and the bullet below said in
+# so many words that adding a third module meant editing it and that nothing
+# would detect the omission. It came true the same day: ``ops/lane_slot.py``
+# landed calling ``kernel32.OpenProcess``, nobody added it, and widening its
+# access mask to ``PROCESS_ALL_ACCESS`` (0x1F0FFF) left
+# ``tests/test_process_capability.py``, ``tests/test_loop_watch.py`` and
+# ``tests/test_lane_slot.py`` all green - reproduced here before this change,
+# 267 passed with the mask wide open.
+#
+# A roster a human has to remember to extend is the ``.gl`` defect one more
+# time: an enumerated list that reads as complete and is not. So the roster is
+# DERIVED from the tree, and the hand-written part is a FLOOR rather than the
+# whole answer.
+# ---------------------------------------------------------------------------
+
+#: Call names that acquire, duplicate or reopen a handle to ANOTHER process.
+#: A module that names one of these is in scope by construction.
+#:
+#: THIS IS A DENYLIST OF NAMES and it has a denylist's ceiling, exactly like
+#: the one in ``tests/test_loop_watch.py``. It is a DISCOVERY list, not a
+#: permission list: a spelling missing from it does not become permitted, it
+#: becomes unexamined, which is why the floor below exists and why the
+#: blindness is stated in the docstring above rather than only here.
+PROCESS_HANDLE_APIS = frozenset(
+    {
+        "OpenProcess",
+        "NtOpenProcess",
+        "ZwOpenProcess",
+        "OpenThread",
+        "NtOpenThread",
+        "DuplicateHandle",
+        "CreateToolhelp32Snapshot",
+        "CreateRemoteThread",
+        "TerminateProcess",
+        "NtSuspendProcess",
+    }
+)
+
+#: Path prefixes the derivation does not walk. The test tree is excluded
+#: because these very files quote every forbidden spelling as fixture source,
+#: so deriving over them would put the guard's own corpus in its own scope.
+#: That is a declared hole: a TEST that opened a process handle for real would
+#: not be examined here.
+DERIVATION_EXCLUDED_PREFIXES = ("tests/",)
+
+#: The roster FLOOR - the modules a human has read and knows hold a process
+#: handle. It exists so a derivation that breaks (git missing, the walker
+#: returning nothing, a recogniser that stops recognising) cannot silently
+#: empty the roster and report a confident zero. The floor is not trusted to be
+#: complete, and :func:`test_the_derivation_finds_every_module_in_the_floor`
+#: proves the derivation finds all of it unaided, so the floor is never doing
+#: the work on its own.
+REQUIRED_SCOPE = ("ops/lane_slot.py", "ops/loop/guard.py", "ops/loop/watch.py")
+
+
+def names_a_process_handle_api(source: str) -> bool:
+    """True when ``source`` names a call that can hand back a process handle.
+
+    Matched on the parsed tree rather than the raw text, and that is a real
+    distinction here: this repository's prose discusses ``OpenProcess`` at
+    length, and a substring match would drag every module that merely TALKS
+    about the boundary into a scope where it must then pass an allowlist
+    written for modules that cross it.
+
+    Three node shapes, so the attribute form, the bare name a rebinding leaves
+    behind, and the string literal a ``getattr`` launder needs all land here.
+    A source that will not parse answers True - refuse what you cannot read -
+    and lands in scope, where the scanner will raise on it loudly rather than
+    skip it quietly.
+    """
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return True
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute) and node.attr in PROCESS_HANDLE_APIS:
+            return True
+        if isinstance(node, ast.Name) and node.id in PROCESS_HANDLE_APIS:
+            return True
+        if (
+            isinstance(node, ast.Constant)
+            and isinstance(node.value, str)
+            and node.value in PROCESS_HANDLE_APIS
+        ):
+            return True
+    return False
+
+
+def derive_scope(sources: Iterable[tuple[str, str]]) -> tuple[str, ...]:
+    """Return the in-scope relative paths from ``(relative, source)`` pairs.
+
+    Pure over its input on purpose. Pinning the derivation therefore needs
+    nothing but a list of strings - no file planted in the tree this guard
+    audits, which would be a capability-bearing module added to the repository
+    in order to test that capability-bearing modules are noticed.
+    """
+    return tuple(
+        sorted(relative for relative, source in sources if names_a_process_handle_api(source))
+    )
+
+
+def _candidate_sources() -> list[tuple[str, str]]:
+    """Every published ``.py`` outside the test tree, as ``(relative, source)``.
+
+    ``_tracked.iter_authored_files`` is the shared walker, and it lists tracked
+    AND untracked-but-not-ignored files. That is what makes this roster catch a
+    module on the day it is WRITTEN rather than on the day after it is
+    committed - which is precisely when ``ops/lane_slot.py`` needed catching.
+    """
+    found: list[tuple[str, str]] = []
+    for path in _tracked.iter_authored_files(REPO_ROOT):
+        if path.suffix != ".py":
+            continue
+        try:
+            relative = path.resolve().relative_to(REPO_ROOT).as_posix()
+        except ValueError:
+            continue
+        if relative.startswith(DERIVATION_EXCLUDED_PREFIXES):
+            continue
+        try:
+            found.append((relative, path.read_text(encoding="utf-8")))
+        except OSError:
+            continue
+    return found
+
+
+#: What the tree says, unaided by the floor. Kept as its own name so a test can
+#: ask whether the derivation really found the floor rather than being handed it.
+DERIVED_SCOPE = derive_scope(_candidate_sources())
+
+#: The modules in scope: every module in this repository that can acquire a
+#: handle to another process, derived from the tree and floored by
+#: :data:`REQUIRED_SCOPE`.
+SCOPE = tuple(sorted(set(REQUIRED_SCOPE) | set(DERIVED_SCOPE)))
 
 # ---------------------------------------------------------------------------
 # The vetted sets. THIS is the part that gets reviewed. Every member below was
@@ -253,11 +424,16 @@ ALLOWED_WIN32_FUNCTION_ATTRS = frozenset({"restype", "argtypes"})
 #: Attributes reachable on the ``os`` module. ``kill`` is here only because
 #: :func:`_check_kill_signal` constrains it to signal 0; the name alone is not
 #: what makes it safe.
+#:
+#: ``environ`` is this process's OWN environment mapping. Reading or writing it
+#: changes nothing outside this process and hands out no handle to another one;
+#: ``ops/lane_slot.py`` reads it to resolve the bucket override.
 ALLOWED_OS_ATTRS = frozenset(
     {
         "O_CREAT",
         "O_EXCL",
         "O_WRONLY",
+        "environ",
         "fdopen",
         "fsync",
         "getpid",
@@ -266,7 +442,11 @@ ALLOWED_OS_ATTRS = frozenset(
     }
 )
 
-#: Modules these two files may import, at module scope or inside a function.
+#: Modules the in-scope files may import, at module scope or inside a function.
+#:
+#: ``time`` is pure Python clock and sleep. It starts nothing, holds no handle,
+#: and exposes no way to reach another process; ``ops/lane_slot.py`` uses it for
+#: the lock timestamp and the release backoff.
 ALLOWED_IMPORTS = frozenset(
     {
         "__future__",
@@ -284,6 +464,7 @@ ALLOWED_IMPORTS = frozenset(
         "subprocess",
         "sys",
         "tempfile",
+        "time",
     }
 )
 
@@ -1219,7 +1400,7 @@ def test_ops16_spelling_3_ntdll_undocumented_entry_point() -> None:
 
 # ---------------------------------------------------------------------------
 # The wider table. Every entry is a spelling a human wrote down as something
-# these two modules must never grow.
+# an in-scope module must never grow.
 # ---------------------------------------------------------------------------
 
 FORBIDDEN_SPELLINGS: tuple[tuple[str, str, str, str], ...] = (
@@ -1508,6 +1689,254 @@ def test_scope_names_files_that_exist() -> None:
         path = REPO_ROOT / relative
         assert path.is_file(), f"{path} is in SCOPE but is not a file"
         assert path.read_text(encoding="utf-8").strip(), f"{path} is empty"
+
+
+# ---------------------------------------------------------------------------
+# The DERIVATION. ``OPS-46``: the roster used to be typed out by hand and the
+# docstring above predicted the exact way that would fail. It failed that way.
+# Everything below pins the replacement, and the synthetic half deliberately
+# takes STRINGS rather than files - planting a module that opens a process
+# handle into the tree this guard audits, in order to prove the guard notices
+# modules that open process handles, would be adding the hazard to test the
+# alarm.
+# ---------------------------------------------------------------------------
+
+#: A module that reaches every one of these, spelled three different ways.
+DERIVATION_POSITIVES: tuple[tuple[str, str], ...] = (
+    (
+        "attribute-call",
+        'import ctypes\n\n\ndef f(pid):\n'
+        '    k = ctypes.WinDLL("kernel32")\n'
+        "    return k.OpenProcess(0x1000, False, pid)\n",
+    ),
+    (
+        "bare-name-call",
+        "def f(pid):\n    return OpenProcess(0x1000, False, pid)\n",
+    ),
+    (
+        "string-literal-for-a-getattr-launder",
+        'def f(k, pid):\n    return getattr(k, "OpenProcess")(0x1000, False, pid)\n',
+    ),
+    (
+        "an-undocumented-nt-entry-point-that-is-on-the-discovery-list",
+        "def f(h):\n    return ntdll.NtSuspendProcess(h)\n",
+    ),
+    (
+        "source-that-will-not-parse-is-refused-unread",
+        "def f(:\n",
+    ),
+)
+
+#: Shapes that must NOT drag a module into scope. The first is the one that
+#: makes an AST match worth the extra code: this repository's prose discusses
+#: ``OpenProcess`` constantly, and a substring match would put every document
+#: module in a scope written for modules that cross the boundary.
+DERIVATION_NEGATIVES: tuple[tuple[str, str], ...] = (
+    (
+        "prose-that-merely-discusses-the-api",
+        '"""This module never calls OpenProcess and holds no handle."""\n\n'
+        "import json\n\n\ndef load(text):\n    return json.loads(text)\n",
+    ),
+    (
+        "a-comment-that-names-the-api",
+        "import json\n\n\ndef load(text):\n"
+        "    # OpenProcess is deliberately not used here.\n"
+        "    return json.loads(text)\n",
+    ),
+    (
+        "an-ordinary-module-that-names-nothing",
+        "def add(a, b):\n    return a + b\n",
+    ),
+)
+
+
+@pytest.mark.parametrize(
+    ("label", "source"), DERIVATION_POSITIVES, ids=[e[0] for e in DERIVATION_POSITIVES]
+)
+def test_the_derivation_pulls_a_handle_bearing_module_into_scope(
+    label: str, source: str
+) -> None:
+    """Each spelling puts its module on the roster, over synthetic source."""
+    assert names_a_process_handle_api(source), label
+    assert derive_scope([("synthetic/x.py", source)]) == ("synthetic/x.py",), label
+
+
+@pytest.mark.parametrize(
+    ("label", "source"), DERIVATION_NEGATIVES, ids=[e[0] for e in DERIVATION_NEGATIVES]
+)
+def test_the_derivation_leaves_a_module_that_only_talks_about_it_alone(
+    label: str, source: str
+) -> None:
+    """The mirror - a derivation that scoops up everything is not a derivation.
+
+    Without this, every assertion above would still pass if
+    :func:`names_a_process_handle_api` were replaced by ``return True``, and
+    the roster would then be "every module in the repository", which fails the
+    allowlist on contact and gets deleted the same afternoon.
+    """
+    assert not names_a_process_handle_api(source), label
+    assert derive_scope([("synthetic/x.py", source)]) == (), label
+
+
+def test_the_derivation_finds_every_module_in_the_floor() -> None:
+    """The floor is a backstop, never the answer.
+
+    :data:`SCOPE` unions :data:`REQUIRED_SCOPE` into :data:`DERIVED_SCOPE`, so
+    a derivation that found NOTHING would still produce a plausible roster and
+    every mirror test would pass. This is the assertion that makes the union
+    safe: the derivation finds all three unaided, so the floor is never quietly
+    doing the derivation's job.
+    """
+    missing = sorted(set(REQUIRED_SCOPE) - set(DERIVED_SCOPE))
+    assert missing == [], (
+        f"the derivation did not find {missing}, so the roster is resting on "
+        f"REQUIRED_SCOPE alone; derived: {DERIVED_SCOPE}"
+    )
+
+
+def test_the_derivation_actually_walked_the_repository() -> None:
+    """The roster is a verdict over the tree, not an empty walk.
+
+    A walker that returned nothing - git absent, the suffix filter wrong, the
+    relative-path computation raising - yields an empty derivation, which the
+    floor would then paper over. So assert the walk saw a substantial number of
+    modules AND that it saw a known handle-free one, which is what tells "the
+    walk found many files and judged them" apart from "the walk found only the
+    files that are in scope".
+    """
+    candidates = _candidate_sources()
+    names = [relative for relative, _ in candidates]
+    assert len(names) > 20, f"only {len(names)} candidate modules: {names}"
+    assert "lanternlight/redact.py" in names, names
+    assert "lanternlight/redact.py" not in SCOPE, SCOPE
+    assert set(SCOPE) < set(names), (sorted(SCOPE), len(names))
+
+
+def test_the_derivation_excludes_the_test_tree_it_says_it_excludes() -> None:
+    """The stated hole is the real hole.
+
+    ``tests/test_loop_watch.py`` names ``OpenProcess`` in fixture source, so it
+    WOULD be derived if the exclusion were not applied. Asserting the exclusion
+    fires on a file that would otherwise match is what keeps this from being a
+    prefix filter that matches nothing.
+    """
+    watch_tests = (REPO_ROOT / "tests" / "test_loop_watch.py").read_text(encoding="utf-8")
+    assert names_a_process_handle_api(watch_tests), "fixture source should match"
+    assert not [relative for relative in SCOPE if relative.startswith("tests/")], SCOPE
+
+
+# ---------------------------------------------------------------------------
+# Marshalling. ``ops/lane_slot.py`` shipped calling ``OpenProcess`` with no
+# ``restype`` and no ``argtypes``, unlike the two modules beside it. The
+# default ``restype`` is ``c_int``, so a 64-bit HANDLE comes back truncated to
+# a signed 32-bit value and the ``CloseHandle`` after it operates on a number
+# that is not the handle. Measured on this machine 2026-09-07 through the same
+# kernel32: a handle-shaped return of ``0x7ff6ecb70000`` arrived as
+# ``-323551232``, which re-widens to ``0xffffffffecb70000`` - a different
+# object. It was latent rather than visible only because handle VALUES on this
+# box are currently small.
+# ---------------------------------------------------------------------------
+
+#: Entry points whose RETURN VALUE is a handle, and which therefore cannot be
+#: left on the default ``c_int`` marshalling.
+HANDLE_RETURNING_ENTRY_POINTS = frozenset({"OpenProcess"})
+
+
+def undeclared_marshalling(relative: str, source: str) -> list[str]:
+    """Every handle-returning call in ``source`` left on ctypes' defaults.
+
+    Pure over its inputs so the check can be shown a badly behaved module
+    without editing a production file to test a test.
+    """
+    tree = ast.parse(source)
+    called = {
+        node.func.attr
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr in HANDLE_RETURNING_ENTRY_POINTS
+    }
+    declared: set[tuple[str, str]] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign):
+            targets: list[ast.expr] = list(node.targets)
+        elif isinstance(node, ast.AnnAssign):
+            targets = [node.target]
+        else:
+            continue
+        for target in targets:
+            if (
+                isinstance(target, ast.Attribute)
+                and target.attr in ALLOWED_WIN32_FUNCTION_ATTRS
+                and isinstance(target.value, ast.Attribute)
+            ):
+                declared.add((target.value.attr, target.attr))
+    return [
+        f"{relative}: {entry} is called but .{attr} is never declared, so ctypes "
+        f"marshals it as c_int and a 64-bit handle is truncated"
+        for entry in sorted(called)
+        for attr in sorted(ALLOWED_WIN32_FUNCTION_ATTRS)
+        if (entry, attr) not in declared
+    ]
+
+
+@pytest.mark.parametrize("relative", SCOPE)
+def test_every_in_scope_module_declares_its_handle_marshalling(relative: str) -> None:
+    """No in-scope module leaves a handle-returning call on ctypes' defaults.
+
+    An in-scope module that opens nothing is CLEAN here rather than red, for
+    the same reason the access-mask check treats it that way: it has no
+    marshalling to get wrong. Presence of the probe is anchored by
+    :func:`test_the_scanner_actually_saw_the_module`.
+    """
+    problems = undeclared_marshalling(relative, _scope_source(relative))
+    assert problems == [], "\n".join(problems)
+
+
+def test_the_marshalling_check_reddens_on_a_module_that_omits_it() -> None:
+    """The check has been shown a positive, over synthetic source.
+
+    This is the exact shape ``ops/lane_slot.py`` shipped with. Without this
+    test the parametrized case above would pass just as happily if
+    :func:`undeclared_marshalling` returned ``[]`` unconditionally.
+    """
+    omitted = (
+        'import ctypes\n\n\ndef f(pid):\n'
+        '    k = ctypes.WinDLL("kernel32", use_last_error=True)\n'
+        "    handle = k.OpenProcess(0x1000, False, pid)\n"
+        "    k.CloseHandle(handle)\n"
+    )
+    problems = undeclared_marshalling("synthetic/omitted.py", omitted)
+    assert len(problems) == 2, problems
+    assert any("restype" in problem for problem in problems), problems
+    assert any("argtypes" in problem for problem in problems), problems
+
+    half = omitted.replace(
+        "    handle = k.OpenProcess",
+        "    k.OpenProcess.restype = None\n    handle = k.OpenProcess",
+    )
+    assert "k.OpenProcess.restype" in half, "anchor moved"
+    assert len(undeclared_marshalling("synthetic/half.py", half)) == 1
+
+
+def test_the_marshalling_check_accepts_the_declared_shape_and_ignores_the_quiet() -> None:
+    """The mirror, plus the probe-less case.
+
+    A check that returned a problem for everything would pass the positive
+    above and fail the roster, and a check that reddened on a module with no
+    ``OpenProcess`` at all would turn every future in-scope module into a false
+    alarm.
+    """
+    declared = (
+        "import ctypes\nfrom ctypes import wintypes\n\n\ndef f(pid):\n"
+        '    k = ctypes.WinDLL("kernel32", use_last_error=True)\n'
+        "    k.OpenProcess.restype = wintypes.HANDLE\n"
+        "    k.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)\n"
+        "    return k.OpenProcess(0x1000, False, pid)\n"
+    )
+    quiet = "import json\n\n\ndef load(text):\n    return json.loads(text)\n"
+    assert undeclared_marshalling("synthetic/declared.py", declared) == []
+    assert undeclared_marshalling("synthetic/quiet.py", quiet) == []
 
 
 def test_the_docstring_above_names_a_mask_check_that_really_covers_scope() -> None:

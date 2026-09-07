@@ -134,6 +134,22 @@ _DEFAULT_RELATIVE = Path("ops") / "runtime" / "lane_slots"
 
 _STILL_ACTIVE = 259
 
+#: Windows access right that is enough to ask whether a process exists without
+#: acquiring any right to affect it. Declared at MODULE scope, and under this
+#: exact name, because the roster-wide access-mask check resolves it on the
+#: module object: a function-local copy shadows the call site while the module
+#: attribute still reads 0x1000, which is a hole that check exists to close.
+#: ``ops/loop/guard.py`` and ``ops/loop/watch.py`` spell the same constant out
+#: for themselves - it is a Windows API number rather than a derivation, so
+#: there is nothing to keep in sync and nothing to import.
+_PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+
+#: ``GetLastError`` after a failed ``OpenProcess``. 87 is
+#: ``ERROR_INVALID_PARAMETER``, which is what Windows returns when no process
+#: bears the pid at all. Every other code - access denied, most of all - says
+#: nothing about whether the process is there.
+_ERROR_INVALID_PARAMETER = 87
+
 
 class LaneSlotError(Exception):
     """Base for every error this module raises deliberately."""
@@ -271,6 +287,20 @@ def _pid_alive(pid: int) -> bool:
     ``os.kill(pid, 0)`` is NOT portable here: on Windows CPython routes any
     signal other than the two console events to ``TerminateProcess``, so the
     liveness probe would kill the process it is asking about.
+
+    ``restype`` and ``argtypes`` are declared on every entry point, matching
+    ``ops/loop/guard.py`` and ``ops/loop/watch.py``, and the reason is measured
+    rather than stylistic. A ctypes function with no ``restype`` defaults to
+    ``c_int``, so a 64-bit ``HANDLE`` comes back truncated to a signed 32-bit
+    value: measured on this machine 2026-09-07, the same kernel32 handle
+    answered ``GetModuleHandleW`` with ``-323551232`` under the default and
+    with ``0x7ff6ecb70000`` under an explicit ``restype``, and
+    ``GetCurrentProcess`` answered ``-1`` rather than
+    ``0xffffffffffffffff``. Handle VALUES on this box are currently small
+    enough that ``OpenProcess`` was returning an intact number anyway - 388
+    under both spellings in the same run - so the defect was latent, not
+    visible, and the ``CloseHandle`` that follows would have been handed a
+    truncated handle the day it stopped being.
     """
     if pid <= 0:
         return False
@@ -281,14 +311,19 @@ def _pid_alive(pid: int) -> bool:
         except Exception:  # pragma: no cover - ctypes is always present here
             return True
         kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-        process_query_limited_information = 0x1000
-        handle = kernel32.OpenProcess(
-            process_query_limited_information, False, ctypes.c_uint(pid)
+        kernel32.OpenProcess.restype = wintypes.HANDLE
+        kernel32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+        kernel32.GetExitCodeProcess.restype = wintypes.BOOL
+        kernel32.GetExitCodeProcess.argtypes = (
+            wintypes.HANDLE,
+            ctypes.POINTER(wintypes.DWORD),
         )
+        kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+        handle = kernel32.OpenProcess(_PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
         if not handle:
             # ERROR_INVALID_PARAMETER means no such process. Anything else
             # (access denied, for instance) is not evidence of death.
-            return ctypes.get_last_error() != 87
+            return ctypes.get_last_error() != _ERROR_INVALID_PARAMETER
         try:
             code = wintypes.DWORD()
             if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):

@@ -5223,6 +5223,19 @@ same trap `OPS-39` defect 5 named for a different guard's own prose. History
 rewrite was performed to purge the fifteen historical commits named above of the
 three spellings.
 
+**CORRECTED at the wrap of the same session, because the sentence above was
+INCOMPLETE and an adversarial verifier caught it.** The rewrite purged blob
+CONTENT and left COMMIT MESSAGES untouched. `git log -S` is a pickaxe over
+diffs; it never reads a message, so the clean result it returned was a claim
+about the tool rather than about the repository - the exact failure class this
+file records elsewhere as an empty grep being a claim about your pattern. One
+published commit message on `origin/main` still carried the backslash spelling
+after the first rewrite was declared done. A second rewrite, using a message
+replacement rather than a content replacement, was run at the wrap and the
+result re-measured by walking every commit message on `origin/main` with a
+control that returns non-zero. Anyone re-deriving this must search MESSAGES and
+CONTENT separately; one query does not cover both.
+
 ### Acceptance
 
 1. **The tracked tree is clean of all four forms** (backslash, forward-slash,
@@ -5606,6 +5619,56 @@ tree has no counterpart.
 4. Watched red under mutation before it is believed: break a claim it is
    supposed to catch, confirm the hook flags it, restore, confirm it does not
    flag a true claim.
+
+## OPS-46. The hard-boundary capability backstop is now DERIVED rather than hand-typed - CLOSED 2026-09-07
+
+Filed and closed at the same wrap that found the defect, because leaving it open
+would have meant shipping a session in which the single most important guard in
+this repository had a hole in it.
+
+`tests/test_process_capability.py` is the mechanical backstop for THE HARD
+BOUNDARY in `CLAUDE.md`: nothing here may acquire a handle to another process
+beyond the narrowest right that answers "is this pid alive". Its roster of
+in-scope modules was a hand-typed tuple naming two files. `ops/lane_slot.py`,
+added earlier the same day, calls `OpenProcess` and was not in it.
+
+**The file predicted its own failure and was right.** Its line 131 already said
+that adding a third module which can acquire a handle means adding it to the
+roster, and that nothing detects the omission for you. The prediction came true
+within the day, and the consequence was measured rather than argued: widening
+the new module's access mask to `PROCESS_ALL_ACCESS`, with the anchor asserted
+to match exactly once, left every relevant test GREEN.
+
+**What changed.** The roster is now DERIVED from the tree - every published
+non-test module whose PARSED source names a process-handle API, via the shared
+tracked walker so an untracked-but-not-ignored file still counts. Parsed and
+not grepped, because this repository's prose discusses `OpenProcess` constantly
+and a substring match would sweep documentation into a security roster. The
+hand-typed tuple survives as a FLOOR only, with an arm proving the derivation
+finds every member of that floor unaided, so the floor can never mask a walk
+that has stopped working.
+
+A latent bug in the same function was fixed with it: `OpenProcess` was declared
+with no `restype` and no `argtypes`, unlike the two older modules, so the
+default `c_long` truncates a 64-bit handle and the following `CloseHandle`
+operates on a different value. Measured on the same library rather than assumed:
+`GetModuleHandleW` returned a negative truncated value against its true handle,
+and re-widening produced a DIFFERENT handle rather than the original. It had not
+yet bitten because the pids this module opens returned small values.
+
+**Acceptance, all met.** The mask mutation now reddens
+`test_no_in_scope_module_asks_for_a_wider_process_right[ops/lane_slot.py]`,
+confirmed independently by the merger after the implementing lane claimed it;
+the derivation finds all three modules with the floor removed; a roster-wide arm
+refuses a module that omits the marshalling declaration.
+
+**Stated blindness, because a guard that overstates itself is worse than none.**
+The discovery list of process-handle APIs is a denylist, so an API nobody has
+thought of is invisible, and the `tests/` tree is excluded from the walk by
+design. `docs/INVENTORY.md` previously billed this guard as catching "any module
+outside the two allowlisted ones acquiring a process handle at all"; that
+sentence was false as written and is corrected to what the guard actually does
+plus these two limits.
 
 ## 4b. Ammo-family and talent measurement - READY, cheap, needs the client
 

@@ -64,10 +64,9 @@ exit non-zero to refuse the commit. Neither hook has a documented bypass.
 
 "Guard" here means a test module whose job is to catch a specific class of
 regression, as distinct from a test module that specifies a feature's
-behaviour. Each collected count below is a property of the module, not the
-whole suite - re-derive per file with
-`python -m pytest --collect-only -q tests/<file>` (see Test count below for
-why the plain `-q` form is used here).
+behaviour. No collected count is recorded below, for the reason given under
+Test count - re-derive one per file with
+`python -m pytest --collect-only tests/<file>` and read the last line.
 
 | Guard | Defect class it catches |
 |---|---|
@@ -82,7 +81,7 @@ why the plain `-q` form is used here).
 | `tests/test_source_register.py` | A module-ish token named in `docs/ECOSYSTEM.md` prose that is not actually registered as a source. |
 | `tests/test_no_hardcoded_home_path.py` | A live, user-facing surface hardcoding this machine's home directory or account name, which would silently never run (or run wrong) on a different account or a fresh clone. |
 | `tests/test_ports.py` | A port named anywhere in the project falling outside its declared block (see Port block below). |
-| `tests/test_process_capability.py` | Any module outside the two allowlisted ones acquiring a process handle at all - the mechanical backstop for the hard boundary against touching the game process. |
+| `tests/test_process_capability.py` | An in-scope module reaching for a capability no human vetted - a library other than `kernel32`, a Win32 entry point outside the four allowed, an `os` attribute or an import that is not on the list, a subprocess whose `argv[0]` is not `sys.executable`, or `os.kill` with any signal but a literal `0`. In scope means every published non-test `.py` whose parsed source names a process-handle API (see `PROCESS_HANDLE_APIS`), derived from the tree rather than typed out - the hand-written roster missed `ops/lane_slot.py` on the day it landed, and a widened access mask went undetected. Two stated limits, because the guard's own docstring insists on them: it reads SOURCE and runs nothing, and the discovery list is a denylist of API NAMES, so a handle acquired through a spelling nobody listed is not refused, only unexamined. It is the mechanical backstop for the hard boundary against touching the game process, and it is necessary rather than sufficient. |
 | `tests/test_repo_surfaces.py` | Regressions in the public-facing surfaces added 2026-09-06 (see `OPS-40`). |
 | `tests/test_ops_ids.py` | An `OPS-` id naming more than one item, or the "next free id" question becoming unanswerable. |
 | `tests/test_merge_gate.py` | `ops/merge_gate.py` itself failing to catch a claimed-but-missing file, a claimed-but-empty file, or a collected-test-count drop (repo-wide or per-file). |

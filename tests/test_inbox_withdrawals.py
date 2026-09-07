@@ -23,9 +23,29 @@ THREE SUBTLETIES, EACH OF WHICH HAS ITS OWN TESTS BELOW
 3. **An acknowledgement must prune BOTH records.** This is the trap the design
    walked into. Prune only the seen set and the withdrawn name lives on in the
    reported record for ever, re-deriving as a withdrawal on every future run,
-   and the line can never be cleared. The three arms at the bottom of this file
-   pin it: an unacknowledged withdrawal survives, an acknowledged one does not
-   come back, and the pruning is not a back door that consumes unread mail.
+   and the line can never be cleared. The arms at the bottom of this file pin
+   it: an unacknowledged withdrawal survives, an acknowledged one does not come
+   back by either route into the baseline, and the pruning is not a back door
+   that consumes unread mail.
+
+THE ARM THAT PROVED NOTHING, AND WHY - MEASURED 2026-09-07
+----------------------------------------------------------
+``test_arm_two_an_acknowledged_withdrawal_does_not_come_back`` used to open by
+ACKNOWLEDGING the note. That made it decoration. Replace
+``save_reported(current_names, reported_path)`` in the acknowledge branch of
+``ops/inbox_watch.py`` with ``pass`` - which is exactly the shipped defect this
+arm names - and all seven ``tests/test_inbox_*.py`` modules stayed green.
+
+The reason is that the mutation removes the ONLY write to the reported record
+the arm ever performed. With no reported record on disk the baseline is
+``seen`` alone, the acknowledgement empties ``seen``, and the withdrawal cleanly
+fails to come back for a reason that has nothing to do with pruning. The arm
+watched the correct value appear for the wrong cause.
+
+So an arm about pruning must first make the record it claims is pruned
+NON-EMPTY, by a write the mutation does not also delete - a REPORT-ONLY run -
+and it must assert that precondition before believing the verdict. Both arms
+below now do that, and both go red under the mutation.
 """
 
 from __future__ import annotations
@@ -70,6 +90,25 @@ def _reported_path(state: Path) -> Path:
 def _reported_names(state: Path) -> set[str]:
     payload = json.loads(_reported_path(state).read_text(encoding="utf-8"))
     return set(payload["reported"])
+
+
+def _assert_reported_holds(state: Path, name: str) -> None:
+    """Assert the reported record exists on disk and already carries ``name``.
+
+    The precondition of every pruning arm below, asserted rather than assumed.
+    An arm that watches a name disappear from a record which was never written
+    in the first place sees the right value for the wrong reason, and stays
+    green under the very defect it is named after - see the module docstring.
+    """
+    path = _reported_path(state)
+    assert path.exists(), (
+        f"the reported record {path} does not exist, so an arm about PRUNING it "
+        "has nothing to prune and proves nothing"
+    )
+    assert name in _reported_names(state), (
+        f"{name!r} is not in the reported record, so its later absence from that "
+        "record is not evidence that an acknowledgement pruned it"
+    )
 
 
 class TestAWithdrawalIsReportedAtAll:
@@ -217,7 +256,16 @@ class TestTheComparisonIsOnStableNamesNotOnKeys:
 
 
 class TestAcknowledgementPrunesBothRecords:
-    """The three arms. The middle one is the trap; the last one guards the fix."""
+    """The arms. The middle two are the trap; the last one guards the fix.
+
+    There are two of the middle arm because there are two routes by which a
+    stable name reaches the withdrawal baseline ``reported | seen``, and the
+    defect lives in exactly one of them. A name that arrived only through a
+    REPORT-ONLY run exists in the reported record and nowhere else, and pruning
+    the seen set does not touch it. Cover only the acknowledged route and the
+    reported record is never even written under the mutation, so the arm passes
+    without exercising the pruning at all.
+    """
 
     def test_arm_one_an_unacknowledged_withdrawal_survives_to_the_next_run(
         self, tmp_path: Path
@@ -237,27 +285,68 @@ class TestAcknowledgementPrunesBothRecords:
         )
         assert third.withdrawn == ["retracted.md"]
 
-    def test_arm_two_an_acknowledged_withdrawal_does_not_come_back(
+    def test_arm_two_a_withdrawal_known_only_from_a_REPORT_can_be_cleared(
         self, tmp_path: Path
     ) -> None:
+        """The load-bearing arm, and the one the shipped defect actually breaks.
+
+        The note is PRINTED and never acknowledged, so its name enters the
+        withdrawal baseline through the reported record alone. Pruning the seen
+        set cannot reach it. If the acknowledgement does not also rewrite the
+        reported record, ``reported | seen`` regenerates the withdrawal on every
+        future run and the operator has a line no action can ever clear - a true
+        report the reader cannot dismiss, which trains the reader to ignore the
+        whole block.
+        """
         inbox, state = _tree(tmp_path)
         note = _write(inbox, "retracted.md", "# From RC - hello\n\nsent to LL.\n")
-        inbox_watch.acknowledge_inbox(inbox=inbox, state=state)
+
+        inbox_watch.scan(inbox=inbox, state=state)  # REPORT-ONLY: reported record only
+        assert not state.exists(), "the premise of this arm is an UNacknowledged note"
+        _assert_reported_holds(state, "retracted.md")
         note.unlink()
 
+        pending = inbox_watch.scan(inbox=inbox, state=state)
         acked = inbox_watch.acknowledge_inbox(inbox=inbox, state=state)
         after = inbox_watch.scan(inbox=inbox, state=state)
+        later = inbox_watch.scan(inbox=inbox, state=state)
 
+        assert pending.withdrawn == ["retracted.md"], "it must be reported before it is cleared"
         assert acked.withdrawn == ["retracted.md"], "the acknowledging run still reports it"
         assert after.withdrawn == [], (
             "the withdrawal re-derived after being acknowledged: the reported "
             "record was not pruned, so reported | seen keeps regenerating it and "
             "the line can never be cleared"
         )
+        assert later.withdrawn == [], "cleared once must mean cleared for good"
         # Assert the RECORD, not only the verdict. A future change could clear
         # the line by special-casing the renderer while the stale name stays on
         # disk, and the next reader would find a record that never shrinks.
-        assert "retracted.md" not in _reported_names(state)
+        assert _reported_names(state) == set(), _reported_names(state)
+        assert "retracted.md" not in inbox_watch.render(after)
+
+    def test_arm_two_b_an_acknowledged_withdrawal_does_not_come_back(
+        self, tmp_path: Path
+    ) -> None:
+        """The other route in: the name reached the baseline through the seen set.
+
+        The acknowledging run that opens this arm writes BOTH records, and the
+        precondition below asserts it - without that assertion the arm passes
+        whenever the reported record is never written at all, which is exactly
+        what the defect does.
+        """
+        inbox, state = _tree(tmp_path)
+        note = _write(inbox, "retracted.md", "# From RC - hello\n\nsent to LL.\n")
+        inbox_watch.acknowledge_inbox(inbox=inbox, state=state)
+        _assert_reported_holds(state, "retracted.md")
+        note.unlink()
+
+        acked = inbox_watch.acknowledge_inbox(inbox=inbox, state=state)
+        after = inbox_watch.scan(inbox=inbox, state=state)
+
+        assert acked.withdrawn == ["retracted.md"], "the acknowledging run still reports it"
+        assert after.withdrawn == []
+        assert _reported_names(state) == set(), _reported_names(state)
 
     def test_arm_three_pruning_is_not_a_second_way_to_consume_unread_mail(
         self, tmp_path: Path
