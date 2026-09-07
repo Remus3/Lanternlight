@@ -382,6 +382,13 @@ LANES: tuple[Lane, ...] = (
             "docs/LEDGER.md",
             "docs/HEADLESS.md",
             "docs/OPERATIONS.md",
+            # Added 2026-09-07 closing OPS-42 question 2. The inventory is a
+            # description of this project's own machinery - its commands,
+            # hooks, guards and port block - which is continuity material and
+            # not a lane's domain artefact, so it belongs to this lane for the
+            # same reason ROADMAP.md does.
+            "docs/INVENTORY.md",
+            "tests/test_inventory.py",
             "WAKEUP_NOTES.md",
             # Renamed from NEXT_SESSION_PROMPT.md 2026-09-06. The hand-off is
             # now the tracked repo-root file the Desktop shortcut points at,

@@ -50,6 +50,8 @@ Touch these paths and nothing else. Every other path in the repository belongs t
 - `docs/LEDGER.md`
 - `docs/HEADLESS.md`
 - `docs/OPERATIONS.md`
+- `docs/INVENTORY.md`
+- `tests/test_inventory.py`
 - `WAKEUP_NOTES.md`
 - `LL-NEXT-SESSION.txt`
 - `.claude/commands/*.md`

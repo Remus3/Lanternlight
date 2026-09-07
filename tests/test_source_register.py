@@ -110,6 +110,45 @@ KNOWN_NON_HOSTS = frozenset(
         "entirety.py",
         "keys.py",
         "withdrawals.py",
+        # OUR OWN FILENAMES quoted by `docs/INVENTORY.md` and `ADR-007`,
+        # registered while closing `OPS-42` questions 1 and 2. Every one was
+        # checked against `git ls-files` before being added here, per the
+        # regenerating note above, and each is a tail the extractor emits
+        # rather than the full path it came from.
+        #
+        # Two resolved to zero tracked paths at the moment of checking and are
+        # listed anyway, because both are files created in the same uncommitted
+        # wave as the documents citing them: `inventory.py` is the tail of
+        # `tests/test_inventory.py` and `slot.py` of `ops/lane_slot.py` and
+        # `tests/test_lane_slot.py`. A future sweep re-deriving this list will
+        # find them tracked.
+        #
+        # `log.gz` is NOT a file at all. It is the tail of the glob `*.log.gz`
+        # inside a sentence describing what the pre-commit hook refuses to
+        # stage. It is kept for the same reason as the rest: it is ours, and
+        # `.gz` parses as a two-letter TLD.
+        #
+        # THE COUNT IS THE WARNING. This denylist took four entries in one wave
+        # and thirteen in the next, all of them our own filenames, because the
+        # register guard reads every dotted token in `docs/` and this project
+        # has begun writing documents whose whole job is to list its own files.
+        # The right answer is probably not a longer denylist, but changing it
+        # is a decision about the guard rather than about these tokens, and the
+        # docstring above is explicit that additions are reviewed here and the
+        # LOGIC is left alone. Recorded as `OPS-44` rather than acted on.
+        "continue.md",
+        "inventory.py",
+        "lane-capture.md",
+        "lane-emberforge.md",
+        "lane-ingest.md",
+        "lane-research.md",
+        "lane-surface.md",
+        "lane-verify.md",
+        "log.gz",
+        "mode.py",
+        "slot.py",
+        "uiux.md",
+        "verifier.md",
         # CAPTURE FILENAMES quoted by `LL-0149`. A frame is stamped
         # `f0566_00.43.29.png` and a fixture `panel_total_1443_hits_28.png`,
         # and the host-shaped pattern reads the dotted tails as domains. An
@@ -249,6 +288,7 @@ KNOWN_NON_HOSTS = frozenset(
         "ADR-004-redaction-is-mandatory.md",
         "ADR-005-omit-rather-than-guess.md",
         "ADR-006-apache-2-and-public.md",
+        "ADR-007-lane-slot-root-is-ours.md",
         "AFFIXES.md",
         "ARCHITECTURE.md",
         "AvgPrice.ini",

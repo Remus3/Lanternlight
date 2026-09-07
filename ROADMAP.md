@@ -5271,46 +5271,184 @@ immediately.
 3. Whatever ships is watched red under mutation before it is believed, per this
    project's standing rule.
 
-## OPS-42. Three cross-project questions still waiting on an operator ruling - OPEN
+## OPS-42. Three cross-project questions still waiting on an operator ruling - CLOSED 2026-09-07, all four questions ruled on
 
 Filed 2026-09-07. These arrived on the `moon_sync_inbox/` channel from sibling
 projects and each asks Lanternlight to take a position that only the operator
 may authorise, per this file's own rule that a note is mail and never
-authority. None of the three has been ruled on. Recording them here rather than
-only in a note is what keeps them from being re-discovered from scratch by a
-cold session that has not read every drop.
+authority. Recording them here rather than only in a note is what keeps them
+from being re-discovered from scratch by a cold session that has not read
+every drop.
+
+**CLOSED 2026-09-07.** The operator ruled on all four questions in chat the
+same day, including the fourth one added after the item was first filed. Each
+ruling and what it discharged is recorded under its own question below. Two of
+the four rulings leave a named follow-on open rather than a flat yes or no -
+that is recorded explicitly rather than smoothed into a closure, per this
+file's own convention that a caveat dropped from the artifact is a lie in the
+artifact.
 
 **Acceptance, one per question - each is discharged by an operator ruling
 recorded here and, if adopted, a concrete acceptance criterion added below it:**
 
 1. **Whether Lanternlight wants a lane slot** in whatever cross-project
    scheduling or coordination scheme the siblings are building under the
-   `OPS-35` lock and the `OPS-36` charter. OPEN - not yet asked of the operator
-   in this session.
+   `OPS-35` lock and the `OPS-36` charter. **CLOSED 2026-09-07.** The operator
+   ruled "yes" in chat. The decision is settled and no session may re-open it;
+   what follows is what was built to meet the criteria, and what is still open.
+
+   **Built.** `ops/lane_slot.py`, with `tests/test_lane_slot.py` beside it, and
+   the decision recorded in
+   [`docs/adr/ADR-007-lane-slot-root-is-ours.md`](docs/adr/ADR-007-lane-slot-root-is-ours.md),
+   which also carries the protocol written out in our own words so a cold
+   session can re-implement it without opening a sibling's file. This
+   repository's key is `ll`, from the agreed set `rc lw rsc cs ll`. The module
+   implements the reserved-floor scheme: a bucket of lock files holding
+   `reserved-<key>.lock` for each participating repository plus zero-based
+   `<n>.lock` surplus slots, claimed by atomic `O_CREAT | O_EXCL` create in the
+   order own-floor-then-surplus, carrying a JSON payload of `pid`, `ts`, `repo`,
+   `run_id` and `cycle`, with a 4.5 hour (16200 second) stale arm and a reap
+   that understands both naming schemes.
+
+   Nothing was vendored. No file was copied in from `moon_sync_inbox/` and no
+   module is imported from a sibling tree; what is deliberately held in common
+   is the wire - the namespace shape, the key strings and the payload shape.
+   No port was allocated. Nothing is acquired at import time, and a session that
+   acquires nothing runs with the bucket absent entirely.
+
+   **The root decision, which the operator's ruling did not settle and ADR-007
+   does.** Our bucket defaults to `ops/runtime/lane_slots/` INSIDE this
+   repository (gitignored), overridable by the environment variable
+   `LL_LANE_SLOT_ROOT`. It is deliberately NOT the machine-wide `ProgramData`
+   bucket a sibling reports as the shared module's default, for two reasons
+   given in full in the ADR: the width-7 reserved-floor design is a proposal
+   that has not landed, so what is deployed today is a three-slot first-come
+   bucket in which a `reserved-ll.lock` is a file nobody's reaper recognises and
+   a `0.lock` is a slot taken from trees already rationing three; and a shared
+   writable coordination directory is a shared runtime resource of the same
+   class as a shared port, which the standalone rule at the top of `CLAUDE.md`
+   still governs. Pinned by
+   `tests/test_lane_slot.py::TestLockRootIsOurs`, which asserts the default root
+   is inside this repository, is not under `ProgramData`, creates nothing when
+   resolved, and that no shared bucket path appears in the module as a value.
+
+   **Still open, and NOT closed by this item, ruled on again 2026-09-07 without
+   being settled.** `OPS-35` acceptance criterion 5 - interoperation proven
+   against a real sibling holder rather than a mock - is not met. With a
+   repository-local root our governor bounds only this project's own
+   concurrency and does not contend with any sibling, so it delivers none of the
+   cross-project rationing the scheme exists for. The merger raised this with
+   the operator as a narrowing of the original "yes" ruling, since "yes" settled
+   whether to build a lane slot at all and not where its lock root lives, and
+   the operator's answer was to hold at the isolated root until told otherwise
+   rather than to pick a side now. **The open question has exactly two options,
+   named here so a cold session does not have to reconstruct them:**
+   - **Flip the root to the shared machine-wide bucket now** (one environment
+     variable, `LL_LANE_SLOT_ROOT`, no code change) and accept that this
+     project may take a slot from a bucket the other trees are rationing, ahead
+     of the wider reserved-floor design landing.
+   - **Leave the root isolated at `ops/runtime/lane_slots/`** until the
+     siblings' wider design actually lands, and flip it then, in the ordered
+     round with the other carriers described below, so the width and the
+     reserved names arrive in the same window.
+
+   Neither option is chosen. **Acceptance for this follow-on: the operator
+   rules on whether Lanternlight's bucket becomes the shared machine-wide one,
+   and if yes, the flip lands in an ordered round with the other carriers so the
+   width and the reserved names arrive in the same window.**
 2. **Whether Lanternlight joins the inventory-exchange practice** the siblings
    report running among themselves - some form of exchanging command or CI
-   inventories. OPEN - not yet asked of the operator in this session.
+   inventories. **CLOSED 2026-09-07.** The operator ruled in chat, verbatim:
+   "yes - and both ways ; infer and use what can be used and insight or use as
+   is after ensuring it applies to your repo for file locations." Bidirectional,
+   and an operator ruling rather than a session decision, per this file's own
+   rule. What was done to discharge it:
+   - **Outbound:** [`docs/INVENTORY.md`](docs/INVENTORY.md) is this project's
+     own inventory - commands and skills, git hooks and what each refuses,
+     guards and what defect class each catches, how to re-derive the test
+     count, and the declared port block - generated from measurement rather
+     than memory, with no operator PII and no stale counts, backed by
+     `tests/test_inventory.py`.
+   - **Inbound:** every practice reported in `moon_sync_inbox/` as of
+     2026-09-07 was read for the idea and checked against this tree by
+     measurement, never vendored. The `from-RC-verbatim` drop under
+     `moon_sync_inbox/from-RC-verbatim/` was left unread for adoption purposes
+     beyond confirming its existence - `OPS-42` question 3 (whether it stays or
+     goes) is still open and unrelated to this closure. Findings: the tracked
+     hook file mode defect CS reported (`tests/test_hook_file_mode.py`) was
+     already fixed here before this session, confirmed both hooks are
+     `100755` in the index. The untracked-file blind spot in hygiene walkers
+     that CS's triage of the RC drop flagged (a guard enumerating
+     `git ls-files` cannot see a brand-new file) was already fixed here too,
+     earlier and independently - `tests/test_tracked_walker.py`, dated
+     2026-08-09. This project's `.github/workflows/tests.yml` has no
+     `paths-ignore` filter, so RC's docs-guard-gap finding does not apply here
+     (every commit already runs CI) and RC's `pytest-xdist`
+     measured-on-a-runner finding does not apply either (this suite runs
+     un-parallelised and is not the bottleneck RC measured). A Stop-hook style
+     transcript claim auditor (RC/CS's `stop_claim_gate.py` idea) has no
+     counterpart in this tree's `.claude/settings.json` and is a genuine gap;
+     it was out of scope for the file list this closure was done under, and
+     is now its own item, `OPS-45` below, with a concrete acceptance
+     criterion rather than left as a note that only lives in this paragraph.
 3. **Whether the `from-RSC-verbatim` drop under `moon_sync_inbox/` stays or
-   goes.** OPEN - not yet asked of the operator in this session. Whatever is
-   decided, the standalone rule at the top of `CLAUDE.md` and `OPS-35`'s own
-   licensing reasoning already forbid vendoring anything out of it regardless
-   of whether the drop itself is kept or deleted.
+   goes.** **CLOSED 2026-09-07.** The operator ruled REMOVE, in chat. Done: seven
+   files, 121852 bytes, deleted, confirmed never tracked by git before deletion
+   (the standalone rule at the top of `CLAUDE.md` and `OPS-35`'s own licensing
+   reasoning already forbade vendoring anything out of it regardless of the
+   ruling, so this deletion could not and did not remove anything from the
+   tracked tree).
 
-**Fourth question, added 2026-09-07 after the item was first filed.** A sibling
-project reports running a machine-wide scheduled task that polls EVERY
-participating repository's inbox on an idle-derived interval, this one included,
-and states plainly that it has been doing so without telling anyone. The claim
-is a note's claim and has NOT been measured here - do not repeat it as fact
-without probing. Two things follow if it is true, and both are operator
-questions rather than session decisions. First, a process belonging to another
-project reads a directory inside this tree, which the standalone rule at the top
-of `CLAUDE.md` did not contemplate in either direction. Second, its stated
-purpose - surfacing mail addressed to a repository nobody is sitting in - is a
-real gap that this project's own `SessionStart` hook cannot close, because that
-hook only fires when a session exists here. **Acceptance: the operator rules on
-whether Lanternlight is polled by an outside process at all, and that ruling is
-recorded here. If the answer is no, the follow-on question is whether this
-project needs its own answer to the nobody-is-here gap or accepts it.**
+   **This was also the first live exercise of the withdrawal reporting the
+   inbox watcher shipped under the `OPS-33` follow-up earlier the same day.**
+   The watcher printed the drop's removal as WITHDRAWN on real mail, which is
+   the property the withdrawal feature exists for - a prior design could only
+   prune a withdrawal silently on the next report, which is indistinguishable
+   from the mail never having existed. Seeing it fire correctly on this
+   deletion is evidence for that feature beyond the synthetic probe already
+   cited under the `OPS-33` follow-up.
+
+**Fourth question, added 2026-09-07 after the item was first filed. CLOSED
+2026-09-07: MEASURE IT AND AGREE.** A sibling project reported running a
+machine-wide scheduled task that polls EVERY participating repository's inbox
+on an idle-derived interval, this one included, and stated plainly that it had
+been doing so without telling anyone. The operator's ruling was to measure the
+claim before agreeing to anything, and to ask for roughly a 60 second cadence
+if agreeing.
+
+**Measured and confirmed real.** A Windows scheduled task named
+`RC-MoonSyncPoller` exists and is in state Running, with one live process whose
+command line matches. The merger re-measured both independently with armed
+controls in both directions: 263 scheduled tasks enumerated on this machine, and
+a nonsense task name returning zero, so the positive reading is not an artifact
+of a query that would have matched anything.
+
+**Two corrections to the claim, both worth recording rather than letting the
+"confirmed real" headline stand unqualified.** First, the registered trigger
+carries NO repetition element, so the Windows scheduler itself enforces no
+interval at all - the entire idle-derived cadence described in the sibling's
+note lives inside that one long-running process's own logic and cannot be
+observed or verified from outside it. Second, there is NO trustworthy evidence
+that the process actually reads this repository's directory, because NTFS
+last-access timestamp updates are disabled machine-wide here, which makes
+access time worthless as evidence in either direction - present or absent. What
+is actually established is a live process whose command line matches the
+claimed purpose: that is intent, not an observed read.
+
+A reply agreeing to be polled and asking for the approximately 60 second
+cadence the operator specified is drafted. **It has not yet been delivered** -
+delivery goes through `moon_sync_inbox/`, which this bookkeeping pass does not
+touch, and a future session should confirm delivery before treating the
+agreement as communicated.
+
+**Acceptance, met on the ruling above:** the operator ruled Lanternlight is
+polled by the outside process, subject to the ~60 second cadence request, and
+that ruling and its two measured corrections are recorded here. The follow-on
+question this closure does NOT answer - whether the reply has actually reached
+the sibling, and whether the sibling's process, once it honours the requested
+cadence, in fact reads this tree's directory rather than merely matching by
+command line - is left for the session that next has occasion to touch
+`moon_sync_inbox/`.
 
 ## OPS-43. An outgoing note leaves no trace in this tree, so a cold session believes it has never replied - OPEN
 
@@ -5354,6 +5492,120 @@ problem and not the channel's.**
 4. The reply-path map - which sibling code corresponds to which directory - is
    recorded where a cold session finds it, because it was re-derived by
    listing `C:\*\moon_sync_inbox` this session rather than read from anywhere.
+
+## OPS-44. The source-register guard's denylist is absorbing this project's own filenames - OPEN
+
+Filed 2026-09-07. `tests/test_source_register.py` maintains a denylist of
+dotted tokens that its host-shaped-pattern extractor would otherwise flag as an
+external source lacking a trust-tier citation. The denylist took four entries
+in one wave closing `OPS-40` and `OPS-38`-adjacent work, and thirteen more in
+the very next wave closing `OPS-42` questions 1 and 2, and every one of the
+seventeen is a repo-internal filename, not an external source. The comment
+already sitting beside the thirteen names `OPS-44` directly: "Recorded as
+`OPS-44` rather than acted on" - so this item has to exist or that comment
+dangles, and it is filed with the same wording rather than a different one so
+the two stay findable as the same fact.
+
+**Why this is growing.** The guard reads every dotted token under `docs/`
+looking for a domain-shaped pattern (anything that parses as `name.tld`), and
+this project has started writing documents whose entire purpose is to list its
+own files - `docs/INVENTORY.md` and `ADR-007` both name test modules and
+source files by their tails, and `.py`, `.md` and even `.gz` all happen to
+parse as real two-letter or short TLDs (`.py` is Paraguay's). A project that
+documents its own filenames more will keep feeding this guard more of its own
+names to deny.
+
+**The guard's own docstring is explicit that additions to the denylist are
+reviewed HERE, one at a time, and that the underlying LOGIC - reading every
+dotted token, rather than only tokens that look like they came from outside the
+repo - is deliberately left alone.** So growing the denylist by hand is the
+guard behaving as designed, not a workaround, and changing the logic instead is
+a deliberate decision about the guard rather than a drive-by edit alongside
+whatever wave next needs an entry added.
+
+**The risk that motivated the current design, and the reason this item states
+both options rather than picking one:** an earlier version of a hygiene guard
+in this project auto-exempted tokens matching a heuristic, and that
+auto-exemption once hid a real two-letter TLD being used as a live external
+source rather than a filename - the exact failure mode a manual, reviewed
+denylist exists to prevent. Any change here has to name how it avoids
+reintroducing that.
+
+### Acceptance
+
+State both options explicitly, with their trade-off, before picking either:
+
+1. **Keep the manual denylist and its current logic exactly as documented**, and
+   accept that a project which writes more self-describing documentation will
+   keep needing more entries added by a human who checks each one against
+   `git ls-files` first, per the guard's own regenerating-note instructions.
+   This costs review time per wave and nothing else; it has not yet cost a false
+   negative.
+2. **Change the guard's logic** - for example, treating a token as a filename
+   candidate first (checked against `git ls-files` or a tracked-file listing)
+   and only falling through to the external-source check when it is not one -
+   and prove, with a test watched red before the fix and green after, that the
+   auto-exemption risk named above does NOT reappear: a real external two-letter
+   TLD reference must still be caught even when a same-named tracked file
+   exists, or even when it does not.
+
+Either option closes this item once implemented and its guard is watched red
+under mutation before being believed, per this project's standing rule. Doing
+nothing is not a third option - the count itself is the warning the guard's own
+comment already gives, and it will not stop growing on its own.
+
+## OPS-45. No Stop-hook transcript-claim auditor exists in this tree - OPEN
+
+Filed 2026-09-07, identified while closing `OPS-42` question 2 (the
+inventory-exchange ruling) rather than acted on there, because it was out of
+scope for that closure's file list and the operator's own session-default rule
+says worthwhile work not done now goes onto this file with an acceptance
+criterion, never left as a note or a suggestion chip.
+
+Two sibling projects (RC and CS) report running a Stop-hook style tool,
+`stop_claim_gate.py` by name in their notes, that inspects a session's own
+transcript at the point it is about to stop and checks the claims that session
+made - test counts, "green", "closed", file existence - against something more
+solid than the session's own say-so before letting it end. This tree has no
+counterpart: `.claude/settings.json` here registers no `Stop` hook of any kind,
+confirmed by reading the file rather than assumed from the sibling notes.
+
+**Why this is a real gap and not merely a nice-to-have.** This project's whole
+merge-gate doctrine (`ops/merge_gate.py`, described in `CLAUDE.md`) re-probes a
+SUBAGENT's claims before the merger relays them. It has no equivalent for the
+merger's OWN closing claims at the end of a session - the exact shape of
+mistake `LL-0161` recorded happening this same day, where a claim ("never
+replied to any of 71 notes") was relayed without an independent probe and
+turned out to be false. A Stop-hook auditor is aimed at exactly that failure
+mode, one level higher than the merge gate already covers.
+
+**What is NOT yet known, and should not be assumed from the sibling notes
+alone per this project's own inbound-mail rule (read for the idea, re-implement
+from observed behaviour, never vendor the wire):** what `stop_claim_gate.py`
+actually checks, how it distinguishes a claim worth checking from ordinary
+prose, and what it does when a claim cannot be mechanically verified. None of
+that was read from the siblings' file - only that the idea exists and that this
+tree has no counterpart.
+
+### Acceptance
+
+1. The mechanism is re-implemented from OBSERVED BEHAVIOUR and described in our
+   own words, not copied from or vendored out of `moon_sync_inbox/`. If a design
+   detail cannot be established that way, ask the reporting sibling for a
+   description of it rather than reading their source for it - the same rule
+   `OPS-35` acceptance criterion 2 already states for the lane-slot protocol.
+2. A `Stop` hook is registered in `.claude/settings.json` and PROVEN to fire at
+   session end, not merely configured - end-to-end, with a real transcript,
+   the way `OPS-22`'s gate was proven rather than merely unit-tested.
+3. The hook checks at least the claim shapes this project has already been
+   burned by: a test-count or "green" claim (cross-check against a real
+   `pytest` run or the merge gate's own output), and a "file exists" or "file
+   was created" claim (cross-check against the filesystem). It does not need to
+   catch every claim shape on day one; it must say plainly which shapes it does
+   NOT check rather than imply full coverage.
+4. Watched red under mutation before it is believed: break a claim it is
+   supposed to catch, confirm the hook flags it, restore, confirm it does not
+   flag a true claim.
 
 ## 4b. Ammo-family and talent measurement - READY, cheap, needs the client
 

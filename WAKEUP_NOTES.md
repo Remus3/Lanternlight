@@ -5,6 +5,108 @@ fidelity and archive older ones rather than deleting them.
 
 ---
 
+# Session note 2026-09-07 - `OPS-42` CLOSED in full on four operator rulings, `OPS-44` and `OPS-45` filed - NOTHING IN THIS SESSION WAS COMMITTED OR PUSHED
+
+**This entry is bookkeeping for work another part of the same session already
+landed in the working tree.** The writer of this entry touched only
+`docs/LEDGER.md`, `ROADMAP.md` and this file, did not touch any `.py` file, did
+not run the suite as part of its own verification, and did not commit or push.
+Every number below is relayed from the merger's own measurement this session,
+not re-derived here, and is marked as such in `docs/LEDGER.md`. A cold session
+picking this up should run the full suite and the merge gate itself before
+trusting the counts, and should commit and push once it has done so - the tree
+as of this note is uncommitted.
+
+## Four operator rulings, given in chat 2026-09-07, closing `OPS-42`
+
+`OPS-42` had been holding three questions plus a fourth added later, all
+waiting on an operator ruling. All four are now ruled on; the item is CLOSED.
+See `ROADMAP.md`'s `OPS-42` for the full text and ledger `LL-0162` for the
+bookkeeping summary.
+
+1. **Lane slot: YES, discharged.** Already built this session before this
+   bookkeeping pass started - `ops/lane_slot.py`, `tests/test_lane_slot.py`,
+   `docs/adr/ADR-007-lane-slot-root-is-ours.md`. The lock root is OURS, at
+   `ops/runtime/lane_slots/`, not the shared machine-wide bucket, because the
+   wider cross-project design has not landed. **The one thing a cold session
+   must not miss:** this leaves `OPS-35` acceptance criterion 5
+   (interoperation with a real sibling holder) open, and the root itself is an
+   explicit open question with exactly two named options - flip to the shared
+   bucket now and accept a possibly-rationed slot, or hold isolated and flip
+   later once the siblings' design lands - recorded verbatim in `ROADMAP.md`
+   rather than left implicit.
+2. **Inventory exchange: YES, and BOTH WAYS.** Already built - `docs/INVENTORY.md`,
+   `tests/test_inventory.py`. Three inbound practices were measured
+   INAPPLICABLE to this tree (a pytest-xdist CI claim, a cancelled-run
+   concurrency block, a docs-guard paths-ignore filter) rather than silently
+   skipped. The Stop-hook transcript-claim auditor idea that closure surfaced
+   but did not build is now `OPS-45`, filed with an acceptance criterion rather
+   than left as a note.
+3. **The from-RSC-verbatim drop: REMOVE. Done.** Seven files, 121852 bytes,
+   confirmed never tracked by git before deletion. First live exercise of the
+   inbox watcher's withdrawal reporting, shipped earlier the same session under
+   the `OPS-33` follow-up.
+4. **The outside poller: MEASURE IT AND AGREE, ~60 second cadence requested.**
+   Measured real - a Windows scheduled task `RC-MoonSyncPoller`, Running, one
+   live process with a matching command line, verified independently by the
+   merger with armed controls (263 tasks enumerated, a nonsense name returns
+   zero). Two corrections recorded rather than smoothed over: the registered
+   trigger has NO repetition element, so the observed cadence lives entirely
+   inside the process and the scheduler enforces nothing; and NTFS
+   last-access is disabled machine-wide here, so access timestamps are
+   worthless as evidence the process actually reads this tree - what is
+   confirmed is intent (a matching command line), not an observed read. A
+   reply agreeing to the cadence is drafted and NOT YET DELIVERED.
+
+## Two new items filed, each with a concrete acceptance criterion
+
+- **`OPS-44`** - the source-register guard's denylist is absorbing this
+  project's own filenames (four entries one wave, thirteen the next, all
+  repo-internal), because the guard reads every dotted token under `docs/` and
+  this project increasingly writes documents that list its own files. Both
+  options are stated - keep the manual denylist and its review cost, or change
+  the guard's logic and prove the auto-exemption risk that motivated the
+  current design does not reappear - and neither is picked here.
+- **`OPS-45`** - no Stop-hook transcript-claim auditor exists in this tree,
+  matching the `stop_claim_gate.py` idea two siblings report running. Aimed at
+  the exact failure `LL-0161` recorded this same day: a claim relayed by the
+  merger without an independent probe, that turned out to be false.
+
+## A process defect worth carrying forward
+
+**A per-file merge-gate baseline can go stale mid-session and fail silently.**
+The baseline in use partway through this session was stale at 40 of 47
+modules and blind to 92 tests across seven modules, because it predated a wave
+that added new test files. Rebuilt from the committed module set at commit
+`66bad3f` to a corrected baseline of 2152 across 45 modules. **A per-file guard
+does not raise an alarm when it stops covering a new file - it just stops
+looking, and the only way to notice is to re-measure the baseline against the
+current module set before trusting the gate's per-file verdict.**
+
+## Verification observed this session (merger's numbers, use these and no others)
+
+`python -m pytest` bare: **2204 passed, 1 skipped, in 137.02s**. Merge gate
+against the corrected 45-module baseline of 2152: **OK, 2205 collected, no
+file's count dropped**. Independent mutation of `ops/lane_slot.py` dropping the
+exclusive-create flag: **7 tests failed**, anchor matched exactly once,
+restored to 45 passed.
+
+## What this bookkeeping pass could not confirm
+
+- Whether the drafted reply for ruling 4 (agreeing to the poller, requesting
+  ~60 second cadence) has actually been placed in `moon_sync_inbox/`. That
+  directory is out of scope for this pass and is gitignored regardless - the
+  same caveat `LL-0161` already carries for the four reply notes, now extended
+  to this fifth one.
+- Whether the sibling's polling process, once (if) it honours the requested
+  cadence, actually reads this tree's directory rather than merely matching by
+  command line - NTFS access-time evidence is unavailable machine-wide, so this
+  may never be independently measurable from this side.
+- The 2204/1-skipped suite count and the merge-gate OK above were not
+  re-derived by this pass; they are relayed from the merger's own run.
+
+---
+
 # Session note 2026-09-07 - four operator rulings recorded, `OPS-33` follow-up and `OPS-40` CLOSED, three new items OPEN - NOTHING IN THIS SESSION WAS COMMITTED OR PUSHED
 
 **This entry is bookkeeping for work another part of the same session already

@@ -17,6 +17,7 @@ Each ADR follows the same four headings: **Context**, **Decision**,
 | [ADR-004](ADR-004-redaction-is-mandatory.md) | Redaction is mandatory and tested | Accepted |
 | [ADR-005](ADR-005-omit-rather-than-guess.md) | Omit rather than guess | Accepted |
 | [ADR-006](ADR-006-apache-2-and-public.md) | Apache-2.0 and public from the first commit | Accepted |
+| [ADR-007](ADR-007-lane-slot-root-is-ours.md) | Lanternlight takes a lane slot, with the lock root in this repo | Accepted |
 
 ## Conventions
 

@@ -84,6 +84,110 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0162 - 2026-09-07 - OPS-42 CLOSED in full - four operator rulings answer all four cross-project questions, two new items filed, and a stale per-file baseline is retired as a process defect
+
+**Four operator rulings, given in chat 2026-09-07, answering the four
+questions `OPS-42` had been holding open.** Recorded here as operator rulings
+so a cold session does not re-litigate any of them; `ROADMAP.md`'s `OPS-42`
+carries the full text of each and is the source to read first.
+
+**Ruling 1, lane slot: YES, discharged.** `ops/lane_slot.py` and
+`tests/test_lane_slot.py` are in the tree, with
+`docs/adr/ADR-007-lane-slot-root-is-ours.md`. The protocol was reconstructed
+from the siblings' notes and re-implemented, never vendored - no file copied
+in, no sibling module imported, no port allocated, nothing acquired at import
+time - and the merger independently verified `lane_slot.py` imports only the
+standard library, names no `ProgramData` path, and binds nothing. **The lock
+root is ours**, at `ops/runtime/lane_slots/`, overridable by
+`LL_LANE_SLOT_ROOT`, and deliberately NOT the shared machine-wide bucket - the
+wider cross-project design has not landed, so a reserved-style lock would go
+unrecognised there today and a surplus lock would take a slot the other trees
+are rationing. `OPS-35` acceptance criterion 5 (interoperation with a real
+sibling holder) stays open as a consequence. The merger raised the root
+placement with the operator as a narrowing of the original ruling; the operator
+held at the isolated root rather than picking a side, so `ROADMAP.md` now
+states the two options explicitly - flip to the shared bucket now and accept a
+possibly-rationed slot, or hold isolated and flip later in an ordered round
+once the siblings' design lands.
+
+**Ruling 2, inventory exchange: YES, and BOTH WAYS.** Verbatim from the
+operator: "yes - and both ways ; infer and use what can be used and insight or
+use as is after ensuring it applies to your repo for file locations."
+`docs/INVENTORY` (the Markdown file of that name under `docs/`) and
+`tests/test_inventory.py` are in the tree. Inbound,
+sibling practices were checked against this tree by measurement before
+adoption rather than assumed: several were already present here; three were
+measured INAPPLICABLE because the tools or config they depend on do not exist
+in this tree at all - a pytest-xdist CI claim, a cancelled-run concurrency
+block, and a docs-guard paths-ignore filter. One practice worth having, a
+Stop-hook auditor checking a transcript's claims, was deliberately not built in
+that pass and is now filed as `OPS-45` with an acceptance criterion, rather
+than left as a note in a closure paragraph.
+
+**Ruling 3, the from-RSC-verbatim drop: REMOVE. Done.** Seven files, 121852
+bytes, confirmed never tracked by git before deletion. The removal was the
+first live exercise of the withdrawal reporting the inbox watcher shipped
+earlier the same day under the `OPS-33` follow-up: the watcher printed the
+drop as WITHDRAWN on real mail rather than going silent, which is the property
+that feature exists for.
+
+**Ruling 4, the outside poller: MEASURE IT AND AGREE, with a request for
+roughly a 60 second cadence.** Measured and confirmed real: a Windows
+scheduled task named `RC-MoonSyncPoller` exists and is in state Running, with
+one live process whose command line matches, and the merger re-measured both
+independently with armed controls in both directions - 263 tasks enumerated,
+and a nonsense task name returning zero. Two corrections to the claim, both
+recorded rather than smoothed over: the registered trigger carries NO
+repetition element, so the Windows scheduler enforces no interval at all and
+the whole idle-derived cadence lives inside a long-running process that cannot
+be observed from outside it; and there is NO trustworthy evidence the process
+reads this repository's directory, because NTFS last-access updates are
+disabled machine-wide here, which makes access timestamps worthless as
+evidence in either direction. What is actually established is a live process
+whose command line matches - intent, not an observed read. A reply agreeing to
+be polled and asking for the 60 second cadence is drafted and NOT YET
+DELIVERED.
+
+**`OPS-42` is CLOSED in full, all four questions.** Two new items opened as a
+direct consequence: `OPS-44` (the source-register guard's denylist absorbing
+this project's own filenames - both options and the auto-exemption risk stated,
+neither picked) and `OPS-45` (the Stop-hook transcript-claim auditor from
+ruling 2).
+
+**A process defect worth remembering, named at this closure rather than left
+implicit.** The per-file merge-gate baseline in use partway through this
+session's work was STALE at 40 of its 47 modules and blind to 92 tests across
+seven modules, because it had been measured before a wave that added new test
+modules. It was rebuilt from the committed module set at commit `66bad3f`,
+giving a corrected baseline of 2152 across 45 modules. A baseline measured
+before a wave goes stale the moment that wave adds a module, and a per-file
+guard silently stops covering what it cannot see - it does not fail loudly,
+it just stops looking at the new files.
+
+**Evidence, this session's numbers, use these and no others:**
+- `python -m pytest` bare: 2204 passed, 1 skipped, in 137.02s.
+- Merge gate against the corrected 45-module baseline of 2152: OK, 2205
+  collected, no file's count dropped.
+- Independent mutation of `ops/lane_slot.py`, dropping the exclusive-create
+  flag: 7 tests failed, the restore anchor matched exactly once, restored to
+  45 passed.
+- `docs/adr/ADR-007-lane-slot-root-is-ours.md`, `docs/INVENTORY` (the Markdown
+  file of that name), `tests/test_inventory.py`, `ops/lane_slot.py` and
+  `tests/test_lane_slot.py` all present on disk, confirmed by listing rather
+  than assumed.
+- `tests/test_source_register.py` already carries the `OPS-44` reference this
+  entry and the new `ROADMAP.md` item name-check against - "Recorded as
+  `OPS-44` rather than acted on" - confirmed by reading the file.
+
+**What this bookkeeping pass could not itself confirm, because it touched only
+`ROADMAP.md`, `docs/LEDGER.md` and `WAKEUP_NOTES.md` and ran no code:** the
+2204/1-skipped suite count and the merge-gate OK above are relayed from the
+merger's own measurement this session, not re-derived here. Whether the
+drafted reply for ruling 4 has actually been placed in
+`moon_sync_inbox/` is unconfirmed to this entry's author, since that directory
+is out of scope for this pass and is gitignored regardless - the same caveat
+`LL-0161` already carries for the four reply notes, now extended to the fifth.
+
 ### LL-0161 - 2026-09-07 - Operator ruling: answer the sibling projects - four reply notes drafted, Lanternlight's first replies on the moon_sync_inbox channel
 
 **Operator ruling, given in chat 2026-09-07: answer the sibling projects.**
