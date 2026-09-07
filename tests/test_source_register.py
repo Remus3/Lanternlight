@@ -125,6 +125,16 @@ KNOWN_NON_HOSTS = frozenset(
         "Path.write",
         "subdirs.py",
         "MANIFEST.sha",
+        # MODULE AND TEST FILENAMES quoted by `LL-0156`, every one arriving
+        # TRUNCATED at the last label pair: `tools/doc_size_budget.py` as
+        # `budget.py`, `tools/syntax_check_hook.py` as `hook.py`,
+        # `tests/test_precommit_gate_lint.py` as `lint.py`. `m.py` is the
+        # throwaway fixture module from the lint gate's own probe transcript,
+        # quoted because the probe's exact output is the evidence.
+        "budget.py",
+        "hook.py",
+        "lint.py",
+        "m.py",
         # The host-shaped pattern truncates at the first label pair, so
         # `per_file.values()` is seen as `file.values` - the TRUNCATED form
         # is what the failure message names and therefore what must be here.

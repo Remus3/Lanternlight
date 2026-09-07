@@ -204,7 +204,22 @@ IFS=$old_ifs
 # halves: the skip there, and the refusal in a repository that does carry it.
 
 staged_md=$(printf '%s\n' "$staged" | grep '\.md$')
+staged_py=$(printf '%s\n' "$staged" | grep '\.py$')
 repo_top=$(git rev-parse --show-toplevel 2>/dev/null) || repo_top=.
+
+# The interpreter, shared by sections 3 and 4. LL_PYTHON wins so a different
+# checkout can point this somewhere else without editing a tracked hook.
+find_python() {
+    for cand in ${LL_PYTHON:-} python python3 \
+        "C:/Users/<ACCOUNT>/AppData/Local/Programs/Python/Python314/python.exe"
+    do
+        if "$cand" -c "import sys" >/dev/null 2>&1; then
+            printf '%s\n' "$cand"
+            return 0
+        fi
+    done
+    return 1
+}
 
 if [ "$fail" -eq 0 ] && [ -n "$staged_md" ] && [ -f "$repo_top/ops/docguards.py" ]; then
 
@@ -226,17 +241,7 @@ if [ "$fail" -eq 0 ] && [ -n "$staged_md" ] && [ -f "$repo_top/ops/docguards.py"
     set +f
     IFS=$md_ifs
 
-    # The interpreter. LL_PYTHON wins so a different checkout can point this
-    # somewhere else without editing a tracked hook.
-    py_bin=
-    for cand in ${LL_PYTHON:-} python python3 \
-        "C:/Users/<ACCOUNT>/AppData/Local/Programs/Python/Python314/python.exe"
-    do
-        if "$cand" -c "import sys" >/dev/null 2>&1; then
-            py_bin=$cand
-            break
-        fi
-    done
+    py_bin=$(find_python) || py_bin=
 
     if [ "$fail" -eq 0 ] && [ -z "$py_bin" ]; then
         report ".githooks/pre-commit" "no working python was found, so the doc-reading tests cannot run against the staged Markdown - set LL_PYTHON"
@@ -297,6 +302,47 @@ if [ "$fail" -eq 0 ] && [ -n "$staged_md" ] && [ -f "$repo_top/ops/docguards.py"
             exec "$py_bin" -m pytest $selected
         ) >&2; then
             report ".githooks/pre-commit" "the doc-reading test subset FAILED against the staged tree - the prose being committed reddens the suite"
+        fi
+    fi
+fi
+
+# ---------------------------------------------------------------
+# 4. LINT GATE - net-new lines ONLY. ROADMAP OPS-37
+# ---------------------------------------------------------------
+#
+# WHY IT IS SCOPED. This repository has always linted manually and tree-wide,
+# with nothing at commit time. The obvious fix - run ruff over the tree and
+# refuse on any finding - is the wrong one: one pre-existing finding anywhere
+# then refuses every commit, including commits that never opened the offending
+# file. That guard does not get fixed, it gets switched off, and a switched-off
+# guard still looks armed. So the question asked here is the narrow one: did
+# THIS commit write a bad line. tools/precommit_gate.py lint-staged answers it
+# by intersecting ruff's findings with the added-line ranges of the staged
+# diff, and it lints the STAGED blob rather than the working tree so the line
+# numbers and the text come from the same place.
+#
+# A REPOSITORY THAT DOES NOT CARRY tools/precommit_gate.py IS SKIPPED, exactly
+# as section 3 skips one without ops/docguards.py. tests/test_no_pii.py and
+# tests/test_docguards.py both point throwaway repositories at this hook and
+# commit ordinary .py files into them; those trees are not Lanternlight, have
+# no ruff config, and refusing there would be a false alarm in another test's
+# fixture. tests/test_precommit_gate_lint.py pins the skip and the refusal.
+#
+# The ambient git environment is KEPT here, like the python calls in section 3
+# and unlike the pytest run: the gate has to read the index being committed,
+# which under `git commit -a` is a temporary one named only by GIT_INDEX_FILE.
+
+if [ "$fail" -eq 0 ] && [ -n "$staged_py" ] && [ -f "$repo_top/tools/precommit_gate.py" ]; then
+    lint_py=$(find_python) || lint_py=
+    if [ -z "$lint_py" ]; then
+        report ".githooks/pre-commit" "no working python was found, so the staged Python cannot be linted - set LL_PYTHON"
+    else
+        lint_out=$("$lint_py" "$repo_top/tools/precommit_gate.py" lint-staged 2>&1)
+        if [ $? -ne 0 ]; then
+            report ".githooks/pre-commit" "ruff reported findings on lines this commit ADDS"
+            printf '%s\n' "$lint_out" | tr -d '\r' | while IFS= read -r line; do
+                printf '        %s\n' "$line" >&2
+            done
         fi
     fi
 fi

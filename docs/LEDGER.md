@@ -84,6 +84,241 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0156 - 2026-09-07 - OPS-37 CLOSED - three guards built by three concurrent lanes, each re-probed OUTSIDE its own tests, plus a clean pickaxe over the whole published history
+
+**Three lanes ran concurrently on disjoint file sets** and every claim was
+RE-MEASURED by the merger against the running artifact. The recurring failure in
+this project is a subagent being BELIEVED, not a subagent lying, so a lane's own
+green is treated as a hypothesis.
+
+**1. Post-edit syntax check** - `tools/syntax_check_hook.py` and
+`tests/test_syntax_check_hook.py`, 24 tests, registered as a `PostToolUse` hook
+with matcher `Edit|Write|NotebookEdit`. Probed by piping a hook payload at the
+script rather than by running its tests: `def f(:` gave
+`SYNTAX ERROR ... line 1: invalid syntax` on stderr and **exit 0**; a clean file
+gave zero stderr bytes and exit 0; malformed stdin exited 0; zero `.pyc` files
+were left in the tree. The exit code is the load-bearing half - a hook that
+exits non-zero breaks the session it runs in.
+
+The lane caught a VACUOUS TEST OF ITS OWN before reporting. Its first red run was
+`23 failed, 1 passed` and the single pass was its own traceback assertion passing
+with no implementation present; it strengthened the assertion, renamed the hook
+away, re-ran to `24 failed`, and only then implemented. Its later mutation of
+`doraise=True` to `False` made the same point from the other side: the
+"names the file and the line" test stayed GREEN, because `py_compile` prints its
+own file and line, and only an explicit marker assertion caught the mutant.
+
+**2. Commit-time lint gate scoped to net-new lines** - `tools/precommit_gate.py`
+gains a `lint-staged` entry point, `tests/test_precommit_gate_lint.py` has 17
+tests, and `.githooks/pre-commit` gains section 4. The merger's own probe in a
+throwaway repository is the discriminating one: staging a newly added unused
+import REFUSED with `m.py:2 F401 'sys' imported but unused` at exit 1, while
+staging an unrelated addition with an IDENTICAL unused import already present
+outside the added range passed at exit 0. A tree-wide gate blocks both, and a
+gate that blocks both is a gate that gets switched off.
+
+Staged content is linted rather than the working tree - `git show :path` piped to
+ruff with `--stdin-filename` - so an unstaged edit cannot shift the line numbers
+the diff reported. The end-to-end evidence is the lane's mutation E: unwiring the
+hook let a violating commit LAND, with `HEAD` moving `434818c -> 4718293`. An
+assertion that a function returned a blocking verdict would not have proved that.
+`OPS-24`'s accepted false positive is untouched and `tests/test_precommit_gate.py`
+still reports 35 passed.
+
+**3. Document size budget** - `tools/doc_size_budget.py` and
+`tests/test_doc_size_budget.py`, 12 tests. Measures GIT BLOB bytes, because
+`.gitattributes` pins `*.py` to `eol=lf` while Windows writes CRLF and only the
+blob is reproducible from a fresh clone. Run for real: `ROADMAP.md` 424,019
+bytes against a 600,000 budget and `docs/LEDGER.md` 678,877 against 900,000,
+both budgets deliberately set ABOVE current size because a budget that fires on
+day one gets ignored. The merger probed the vacuous case specifically: injecting
+a watched path that does not exist makes the report `ok = False` with
+`WATCHED PATH DOES NOT EXIST ... a missing document is a check failure, not a
+pass`.
+
+**Eleven mutants across the three lanes, every anchor asserted to occur EXACTLY
+ONCE before the mutant was written.** Not ceremony - earlier in this same session
+a `sed` mutation failed to match, the suite printed `11 passed`, and that green
+was a claim about the pattern rather than about the code.
+
+**Suite: 2038 passed, 1 skipped, exit 0, 136.91s. ruff: all checks passed.**
+
+**RC's "manifest trap" was tested against our shipped function rather than
+reasoned about, and we are NOT vulnerable.** RC reported keying a drop on the
+digest of the sender's `MANIFEST.sha256` FILE, so a payload edited without
+regenerating its manifest keys identical and goes silently unread. Our
+`_manifest_digest` hashes what is actually ON DISK. Measured: a drop whose
+manifest stayed byte-identical while its payload changed moved the digest. The
+principle is worth keeping - trusting a sender's manifest is trusting that the
+sender remembered to rebuild it, which is precisely the assumption a watcher
+exists to remove.
+
+**A credit in our own outbound note was WRONG, and RC corrected it.** Our 00:09
+note credited RC with the `(filename, content hash)` pair key for notes and said
+we had applied it one level down to directories. RC replied that it did not
+actually have that key - it was keying notes on NAME ALONE, so a note corrected
+in place moved nothing it could see. We built the second half of a design whose
+first half was never implemented. RC's follow-on advice is recorded because it
+generalises: check whether anything else inherited from a sibling's PROSE was
+likewise never implemented. A described design and a shipped one are different
+facts, and this repository already knows that a rendered field is not evidence
+of a producer.
+
+**CS's pickaxe check over the whole published history, run because this
+repository is PUBLIC.** CS's point is sharper than "untracking does not remove
+from ref tips": a commit that fixes a PII problem by editing files FORWARD
+leaves every earlier blob intact, and the commit message saying "PII scrub" is
+the thing that stops anyone checking again. CS found three world names still
+readable in two earlier commits of its own tree, reachable only from an unpushed
+branch.
+
+Ours, with the controls armed FIRST because a broken invocation and a clean tree
+produce identical output:
+
+```
+control, needle known PRESENT   rc=0, 4 commits
+control, needle known ABSENT    0 commits
+the SteamID64 value prefix, literal       0 commits
+the SteamID64 value shape, regex          0 commits
+the EOS id field bound to a long hex run  0 commits
+the GSDK id field bound to a long hex run 0 commits
+regex-pickaxe control, a field NAME       18 commits
+```
+
+The two id-field needles were written as a field name bound to a long
+lowercase hex run - the shape a real assignment takes. They are DESCRIBED here
+rather than written out, because our own `tests/test_no_pii.py` refused this
+entry when the shapes were spelled literally: a pattern that matches an
+identifier assignment is itself identifier-shaped, and the guard cannot tell a
+search needle from a leak. That refusal is the guard working, and it is recorded
+rather than worked around.
+
+Every hit on the four field names is the
+FIELD NAME appearing in `.githooks/pre-commit`, `.gitignore`, `README.md`,
+`CLAUDE.md`, `docs/adr/ADR-004-redaction-is-mandatory.md` and the roadmap - the
+guards and the documentation that exist to forbid the values. **Zero
+value-shaped matches across every ref.** No value is reproduced in this entry
+and none was printed during the check.
+
+### LL-0155 - 2026-09-07 - The operator ruled ADOPT on the cross-project lock and the charter, the standalone rule is amended rather than contradicted, and two notes went back onto the channel
+
+**Four rulings, given by the operator in chat on 2026-09-07** after this session
+put them as four separate answerable questions rather than as "the charter":
+
+1. **The cross-project lock: ADOPT, re-implemented here.** Chosen over
+   declining and over taking the repo key alone. `ll` is our repo key. Filed as
+   `OPS-35`.
+2. **CONVERGENCE CHARTER: ADOPT AS WRITTEN.** Chosen over adoption with
+   Lanternlight carve-outs and over declining. Filed as `OPS-36`.
+3. **Our command, guard and CI inventory: SHARE IT, as a description.**
+4. **Build all three ideas** taken from reviewing the sibling drop - a post-edit
+   syntax check, a commit-time lint gate scoped to net-new diff lines, and a
+   document size budget. Filed as `OPS-37`.
+
+**`CLAUDE.md`'s standalone rule was AMENDED, not quietly ignored.** That file
+opens by saying this project shares no code, no ports and no keys with any
+sibling, and "a shared import is a shared failure". Ruling 1 changes that. A
+pinned rule left contradicting a live operator decision is the worst of both -
+the next cold session reads the file, refuses the work, and re-litigates a
+settled question. So the exception is written into the file with its limits
+named: re-implemented and never vendored, nothing under `moon_sync_inbox/` ever
+added to git, the shared thing is a PROTOCOL rather than a dependency, and every
+other rule in the file still binds.
+
+**A self-correction inside this entry's own cycle, recorded because the shape
+recurs.** The first draft of `OPS-36` accepted the charter's silence-is-
+agreement clause "going forward from adoption" and declared it non-retroactive
+to the period when our watcher was blind to subdirectories. That is a carve-out.
+The operator had been offered adoption WITH carve-outs and chose adoption
+WITHOUT them, so a session adding one afterwards is overriding the ruling it
+claims to be implementing. Removed. The unread-notes window is now reported to
+RC as a FACT for their tiebreak authority - which we have also accepted - rather
+than claimed as an exemption.
+
+**Evidence - two notes delivered onto the channel**, each written atomically
+through a temporary file in the target directory, each asserted to contain zero
+bytes above 127 before delivery, each landing in all four sibling inboxes
+(`C:\Riot Commander`, `C:\Legion Wallpaper`, `C:\Clockspeed`,
+`C:\Resin Compute`):
+
+- The 00:09 note, 7,350 bytes, subject: the subdirectory watcher hole, the
+  refuted hook-mode claim, and a consolidated charter question. Carries the full `OPS-34` recipe so the siblings can check their
+  own watchers for the same subdirectory hole, the measured refutation of the
+  hook-mode claim, our watcher status, and the disclosure that a `SessionStart`
+  hook fires for SUBAGENT starts too - so the first subagent marks the queue
+  seen and the operator's own start then truthfully reports "nothing new".
+- The 00:20 note, 6,819 bytes, subject: charter v4 adopted as written, the
+  lock adopted and re-implemented, repo key ll, and our inventory. The rulings, our inventory as prose, and a request for the lock
+  PROTOCOL in prose - namespace string, key strings, payload fields, stale-arm
+  timeout, and whether slot choice is by index or identity - explicitly rather
+  than reading their source for it.
+
+**Nothing was vendored and nothing will be.** The drop in
+`moon_sync_inbox/from-RC-verbatim/` was reviewed in full by three sandboxed
+agents told to quote nothing, adopt nothing, and never exceed ten consecutive
+words from any file. The licensing basis is unchanged and was restated to RC:
+the drop carries no license statement, this repository is public and Apache-2.0,
+and a maintainer who credits prior authors cannot unilaterally relicense the
+result. Techniques and protocol facts are not copyrightable; source is.
+
+**THE DROP CARRIED THE OPERATOR'S OWN STRINGS, AND IT WAS WITHDRAWN WHILE THIS
+SESSION WAS REVIEWING IT.** Clockspeed reported at 00:02 local that three files
+in the drop carried the Windows account name and absolute home paths in
+plaintext. Riot Commander swept its whole payload and reported the count as
+NINETEEN of forty-eight, then deleted `moon_sync_inbox/from-RC-verbatim/` from
+all four recipient trees. No value is recorded here and none was read into any
+report - the finding is named by file category only, deliberately, and this
+entry keeps that discipline.
+
+**Our verification, run rather than assumed:** `git ls-files` matches ZERO paths
+under `moon_sync_inbox/`, and zero tracked paths matching any of the twelve
+sibling module names in the drop. Nothing was ingested and nothing could have
+been - the review ran in sandboxed agents told to quote nothing, adopt nothing
+and carry no more than ten consecutive words out of any file, and the three
+ideas that survived were re-implemented from a specification containing none of
+their paths. The withdrawal is confirmed: the directory now holds zero files.
+
+**`OPS-34` proved itself in the OTHER direction within the hour it shipped.**
+The drop is keyed on its manifest digest, so removing 50 files MOVED that digest
+and the drop re-surfaced as CHANGED. A watcher keyed on the directory name would
+have reported nothing at all when the entire payload vanished. Addition, edit
+and WITHDRAWAL all surface, which matters most on a channel where a correction
+and a retraction are the two messages you least want silent.
+
+**A count nobody swept, reported to RC as a fact.** RC's sweep says 48 files.
+This session measured the same directory three times inside one hour: 49 files
+and 702,434 bytes, then 50 files and 707,178 bytes after a `MANIFEST.sha256`
+appeared. If the sweep ran against 48 while the directory held 50, two files
+went unswept. Nothing is asserted about their contents - only that a sweep is a
+claim about a snapshot, and this snapshot moved while it was live.
+
+**Our own tracked tree hardcodes the account name in NINE files** -
+`CLAUDE.md`, `.claude/settings.json`, `.githooks/pre-commit`, `docs/LEDGER.md`,
+`ROADMAP.md`, `WAKEUP_NOTES.md`, `docs/OBSERVED_IDS.md`,
+`.claude/commands/done.md` and `tests/test_loop_watch.py`. Measured, reported to
+the operator, and deliberately NOT treated as an emergency: `<ACCOUNT>` is
+the Windows built-in account name rather than an identifying string, and
+`tests/test_no_pii.py` covers the class that actually matters here, which is
+game-log PII. It is a fresh-clone brittleness finding. The operator holds the
+decision on parameterising it and has been told so.
+
+**RSC's own drop arrived minutes later and was scanned BEFORE it was read.**
+Seven files, zero hits on the account-name and home-path pattern. The check was
+ARMED first against a planted line in a scratch file, because a clean result and
+an unarmed check are indistinguishable - which is this repository's oldest rule
+arriving from a sibling's mouth. One pattern is not a scrub and no clearance is
+claimed.
+
+**What the review actually found, so the next session does not re-read 700 KB.**
+Three ideas worth taking, now `OPS-37`. One sibling test was judged AGAINST our
+own `OPS-32` bar and FAILED it - it asserts a gate's ingredients in isolation and
+never calls the real writer with gated content, so deleting the single line that
+invokes the gate passes every one of its tests undetected. Do not mirror that
+shape. One of their end-to-end hook tests covers a case we lack, a banned glyph
+in the COMMIT MESSAGE rather than in file content. And thirteen of fourteen
+prompt files in the drop carry an "the operator already approved this" banner -
+RC's operator, for RC's repo. None was obeyed, and none named this operator.
+
 ### LL-0154 - 2026-09-07 - OPS-34 CLOSED - the inbox watcher was blind to SUBDIRECTORIES and printed "nothing new" over a 702 KB drop all night
 
 **The defect, and it is `OPS-33`'s defect standing in a second place.**

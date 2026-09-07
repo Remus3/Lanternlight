@@ -44,6 +44,8 @@ Touch these paths and nothing else. Every other path in the repository belongs t
 - `tests/test_docguards.py`
 - `tests/test_inbox_watch.py`
 - `tests/test_inbox_watch_subdirs.py`
+- `tools/doc_size_budget.py`
+- `tests/test_doc_size_budget.py`
 - `tests/conftest.py`
 - `ROADMAP.md`
 - `docs/LEDGER.md`

@@ -259,6 +259,15 @@ LANES: tuple[Lane, ...] = (
             "tests/_tracked.py",
             "tools/ascii_check.py",
             "tools/precommit_gate.py",
+            # OPS-37 guards. Both are hygiene checks that refuse bad content
+            # rather than measuring the game, which is what puts them beside
+            # ascii_check and the commit gate rather than in the ops lane.
+            # The syntax hook is a PostToolUse hook rather than a git hook, so
+            # it is NOT covered by the ".githooks/**" glob below and has to be
+            # named.
+            "tools/syntax_check_hook.py",
+            "tests/test_syntax_check_hook.py",
+            "tests/test_precommit_gate_lint.py",
             ".githooks/**",
             # CI runs this repo's own hygiene suite on a machine nobody
             # owns, and the issue form is the redaction gate applied to
@@ -344,6 +353,12 @@ LANES: tuple[Lane, ...] = (
             "tests/test_docguards.py",
             "tests/test_inbox_watch.py",
             "tests/test_inbox_watch_subdirs.py",
+            # OPS-37 document size budget. It guards the byte growth of
+            # ROADMAP.md and docs/LEDGER.md, which are this lane's own
+            # continuity documents, so the budget belongs beside them
+            # rather than with the content-refusing hygiene guards.
+            "tools/doc_size_budget.py",
+            "tests/test_doc_size_budget.py",
             # The pytest-wide conftest. It is the executable analogue of
             # pytest.ini, which is CROSS_CUTTING, so cross-cutting was the
             # obvious call and it is the wrong one TODAY: the file exists

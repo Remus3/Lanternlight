@@ -16,6 +16,13 @@ exit code is the verdict and the stderr text is best-effort - see `_say`, and
 `OPS-15` for the fail-open this ordering used to produce.
 Never raises - a crashing gate that blocks every command is worse than no gate,
 so anything unexpected exits 0 and says why on stderr.
+
+SECOND ENTRY POINT, added for ROADMAP ``OPS-37``. Run with the single argument
+``lint-staged`` this module is not a PreToolUse hook at all: it lints the
+STAGED content of the staged ``.py`` files and exits 1 if any finding sits on a
+line THIS COMMIT ADDS. ``.githooks/pre-commit`` calls it that way. See
+:func:`lint_staged` for why the scoping and the staged-content rule are both
+load-bearing.
 """
 
 from __future__ import annotations
@@ -25,6 +32,7 @@ import json
 import re
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -173,6 +181,299 @@ def _staged_paths() -> list[str]:
     return [line.strip() for line in out.stdout.splitlines() if line.strip()]
 
 
+# ---------------------------------------------------------------------------
+# ROADMAP OPS-37 criterion 2 - the commit-time lint gate.
+# ---------------------------------------------------------------------------
+
+#: A unified-diff hunk header. Only the ``+`` side matters here: ``c`` is the
+#: first line number in the NEW file and ``d`` is how many lines follow it.
+#:
+#: ``d`` IS OPTIONAL, and that is the whole trap. git writes ``@@ -3 +7 @@``
+#: for a single-line change, and a parser that reads the missing count as 0
+#: gives every one-line addition an EMPTY range - so the gate stays green over
+#: exactly the commits it exists to catch, and looks like it is working. The
+#: trailing ``@@`` is required by the pattern so the section heading git
+#: appends (``@@ -12 +12 @@ def enclosing():``) cannot be read as a number.
+HUNK_HEADER = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", re.MULTILINE)
+
+
+@dataclass(frozen=True)
+class LintFinding:
+    """One ruff finding, reduced to what the gate decides on."""
+
+    path: str
+    line: int
+    code: str
+    message: str
+
+    def format(self) -> str:
+        return f"{self.path}:{self.line} {self.code} {self.message}"
+
+
+class RuffFailed(RuntimeError):
+    """ruff was present but could not lint the staged content."""
+
+
+_RUFF_COMMAND: list[str] | None = None
+_RUFF_PROBED = False
+
+
+def ruff_command() -> list[str] | None:
+    """The argv prefix that runs ruff, or ``None`` when ruff is not installed.
+
+    ``python -m ruff`` is preferred over a bare ``ruff`` so the linter that
+    runs is the one installed for the interpreter running this gate, rather
+    than whichever copy happens to be first on PATH.
+
+    ruff is NOT a declared dependency of this project (``pyproject.toml`` has
+    an empty ``dependencies``), so a fresh clone can legitimately be without
+    it. Returning ``None`` here is how the caller learns to stand down instead
+    of refusing every commit on a machine that was never set up to lint.
+    """
+    global _RUFF_COMMAND, _RUFF_PROBED
+    if _RUFF_PROBED:
+        return _RUFF_COMMAND
+    _RUFF_PROBED = True
+    for candidate in ([sys.executable, "-m", "ruff"], ["ruff"]):
+        try:
+            probe = subprocess.run(
+                [*candidate, "--version"],
+                capture_output=True,
+                text=True,
+                timeout=60,
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError):
+            continue
+        if probe.returncode == 0:
+            _RUFF_COMMAND = candidate
+            return _RUFF_COMMAND
+    return None
+
+
+def parse_added_ranges(diff_text: str) -> list[tuple[int, int]]:
+    """Inclusive ``(start, end)`` line ranges that ``diff_text`` ADDS.
+
+    Line numbers are in the NEW file - which, for a ``git diff --cached``, is
+    the staged content and not the working tree. A hunk that adds nothing
+    (``+3,0``, a pure deletion) contributes no range at all: the lines around
+    a deletion were not written by this commit, and blaming them is how a
+    scoped gate quietly becomes a tree-wide one.
+    """
+    ranges: list[tuple[int, int]] = []
+    for match in HUNK_HEADER.finditer(diff_text):
+        start = int(match.group(1))
+        raw_count = match.group(2)
+        count = 1 if raw_count is None else int(raw_count)
+        if count <= 0:
+            continue
+        ranges.append((start, start + count - 1))
+    return ranges
+
+
+def line_is_added(line: int, ranges: list[tuple[int, int]]) -> bool:
+    """Is ``line`` inside any of ``ranges``? Both ends inclusive."""
+    return any(start <= line <= end for start, end in ranges)
+
+
+def _git_stdout(repo: Path, *args: str) -> str | None:
+    """Run git in ``repo`` and return stdout, or ``None`` if it failed.
+
+    THE AMBIENT ENVIRONMENT IS KEPT ON PURPOSE. This runs from a pre-commit
+    hook, where git names the index being committed through ``GIT_INDEX_FILE``
+    - under ``git commit -a`` that is a TEMPORARY index, and scrubbing the
+    variable would point every read below at the wrong one.
+    """
+    try:
+        result = subprocess.run(
+            ["git", *args],
+            cwd=repo,
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
+        return None
+    return result.stdout
+
+
+def staged_python_paths(repo: Path) -> list[str]:
+    """Repo-relative paths of the staged ``.py`` files, added or modified.
+
+    ``--diff-filter=ACM`` drops deletions: a file that is going away has no
+    staged content to lint and no added lines to judge.
+    """
+    out = _git_stdout(
+        repo, "diff", "--cached", "--name-only", "--diff-filter=ACM", "-z"
+    )
+    if out is None:
+        return []
+    return [name for name in out.split("\0") if name.endswith(".py")]
+
+
+def staged_diff(repo: Path, path: str) -> str:
+    """The staged diff for one path, with zero lines of context.
+
+    Zero context is what makes the hunk headers mean "added", rather than
+    "added, plus the three unchanged lines either side".
+
+    One path per call, which is deliberate: parsing a multi-file diff means
+    parsing its ``+++ b/<path>`` headers, and git quotes those for paths
+    carrying unusual bytes. Asking per path removes that failure mode from a
+    guard whose whole value is that it fires on the right lines.
+    """
+    return _git_stdout(repo, "diff", "--cached", "--unified=0", "--", path) or ""
+
+
+def staged_source(repo: Path, path: str) -> str | None:
+    """The STAGED bytes of ``path``, decoded, or ``None`` if unreadable."""
+    return _git_stdout(repo, "show", f":{path}")
+
+
+def ruff_findings(repo: Path, path: str, source: str) -> list[LintFinding]:
+    """Every ruff finding in ``source``, attributed to ``path``. Unscoped.
+
+    ``source`` is handed to ruff on STDIN with ``--stdin-filename`` set to the
+    real repo-relative path. That keeps two things true at once: ruff judges
+    the exact text that is about to be committed, and it still applies the
+    per-file rules in ``ruff.toml`` that are keyed on where the file lives.
+
+    ruff reports an ABSOLUTE filename even for stdin input, so the path here
+    is normalised back to repo-relative and falls back to the path that was
+    asked about. That fallback cannot mis-attribute anything, because ruff is
+    invoked once per staged path.
+
+    Raises :class:`RuffFailed` when ruff runs but does not produce findings -
+    a broken ``ruff.toml`` or an unparseable payload. Exit 0 is "clean" and
+    exit 1 is "findings"; anything else is a linter that did not lint, and
+    reporting that as clean would be a silent hole.
+    """
+    command = ruff_command()
+    if command is None:
+        return []
+    args = [*command, "check", "--output-format", "json", "--no-cache", "--force-exclude"]
+    config = repo / "ruff.toml"
+    if config.is_file():
+        # Explicit, so the answer does not depend on where the caller stood.
+        args += ["--config", str(config)]
+    args += ["--stdin-filename", path, "-"]
+    try:
+        result = subprocess.run(
+            args,
+            cwd=repo,
+            input=source,
+            capture_output=True,
+            text=True,
+            timeout=300,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise RuffFailed(f"could not run ruff on {path}: {exc}") from exc
+    if result.returncode not in (0, 1):
+        raise RuffFailed(
+            f"ruff exited {result.returncode} on {path}: "
+            f"{(result.stderr or result.stdout).strip()}"
+        )
+    try:
+        raw = json.loads(result.stdout or "[]")
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise RuffFailed(f"ruff produced unparseable output for {path}: {exc}") from exc
+
+    findings: list[LintFinding] = []
+    for item in raw:
+        location = item.get("location") or {}
+        row = location.get("row")
+        if not isinstance(row, int):
+            continue
+        findings.append(
+            LintFinding(
+                path=_relative_to(repo, item.get("filename"), path),
+                line=row,
+                code=str(item.get("code") or "?"),
+                message=str(item.get("message") or "").strip(),
+            )
+        )
+    return findings
+
+
+def _relative_to(repo: Path, reported: object, fallback: str) -> str:
+    if not isinstance(reported, str) or not reported:
+        return fallback
+    try:
+        return Path(reported).resolve().relative_to(repo.resolve()).as_posix()
+    except (OSError, ValueError):
+        return fallback
+
+
+def lint_staged(repo: Path) -> list[LintFinding]:
+    """Lint findings that sit on a line THIS COMMIT ADDS. The blocking set.
+
+    **WHY SCOPED AND NOT TREE-WIDE.** A tree-wide gate refuses every commit the
+    moment one pre-existing finding exists anywhere, including in files the
+    commit never opened. That guard does not get fixed, it gets disabled - and
+    a disabled guard is worse than none, because the badge stays up. So the
+    question asked here is narrow: did THIS commit write a bad line.
+
+    **WHY THE STAGED CONTENT AND NOT THE WORKING TREE.** The added ranges come
+    from the index. Line numbers only mean something against the text they were
+    computed from, so the text linted has to be the index's too. Point ruff at
+    the working tree instead and one unstaged edit shifts every line: the gate
+    then waves through a staged violation whose line moved out of range, and
+    refuses a clean staged change because of an edit that is not being
+    committed. Both directions are wrong and neither announces itself, which is
+    why ``tests/test_precommit_gate_lint.py`` pins each one separately.
+    """
+    blocking: list[LintFinding] = []
+    for path in staged_python_paths(repo):
+        ranges = parse_added_ranges(staged_diff(repo, path))
+        if not ranges:
+            continue
+        source = staged_source(repo, path)
+        if source is None:
+            continue
+        blocking += [
+            finding
+            for finding in ruff_findings(repo, path, source)
+            if line_is_added(finding.line, ranges)
+        ]
+    return blocking
+
+
+def lint_staged_main(repo: Path) -> int:
+    """CLI entry for ``lint-staged``. 0 permits, 1 refuses.
+
+    Two stand-downs, and they are deliberately different:
+
+    * **ruff absent** - permit, and say so. It is not a declared dependency,
+      so refusing here would block every commit on a fresh clone over a tool
+      the project never promised was installed.
+    * **ruff present but failing** - REFUSE. A broken config or a crashing
+      linter is not the fresh-clone case; it is a gate that did not run, and
+      reporting a gate that did not run as a pass is the failure this whole
+      file exists to avoid.
+    """
+    if ruff_command() is None:
+        _say("precommit_gate lint-staged: ruff is not installed, skipping.\n")
+        return 0
+    try:
+        findings = lint_staged(repo)
+    except RuffFailed as exc:
+        _say(f"precommit_gate lint-staged: {exc}\n")
+        return 1
+    if not findings:
+        return 0
+    _say(
+        f"{len(findings)} lint finding(s) on lines this commit ADDS "
+        "(pre-existing findings elsewhere are ignored):\n"
+    )
+    for finding in findings:
+        _say(f"  {finding.format()}\n")
+    return 1
+
+
 def _say(message: str) -> None:
     """Report ``message`` on stderr, best-effort, without risking the exit code.
 
@@ -283,8 +584,26 @@ def main() -> int:
     return 0
 
 
+#: The ``lint-staged`` entry point does NOT read stdin as JSON and does NOT
+#: exit 2 - it is a git hook helper, not a PreToolUse hook, and git reads any
+#: non-zero exit as a refusal. Spelled with and without dashes because both
+#: are the obvious thing to type.
+_LINT_ARGV = {"lint-staged", "--lint-staged"}
+
 if __name__ == "__main__":
     try:
+        if len(sys.argv) > 1 and sys.argv[1] in _LINT_ARGV:
+            # NOT covered by the soft-fail below on purpose. That fail-open is
+            # correct for a PreToolUse hook, where a crash must not wedge the
+            # session. Here a crash means the lint gate did not run, and a
+            # gate that did not run has not passed.
+            try:
+                _exit(lint_staged_main(REPO))
+            except SystemExit:
+                raise
+            except Exception as exc:
+                _say(f"precommit_gate lint-staged crashed, REFUSING: {exc}\n")
+                _exit(1)
         _exit(main())
     except SystemExit:
         raise

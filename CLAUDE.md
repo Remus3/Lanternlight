@@ -6,12 +6,32 @@ and save files plus passive screen capture, computes build and combat math in
 **Emberforge**, and surfaces it in a separate window. Public repo, Apache-2.0,
 upstream `github.com/Remus3/Lanternlight`.
 
-**Standalone.** Lanternlight shares no code, no ports, no scheduled-task
-namespace and no API keys with any other project on this machine. Sibling
-projects exist locally and some of their patterns are worth reusing. If you find
-yourself importing from one of them, stop - copy the idea, never the wire. A
-shared import is a shared failure, and this repo is public while they may not
-be.
+**Standalone, with ONE operator-granted exception recorded below.**
+Lanternlight shares no code, no ports, no scheduled-task namespace and no API
+keys with any other project on this machine. Sibling projects exist locally and
+some of their patterns are worth reusing. If you find yourself importing from
+one of them, stop - copy the idea, never the wire. A shared import is a shared
+failure, and this repo is public while they may not be.
+
+**THE EXCEPTION, ruled by the operator in chat 2026-09-07.** Lanternlight
+adopts the cross-project lock and the CONVERGENCE CHARTER, and takes `ll` as its
+repo key. This is a genuine change to the rule above and is written here rather
+than left as a contradiction a cold session would refuse to act on. Its limits:
+
+- **Re-implemented, never vendored.** We build our own from observed behaviour.
+  No file is copied in, no module is imported from a sibling tree, and nothing
+  under `moon_sync_inbox/` is ever added to git. The licensing reason is
+  unchanged - the drop carries no license statement and this repo is public and
+  Apache-2.0 - and the operator's ruling was to adopt the design, not the files.
+- **Interoperating means matching the PROTOCOL**, which is the lock namespace,
+  the key strings and the payload shape. That is the only thing we deliberately
+  hold in common, and it is a wire format rather than a dependency.
+- **Everything else in this file still binds**, including no shared ports, no
+  shared API keys, redaction, the hard boundary, and TDD.
+
+Filed as `OPS-35` (the lock) and `OPS-36` (the charter). Read those before
+acting on either, because the operator ruled on the DECISION and the acceptance
+criteria are still ours to meet.
 
 > **Living docs, read at session start:** [`README.md`](README.md) -
 > [`docs/FINDINGS.md`](docs/FINDINGS.md) - [`docs/OBSERVED_IDS.md`](docs/OBSERVED_IDS.md) -

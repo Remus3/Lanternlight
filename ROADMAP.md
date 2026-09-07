@@ -4534,6 +4534,208 @@ standing reminder that a drop may be read for an IDEA and never vendored.
    dropping `new_drops` from the nothing-new condition (1 failed), and zeroing
    the byte total (1 failed). Restored to 11 passed.
 
+## OPS-35. Adopt the cross-project lock, re-implemented - OPEN, operator-ruled 2026-09-07
+
+**The operator ruled ADOPT on 2026-09-07**, choosing "adopt, re-implemented
+here" over declining and over taking the repo key alone. The decision is
+therefore settled; the acceptance criteria below are not, and they are ours.
+
+This changes the standalone rule at the top of `CLAUDE.md`, which now records
+the exception explicitly. Read it there first.
+
+**What was proposed.** RC and LW run a shared lock (`ops/loop/slots.py` over a
+Windows named mutex in `ops/loop/winmutex.py`) that serialises concurrent
+sessions across the projects on this machine, with a canonical repo key per
+project. `ll` is pre-assigned to us. Their own traffic reports a real near-miss:
+under a reserved-slot design the slot is chosen by IDENTITY, so a repository
+root rename mid-run abandons the held reservation and claims a different one
+while the first sits orphaned until a stale arm fires. LW's root was renamed on
+2026-09-06, so it would have happened that night.
+
+**The distinction this item turns on.** Adopting the DESIGN is now approved.
+Vendoring the FILES is still refused, and the two are not the same act. The
+drop in `moon_sync_inbox/from-RC-verbatim/` carries no license statement, this
+repository is public and Apache-2.0, and a maintainer who credits prior authors
+cannot unilaterally relicense the result. Techniques and protocol facts are not
+copyrightable; source is.
+
+### Acceptance
+
+1. **Nothing from `moon_sync_inbox/` is added to git, ever.** A guard asserts no
+   tracked path resolves inside it, and the guard is watched red by staging a
+   file from there.
+2. **The protocol is written down in our own words BEFORE any code**, in
+   `docs/`: the lock namespace, the exact key strings, the payload shape and
+   every field's meaning, and the stale-arm timeout. A cold session must be able
+   to re-implement from that document without opening a sibling's file. If a
+   detail cannot be established from observed behaviour, ASK RC for a
+   description of it rather than reading their source for it.
+3. **Our implementation keys on IDENTITY, not on the filesystem path.** The
+   near-miss above is a design defect we adopt the fix for, not the defect. A
+   test renames the repository root under a held reservation and asserts the
+   same reservation is still held.
+4. **The lock is never acquired at import time** and never blocks a session that
+   is not contending. A test proves a session that acquires nothing runs to
+   completion with the lock namespace absent entirely.
+5. **Interoperation is proven against a real sibling holder, not a mock.** If
+   that cannot be arranged, the item stays open and says so - a mock proving we
+   agree with ourselves is the two-agents-agreeing failure in a new costume.
+6. Every guard above is watched red under mutation before it is believed.
+
+## OPS-36. Adopt CONVERGENCE CHARTER v4 as written - OPEN, operator-ruled 2026-09-07
+
+**The operator ruled ADOPT AS WRITTEN on 2026-09-07**, over adopting with
+Lanternlight-specific carve-outs and over declining. The decision is settled.
+
+**What still has to be established before anything is implemented, and why this
+item is not simply "done".** Four charter versions arrived on this channel
+inside roughly four hours, several superseding each other, alongside a repo-key
+scheme, a command and CI inventory exchange, a worktree ordering invariant and a
+caveman-wiring clause. "The charter" is not currently one document. A
+consolidated request went to RC on 2026-09-07 asking which version is CURRENT,
+which clauses require an answer from us, what changes in our tree for each, and
+which of them presuppose the lock in `OPS-35`.
+
+**Two clauses accepted with their consequences named**, because a caveat stated
+in chat and dropped from the artifact is a lie in the artifact:
+
+- **RC holds deadlock tiebreak authority.** We accept that. It means a
+  disagreement we cannot settle is settled against us by another project's
+  session, and the operator ruled to accept that cost.
+- **A draft asserts that silence is agreement.** Accepted as written. No
+  Lanternlight session may soften this into "accepted going forward only" - the
+  operator was offered adoption WITH carve-outs and chose adoption WITHOUT them,
+  and a session inventing a carve-out afterwards is overriding the ruling it
+  claims to be implementing. An earlier draft of this section did exactly that
+  and is corrected here.
+
+  There is one FACT that RC needs and that is not a carve-out: notes sat unread
+  on this channel while our watcher was structurally blind to subdirectories -
+  see `OPS-34`, closed 2026-09-07. Whether a silence clause reaches a period in
+  which the channel provably did not reach us is RC's call under the charter's
+  own tiebreak authority, which we have accepted. It has been reported to them
+  as a fact, not claimed as an exemption.
+
+### Acceptance
+
+1. The CURRENT charter version is identified by RC and recorded here verbatim in
+   substance, in our own words, with its version and timestamp.
+2. Each clause that imposes an obligation on this repository is listed with the
+   concrete artifact that discharges it - a file, a hook, a ritual step in
+   `.claude/commands/done.md` - or is marked as imposing none.
+3. Any clause that conflicts with the hard boundary in `CLAUDE.md`, with
+   redaction, or with this repository being PUBLIC is escalated to the operator
+   as a NEW question rather than resolved by a session. Adoption of a charter is
+   not adoption of a rule that would put the operator's game account at risk.
+4. The worktree ordering invariant and the caveman-wiring clause are each either
+   implemented with a test or recorded as already satisfied, naming the file.
+
+## OPS-37. Three guards this repository does not have - CLOSED 2026-09-07, all three built and each verified OUTSIDE its own tests
+
+**The operator ruled BUILD ALL THREE on 2026-09-07.** Each is an IDEA taken from
+reviewing a sibling's drop and must be re-implemented from behaviour; no source
+is copied. Each starts with a failing test that is watched red.
+
+1. **Post-edit syntax check.** A `PostToolUse` hook compiles each touched `.py`
+   through `py_compile`, reports failures on stderr and always exits 0.
+   Acceptance: a file containing a deliberate syntax error is reported, a clean
+   file is not, and the hook never breaks the session that runs it. The gap is
+   real - our hooks run under a windowless interpreter that swallows syntax
+   errors silently and nothing catches it today.
+2. **Commit-time lint gate scoped to net-new lines.** Extend
+   `tools/precommit_gate.py` to parse staged-diff hunk ranges and block only on
+   findings whose line falls inside an ADDED range. Acceptance: one fixture
+   violation inside the diff blocks the commit, one outside it does not, and the
+   end-to-end proof is a real commit attempt with HEAD asserted unchanged. Today
+   we lint manually and tree-wide with zero commit-time enforcement.
+3. **Document size budget.** Flag a named document at or over a configured byte
+   budget. Acceptance: a tiny fixture over a test budget is flagged and one
+   under it is not. Measured 2026-09-07: `ROADMAP.md` is 412,224 bytes across
+   126 sections with no guard at all.
+
+### CLOSED 2026-09-07, ledger `LL-0156` - and each guard was probed OUTSIDE its own tests
+
+Three lanes ran concurrently on disjoint file sets. Every claim below was
+RE-MEASURED by the merger against the running artifact rather than accepted from
+the lane that wrote it, because this project's recurring failure is a subagent
+being believed rather than a subagent lying.
+
+**1. Post-edit syntax check** - `tools/syntax_check_hook.py`,
+`tests/test_syntax_check_hook.py` (24 tests), registered as a `PostToolUse` hook
+with the matcher `Edit|Write|NotebookEdit`. An omitted matcher would have fired
+on `Read` and `Bash` where nothing compiles.
+
+Probed directly, by piping a hook payload at it rather than by running its
+tests: a file containing `def f(:` produced `SYNTAX ERROR ... line 1: invalid
+syntax` on stderr and **exit 0**; a clean file produced zero stderr bytes and
+exit 0; deliberately malformed stdin exited 0; and zero `.pyc` files were left
+anywhere in the tree. The exit code matters more than the message - a hook that
+exits non-zero breaks the session it runs in.
+
+The lane found and fixed a VACUOUS TEST of its own before reporting, which is
+worth recording. Its first red run was `23 failed, 1 passed`; the single pass was
+its own traceback assertion passing with no implementation present. It
+strengthened the assertion, renamed the hook away, re-ran to `24 failed`, and
+only then implemented. Its mutation of `doraise=True` to `False` then confirmed
+the same lesson from the other side - the "names the file and the line" test
+stayed GREEN under that mutation, because `py_compile` prints its own file and
+line; only the explicit marker assertion caught it.
+
+**2. Commit-time lint gate scoped to net-new lines** - `tools/precommit_gate.py`
+extended with a `lint-staged` entry point, `tests/test_precommit_gate_lint.py`
+(17 tests), wired as section 4 of `.githooks/pre-commit`.
+
+The discriminating probe, run by the merger in a throwaway repository: stage a
+newly-added unused import and the gate REFUSES with
+`m.py:2 F401 'sys' imported but unused`, exit 1. Then stage an unrelated
+addition while an IDENTICAL unused import sits in the file already, outside the
+added range - exit 0. A tree-wide gate blocks both, and a gate that blocks both
+is a gate that gets switched off.
+
+Staged content is linted, not the working tree: the gate reads `git show :path`
+and pipes it to ruff with `--stdin-filename`, so an unstaged edit cannot shift
+the line numbers the diff reported. That case has its own test in both
+directions.
+
+The end-to-end evidence is the lane's mutation E, which unwired the hook from
+`lint-staged` and watched a violating commit LAND, `HEAD` moving
+`434818c -> 4718293`. An assertion that a function returned a blocking verdict
+would not have proved this; only a real commit attempt with `HEAD` compared
+before and after does.
+
+`OPS-24`'s accepted false positive is untouched and `tests/test_precommit_gate.py`
+still reports 35 passed.
+
+**3. Document size budget** - `tools/doc_size_budget.py`,
+`tests/test_doc_size_budget.py` (12 tests). Measures GIT BLOB bytes rather than
+working-file bytes, because `.gitattributes` pins `*.py` to `eol=lf` while
+Windows writes CRLF, so the two differ and only the blob is reproducible from a
+fresh clone.
+
+Run for real: `ROADMAP.md` 424,019 bytes against a 600,000 budget, and
+`docs/LEDGER.md` 678,877 against 900,000. Both budgets were deliberately set
+ABOVE current size with headroom stated in the file - a budget set below current
+size fires on day one, gets ignored, and is worse than no budget.
+
+Probed by the merger for the vacuous case specifically: injecting a watched path
+that does not exist makes the report `ok = False` with
+`WATCHED PATH DOES NOT EXIST ... a missing document is a check failure, not a
+pass`. A missing file silently satisfying a size budget is the classic dead
+guard and it is closed here.
+
+**Mutation evidence, eleven mutants across the three lanes, every anchor
+asserted to occur EXACTLY ONCE before the mutant was written.** That precaution
+is not ceremony: earlier in this same session a `sed` mutation failed to match,
+the suite printed `11 passed`, and that green was a claim about the pattern
+rather than about the code. Every mutant was killed and every lane restored to
+green.
+
+**Not adopted, and recorded so nobody re-derives it.** One sibling test reviewed
+alongside these was judged against `OPS-32`'s bar and FAILED it: it asserts a
+gate's ingredients in isolation and never calls the real writer with gated
+content, so deleting the single line that invokes the gate passes every one of
+its tests undetected. Do not mirror that shape when `OPS-32` is built.
+
 ## 4b. Ammo-family and talent measurement - READY, cheap, needs the client
 
 Opened 2026-08-09 after the talent and skills screens were captured. The class's
