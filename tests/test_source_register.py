@@ -136,6 +136,44 @@ KNOWN_NON_HOSTS = frozenset(
         # is a decision about the guard rather than about these tokens, and the
         # docstring above is explicit that additions are reviewed here and the
         # LOGIC is left alone. Recorded as `OPS-44` rather than acted on.
+        # OUR OWN OUTGOING-MAIL MACHINERY, quoted by `docs/REPLY_PATHS.md`,
+        # registered while landing `OPS-43`. The hand-off written at the
+        # previous wrap predicted this trip - it is the FIFTH - and named the
+        # sanctioned move: vet the token, add it here, leave the LOGIC alone
+        # because `OPS-44` still holds that decision unmade.
+        #
+        # Vetted before adding, per the regenerating note above. `outbox.py`
+        # and the two dotted paths are `ops/outbox.py` and functions inside it;
+        # at the moment of checking `git ls-files` matched zero paths for them
+        # because the file was created in the same uncommitted wave as the
+        # document citing it, and `git status` shows it as `?? ops/outbox.py`.
+        # A future sweep re-deriving this list will find it tracked, the same
+        # note already recorded for `inventory.py` and `slot.py`.
+        #
+        # `DELIVERIES.json` is not source at all: it is the delivery record
+        # this project writes under `moon_sync_inbox/_outbox/`, which is
+        # gitignored in full and never committed. `.json` is not a TLD, but the
+        # host-shaped pattern reads the dotted token anyway.
+        "DELIVERIES.json",
+        "ops.outbox.deliver",
+        "outbox.py",
+        "outbox.replies",
+        # The SIXTH trip, on `LL-0168` itself - the entry recording the fifth.
+        # Same shape as the `OPS-31` sequence noted above: the entry that
+        # closes an item is refused by this guard, which is the defect being
+        # recorded happening again while it is being written down.
+        #
+        # `PATHS.md` is the tail of `docs/REPLY_PATHS.md`, which `git ls-files`
+        # will match once this wave is committed and `git status` currently
+        # shows as untracked. `contract.write` is the tail of
+        # `ops.lane_contract.write_all`, `ops.outbox.SIBLING` of
+        # `ops.outbox.SIBLING_INBOXES`, and `ops.outbox.backfill` of the
+        # function of that name - all three are truncations the host-shaped
+        # pattern makes, not names anything in this project actually uses.
+        "PATHS.md",
+        "contract.write",
+        "ops.outbox.SIBLING",
+        "ops.outbox.backfill",
         "continue.md",
         "inventory.py",
         "lane-capture.md",

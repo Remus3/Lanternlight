@@ -239,6 +239,8 @@ __all__ = [
     "NOT_OURS",
     "UNSURE",
     "INBOX_DIRNAME",
+    "OUTBOX_DIRNAME",
+    "outbox_summary",
     "STATE_FILENAME",
     "REPORTED_FILENAME",
     "SCHEMA",
@@ -269,6 +271,23 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 #: The channel directory. Gitignored, and not this project's to own.
 INBOX_DIRNAME = "moon_sync_inbox"
+
+#: OUR OWN outgoing copies, a subdirectory of the channel - ``OPS-43``.
+#:
+#: The operator ruled on 2026-09-07 that this watcher covers the ENTIRETY of the
+#: inbox folder, so a directory placed inside it is watched whether or not we
+#: put it there. That leaves exactly two options for our own outbox and only one
+#: of them is honest: skipping it silently is the ``OPS-34`` defect again, so it
+#: is CLASSIFIED instead - counted onto :class:`Scan`, named in the report as
+#: ours, and kept out of the unread drops and the withdrawal baseline. Without
+#: this, every note this project sends comes straight back to it as unread mail.
+#:
+#: The string is duplicated from ``ops.outbox.OUTBOX_DIRNAME`` rather than
+#: imported, because this module is run as a script by a ``SessionStart`` hook
+#: and a script's ``sys.path`` does not contain the repository root, so an
+#: ``ops.`` import here would fail exactly where the module must not.
+#: ``tests/test_outbox.py`` asserts the two constants agree.
+OUTBOX_DIRNAME = "_outbox"
 
 #: Acknowledged-set file name, under ops/runtime/ which is gitignored. Written
 #: ONLY by an acknowledging run.
@@ -763,6 +782,12 @@ class Scan:
     ``acknowledged`` records whether THIS run wrote the seen set. A report-only
     run leaves it False, and a False here beside a non-empty ``groups`` is the
     normal, intended state: the mail was shown, not consumed.
+
+    ``outbox_present``, ``outbox_notes`` and ``outbox_bytes`` describe OUR OWN
+    outgoing copies - see :data:`OUTBOX_DIRNAME`. They are counts, and the
+    outbox is deliberately absent from ``drops``, from ``total_notes`` and from
+    the withdrawal baseline: it is not mail, and reporting it as mail would hand
+    this project's own replies back to it as unread.
     """
 
     status: str = "ok"
@@ -771,6 +796,9 @@ class Scan:
     groups: list[Group] = field(default_factory=list)
     drops: list[Drop] = field(default_factory=list)
     total_notes: int = 0
+    outbox_present: bool = False
+    outbox_notes: int = 0
+    outbox_bytes: int = 0
     withdrawn: list[str] = field(default_factory=list)
     acknowledged: bool = False
     state_note: str = ""
@@ -874,6 +902,38 @@ def _child_counts(entry: Path) -> tuple[int, int]:
     return dirs, files
 
 
+def outbox_summary(inbox: Path) -> tuple[bool, int, int]:
+    """Return ``(present, notes, total_bytes)`` for OUR OWN outgoing copies.
+
+    ``notes`` counts Markdown files at any depth, because a note is always
+    Markdown and the delivery manifest beside them is a record rather than a
+    note. ``total_bytes`` covers every file under the directory, manifest
+    included, so the figure describes the directory rather than a subset of it.
+
+    Never raises. A directory we cannot walk reports what it managed to count,
+    because this function feeds a heading and not a decision - the mail report
+    must not fail over our own bookkeeping.
+    """
+    root = inbox / OUTBOX_DIRNAME
+    if not root.is_dir():
+        return False, 0, 0
+    notes = 0
+    total = 0
+    try:
+        for path in root.rglob("*"):
+            if not path.is_file():
+                continue
+            if path.suffix.lower() == ".md":
+                notes += 1
+            try:
+                total += path.stat().st_size
+            except OSError:
+                continue
+    except OSError:
+        pass
+    return True, notes, total
+
+
 def _read_drops(inbox: Path) -> tuple[list[Drop], str]:
     """Return one :class:`Drop` per immediate subdirectory, plus a listing error.
 
@@ -890,6 +950,14 @@ def _read_drops(inbox: Path) -> tuple[list[Drop], str]:
     problems: list[str] = []
     for entry in sorted(inbox.iterdir()):
         if not entry.is_dir():
+            continue
+        if entry.name == OUTBOX_DIRNAME:
+            # OURS, not a drop. Counted by outbox_summary and reported under its
+            # own heading. It is skipped HERE and nowhere else: it never becomes
+            # a Drop, so it cannot enter the seen set, the unread list or the
+            # withdrawal baseline, and an emptied outbox is not a vanished
+            # sibling. See OUTBOX_DIRNAME for why this is a classification
+            # rather than a silent skip.
             continue
         try:
             digest, count, total, problem = _manifest_digest(entry)
@@ -1036,6 +1104,16 @@ def scan(
         )
     groups.sort(key=lambda g: g.names[0])
     result.groups = groups
+
+    # OUR OWN OUTGOING COPIES. Counted before the drops so the numbers describe
+    # the same listing, and never folded into total_notes: OPS-43 put this
+    # directory inside the watched folder deliberately, and a count that mixed
+    # our replies into the mail totals would undo the point of separating them.
+    (
+        result.outbox_present,
+        result.outbox_notes,
+        result.outbox_bytes,
+    ) = outbox_summary(inbox_path)
 
     # Subdirectory drops. Keyed on the same PAIR shape as the notes, with the
     # name carrying a trailing slash so a drop can never collide with a note of
@@ -1190,6 +1268,14 @@ def render(result: Scan) -> str:
         line = f"{label}: nothing new - {result.total_notes} notes, all previously seen."
         if result.drops:
             line += f" {len(result.drops)} subdirectory drop(s), also all previously seen."
+        if result.outbox_present:
+            # The quiet run is the one a cold session sees most often, so the
+            # existence of our own record is stated here too. Without it the
+            # only report that ever mentions the outbox is the noisy one.
+            line += (
+                f" OUR OWN OUTGOING NOTES ({result.outbox_notes}) are in "
+                f"{INBOX_DIRNAME}/{OUTBOX_DIRNAME}/ - not mail, and not unread."
+            )
         for problem in (result.state_error, result.reported_error):
             if problem:
                 line += f"\nWARNING: {problem}"
@@ -1252,6 +1338,18 @@ def render(result: Scan) -> str:
             lines.append(f"  {name}")
     else:
         lines.append("NOT ADDRESSED TO US (0 files)")
+
+    if result.outbox_present:
+        lines.append("")
+        lines.append(
+            f"OUR OWN OUTGOING NOTES ({result.outbox_notes}), not mail and not "
+            f"unread: {result.outbox_bytes} bytes in "
+            f"{INBOX_DIRNAME}/{OUTBOX_DIRNAME}/"
+        )
+        lines.append(
+            "  Who we replied to and when is in that directory's delivery "
+            "manifest. Read it instead of listing a sibling's inbox - OPS-43."
+        )
 
     if new_drops:
         lines.append("")

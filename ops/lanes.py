@@ -363,6 +363,13 @@ LANES: tuple[Lane, ...] = (
             # unambiguous and belongs to nothing else, so the registry should
             # not need editing again to add the next one.
             "tests/test_inbox_*.py",
+            # OPS-43, the outgoing half of the same channel. ops/** already
+            # covers ops/outbox.py; the test module does not match the
+            # test_inbox_* glob above and the document is continuity material -
+            # it records where this project's own replies go, which is the
+            # thing a cold session was found re-deriving by listing the disk.
+            "tests/test_outbox.py",
+            "docs/REPLY_PATHS.md",
             # OPS-37 document size budget. It guards the byte growth of
             # ROADMAP.md and docs/LEDGER.md, which are this lane's own
             # continuity documents, so the budget belongs beside them

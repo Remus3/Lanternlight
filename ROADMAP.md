@@ -5463,7 +5463,7 @@ cadence, in fact reads this tree's directory rather than merely matching by
 command line - is left for the session that next has occasion to touch
 `moon_sync_inbox/`.
 
-## OPS-43. An outgoing note leaves no trace in this tree, so a cold session believes it has never replied - OPEN
+## OPS-43. An outgoing note leaves no trace in this tree, so a cold session believes it has never replied - CLOSED 2026-09-07
 
 Filed 2026-09-07, from a false claim this project made about itself and then
 recorded in its own ledger.
@@ -5517,6 +5517,77 @@ problem and not the channel's.**
 4. The reply-path map - which sibling code corresponds to which directory - is
    recorded where a cold session finds it, because it was re-derived by
    listing `C:\*\moon_sync_inbox` this session rather than read from anywhere.
+
+**CLOSED 2026-09-07 evening. All four criteria discharged, each named.**
+
+1. `ops/outbox.py` `deliver` writes the outbox copy and its manifest row into
+   `moon_sync_inbox/_outbox/` before it attempts a single sibling write, both
+   through a temporary plus `replace`. Two separate tests hold this, because
+   the criterion carries two separate claims: one provokes a real `OSError` by
+   pointing a recipient at an ordinary file and asserts the copy and the row
+   survive the failure, the other observes the ORDER of writes and asserts the
+   sibling write comes last. The second was added after the first was watched
+   staying GREEN while the manifest write was deleted - a later rewrite put the
+   row back, so the byte test could not see the ordering had gone.
+2. `ops/inbox_watch.py` recognises `_outbox` by name in `_read_drops` and
+   classifies it: counted onto `Scan` as `outbox_present`, `outbox_notes` and
+   `outbox_bytes`, named in the report under its own heading, and kept out of
+   the unread drops, out of `total_notes` and out of the withdrawal baseline.
+   A sibling drop sitting beside it is still reported, so the skip is for our
+   directory and not for directories. Measured on the live inbox after the
+   backfill: `OUR OWN OUTGOING NOTES (25), not mail and not unread`, zero
+   subdirectory drops and zero withdrawals.
+3. `ops.outbox.replies_to` answers from the manifest alone. The test deletes
+   the fake sibling directories outright before asking, so a lookup that
+   reached for one cannot pass. A corrupt manifest RAISES rather than reading
+   as "we never replied", which is the specific false answer this whole item
+   exists to stop.
+4. `docs/REPLY_PATHS.md`, linked from `CLAUDE.md`. It carries the code-to-
+   directory table and `tests/test_outbox.py` fails if it and
+   `ops.outbox.SIBLING_INBOXES` disagree in EITHER direction.
+
+**Every guard was watched going red.** Six mutations, each with its anchor
+asserted to have matched before the result was believed: the outbox copy write
+deleted (3 red), the manifest row deleted (1 red, and it was this run that
+exposed the missing ordering test), the watcher's classification reverted to
+`if False` (2 red), one path in the document altered (1 red), the backfill's
+already-known check dropped (2 red), and the backfill's local copy dropped
+(1 red).
+
+**A BACKFILL WAS ADDED BEYOND THE FOUR CRITERIA, because they fix only the
+future.** Twenty five `from-LL-*` notes were already in four sibling
+directories when this landed and a cold session could still account for none of
+them. `ops.outbox.backfill` reads OUR OWN notes back out by name prefix and
+records them. A reconstructed row carries NO `sent_utc` and no `sent_local` -
+the fields are absent, not null and not zero - and is flagged `reconstructed`,
+because this function never watched the send. The one time available is the
+file's mtime where it landed, recorded as `earliest_seen_local`. An observed
+`deliver` always outranks a reconstruction of the same note.
+
+**RE-DERIVED 2026-09-07 evening, independently of the manifest, with a positive
+control.** Twenty five unique `from-LL-*` names across the four inboxes, forty
+one deliveries in total, per inbox CS 10, LW 8, RC 12, RSC 11. Eleven of the
+twenty five appear in `docs/LEDGER.md`; FOURTEEN leave no trace there. The
+ledger search was run over a whitespace-collapsed copy, because prose here is
+hard-wrapped near 80 columns and these filenames are longer than that, so a
+line-oriented search would have returned a false clean bill. The control was
+`LL-0164`, a string known to be in the ledger, matched the same way. The
+backfill then produced 25 rows and the same four per-inbox counts from a
+separate code path, which is a cross-check and not a corroboration.
+
+Note that the 17:38 figure in the paragraph above - nineteen unique, five in
+the ledger, fourteen untraced - has MOVED in one half only. Traced went 5 to 11
+because the previous session ledgered its own replies; untraced stayed at 14.
+The untraced fourteen are the historical ones and the backfill is what now
+accounts for them.
+
+**What this does NOT fix, stated here rather than discovered later.** The
+outbox is inside `moon_sync_inbox/`, which is gitignored in full, so the record
+is MACHINE-local and not repository-local. A fresh clone still knows nothing
+about past replies. That is deliberate - the channel is not this project's to
+publish and this repository is public - and the case it does fix is the one
+that actually bit: a cold session on THIS disk. A reply worth carrying into git
+still goes in `docs/LEDGER.md`.
 
 ## OPS-44. The source-register guard's denylist is absorbing this project's own filenames - OPEN
 

@@ -57,9 +57,27 @@ LIVE_BY_DESIGN = frozenset(
 
 
 def _inbox_test_files() -> list[Path]:
-    files = sorted(TESTS_DIR.glob("test_inbox_*.py"))
+    """Every test module that reaches the watcher, not every module named after it.
+
+    The selector used to be the ``test_inbox_*.py`` glob alone, and ``OPS-43``
+    walked straight past it: ``tests/test_outbox.py`` calls ``scan`` and
+    ``acknowledge_inbox`` several times and matches no ``test_inbox_`` prefix,
+    so the guard would have had nothing to say about it. A naming convention is
+    not a membership test - the question this file asks is which modules TOUCH
+    the watcher, so that is what is selected, by reading each module for an
+    import of it. The glob is kept as well, because a module that names the
+    watcher only in a docstring is still worth checking and costs milliseconds.
+    """
+    files = set(TESTS_DIR.glob("test_inbox_*.py"))
+    for path in sorted(TESTS_DIR.glob("test_*.py")):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:  # pragma: no cover - a listed file we cannot read
+            continue
+        if "inbox_watch" in text:
+            files.add(path)
     assert files, "no inbox test modules were found - this guard would pass vacuously"
-    return files
+    return sorted(files)
 
 
 def _calls_with_enclosing_function(tree: ast.AST):
