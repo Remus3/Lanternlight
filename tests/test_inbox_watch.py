@@ -120,10 +120,21 @@ def test_first_run_reports_a_new_note(tmp_path: Path) -> None:
 
 
 def test_an_untouched_note_does_not_resurface(tmp_path: Path) -> None:
+    """The first look must ACKNOWLEDGE, because a plain look no longer does.
+
+    Every "does not resurface" test in this file and its siblings used to open
+    with a bare ``scan``, and a bare ``scan`` now reports without moving the
+    watermark. Left alone they would still be green - the second look would
+    simply report the note as new all over again and the ``== set()`` assertion
+    would be the only thing standing between that and a silent pass. They are
+    rewritten to acknowledge explicitly, which is also what makes the rename and
+    edit tests below non-vacuous: without a real watermark to clear, "it came
+    back" is true no matter what the key is.
+    """
     inbox, state = _tree(tmp_path)
     _write(inbox, "note.md", "# From RC - hello\n\nsent to LL.\n")
 
-    inbox_watch.scan(inbox=inbox, state=state)
+    inbox_watch.acknowledge_inbox(inbox=inbox, state=state)
     second = inbox_watch.scan(inbox=inbox, state=state)
 
     assert _new_names(second) == set()
@@ -136,7 +147,7 @@ def test_a_rename_resurfaces_the_note(tmp_path: Path) -> None:
     body = "# From RC - hello\n\nsent to LL.\n"
     first = _write(inbox, "old-name.md", body)
 
-    inbox_watch.scan(inbox=inbox, state=state)
+    inbox_watch.acknowledge_inbox(inbox=inbox, state=state)
     first.rename(inbox / "new-name.md")
     after = inbox_watch.scan(inbox=inbox, state=state)
 
@@ -148,7 +159,7 @@ def test_an_edit_resurfaces_the_note(tmp_path: Path) -> None:
     inbox, state = _tree(tmp_path)
     _write(inbox, "note.md", "# From RC - hello\n\nsent to LL.\n")
 
-    inbox_watch.scan(inbox=inbox, state=state)
+    inbox_watch.acknowledge_inbox(inbox=inbox, state=state)
     _write(inbox, "note.md", "# From RC - hello\n\nsent to LL. CORRECTION: ignore the above.\n")
     after = inbox_watch.scan(inbox=inbox, state=state)
 
@@ -160,9 +171,9 @@ def test_the_seen_set_drops_entries_for_vanished_files(tmp_path: Path) -> None:
     gone = _write(inbox, "gone.md", "# From RC - a\n\nsent to LL.\n")
     _write(inbox, "stays.md", "# From RC - b\n\nsent to LL.\n")
 
-    inbox_watch.scan(inbox=inbox, state=state)
+    inbox_watch.acknowledge_inbox(inbox=inbox, state=state)
     gone.unlink()
-    inbox_watch.scan(inbox=inbox, state=state)
+    inbox_watch.acknowledge_inbox(inbox=inbox, state=state)
 
     pairs, _ = inbox_watch.load_seen(state)
     assert {name for name, _digest in pairs} == {"stays.md"}
@@ -189,7 +200,7 @@ def test_the_state_write_goes_through_a_temp_file_then_replace(
         return real_replace(self, target)
 
     monkeypatch.setattr(Path, "replace", recording_replace)
-    inbox_watch.scan(inbox=inbox, state=state)
+    inbox_watch.acknowledge_inbox(inbox=inbox, state=state)
 
     assert recorded, "nothing was replaced - the state file was never written"
     moves = [(src, dst) for src, dst in recorded if dst == str(state)]
@@ -332,7 +343,7 @@ def test_a_missing_directory_reports_failure_not_nothing_new(tmp_path: Path) -> 
 def test_a_corrupt_state_file_surfaces_everything_and_says_so(tmp_path: Path) -> None:
     inbox, state = _tree(tmp_path)
     _write(inbox, "note.md", "# From RC - hello\n\nsent to LL.\n")
-    inbox_watch.scan(inbox=inbox, state=state)
+    inbox_watch.acknowledge_inbox(inbox=inbox, state=state)
 
     state.write_text("{ this is not json", encoding="utf-8")
     after = inbox_watch.scan(inbox=inbox, state=state)
@@ -374,7 +385,7 @@ def test_main_exits_zero_even_when_the_inbox_is_missing(
 def test_nothing_new_is_one_line(tmp_path: Path) -> None:
     inbox, state = _tree(tmp_path)
     _write(inbox, "note.md", "# From RC - hello\n\nsent to LL.\n")
-    inbox_watch.scan(inbox=inbox, state=state)
+    inbox_watch.acknowledge_inbox(inbox=inbox, state=state)
 
     rendered = inbox_watch.render(inbox_watch.scan(inbox=inbox, state=state))
 
@@ -481,13 +492,21 @@ def test_the_sessionstart_hook_command_really_runs_and_prints_the_report() -> No
     can prove that. It does prove every part this repository controls: the
     interpreter, the script path, a zero exit and real output on stdout.
 
-    The hook command takes no arguments, so it reads and WRITES the real seen
-    set. The live state is therefore snapshotted and restored around the run:
-    a test that marks the real backlog as read would consume exactly the mail
-    the next session is supposed to be handed.
+    The hook command takes no arguments, so it reads and writes the OPERATOR'S
+    LIVE RECORDS. This is the one test in the inbox family that is allowed to,
+    because the thing under test IS the real command string, and
+    ``tests/test_inbox_live_state.py`` names it as the single exception.
+
+    EVERY live record it can touch is snapshotted and restored, and there are
+    now TWO of them. When a second record was added the first run of this suite
+    wrote 93 fixture names into the real reported record, because the tests
+    injected only a state path and the reported path still defaulted to the live
+    one. If you add a third record, add it here as well - a record that is
+    write-only until something finally reads it fails silently for as long as
+    nobody reads it.
     """
-    live_state = inbox_watch.default_state_path()
-    before = live_state.read_bytes() if live_state.is_file() else None
+    live = [inbox_watch.default_state_path(), inbox_watch.default_reported_path()]
+    before = [path.read_bytes() if path.is_file() else None for path in live]
     parts = _sessionstart_command(_settings()).split()
     try:
         proc = subprocess.run(
@@ -498,15 +517,17 @@ def test_the_sessionstart_hook_command_really_runs_and_prints_the_report() -> No
             check=False,
         )
     finally:
-        if before is None:
-            live_state.unlink(missing_ok=True)
-        else:
-            live_state.write_bytes(before)
+        for path, snapshot in zip(live, before, strict=True):
+            if snapshot is None:
+                path.unlink(missing_ok=True)
+            else:
+                path.write_bytes(snapshot)
 
     stdout = proc.stdout.decode("utf-8", "replace")
     assert proc.returncode == 0, proc.stderr.decode("utf-8", "replace")
     assert "moon_sync_inbox" in stdout, stdout
-    assert (live_state.read_bytes() if live_state.is_file() else None) == before
+    after = [path.read_bytes() if path.is_file() else None for path in live]
+    assert after == before
 
 
 def test_the_module_runs_as_a_script_under_this_interpreter(tmp_path: Path) -> None:

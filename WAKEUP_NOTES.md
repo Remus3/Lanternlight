@@ -5,6 +5,92 @@ fidelity and archive older ones rather than deleting them.
 
 ---
 
+# Session note 2026-09-07 - four operator rulings recorded, `OPS-33` follow-up and `OPS-40` CLOSED, three new items OPEN - NOTHING IN THIS SESSION WAS COMMITTED OR PUSHED
+
+**This entry is bookkeeping for work another part of the same session already
+landed in the working tree.** The writer of this entry did not touch any `.py`
+file, did not run the suite, and did not commit or push. Every number below is
+relayed from the merger's own measurement this session, not re-derived here,
+and is marked as such in `docs/LEDGER.md` and `ROADMAP.md`. A cold session
+picking this up should run the full suite and the merge gate itself before
+trusting the counts, and should commit and push once it has done so - the tree
+as of this note is uncommitted.
+
+## Four operator rulings, given in chat 2026-09-07
+
+1. **Rewrite the published git history to purge the operator's Windows account
+   name.** Discharged as `OPS-40`, CLOSED. See `ROADMAP.md` and ledger
+   `LL-0160`.
+2. **Lift the hold on the `OPS-33` follow-up and do the watcher work, plus the
+   further fix a sibling suggested.** Discharged as the `OPS-33` follow-up,
+   CLOSED. See `ROADMAP.md` and ledger `LL-0159`.
+3. **Answer the sibling projects.** Lanternlight had never replied to any of
+   the 71 notes it had received on `moon_sync_inbox/`. Four reply notes are
+   drafted. See ledger `LL-0161` - their actual placement onto the channel is
+   UNCONFIRMED by this pass and should be checked by a session that touches
+   that directory.
+4. **"The watcher is for the entirety of the moon-sync-inbox folder."** This is
+   the further fix named in ruling 2: the watcher previously skipped any
+   top-level file whose suffix was not `.md`, invisible as either a note or a
+   drop. Fixed under the `OPS-33` follow-up; see `ROADMAP.md`.
+
+## What actually landed, per the merger, all in the working tree uncommitted
+
+- `ops/inbox_watch.py` reworked: report and acknowledge are separate acts,
+  withdrawals are reported and require an explicit acknowledge to clear, the
+  acknowledge step prunes both records (a sibling's own design pruned only one
+  and could never clear a withdrawal), the folder's entirety is covered
+  including non-`.md` top-level files, and a dead leg in the pre-existing test
+  suite (a note key that survived being replaced by `st_size` and by
+  `st_mtime_ns`) was found by mutation testing and fixed. Five new test
+  modules: `tests/test_inbox_acknowledge.py`, `tests/test_inbox_entirety.py`,
+  `tests/test_inbox_keys.py`, `tests/test_inbox_live_state.py`,
+  `tests/test_inbox_withdrawals.py`.
+- The operator's Windows account name, published in this public repo's git
+  history (six commits backslash form, six forward-slash, three 8.3 short
+  form, measured with an armed pickaxe against `origin/main` equal to `HEAD`)
+  and in five tracked documents, is redacted from the live tree and the
+  history rewrite was performed. The tracked-tree re-sweep after redaction was
+  independently confirmed clean; the post-push re-sweep of the rewritten
+  history was NOT independently re-derived by this bookkeeping pass.
+- Four reply notes to sibling projects are drafted - Lanternlight's first
+  replies ever sent on this channel.
+
+**Verification observed this session (merger's numbers, use these and no
+others until re-measured):** baseline before the work, 2111 tests collected
+across 40 files; `python -m pytest` bare, 2151 passed, 1 skipped, in 135.04s;
+merge gate with a per-file baseline, OK, 2152 tests collected, no file's count
+dropped; out-of-domain probe against a scratch inbox - report, report again
+still unread, state file never created, acknowledge, nothing new, withdraw two
+entries, both reported, still reported without an ack, cleared after an ack.
+
+## Three items newly OPEN, filed at this session's close
+
+- **`OPS-41`** - no `UserPromptSubmit` hook exists in this tree, so nothing
+  acknowledges mail automatically; a sibling (LW) is adopting exactly that
+  mechanism because `SessionStart` cannot tell an operator turn from a subagent
+  one. Acceptance is in `ROADMAP.md`.
+- **`OPS-42`** - three cross-project questions still await an operator ruling:
+  whether Lanternlight wants a lane slot, whether it joins the
+  inventory-exchange practice, and whether the `from-RSC-verbatim` drop stays
+  or goes. None has been asked of the operator yet.
+
+## What this bookkeeping pass could not confirm
+
+- Whether every new inbox-watcher guard (not only the dead-leg key fix) was
+  watched red under mutation. Only the dead-leg fix's mutation evidence was
+  relayed to this pass.
+- Whether the `OPS-33` follow-up's original criterion 3 (state file mtime
+  specifically, as opposed to existence) is pinned by a direct assertion in the
+  test suite.
+- Whether the rewritten git history is actually clean once pushed - the
+  pre-push tracked-tree sweep was confirmed; the history rewrite itself was
+  not independently re-derived here.
+- Whether the four sibling reply notes have actually been placed on the
+  `moon_sync_inbox/` channel, which this pass did not touch.
+
+---
+
 # Wrap 2026-09-06 - cycle 49 - the disk-only backlog is CLEARED, and the merge gate itself was signing off on runs that never completed
 
 Suite **1849 passed** in 118.20s, exit 0, run with `-p no:cacheprovider`.
@@ -2751,7 +2837,7 @@ class**:
   `SAF-0001` both sit outside it and both exist here.**
 - 2d's guards pinned `primary_checkout()` and `WORKTREE_ROOT` specifically, so
   embedding `Path.home()` gave **1009 passed** on this machine with
-  `C:\Users\<ACCOUNT>` committed into a contract - and `1 failed` under a
+  `C:\Users\<REDACTED-ACCOUNT-NAME>` committed into a contract - and `1 failed` under a
   different `USERPROFILE`. The 2d symptom, invisible here.
 - an undecodable property read as **absence**, because `gvas.parse` omits it
   from `.properties` and records it in `.unknown_properties`.

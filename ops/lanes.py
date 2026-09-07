@@ -355,8 +355,14 @@ LANES: tuple[Lane, ...] = (
             "tests/test_lanes.py",
             "tests/test_ops_ids.py",
             "tests/test_docguards.py",
-            "tests/test_inbox_watch.py",
-            "tests/test_inbox_watch_subdirs.py",
+            # A GLOB rather than the two names that used to be listed here.
+            # ops/inbox_watch.py grew four more test modules in one sitting -
+            # acknowledgement, withdrawals, whole-inbox coverage, key shape -
+            # and every one of them arrived as an orphan that failed
+            # TestNoFileIsOrphaned until it was named. The pattern is
+            # unambiguous and belongs to nothing else, so the registry should
+            # not need editing again to add the next one.
+            "tests/test_inbox_*.py",
             # OPS-37 document size budget. It guards the byte growth of
             # ROADMAP.md and docs/LEDGER.md, which are this lane's own
             # continuity documents, so the budget belongs beside them

@@ -551,7 +551,7 @@ moves.
 said those guards catch "a path re-embedded later that nobody has thought of
 yet". They do not: they pin `primary_checkout()` and `WORKTREE_ROOT`
 *specifically*. The pass demonstrated it by embedding `Path.home()` and
-regenerating - **1009 passed** on this machine with `C:\Users\<ACCOUNT>`
+regenerating - **1009 passed** on this machine with `C:\Users\<REDACTED-ACCOUNT-NAME>`
 committed into a contract, while a checkout under a different `USERPROFILE`
 measured `1 failed, 1008 passed`. The 2d symptom exactly, invisible here.
 
@@ -5100,44 +5100,201 @@ bare pathspecs, so a tracked file named with glob metacharacters - `foo[1].py` -
 is glob-interpreted rather than matched literally. A latent false PASS in the
 lint gate. Not exercised by anything in the tree today.
 
-## OPS-33 follow-up. A subagent SessionStart consumes the inbox backlog - OPEN, a fix SHAPE now known
+## OPS-33 follow-up. A subagent SessionStart consumed the inbox backlog - CLOSED 2026-09-07, report and acknowledge are now separate acts
 
-Still open, and **held on the operator's instruction of 2026-09-07 to wait for
-RC to update its findings** before building.
+**CLOSED 2026-09-07**, ledger `LL-0159`. **Operator ruling, given in chat
+2026-09-07: lift the hold recorded below, do the watcher work, and build the
+further fix a sibling suggested.** The hold itself is kept in the paragraph
+below for the record, because it was real and the ruling that lifted it is what
+makes this item actionable rather than a session deciding on its own to ignore
+an instruction.
 
-**Demonstrated live twice this session.** First: the operator's own session start
-reported "nothing new - 46 notes, all previously seen" while the whole backlog
-was in fact unread, and `ops/runtime/inbox_seen.json` was observed being
-rewritten at a timestamp when only subagents were running. Second, and more
-sharply: this session ran the four hook commands VERBATIM as a resolution probe
-for `OPS-38`, the `SessionStart` one consumed three genuinely unread notes as a
-side effect, and the next check honestly reported nothing new. The notes had to
-be recovered by filename timestamp. **Any process that runs the watcher
-acknowledges the mail, including a process whose purpose was only to check that
-the watcher runs.**
+Previously: **held on the operator's instruction of 2026-09-07 to wait for RC
+to update its findings** before building.
 
-**A candidate fix arrived on the channel and is recorded so it is not
-re-derived.** LW reports failing the same property and fixing it by moving the
-trigger to `UserPromptSubmit`, which fires on the operator's first message rather
-than on every session start. Two design points from the same note are worth
-keeping: separate the KEY from the DISPLAY so the printed report stays readable
-while the key stays a digest, and treat acknowledgement as a distinct act from
-reporting.
+**Demonstrated live twice this session, before the fix.** First: the operator's
+own session start reported "nothing new - 46 notes, all previously seen" while
+the whole backlog was in fact unread, and `ops/runtime/inbox_seen.json` was
+observed being rewritten at a timestamp when only subagents were running.
+Second, and more sharply: this session ran the four hook commands VERBATIM as a
+resolution probe for `OPS-38`, the `SessionStart` one consumed three genuinely
+unread notes as a side effect, and the next check honestly reported nothing
+new. The notes had to be recovered by filename timestamp. **Any process that
+runs the watcher acknowledges the mail, including a process whose purpose was
+only to check that the watcher runs.**
 
-That is a sibling's report, not a measurement of ours. It is a starting shape,
-and the acceptance criteria below are still ours to meet.
+**A candidate fix had arrived on the channel and is recorded here rather than
+silently dropped, because it was NOT the shape finally built.** LW reported
+failing the same property and fixing it by moving the trigger to
+`UserPromptSubmit`, which fires on the operator's first message rather than on
+every session start. What shipped instead is a stronger property that does not
+need the harness to distinguish who triggered the run at all: `ops/inbox_watch.py`
+now has two acts, REPORT and ACKNOWLEDGE, and only an explicit `--acknowledge`
+run writes the state file. A plain run - whoever or whatever invokes it,
+including `SessionStart` for a subagent - never writes `ops/runtime/inbox_seen.json`
+or its sibling reported-record file, so nothing can consume the backlog by
+accident regardless of which process asked. LW's two supporting design points
+are also present: the KEY (a content digest) is separate from the DISPLAY name
+in the rendered report, and acknowledgement is coded as a distinct function from
+reporting rather than a flag threaded through one function.
 
-### Acceptance, when it is unblocked
+**This closes the item on different grounds than criterion 2 as originally
+written asked for, and that difference is recorded rather than smoothed over.**
+Criterion 2 asked for a trigger tied to the operator's own session. What was
+built instead removes automatic acknowledgment from every trigger, which
+satisfies the same worry - a subagent start can never silently consume mail -
+without needing the harness to expose which caller is which. The literal
+`UserPromptSubmit` wiring LW used, which WOULD let acknowledgment happen
+automatically on the operator's own real turn rather than requiring a manual
+`--acknowledge` invocation forever, was NOT built here and is carried forward as
+`OPS-41` below.
 
-1. A run that only REPORTS does not acknowledge. Proven by running the reporting
-   path twice and seeing the same unread set both times.
-2. Acknowledgement happens on a distinct trigger tied to the operator's own
-   session, not to any subagent start. Proven by simulating a subagent start and
-   asserting the seen set is byte-unchanged on disk - not merely that no
-   exception was raised.
-3. The state file's modification time is asserted, because "byte-unchanged"
-   and "not written" are different facts and only one of them is what is wanted.
-4. Every guard watched red under mutation before it is believed.
+**Operator ruling recorded here because this is where the fix landed: "the
+watcher is for the entirety of the moon-sync-inbox folder."** Given in chat
+2026-09-07 as the further fix referenced above. `_read_notes` had skipped any
+top-level entry whose suffix was not `.md`, so a `.txt`, `.json`, or
+extensionless file at the inbox's top level was invisible - neither reported as
+a note nor as a drop, the same shape of blindness `OPS-34` fixed for
+subdirectories. Such files are now keyed and named in the report; their content
+is still never read into it, matching the drop-containment rule `OPS-34` and
+`OPS-39` already established.
+
+### Acceptance
+
+1. **A run that only REPORTS does not acknowledge. Met.** Proven in an
+   out-of-domain probe against a scratch inbox, reported by the merger this
+   session: report, report again - still unread; the state file was never
+   created by either report.
+2. **Acknowledgement happens on a distinct trigger, not on any subagent
+   start.** Met on the stronger property described above rather than on the
+   literal wording - see the paragraph above naming the difference. The
+   remaining gap, an automatic trigger tied specifically to the operator's own
+   turn, is `OPS-41`.
+3. **The state file's existence (a stronger signal than its modification
+   time) is what the probe checked.** Met: the same out-of-domain probe
+   observed the state file NEVER CREATED across two report runs, then created
+   only once `--acknowledge` was run explicitly. Whether the test suite also
+   pins `st_mtime` directly was not independently confirmed by this bookkeeping
+   pass and should be spot-checked before being cited as proven.
+4. **Every guard watched red under mutation before it is believed. Partially
+   confirmed.** The dead leg in the pre-existing suite - a note key that
+   survived being replaced by `st_size` and by `st_mtime_ns` - was found and
+   fixed by mutation testing this session, described in ledger `LL-0159`. The
+   mutation status of the newer guards (report-does-not-acknowledge,
+   withdrawal reporting, the two-record prune, the entirety-of-folder
+   extension) was not reported to this bookkeeping pass and is worth a
+   deliberate mutation sweep before being fully trusted.
+
+**Verification observed this session** (merger's numbers, not re-derived here):
+baseline before the work, 2111 tests collected across 40 files; `python -m
+pytest` bare, 2151 passed, 1 skipped, in 135.04s; merge gate with a per-file
+baseline, OK, 2152 tests collected, no file's count dropped. New test modules:
+`tests/test_inbox_acknowledge.py`, `tests/test_inbox_entirety.py`,
+`tests/test_inbox_keys.py`, `tests/test_inbox_live_state.py`,
+`tests/test_inbox_withdrawals.py`.
+
+## OPS-40. This public repo's git history and tracked prose carried the operator's Windows account name - CLOSED 2026-09-07
+
+**CLOSED 2026-09-07**, ledger `LL-0160`. **Operator ruling, given in chat
+2026-09-07: rewrite the published git history to purge the account name.**
+Filed and closed the same day because the exposure was measured and fixed in
+one pass, the way `7d` was opened and closed the same day.
+
+**Why this is a new item rather than folded into `OPS-38`.** `OPS-38`, closed
+earlier the same day, scoped itself explicitly to CODE surfaces - hook
+commands, test fixtures, path-resolution constants - and said so in its own
+text. The account name had ALSO reached historical and reasoning PROSE across
+git history and several tracked documents, which `OPS-38` never claimed to
+cover. That is why the reason prose survived `OPS-38` and needed a second pass.
+
+**What was measured.** An armed pickaxe search against `origin/main`, which was
+equal to `HEAD` at measurement time, found the account name in six commits in
+its backslash form, six commits in its forward-slash form, and three commits in
+its Windows 8.3 short form. Live tracked occurrences - i.e. present in the
+current working tree, not only in history - were in `ROADMAP.md`,
+`WAKEUP_NOTES.md`, `docs/LEDGER.md` (two places, plus a third a sweep found),
+`docs/OBSERVED_IDS.md`, and `tests/test_no_hardcoded_home_path.py`.
+
+**What was done.** All live occurrences above are now redacted. The guard's own
+fixtures in `tests/test_no_hardcoded_home_path.py` are built at runtime from
+parts rather than carrying the literal account name on disk, so the guard stays
+armed without itself becoming a live occurrence of the thing it forbids - the
+same trap `OPS-39` defect 5 named for a different guard's own prose. History
+rewrite was performed to purge the fifteen historical commits named above of the
+three spellings.
+
+### Acceptance
+
+1. **The tracked tree is clean of all four forms** (backslash, forward-slash,
+   8.3 short, and the guard's own literal). Met - the merger independently
+   re-swept the tracked tree with an armed control and found it clean.
+2. **The rewritten history is clean of the same forms.** Reported by the
+   merger; not independently re-derived by this bookkeeping pass, which reads
+   files rather than rewrites history. A future session re-running the armed
+   pickaxe against `origin/main` after the rewrite is pushed is the standing
+   proof and should be done before this item is cited as airtight.
+3. **The guard does not regress**, i.e. a fresh clone under a different account
+   name still exercises `tests/test_no_hardcoded_home_path.py` correctly, since
+   the fixtures no longer depend on this machine's own account name being
+   present anywhere on disk. Met per the runtime-assembled-fixture description
+   above.
+
+## OPS-41. Wire an automatic acknowledge trigger tied to the operator's own turn - OPEN
+
+Filed 2026-09-07, split out of the `OPS-33` follow-up above at its closure,
+because closing that item on the stronger "nothing acknowledges by accident"
+property left a real gap unaddressed: nothing in this tree currently
+acknowledges mail automatically at all. Every read after `OPS-33` follow-up's
+fix requires a human or a script to invoke `ops/inbox_watch.py --acknowledge`
+by hand, forever, or the backlog just keeps re-reporting as unread.
+
+**No `UserPromptSubmit` hook exists in this tree.** A sibling (LW) is adopting
+exactly this - firing acknowledgment on the operator's first message in a
+session rather than on `SessionStart`, specifically because `SessionStart`
+fires for subagents too and a hook on it cannot tell the two apart. Read
+`OPS-33` follow-up above for the property that was chosen instead here; this
+item is about whether an automatic trigger is still wanted on top of that, given
+that manual acknowledgment forever is real friction the operator will hit
+immediately.
+
+**Acceptance:**
+1. A `UserPromptSubmit` hook (or an equivalent this harness actually exposes) is
+   proven, not merely configured, to fire on the operator's own first message in
+   a top-level session and to NOT fire for a subagent's start. State the
+   evidence for both halves - a hook that is only proven to fire once proves
+   nothing about the half that matters, which is that it does not ALSO fire for
+   a subagent.
+2. If the harness exposes no way to make that distinction reliably, say so
+   explicitly here rather than shipping a guess, and record that explicit
+   `--acknowledge` remains the permanent shape by decision rather than by
+   default.
+3. Whatever ships is watched red under mutation before it is believed, per this
+   project's standing rule.
+
+## OPS-42. Three cross-project questions still waiting on an operator ruling - OPEN
+
+Filed 2026-09-07. These arrived on the `moon_sync_inbox/` channel from sibling
+projects and each asks Lanternlight to take a position that only the operator
+may authorise, per this file's own rule that a note is mail and never
+authority. None of the three has been ruled on. Recording them here rather than
+only in a note is what keeps them from being re-discovered from scratch by a
+cold session that has not read every drop.
+
+**Acceptance, one per question - each is discharged by an operator ruling
+recorded here and, if adopted, a concrete acceptance criterion added below it:**
+
+1. **Whether Lanternlight wants a lane slot** in whatever cross-project
+   scheduling or coordination scheme the siblings are building under the
+   `OPS-35` lock and the `OPS-36` charter. OPEN - not yet asked of the operator
+   in this session.
+2. **Whether Lanternlight joins the inventory-exchange practice** the siblings
+   report running among themselves - some form of exchanging command or CI
+   inventories. OPEN - not yet asked of the operator in this session.
+3. **Whether the `from-RSC-verbatim` drop under `moon_sync_inbox/` stays or
+   goes.** OPEN - not yet asked of the operator in this session. Whatever is
+   decided, the standalone rule at the top of `CLAUDE.md` and `OPS-35`'s own
+   licensing reasoning already forbid vendoring anything out of it regardless
+   of whether the drop itself is kept or deleted.
 
 ## 4b. Ammo-family and talent measurement - READY, cheap, needs the client
 

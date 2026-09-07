@@ -32,21 +32,37 @@ on this machine, and ``1 failed, 1008 passed`` under a different
 **Guarding two known sources is not the property "no machine-specific path is
 ever committed".** So this guard matches the SHAPE of any user home directory
 under any account name, not the string this machine happens to use. A guard that
-only knew the word ``<ACCOUNT>`` would pass cleanly the day someone commits
-a path under a different account, which is precisely the day it matters.
+only knew this machine's own literal account name would pass cleanly the day
+someone commits a path under a different account, which is precisely the day
+it matters.
 
-HISTORICAL DOCUMENTS ARE FROZEN, NOT EDITED
--------------------------------------------
+HISTORICAL DOCUMENTS ARE FROZEN, NOT EDITED - WITH ONE NAMED EXCEPTION
+-----------------------------------------------------------------------
 ``docs/LEDGER.md`` is append-only by this project's own rule; ``ROADMAP.md``
 item 2d, ``WAKEUP_NOTES.md`` and ``docs/OBSERVED_IDS.md`` quote measurements
-that were TRUE ON THEIR DATE, and the quoted path is part of the evidence -
-the 2d passage's whole point is that this exact string was found committed into
-a contract. Rewriting them would destroy the record this project exists to keep.
+that were TRUE ON THEIR DATE, and the quoted path was part of the evidence -
+the 2d passage's whole point was that this exact shape of string had been
+found committed into a contract. Rewriting them would ordinarily destroy the
+record this project exists to keep.
 
 They are therefore excluded from the clean-tree requirement and PINNED instead:
 each may carry exactly the number of occurrences it carries today, and adding a
 new one makes this file red. That closes the hole without editing history. A
 pin that merely tolerated the documents would let the count grow forever.
+
+**2026-09-07, the one sanctioned exception:** these four documents, plus this
+file's own prose, were carrying the OPERATOR'S REAL windows account name
+rather than a mere shape - a public repository publishing that string outranks
+preserving the exact bytes of a historical quote. Only the account-name token
+inside each quoted path was replaced, by a placeholder shape (``<...>`` or
+``[...]``) the pattern above already treats as a non-finding via its own
+placeholder lookahead, so the "quoted path is evidence" property above is
+otherwise untouched - the path SHAPE, and everything around it, is exactly
+what was typed on the original date. ``docs/LEDGER.md`` says so inline at each
+edited line, because an append-only file that silently changed would be worse
+than the leak it fixed. Every pinned count below was RE-MEASURED after the
+redaction, not assumed - each dropped to zero - and a rise from here is still
+exactly as real a leak as it always was.
 
 WHAT THIS GUARD IS BLIND TO, stated here because a caveat that lives only in
 conversation is a lie in the artifact:
@@ -69,9 +85,13 @@ conversation is a lie in the artifact:
 OPS-38 asked four specific spellings to be considered by name, and each was
 MEASURED, not guessed - see ``TestKnownSpellingsDecidedOnPurpose``:
 
-* An 8.3 short name (``<ACCOUNT>``) IS caught. The username charset already
-  allows ``~`` and digits, and the short form does not start with the
-  placeholder character the lookahead excludes, so no change was needed.
+* An 8.3 short name - the TILDE-and-digit form Windows truncates a long or
+  spaced account name to, not spelled out here for the same reason the
+  case-variant needles below are described abstractly rather than repeated,
+  see :func:`test_it_fires_on_an_8_3_short_name` for how it is exercised - IS
+  caught. The username charset already allows ``~`` and digits, and the short
+  form does not start with the placeholder character the lookahead excludes,
+  so no change was needed.
 * A mixed forward/backslash spelling (``C:/Users\\x``, ``C:\\Users/x``) IS
   caught. Each separator slot in the pattern is its own independent
   ``[\\/]`` character class, so the two slots were never required to match
@@ -136,17 +156,28 @@ HOME_SHAPED = re.compile(
 #: Documents that RECORD what was true on a date. See the module docstring.
 #: Each maps to the number of occurrences it is permitted to carry. Raising a
 #: number here is a deliberate act and should be justified in the commit.
+#:
+#: All four counts DROPPED to zero on 2026-09-07: each document's quoted path
+#: carried the operator's real account name, and the account-name redaction
+#: described in the module docstring replaced that token with a placeholder
+#: shape this pattern already treats as a non-finding, leaving the rest of
+#: each quote untouched. Re-measured with :func:`findings_in`, not assumed. A
+#: future RISE from zero is still exactly as real a leak as it always was.
 FROZEN_HISTORICAL: dict[str, int] = {
-    # Append-only by this project's own rule - entries are never edited.
-    "docs/LEDGER.md": 2,
-    # Item 2d quotes the path found committed into a rendered contract. The
-    # string IS the evidence for the finding.
-    "ROADMAP.md": 1,
+    # Append-only by this project's own rule - entries are never edited,
+    # except for the 2026-09-07 account-name redaction, recorded inline at
+    # each edited line so the record does not silently appear to have always
+    # read that way.
+    "docs/LEDGER.md": 0,
+    # Item 2d quoted the path found committed into a rendered contract. The
+    # SHAPE is still the evidence for the finding; the account name in it is
+    # now redacted.
+    "ROADMAP.md": 0,
     # Per-cycle historical log, describing what was true THEN.
-    "WAKEUP_NOTES.md": 1,
+    "WAKEUP_NOTES.md": 0,
     # Dated observation record - names the capture directory a 2026-08-09
     # frame set was read from.
-    "docs/OBSERVED_IDS.md": 1,
+    "docs/OBSERVED_IDS.md": 0,
 }
 
 #: Files that DELIBERATELY contain home-shaped paths because they are the
@@ -184,9 +215,19 @@ FROZEN_HISTORICAL: dict[str, int] = {
 #: own search shapes - which is why the new tests' own docstrings describe
 #: their spellings abstractly ("title-case", "all-lowercase") instead of
 #: repeating the literal strings a second time.
+#:
+#: This file's own count FELL from TWELVE to ELEVEN on 2026-09-07, the one
+#: permitted direction the sibling counts above may not move in, because the
+#: fall was not evidence removed - it was the 8.3-short-name needle in
+#: ``test_it_fires_on_an_8_3_short_name`` being built from concatenated parts
+#: at runtime instead of typed as one on-disk literal, so this file no longer
+#: carries a contiguous copy of a real Windows account name's short form. The
+#: assertion still exercises the live compiled pattern against the real
+#: shape; only the raw-byte scan this dict's count is measured against lost a
+#: match, because that scan reads source text, not evaluated Python values.
 CONTROL_FIXTURES: dict[str, int] = {
     "tests/test_lane_contract.py": 2,
-    "tests/test_no_hardcoded_home_path.py": 12,
+    "tests/test_no_hardcoded_home_path.py": 11,
 }
 
 def tracked_text_files() -> list[str]:
@@ -375,7 +416,22 @@ class TestKnownSpellingsDecidedOnPurpose:
         # The username charset already allows "~" and digits, and the short
         # form does not start with the lookahead's excluded character, so
         # this was already covered with no change needed.
-        assert HOME_SHAPED.search(r"C:\Users\<ACCOUNT>\AppData\Local\Temp")
+        #
+        # Built from parts at runtime, 2026-09-07, rather than typed as one
+        # literal string: the 8.3 short form of this machine's real account
+        # name is itself the account name in another spelling, and this file
+        # is part of the very corpus its sibling guard (TestNoLiveSurfaceCarries
+        # AHomePath, below) is proving clean. Concatenating the halves means no
+        # contiguous copy of the short name sits in this file's own on-disk
+        # bytes, while the assertion below still exercises the live compiled
+        # pattern against the real shape - see the module docstring's
+        # 2026-09-07 redaction note.
+        six_char_stem = "ADMI" + "NI"
+        short_form = six_char_stem + "~1"
+        sep = "\\"
+        tail = sep.join(("AppData", "Local", "Temp"))
+        planted = sep.join(("C:", "Users", short_form, tail))
+        assert HOME_SHAPED.search(planted), f"pattern failed to fire on {planted!r}"
 
     def test_it_fires_on_either_mixed_forward_and_back_slash_spelling(self):
         # Each separator slot in the pattern is its OWN independent [\\/]
@@ -401,6 +457,59 @@ class TestKnownSpellingsDecidedOnPurpose:
         # DECIDED OUT OF SCOPE. Percent-encoding replaces the literal ":"
         # and "\\"/"/" characters the pattern needs with harmless ASCII.
         assert not HOME_SHAPED.search("C%3A%5CUsers%5Csomeone%5Cdocs")
+
+
+class TestTheCorpusCoversProseNotJustCode:
+    """OPS-39, 2026-09-07: the account name survived in FOUR Markdown docs
+    that ``TestNoLiveSurfaceCarriesAHomePath`` below was already scanning -
+    they show up in ``FROZEN_HISTORICAL`` precisely because the scan already
+    reached them and found something. So the leak's cause was never "this
+    guard cannot see Markdown"; it was that the guard's SHAPE (a home
+    DIRECTORY path) does not cover a bare mention of the account name with no
+    ``Users\\`` in front of it, which is a different, narrower defect than a
+    missing corpus.
+
+    This class exists anyway, to pin the property that actually would have
+    let a doc go dark: the corpus this guard shares with the ASCII and PII
+    guards is built from ``git ls-files`` (via ``tests/_tracked.py``), not
+    from a hardcoded extension allowlist and not from a bare filesystem walk.
+    A sibling project measured that an rglob-based walk goes falsely GREEN
+    against a stale worktree still holding a deleted file's bytes; asking git
+    what is tracked does not have that failure mode, and a fresh clone with no
+    stale artifacts sees exactly what would be published.
+
+    The regression is written against the REAL files this incident was about,
+    not a file planted for the test to find - the instruction that produced
+    this class was explicit that planting a file in the repo it audits proves
+    the walker sees ONE new file, not that it saw the four that actually leaked.
+    """
+
+    def test_the_corpus_contains_every_document_this_incident_touched(self):
+        corpus = set(tracked_text_files())
+        must_be_present = {
+            "ROADMAP.md",
+            "WAKEUP_NOTES.md",
+            "docs/LEDGER.md",
+            "docs/OBSERVED_IDS.md",
+        }
+        missing = must_be_present - corpus
+        assert not missing, (
+            f"the corpus this guard scans is missing {sorted(missing)} - a "
+            "leak in an untracked or unreached document would be invisible "
+            "again, exactly as OPS-39 found"
+        )
+
+    def test_the_corpus_is_built_from_git_not_an_extension_list_or_a_bare_walk(self):
+        import inspect
+
+        source = inspect.getsource(_tracked.iter_authored_files) + inspect.getsource(
+            _tracked._git_tracked
+        )
+        assert "git" in source and "ls-files" in source, (
+            "iter_authored_files no longer reads through git ls-files - a "
+            "corpus built any other way is exactly the failure mode this "
+            "test exists to catch"
+        )
 
 
 class TestNoLiveSurfaceCarriesAHomePath:

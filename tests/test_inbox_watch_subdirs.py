@@ -39,6 +39,15 @@ content hash. This gives the drop exactly the property the notes already have:
 a RENAME of the drop surfaces it again, and an EDIT of any file inside it
 surfaces it again. On an asynchronous channel the edit is usually the
 correction, and missing a correction is unbounded.
+
+EVERY "FIRST LOOK" HERE ACKNOWLEDGES, DELIBERATELY
+---------------------------------------------------
+A plain ``scan`` no longer moves the watermark - reporting and acknowledging
+were split, see ``tests/test_inbox_acknowledge.py``. The setup step in each
+test below therefore calls ``acknowledge_inbox`` rather than ``scan``. That is
+not cosmetic: with a bare ``scan`` there would be no watermark to clear, so
+"the drop surfaced again" would be true whatever the key was, and every
+edit/rename test in this file would pass without exercising the digest at all.
 """
 
 from __future__ import annotations
@@ -113,7 +122,7 @@ class TestTheReportCannotSayNothingNewOverANewDrop:
         inbox = _inbox_with_a_drop(tmp_path)
         state = tmp_path / "seen.json"
 
-        inbox_watch.scan(inbox=inbox, state=state)
+        inbox_watch.acknowledge_inbox(inbox=inbox, state=state)
         second = inbox_watch.scan(inbox=inbox, state=state)
 
         drops = {d.name: d for d in second.drops}
@@ -125,7 +134,7 @@ class TestTheDropSurfacesOnAnEditAndOnARename:
     def test_editing_one_file_inside_the_drop_re_surfaces_it(self, tmp_path):
         inbox = _inbox_with_a_drop(tmp_path)
         state = tmp_path / "seen.json"
-        inbox_watch.scan(inbox=inbox, state=state)
+        inbox_watch.acknowledge_inbox(inbox=inbox, state=state)
 
         _write(inbox / "from-XX-verbatim" / "tools" / "guard.py", "print(9999)\n")
         after = inbox_watch.scan(inbox=inbox, state=state)
@@ -139,7 +148,7 @@ class TestTheDropSurfacesOnAnEditAndOnARename:
     def test_adding_a_file_to_the_drop_re_surfaces_it(self, tmp_path):
         inbox = _inbox_with_a_drop(tmp_path)
         state = tmp_path / "seen.json"
-        inbox_watch.scan(inbox=inbox, state=state)
+        inbox_watch.acknowledge_inbox(inbox=inbox, state=state)
 
         _write(inbox / "from-XX-verbatim" / "tools" / "new.py", "print(3)\n")
         after = inbox_watch.scan(inbox=inbox, state=state)
@@ -150,7 +159,7 @@ class TestTheDropSurfacesOnAnEditAndOnARename:
     def test_renaming_the_drop_re_surfaces_it(self, tmp_path):
         inbox = _inbox_with_a_drop(tmp_path)
         state = tmp_path / "seen.json"
-        inbox_watch.scan(inbox=inbox, state=state)
+        inbox_watch.acknowledge_inbox(inbox=inbox, state=state)
 
         (inbox / "from-XX-verbatim").rename(inbox / "from-XX-verbatim-v2")
         after = inbox_watch.scan(inbox=inbox, state=state)
@@ -410,7 +419,7 @@ class TestAnUnreadableDropCanNeverRenderAsNothingNew:
         inbox = tmp_path / "moon_sync_inbox"
         _write(inbox / "2026-09-06-1200-from-XX-a-note.md", "# From XX\n\nsent to RC.\n")
         state = tmp_path / "seen.json"
-        inbox_watch.scan(inbox=inbox, state=state)  # the note is now seen
+        inbox_watch.acknowledge_inbox(inbox=inbox, state=state)  # now READ
 
         _write(inbox / "newdrop" / "a.py", "x\n")
         _blind(monkeypatch, inbox / "newdrop")
@@ -431,7 +440,7 @@ class TestAnUnreadableDropCanNeverRenderAsNothingNew:
         _blind(monkeypatch, inbox / "newdrop")
         state = tmp_path / "seen.json"
 
-        inbox_watch.scan(inbox=inbox, state=state)
+        inbox_watch.acknowledge_inbox(inbox=inbox, state=state)
         second = inbox_watch.scan(inbox=inbox, state=state)
 
         drops = {d.name: d for d in second.drops}
@@ -486,7 +495,7 @@ class TestAnUnreadableDropCanNeverRenderAsNothingNew:
         """The negative above must not be bought by never saying it at all."""
         inbox = _inbox_with_a_drop(tmp_path)
         state = tmp_path / "seen.json"
-        inbox_watch.scan(inbox=inbox, state=state)
+        inbox_watch.acknowledge_inbox(inbox=inbox, state=state)
 
         second = inbox_watch.scan(inbox=inbox, state=state)
 

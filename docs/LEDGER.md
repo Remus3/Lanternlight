@@ -84,6 +84,122 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0161 - 2026-09-07 - Operator ruling: answer the sibling projects - four reply notes drafted, Lanternlight's first replies on the moon_sync_inbox channel
+
+**Operator ruling, given in chat 2026-09-07: answer the sibling projects.**
+Measured before this ruling: Lanternlight had received 71 notes on the
+`moon_sync_inbox/` channel across its history and had sent zero replies to any
+of them. Four reply notes are now drafted, one per project the channel has
+correspondence with.
+
+**What this entry can and cannot attest to.** The four notes were drafted this
+session; this bookkeeping pass did not itself write, read, or verify their
+placement, because `moon_sync_inbox/` is out of scope for this pass and is
+gitignored regardless. Whether the four drafts have actually been placed onto
+the channel where a sibling's own watcher would see them is UNCONFIRMED to this
+entry's author and should be verified by the next session that has occasion to
+touch that directory, rather than assumed from this record.
+
+**Evidence:** the operator's own ruling in chat, 2026-09-07. No file path is
+cited because the four drafts live under `moon_sync_inbox/`, which this project
+never commits and this pass never inspected.
+
+### LL-0160 - 2026-09-07 - OPS-40 CLOSED - this public repo's git history and five tracked documents carried the operator's Windows account name; both are now purged
+
+**Operator ruling, given in chat 2026-09-07: rewrite the published git history
+to purge the operator's Windows account name.** `OPS-38`, closed hours earlier
+the same day, scoped itself explicitly to CODE surfaces and said so in its own
+text; the account name had also reached historical and reasoning PROSE, which
+is why it survived that closure and needed this second pass.
+
+**Evidence:**
+- An armed pickaxe search against `origin/main`, measured equal to `HEAD` at
+  the time, found the account name in six commits carrying its backslash form,
+  six carrying its forward-slash form, and three carrying its Windows 8.3 short
+  form.
+- Live tracked occurrences (present in the working tree, not only in history)
+  were in `ROADMAP.md`, `WAKEUP_NOTES.md`, `docs/LEDGER.md` (two places, plus a
+  third a sweep found), `docs/OBSERVED_IDS.md`, and
+  `tests/test_no_hardcoded_home_path.py`. All five are now redacted.
+- `tests/test_no_hardcoded_home_path.py`'s own fixtures are now built at
+  runtime from parts rather than carrying the literal account name on disk, so
+  the guard stays armed without itself becoming a live occurrence of the thing
+  it forbids - the same trap `OPS-39` defect 5 named for a different guard's
+  own prose.
+- The merger re-swept the tracked tree independently with an armed control
+  after the redactions and found it clean of all four forms (the three history
+  spellings plus the guard's own former literal).
+- Full acceptance and the one item this bookkeeping pass could not
+  independently re-derive (a post-push re-sweep of the rewritten history) are
+  recorded in `ROADMAP.md` under `OPS-40`.
+
+### LL-0159 - 2026-09-07 - OPS-33 follow-up CLOSED - report and acknowledge are now separate acts, withdrawals are reported, and the watcher covers the entirety of the inbox folder
+
+**Operator ruling, given in chat 2026-09-07: lift the hold on the `OPS-33`
+follow-up, do the watcher work, and build the further fix a sibling suggested.**
+The follow-up had been held since 2026-09-07 on the operator's own earlier
+instruction to wait for RC's findings; this ruling lifted that hold the same
+day.
+
+**What changed in `ops/inbox_watch.py`, with five new test modules -
+`tests/test_inbox_acknowledge.py`, `tests/test_inbox_entirety.py`,
+`tests/test_inbox_keys.py`, `tests/test_inbox_live_state.py`,
+`tests/test_inbox_withdrawals.py`:**
+
+- **Reporting no longer acknowledges.** A plain run reports only and never
+  writes the state file; acknowledgement is now the explicit, separate
+  `--acknowledge` invocation. This closes the defect where a manual run
+  `CLAUDE.md` itself prescribes, or any probe at all, moved the watermark past
+  mail nobody had actually read.
+- **Withdrawals are now reported.** An entry that vanishes from the inbox is
+  listed as withdrawn until an acknowledging run prunes it. Two subtleties are
+  load-bearing: the comparison is keyed on the STABLE NAME, because with
+  content-digest keys an edit and a withdrawal both move the key; and the
+  baseline for comparison is the union of the reported record and the seen
+  record, because an entry listed once and then pulled before anyone
+  acknowledged it lives only in the reported record.
+- **Acknowledgement prunes BOTH records.** A design shared on the channel had
+  shipped this same feature with an acknowledge step that pruned only one
+  record, so a withdrawal line could never clear. Found here by running the
+  command against live mail, not by a test - every arm in the borrowed design
+  asserted that a withdrawal APPEARS and none asserted that it can GO AWAY.
+- **The watcher now covers the entirety of the folder, per the operator's own
+  words recorded in `ROADMAP.md`: "the watcher is for the entirety of the
+  moon-sync-inbox folder."** `_read_notes` had skipped any top-level file whose
+  suffix was not `.md`, so a `.txt`, `.json`, or extensionless top-level file
+  was invisible - neither note nor drop. Such files are now keyed and named;
+  their content is still never read into the report, matching the
+  drop-containment rule `OPS-34` and `OPS-39` already established.
+- **A dead leg in the pre-existing suite was found by mutation testing and
+  fixed.** The note key survived being replaced by `st_size` and by
+  `st_mtime_ns`, because the arm proving an edited note resurfaces replaced it
+  with a LONGER string moments after writing, so size, mtime, and content all
+  moved at once and the arm pinned none of them individually.
+  `tests/test_inbox_keys.py` now edits in place at constant byte length, writes
+  BYTES rather than text so Windows does not turn LF into CRLF and change the
+  length, and asserts the mtime actually MOVED before restoring it.
+- **The tests had been writing into the operator's live records.** Only the
+  state path had been injectable, so a newly added second record defaulted to
+  the live one and a run wrote 93 fixture names into it. `scan()` now derives
+  the reported path as the state path's sibling, and
+  `tests/test_inbox_live_state.py` statically refuses any inbox test that omits
+  a state path.
+
+**Verification observed this session (merger's numbers):**
+- baseline before the work: 2111 tests collected across 40 files.
+- `python -m pytest` run bare: 2151 passed, 1 skipped, in 135.04s.
+- merge gate with a per-file baseline: OK, 2152 tests collected, no file's
+  count dropped.
+- out-of-domain probe against a scratch inbox: report, report again - still
+  unread; state file never created; acknowledge; nothing new; withdraw two
+  entries - both reported; still reported without an ack; cleared after an ack.
+
+**Not closed by this fix, carried forward as `OPS-41`:** nothing here
+acknowledges mail automatically. A sibling (LW) reports fixing the same
+underlying property by moving its trigger to `UserPromptSubmit`, which fires on
+the operator's own first message rather than on `SessionStart`. That specific
+mechanism was not built in this tree.
+
 ### LL-0158 - 2026-09-07 - OPS-39 - the wrap's refutation refused the merge and found SIX defects in work shipped hours earlier; five are fixed, and fixing them found four more
 
 **The refutation pass said "not safe to merge as claimed" and it was right.**
@@ -574,7 +690,7 @@ claim about a snapshot, and this snapshot moved while it was live.
 `CLAUDE.md`, `.claude/settings.json`, `.githooks/pre-commit`, `docs/LEDGER.md`,
 `ROADMAP.md`, `WAKEUP_NOTES.md`, `docs/OBSERVED_IDS.md`,
 `.claude/commands/done.md` and `tests/test_loop_watch.py`. Measured, reported to
-the operator, and deliberately NOT treated as an emergency: `<ACCOUNT>` is
+the operator, and deliberately NOT treated as an emergency: `[REDACTED-ACCOUNT-NAME-2026-09-07]` is
 the Windows built-in account name rather than an identifying string, and
 `tests/test_no_pii.py` covers the class that actually matters here, which is
 game-log PII. It is a fresh-clone brittleness finding. The operator holds the
@@ -2349,7 +2465,7 @@ DISK, OBSERVED AND UNEXPLAINED, recorded because the next session may hit it. Mi
 - GITHUB MCP FIXED, and no secret was handled. Its plugin .mcp.json carried a hardcoded Authorization header against https://api.githubcopilot.com/mcp/ which the server now rejects with 401, and the error message states OAuth fallback is DISABLED while that header is set. The header block was removed so the fallback can engage; the stale token was never read or printed. Backup at .mcp.json.bak-2026-08-29. Endpoint confirmed reachable - curl returns HTTP 401, i.e. auth-required rather than unreachable.
 - SERENA MCP FIXED, after a WRONG first diagnosis. Its config ran 'uvx --from git+https://github.com/oraios/serena', which resolves and installs the package on EVERY launch. It failed with os error 32 removing bottle-0.13.4.data mid-install.
 - SERENA, WHAT THE FIRST DIAGNOSIS GOT WRONG: two live uv.exe processes held the shared uv cache lock, so lock contention looked like the cause. It was not - an isolated UV_CACHE_DIR failed the same way on the second attempt after passing on the first. The failure is a flaky file-in-use race during extraction, and the first success was luck.
-- SERENA, THE ACTUAL FIX: 'uv tool install --from git+https://github.com/oraios/serena serena-agent' installs it once (3 executables, serena-agent v1.7.1.dev0), and the MCP config now runs the installed C:/Users/<ACCOUNT>/.local/bin/serena.exe directly. The per-launch install is gone, so the race cannot recur. Verified: 'serena.exe start-mcp-server --help' runs.
+- SERENA, THE ACTUAL FIX: 'uv tool install --from git+https://github.com/oraios/serena serena-agent' installs it once (3 executables, serena-agent v1.7.1.dev0), and the MCP config now runs the installed C:/Users/[REDACTED-ACCOUNT-NAME-2026-09-07]/.local/bin/serena.exe directly. The per-launch install is gone, so the race cannot recur. Verified: 'serena.exe start-mcp-server --help' runs.
 - SUITE THIS RUN, clean tree with __pycache__ purged: 1302 tests collected, 1302 passed, ruff check All checks passed, merge gate OK against a baseline of 1297.
 
 WHAT I DELIBERATELY DID NOT DO, because it would have hurt a sibling project: the two uv.exe processes holding the shared cache lock belong to the Windows-MCP extension (ant.dir.cursortouch.windows-mcp), which is CONNECTED and in use this session. 'uv cache clean --force' would have overridden their lock, and killing them would have broken a working server. Serena got its own path instead. Check WHAT holds a lock before breaking it.
@@ -2991,7 +3107,7 @@ ONE ASSERTION IN THIS ENTRY'S OWN TESTS WAS WRONG AND IS CORRECTED RATHER THAN D
 **Evidence:**
 - THE WORST HOLE, reproduced by the integrator before any fix rather than relayed: the fence state was a bare toggle, so an entry that opened a code fence and never closed it left every following line counted as code and the guard stood down for the rest of the file. integrate() -> ['LL-0900'], NON-EMPTY, which reads as SUCCESS; LL-0901 never landed as its own entry; its text was absorbed into LL-0900's block; no exception. WORSE than the LL-0034 defect, which at least returned []
 - SECOND HOLE: the id pattern was [A-Z]{2,6}-\d{3,}, i.e. today's ids. A malformed heading with any other shape failed the heading pattern AND the id pattern and fell through into silence - lowercase, mixed case, 1-letter and 7-letter prefixes, 2 digits, and no hyphen. OPS-7 and SAF-0001 both sit outside that pattern and both exist in this repository
-- THIRD HOLE, against LL-0033: the 2d guards pin primary_checkout() and WORKTREE_ROOT specifically, not the class. The pass embedded Path.home() and regenerated - 1009 passed on this machine with C:\Users\<ACCOUNT> committed into a contract, while a checkout under a different USERPROFILE measured '1 failed, 1008 passed'. The 2d symptom exactly, invisible here
+- THIRD HOLE, against LL-0033: the 2d guards pin primary_checkout() and WORKTREE_ROOT specifically, not the class. The pass embedded Path.home() and regenerated - 1009 passed on this machine with C:\Users\[REDACTED-ACCOUNT-NAME-2026-09-07] committed into a contract, while a checkout under a different USERPROFILE measured '1 failed, 1008 passed'. The 2d symptom exactly, invisible here
 - FOURTH HOLE, against LL-0035: gvas.parse omits an undecodable property from .properties and records it in .unknown_properties, so 'never written' and 'written but our reader failed' both answered None
 - THE FAILING TESTS CAME FIRST: 12 failed before any implementation, across the unbalanced-fence class, seven id shapes, the absolute-path class guard and the unreadable-property case
 - ALL SIX MUTANTS NOW RED, __pycache__ purged and every anchor asserted unique: id shape narrowed to LL-NNNN -> 7 failed; fence delimiters narrowed -> 2 failed; unbalanced-fence refusal deleted -> 6 failed; id matched anywhere instead of first-token -> 2 failed; Path.home() embedded in a contract -> 2 failed; undecodable property reading as absence -> 2 failed

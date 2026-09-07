@@ -98,6 +98,18 @@ KNOWN_NON_HOSTS = frozenset(
         "slots.py",
         "sys.addaudithook",
         "GateReport.notes",
+        # TEST MODULE FILENAMES quoted by `LL-0159`, the entry closing the
+        # `OPS-33` follow-up. Each is a file in THIS tree - `git ls-files`
+        # matches `tests/test_inbox_acknowledge.py` and its three siblings -
+        # and the host-shaped pattern reads the dotted tail as a domain
+        # because `.py` is a real TLD, Paraguay's. Looked at before adding,
+        # per the regenerating note above: these are our own test modules,
+        # not sources. The tokens are the tails the extractor emits, not the
+        # full paths, which is what any failure message would name.
+        "acknowledge.py",
+        "entirety.py",
+        "keys.py",
+        "withdrawals.py",
         # CAPTURE FILENAMES quoted by `LL-0149`. A frame is stamped
         # `f0566_00.43.29.png` and a fixture `panel_total_1443_hits_28.png`,
         # and the host-shaped pattern reads the dotted tails as domains. An

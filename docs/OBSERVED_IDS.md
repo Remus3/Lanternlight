@@ -658,7 +658,7 @@ itself the correction to an earlier rediscovery failure about this same screen.
 The claim was false when written. The remaining 14 texts below are new.
 
 Every node was hovered in the `2026-08-09` capture at
-`C:/Users/<ACCOUNT>/.lanternlight/frames/`, which is a **2560x1440
+`C:/Users/<REDACTED-ACCOUNT-NAME>/.lanternlight/frames/`, which is a **2560x1440
 full-scene set outside `C:/ll-captures/`** and is therefore invisible to a walk
 of that tree. It holds 218 PNGs: 217 in the `f`-series, `f0000_16.01.15` to
 `f0216_16.09.16`, plus one `skills_16.54.16` taken 45 minutes later. The character is **Level 2** and every page-two cluster is locked,
