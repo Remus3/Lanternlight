@@ -4094,9 +4094,12 @@ pattern worth copying, idea only and none of its wire:
   added after it was written.
 - Add a coverage test that independently RE-DERIVES that set and fails when the
   selector's live output has a gap, so the selector is itself guarded.
-- Run that subset in pre-commit. Measured here 2026-09-07: the doc-reading
-  guards finish in about 28s, against about 2m11s for the full suite, so it is
-  affordable on every commit.
+- Run that subset in pre-commit. Affordability is measured but NOT yet measured
+  for the whole set, because the set is what the selector has to derive:
+  `test_source_register.py` + `test_ascii_hygiene.py` + `test_no_pii.py` ran
+  53 tests in 27.7s here on 2026-09-07, against a full suite of 1854 that took
+  2m11s once and 4m21s under load. Three modules is a floor, not the answer -
+  re-measure once the selector exists.
 
 That would have blocked all three incidents BEFORE the commit, which is what
 criterion 2 above asks for and what a badge cannot do.

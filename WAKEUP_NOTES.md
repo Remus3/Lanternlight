@@ -49,9 +49,20 @@ symptom that exposed the real defect, and the item's own filed assumption -
 that these failures "at least fail loudly" - was **wrong**, now corrected in
 place rather than edited away.
 
-**STANDING RISK, and the next session should know it:** every merge-gate
-sign-off taken before this cycle rests on the broken parser. Nothing is known
-to have been mis-signed, and **nothing has been re-audited.**
+**STANDING RISK - DISCHARGED 2026-09-07, and it did not resolve the way it was
+framed.** It said every merge-gate sign-off before this cycle rests on the
+broken parser, with nothing re-audited. The re-audit re-ran the suite at every
+commit in the exposure window - 265 of them, from git, in throwaway worktrees -
+and found **ZERO aborted runs anywhere**. Both vacuous routes need an aborted
+run, so **the parser never mis-signed anything.**
+
+**What the audit found instead is live and recurs: the gate is run BEFORE the
+ledger entry that ships with it,** and the entry's own prose reddens the tree
+it is committed into. Three instances, the third being the wrap that recorded
+the audit - `LL-0147` cited two tokens absent from the source register and the
+suite went `1 failed, 1853 passed` until they were registered. Now `OPS-31`.
+The sign-offs were not false; each count was true of the tree the gate
+measured. **A gate is only as good as the tree state it is pointed at.**
 
 **The fix then had a THIRD hole, and only the refutation pass found it.** The
 anchored parser STRIPPED leading whitespace and then anchored, throwing away

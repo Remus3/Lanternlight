@@ -1,4 +1,4 @@
-LANTERNLIGHT - SESSION 50 CONTINUATION
+LANTERNLIGHT - SESSION 51 CONTINUATION
 
 You are working on Lanternlight, a companion and analysis project for the
 Steam game Mistfall Hunter. Repo root C:\Lanternlight, public at
@@ -17,13 +17,42 @@ The list below is the state at the 2026-09-06 cycle 49 wrap. Re-derive it, do
 not trust it - read the ROADMAP headings yourself, because a filed status goes
 stale and this project's own rule is that a filed count is a hypothesis.
 
-READ THIS FIRST - A STANDING RISK YOU INHERIT
+READ THIS FIRST - THE STANDING RISK IS DISCHARGED, AND IT RESOLVED THE OTHER WAY
 
 `merge_gate.verify` was PASSING VACUOUSLY on runs that never completed, found
-and fixed in cycle 49 (`OPS-30`, ledger `LL-0145`). Every merge-gate sign-off
-taken BEFORE that fix rests on a parser that could read a pass count out of a
-`FAILURES` body. Nothing is known to have been mis-signed, and NOTHING HAS
-BEEN RE-AUDITED. Do not treat a historical "gate OK" as evidence.
+and fixed in cycle 49 (`OPS-30`, ledger `LL-0145`). That fix left a standing
+risk: every sign-off taken before it rested on a parser which could read a pass
+count out of a `FAILURES` body, and nothing had been re-audited.
+
+**Cycle 50 re-audited it. The parser never mis-signed anything.** Every commit
+in the exposure window was checked out and the suite RE-RUN from git - 265
+commits, 258 green - and there were **ZERO aborted runs anywhere in history**.
+Both vacuous routes need an aborted run and never got one. The count-regression
+check had nothing to catch either: zero collected-count drops. Historical "gate
+OK" is no longer an open exposure. Ledger `LL-0147`.
+
+**What the audit found instead is live, and it is your priority: `OPS-31`.**
+The gate is run BEFORE the ledger entry that ships with it, so the entry's own
+prose reddens the tree it is committed into. Three instances, the third being
+the wrap that recorded the audit - `LL-0147` cited two tokens absent from the
+source register, and the suite went `1 failed, 1853 passed` until they were
+registered. The sign-offs were not FALSE; each count was true of the tree the
+gate measured. **A gate is only as good as the tree state it is pointed at,**
+and re-running the suite after the code changes but before the doc edits is not
+running it.
+
+Two things the audit could not have caught by re-running anything, both open
+under `OPS-31`: `merge_gate.check_per_file_counts` is **never called** while
+being exported in `__all__`, and `verify(claimed_paths=(), baseline=None)`
+defaults both to checking nothing.
+
+**A caution about the audit's own method, because it bit me.** Three of the
+seven reds it first reported were artifacts of running in a WORKTREE:
+`ops/lane_contract.py` briefly embedded `lanes.REPO_ROOT` in the rendered
+contract text, so a contract written at the real root can never equal what a
+worktree renders. An independent refutation pass caught it and the finding was
+withdrawn. If you re-run history in a worktree, check for path-dependence
+first.
 
 The fix then had a THIRD hole of its own, found only by the refutation pass:
 the anchored parser stripped leading whitespace and then anchored, so an
@@ -69,8 +98,26 @@ Blocked on the operator rather than on work:
 
 OPEN AND DISK-ONLY - THIS IS NOW A SHORT LIST
 
-Cycle 49 CLOSED `OPS-28`, `OPS-29` and `OPS-30`. The only disk-only work left
-is one item:
+Cycle 49 CLOSED `OPS-28`, `OPS-29` and `OPS-30`. Cycle 50 discharged
+`OPS-30`'s standing risk by re-auditing it, and opened `OPS-31` from what the
+audit found. Two disk-only items:
+
+- **OPS-31 - START HERE.** The gate runs before the ledger entry that ships
+  with it. Criterion 2 is the real work: a MECHANICAL guard that fails when the
+  tree about to be committed has not been run since its last edit. A checklist
+  line is not acceptance - `ac7fd5e` and `c9a0f76` both had the ritual and both
+  shipped red. The design to copy is written into the ROADMAP section: derive
+  the md-reading guard set from `git ls-files` AT RUN TIME, never hand-maintain
+  it in YAML, guard the selector with a test that independently re-derives it,
+  and run that subset in `.githooks/pre-commit` - which today checks bytes and
+  runs no pytest guard at all. Prove it non-vacuously by planting the exact
+  defect: write an entry citing an unregistered token, watch red, register it,
+  watch green.
+  - Do NOT re-litigate a `docs-guards` CI badge. Considered and DECLINED in
+    cycle 50 with the reason recorded: a sibling project needs one because its
+    CI carries `paths-ignore` for markdown, while `tests.yml` here has no path
+    filter at all, so a docs-only push already runs the whole suite. A badge
+    also reports AFTER the push, which is not what criterion 2 asks for.
 
 - OPS-27 - its criterion 1 is DISCHARGED and the item was REFRAMED, so read
   the ROADMAP subsections before touching it. Do NOT build what the item's
