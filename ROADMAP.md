@@ -4021,11 +4021,97 @@ limit, and C: has 298.1 GB free while commit sits at 34,805 of 48,267 MB.
 initially produced **0 red** under mutation. Three subprocess tests were added
 and it now produces 2 red.
 
-**STANDING RISK, recorded because it is why this item mattered.** Every
+**STANDING RISK - DISCHARGED 2026-09-06 by the re-audit below.** It said: every
 merge-gate sign-off taken BEFORE this fix rests on a parser that could read a
-count out of a run that never completed. Nothing is known to have been
-mis-signed, and **nothing has been re-audited.** That is an open exposure, not
-a reassurance.
+count out of a run that never completed, nothing is known to have been
+mis-signed, and nothing has been re-audited. It has now been re-audited, and
+the answer is that **the parser never mis-signed anything** - see `OPS-31`,
+which is the defect the re-audit found instead.
+
+## OPS-31. The gate is run BEFORE the ledger entry that ships with it - OPEN, root cause proven, recurs
+
+**The re-audit of `OPS-30`'s standing risk cleared the parser and found this
+instead.** Every commit in the defect's exposure window was checked out into a
+throwaway worktree and the suite RE-RUN, taking the verdict from pytest's exit
+code and its column-0 stats line rather than from `merge_gate`. Across 260
+distinct commits there were **ZERO aborted runs** - no `INTERNALERROR`, no
+missing stats line, no failed collect. The vacuous route needs an aborted run
+and never got one.
+
+**What the sweep found instead is a live, recurring defect.** A wrap measures
+the suite, THEN writes the ledger entry recording that measurement, and the
+entry's own prose reddens the tree it is committed into. Proven twice, and the
+second time was two commits before `HEAD`:
+
+- `ac7fd5e` (2026-08-30) - `LL-0087` records `1327 passed in 23.07s`, "observed
+  at wrap". The committed tree gives `1 failed, 1326 passed`, because the entry
+  cites `ops.lanes.owner`, absent from the register in `docs/ECOSYSTEM.md`.
+  `git log -S` names `ac7fd5e` as the sole introducer of that token. Fixed by
+  the next commit adding it to `KNOWN_NON_HOSTS`.
+- `c9a0f76` (2026-09-06) - claims 1781, tree gives `1 failed, 1780 passed`, on
+  four tokens quoted by `LL-0140`. Fixed by `af7fc49`, whose diff registers
+  exactly those four with a comment naming the entry.
+
+**The sign-off itself was NOT false.** The count was true of the tree the gate
+measured. The gap is that the ledger is written after the measurement and
+committed with it, so the gate never sees the tree that lands. A gate is only
+as good as the tree state it is pointed at.
+
+**Acceptance:**
+1. The suite is re-run AFTER the ledger entry and roadmap edits are written,
+   and before the commit - not merely after the code changes. Demonstrate on a
+   real wrap, quoting both runs.
+2. A mechanical guard, not a ritual: something that FAILS when the tree that
+   is about to be committed has not been run since its last edit. A checklist
+   line is not acceptance; `ac7fd5e` and `c9a0f76` both had the ritual.
+3. The guard is proven non-vacuous by planting the exact defect - write an
+   entry citing an unregistered token, confirm red, register it, confirm green.
+
+**A `docs-guards` CI badge was CONSIDERED AND DECLINED for this repo, and the
+reason is a precondition we do not share.** A sibling project on this machine
+runs one, and it is load-bearing THERE because its main CI carries
+`paths-ignore: ['**/*.md']` to save runner minutes - so a docs-only commit
+triggers no workflow at all, while dozens of its test modules read tracked
+`.md` files and assert on their content. Its own comments record the failure
+landing twice in a row, the second time being the docs-only FIX whose green was
+never machine-confirmed. `.github/workflows/tests.yml` here carries **no
+`paths` or `paths-ignore` filter at all**, so a docs-only push already runs the
+whole suite. A second badge would be presentation, not coverage.
+
+**It also would not have prevented any of the three incidents,** because a
+badge reports after the push. `ac7fd5e` and `c9a0f76` were both pushed, both
+went red, and both were fixed by the next commit - CI turning red is exactly
+what already happened.
+
+**What DOES transfer is the sibling's selector discipline, and it belongs in
+the pre-commit hook rather than in CI.** `.githooks/pre-commit` today checks
+bytes - non-ASCII, forbidden paths - and runs **no pytest guard at all**. The
+pattern worth copying, idea only and none of its wire:
+
+- Derive the set of guards that read tracked `.md` from `git ls-files` AT RUN
+  TIME. Do not hand-maintain a module list; the sibling's comments name the
+  exact failure - a list written into YAML is silently green over every module
+  added after it was written.
+- Add a coverage test that independently RE-DERIVES that set and fails when the
+  selector's live output has a gap, so the selector is itself guarded.
+- Run that subset in pre-commit. Measured here 2026-09-07: the doc-reading
+  guards finish in about 28s, against about 2m11s for the full suite, so it is
+  affordable on every commit.
+
+That would have blocked all three incidents BEFORE the commit, which is what
+criterion 2 above asks for and what a badge cannot do.
+
+**Two structural holes found in the same pass, neither reachable by re-running
+anything, both open:**
+- `merge_gate.check_per_file_counts` **is never called** - not by `verify`, not
+  by anything outside its own definition and its tests. It is exported in
+  `__all__` and referenced in a `lane_contract` docstring, which is how it
+  reads as a live guard. Either wire it into `verify` or delete it; a check
+  that has never run is decoration with a good name.
+- `verify(claimed_paths=(), baseline=None)` - both default to something that
+  checks nothing, and `baseline` is supplied by the very caller whose work is
+  under test. `baseline=None` does at least raise `no-baseline`; an empty
+  `claimed_paths` is silent.
 
 ## 4b. Ammo-family and talent measurement - READY, cheap, needs the client
 

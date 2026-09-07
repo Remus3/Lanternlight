@@ -103,6 +103,15 @@ KNOWN_NON_HOSTS = frozenset(
         "surfaces.py",
         "sys.meta",
         "tests.yml",
+        # Dotted PYTHON ATTRIBUTES quoted by `LL-0147`, truncated by the
+        # host-shaped pattern the same way the `LL-0141` block above records:
+        # `lanes.REPO_ROOT` is seen as `lanes.REPO`. Both name attributes of
+        # this repo's own modules - `ops/lanes.py` and `merge_gate`'s
+        # `SummaryResult` - and neither is a source. `LL-0147` is the entry
+        # that FOUND this failure mode, so it reddening the tree by naming its
+        # own evidence is the defect demonstrating itself; see `OPS-31`.
+        "lanes.REPO",
+        "summary.passed",
         "attribution.commit",
         "attribution.pr",
         "config.yml",

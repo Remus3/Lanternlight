@@ -355,6 +355,42 @@ class TestSummaryLineIsAnchoredNotGrepped:
         assert result.found
         assert result.passed == 0
 
+    def test_a_quoted_ZERO_failed_ahead_of_the_stats_line_does_not_win(self):
+        """Found by the cycle 50 RE-AUDIT of the historical sign-offs.
+
+        The pre-fix parser searched the whole blob, so the FIRST `N failed`
+        won. That made a COMPLETED failing run reachable, which LL-0145's
+        account of the defect did not cover - it named only aborted runs.
+
+        MEASURED end to end with a real pytest run: a suite ending
+        `3 failed, 1851 passed in 115.53s`, exit 1, was read by the old parser
+        as passed=1772, failed=0, errors=0 - ZERO findings, so the old gate
+        signed off on a COMPLETED, FAILING run. The string it latched onto is
+        real and still in the tree: `docs/LEDGER.md` carries the prose
+        `1772 passed, 0 failed` in the entry describing the OPS-29 near miss.
+
+        THE LIMIT, because this docstring's first draft overstated it and the
+        refutation pass caught that: the failing test which rendered that
+        prose was written FOR the demonstration. The repo's own
+        ledger-scanning tests print the offending TOKEN and the citing
+        FILENAME, not the file's text, and under two separate ledger
+        corruptions neither emitted `0 failed`. The mechanism is proven; an
+        existing in-repo test that triggers it is NOT.
+
+        The anchor already closes this, because the quoted line is indented
+        and the real stats line is not. This test is what keeps it closed.
+        """
+        text = (
+            "=================================== FAILURES ==================\n"
+            "    quoted from the ledger: `1772 passed, 0 failed` from a run\n"
+            "3 failed, 1851 passed in 115.53s\n"
+        )
+        result = merge_gate.parse_summary(text)
+        assert result.failed == 3, (
+            "a quoted '0 failed' preempted the run's own stats line"
+        )
+        assert result.passed == 1851
+
     def test_an_INDENTED_summary_shaped_line_is_quoted_output_not_a_summary(self):
         """Found by the cycle 49 refutation pass - the fix's own residual hole.
 
