@@ -5296,6 +5296,49 @@ recorded here and, if adopted, a concrete acceptance criterion added below it:**
    licensing reasoning already forbid vendoring anything out of it regardless
    of whether the drop itself is kept or deleted.
 
+## OPS-43. An outgoing note leaves no trace in this tree, so a cold session believes it has never replied - OPEN
+
+Filed 2026-09-07, from a false claim this project made about itself and then
+recorded in its own ledger.
+
+Lanternlight replies to a sibling by writing a note directly into that
+sibling's `moon_sync_inbox/` directory. It keeps NO copy of what it sent.
+Inside this repository there is therefore no artifact showing that any reply was
+ever sent, and `moon_sync_inbox/` is gitignored, so git history does not carry
+one either.
+
+The consequence is not hypothetical and is not merely cosmetic. A session
+reading only its own disk observes no outgoing mail and concludes, correctly
+from its evidence and wrongly in fact, that this project has been silent on the
+channel. That happened on 2026-09-07: a subagent reported that Lanternlight had
+never replied to any of the 71 notes it had received, the merger relayed it
+without an independent probe, it was written into `WAKEUP_NOTES.md` and into
+ledger `LL-0161`, and one delivered note carried "first reply on this channel"
+in its own title. Six earlier replies existed the whole time, the oldest from
+2026-09-06 at 23:07 local, sitting in four directories this project does not
+read. Both records are corrected and a correction note was sent to the affected
+sibling.
+
+**Every cold session reads only its own disk. That is the design, not a
+shortcoming, which is exactly why the missing artifact is this project's
+problem and not the channel's.**
+
+**Acceptance criteria.**
+
+1. Every note this project sends is also written into a local outbox under
+   `moon_sync_inbox/`, atomically, before or at the moment it is delivered.
+2. The watcher distinguishes our own outgoing notes from inbound mail and never
+   reports one of ours as unread. Ruling 4 of 2026-09-07 puts the entirety of
+   the folder in scope, so an outbox inside it is watched and must be
+   classified rather than skipped.
+3. A test asserts that a session with no memory can answer "has this project
+   replied to X, and when" from tracked or on-disk state alone, without reading
+   any sibling directory. Prove it is not vacuous: remove the outbox copy,
+   watch the test go red, restore it, watch it go green.
+4. The reply-path map - which sibling code corresponds to which directory - is
+   recorded where a cold session finds it, because it was re-derived by
+   listing `C:\*\moon_sync_inbox` this session rather than read from anywhere.
+
 ## 4b. Ammo-family and talent measurement - READY, cheap, needs the client
 
 Opened 2026-08-09 after the talent and skills screens were captured. The class's

@@ -104,6 +104,30 @@ touch that directory, rather than assumed from this record.
 cited because the four drafts live under `moon_sync_inbox/`, which this project
 never commits and this pass never inspected.
 
+**CORRECTION, appended the same day by the merger rather than by rewriting the
+text above, which is left as written because this file is append-only.** Two
+claims in this entry are wrong and one is now settled.
+
+1. **"Had sent zero replies" is FALSE.** Measured at delivery time by listing
+   each destination directory: Lanternlight had already sent six notes, the
+   oldest timestamped 2026-09-06 at 23:07 local, to all four siblings. The
+   claim reached this entry from a subagent and was relayed without an
+   independent probe. It is the repository's own anti-pattern - a filed count
+   is a hypothesis - in the one place the project trusts most.
+2. **The placement is no longer UNCONFIRMED.** All four notes were delivered
+   into the siblings' own `moon_sync_inbox/` directories and each delivery was
+   verified by listing the destination afterwards. A fifth note was sent to the
+   one sibling whose delivered copy had "first reply on this channel" in its
+   title, correcting that in the recipient's own inbox rather than only here.
+3. **Why the false claim was believable, which is the transferable half and is
+   now `OPS-43`.** Lanternlight writes an outgoing note directly into the
+   recipient's directory and keeps no copy in its own tree. From inside this
+   repository there is consequently no artifact showing that any reply was ever
+   sent, so a session reading only its own disk correctly observes nothing and
+   incorrectly concludes nothing was sent. Every cold session reads only its own
+   disk, by design. The evidence that refuted the claim existed the whole time
+   and lived exclusively in four directories this project does not read.
+
 ### LL-0160 - 2026-09-07 - OPS-40 CLOSED - this public repo's git history and five tracked documents carried the operator's Windows account name; both are now purged
 
 **Operator ruling, given in chat 2026-09-07: rewrite the published git history
