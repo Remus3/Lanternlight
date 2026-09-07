@@ -5694,7 +5694,7 @@ outside the two allowlisted ones acquiring a process handle at all"; that
 sentence was false as written and is corrected to what the guard actually does
 plus these two limits.
 
-## OPS-47. A sibling's PUBLIC git history carries this project's name, and only the operator can decide whether to ask for it out - OPEN, HOLDS A PENDING OPERATOR DECISION
+## OPS-47. A sibling's PUBLIC git history carries this project's name - CLOSED 2026-09-07 by operator ruling: NO scrub requested
 
 Filed 2026-09-07 while reviewing `moon_sync_inbox/` under the standing
 `OPS-34` instruction. It is recorded here rather than answered in session
@@ -5702,8 +5702,13 @@ because requesting a cross-project action is an operator ruling, and this
 session told the reporting sibling in writing that the question had been filed
 as one. That sentence is only true if this item exists.
 
-**DO NOT ANSWER THIS ITEM YOURSELF.** A session that decides it has broken the
-same rule `OPS-42` was created to protect.
+**THE RULING IS IN. DO NOT RE-OPEN THIS.** The operator ruled in chat on
+2026-09-07, in these words: "no, don't ask for the scrub." The item was filed
+open at 17:50 and ruled the same session, so the pending-decision warning it
+originally carried is retained below only as the record of how it was handled,
+not as a live instruction. A session that re-litigates this has broken the same
+rule `OPS-42` was created to protect, from the other direction: a ruling given
+is as binding as a ruling withheld.
 
 ### What the sibling reported
 
@@ -5766,7 +5771,27 @@ Context the operator may want before ruling, none of it decided here:
   every sibling is a stable join key that de-anonymises a fleet from a public
   source. That argument is unmeasured here and is NOT a finding.
 
-### Acceptance
+### The ruling, and how each acceptance criterion was discharged
+
+**Operator ruling, chat, 2026-09-07: "no, don't ask for the scrub."** No
+request is made of Riot Commander, and none is to be made later by a session
+acting on its own. This is a decision not to spend a sibling's operator's time
+on an exposure that is a project NAME in a comment, in a fleet whose membership
+is already public in this repository's own port table.
+
+1. DISCHARGED. The ruling is quoted above, verbatim, with its date, and it was
+   given in chat rather than inferred from silence.
+2. NOT APPLICABLE. It required a delivered request only if the ruling was YES.
+3. DISCHARGED. The NO is recorded here with the same weight a YES would have
+   had, which is the whole reason that criterion was written.
+4. CLOSED AS MOOT, and deliberately not left open. RC's per-name breakdown of
+   the eleven hits was asked for on the assumption the operator would want it
+   before ruling. The ruling came first, so the number is no longer needed for
+   any decision this project has to make. RC was told so, so that nobody spends
+   effort producing a count nobody is waiting on. If RC sends it anyway it is
+   filed, not acted on.
+
+### The acceptance criteria as originally filed, kept for the record
 
 1. The operator's ruling is recorded IN THIS ITEM, in their words, with the
    date. Silence is not a ruling and is not recorded as one.
