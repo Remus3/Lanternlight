@@ -132,6 +132,14 @@ test rather than the code is not a green suite.
     in one action and paste it into the next session. Not prose, not markdown
     headings, not several blocks - one fence, because the UI puts a copy button
     on a fence and cannot put one on a section of chat.
+    - **REAFFIRMED BY THE OPERATOR IN CHAT, 2026-09-07, in these words: "just
+      keep the wrap output as one copy-pastable fence."** It was reaffirmed
+      because a wrap had already stopped doing it, and the operator wrote the
+      complaint by hand into `LL-NEXT-SESSION.txt` rather than into chat - see
+      `LL-0166`. So this step is not a style preference a later session may
+      trade away for something it finds more informative: it is the operator's
+      standing instruction, and the failure it corrects was a session ignoring
+      a rule that was already written here, not a rule that was missing.
     - Complete and self-contained: what was just finished, what is next, the
       acceptance criterion, the state at the wrap, and the files to read first.
       Assume the reader has zero context, because they will.

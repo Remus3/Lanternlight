@@ -84,6 +84,16 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0166 - 2026-09-07 - The operator's hand-off complaint is discharged, and the finding is that the rule it names was already written down and was ignored
+
+**Evidence:**
+- OPERATOR RULING, given in chat 2026-09-07, quoted verbatim so it cannot be paraphrased into something weaker later: "just keep the wrap output as one copy-pastable fence." This answers the complaint the operator typed by hand into `LL-NEXT-SESSION.txt` at 13:30 the same day, which said the continuation prompt was not being produced in the shape they had asked for.
+- THE FINDING IS THAT NOTHING WAS MISSING FROM THE CONTRACT. `.claude/commands/done.md` step 10 already said exactly this before the complaint was made: one fenced code block, not prose, not markdown headings, not several blocks, with the reason stated - the UI puts a copy button on a fence and cannot put one on a section of chat - plus "Nothing after it, and NO RECAP", and a matching line in that file's own Definition of done. The specification was correct and a session did not follow it. That distinction is the whole value of this entry: a cold session reading the complaint alone would reasonably conclude the rule needed writing, would write it, and would have fixed nothing.
+- WHAT CHANGED, deliberately small: step 10 now carries the operator's words and the date, and says in the artifact that this is a standing instruction rather than a style preference a later session may trade away for something it finds more informative. No logic, no new machinery, and the surrounding rules were left exactly as they were.
+- WHAT WAS ALREADY TRUE, measured this session rather than assumed from the complaint: the tracked hand-off file exists at the repository root, and the operator's desktop shortcut exists and resolves to that path, confirmed by reading `TargetPath` back off the saved shortcut and testing that the target exists. So the FILE half of the requested shape was never broken. The complaint was about the wrap's CHAT output only.
+- NO GUARD WAS ADDED, and the reason is recorded rather than left as an omission a later session re-opens. This project's instinct is to make a rule mechanical, and there is no mechanical check available here: the artifact under discussion is chat output, which no test in this tree can observe. A test asserting that `done.md` still CONTAINS the rule would pass while a session ignored it, which is precisely the failure that happened, so it would be decoration rather than a guard. `LL-0163` already records what a guard that cannot fail is worth.
+- SCOPE, stated so this is not read as more than it is: this entry closes the complaint about the hand-off prompt's shape. It does not claim any wrap has since run correctly, because none has run since the ruling. The next wrap is the first test of it.
+
 ### LL-0165 - 2026-09-07 - OPS-47 CLOSED the same session it was filed: the operator ruled NO scrub, the request was withdrawn from the sibling, and the hand-off file the operator rewrote by hand is now committed
 
 **Evidence:**
