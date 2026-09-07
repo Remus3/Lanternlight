@@ -24,9 +24,12 @@ Acknowledge with an explicit `python ops/inbox_watch.py --acknowledge`, and
 only for notes you have actually read.
 
 STATE AT THE WRAP
-  origin/main           this wrap's commit; the three content commits before
-                        it are 73b03e3, eee1188, 1ee0ee4. Working tree clean,
-                        everything pushed.
+  origin/main           this session's commits are 73b03e3, eee1188, 1ee0ee4,
+                        0cd5221, 19b3b48, plus the final wrap commit that
+                        carries this line. Working tree clean at the wrap,
+                        everything pushed. Confirm with
+                        `git log --oneline -6` and `git rev-parse HEAD
+                        origin/main` rather than trusting this list.
   python -m pytest bare 2225 passed, 1 skipped in 167.51s
   python -m ruff check. all checks passed
   loop                  cycle 54, item OPS-43. OPS-43 was CARRIED FORWARD as a
