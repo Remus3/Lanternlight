@@ -84,6 +84,108 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0154 - 2026-09-07 - OPS-34 CLOSED - the inbox watcher was blind to SUBDIRECTORIES and printed "nothing new" over a 702 KB drop all night
+
+**The defect, and it is `OPS-33`'s defect standing in a second place.**
+`ops/inbox_watch.py` listed the inbox with `Path.iterdir()` and skipped every
+entry whose suffix was not `.md`. A directory has no `.md` suffix, so a
+subdirectory was not merely unclassified - it was invisible. Riot Commander
+dropped its live source into `moon_sync_inbox/from-RC-verbatim/` on 2026-09-06
+and the watcher reported `nothing new - 46 notes, all previously seen` over the
+top of it for the whole night. That is the module's own forbidden output: its
+docstring says "I could not look" and "I looked and there was nothing" are
+different facts, and here it had not looked at all while reporting the second.
+
+**The drop was re-measured rather than believed.** The session hand-off recorded
+it as "48 files / 792 KB". Measured this run with `find -type f | wc -l` and the
+watcher's own byte total: **49 files, 702,434 bytes**. Both halves of the filed
+figure were wrong, which is this repository's "a filed count is a hypothesis"
+rule landing on its own hand-off document.
+
+**Operator instruction that motivated it**, given in chat 2026-09-06 and
+broadcast by the operator to all five repositories' main sessions at the same
+time: always properly review `moon_sync_inbox/` AND its subdirectories for
+ingest, review, implementation and response. A top-level pass is not a review.
+
+**Evidence:**
+- TDD, red first: `tests/test_inbox_watch_subdirs.py` written before any
+  implementation and watched fail - `9 failed, 2 passed`, headline
+  `AttributeError: 'Scan' object has no attribute 'drops'`.
+- After implementation: `tests/test_inbox_watch_subdirs.py` plus the existing
+  `tests/test_inbox_watch.py` gave `38 passed in 0.44s`, so the new walk did not
+  disturb the note path.
+- A Windows line-ending trap fired mid-run and was fixed in the TEST, not the
+  implementation: `Path.write_text` translates LF to CRLF by default, so a
+  fixture asking for three bytes landed as four and both the byte total and the
+  manifest digest were measuring the platform's newline policy. `newline=""` is
+  now load-bearing in the fixture helper and says so in its docstring.
+- Non-vacuity, five mutations, each with its anchor asserted to match exactly
+  ONCE before the mutant was written. This mattered: the first attempt used a
+  `sed` pattern whose backslash escaping did not match, the suite printed
+  `11 passed`, and that green was a claim about the pattern rather than about
+  the code. The anchored re-run reported `all 5 anchors matched exactly once`.
+  Mutants and their kills: emptying the relative path out of the digest recipe
+  `2 failed, 9 passed`; walking `rglob` instead of `iterdir` for a drop's
+  children so every leaf filename leaks into the report `1 failed, 10 passed`;
+  never adding the drop's key to the seen set `1 failed, 10 passed`; removing
+  `new_drops` from the nothing-new condition `1 failed, 10 passed`; zeroing the
+  byte total `1 failed, 10 passed`. Restored: `11 passed`.
+- Live probe against the REAL inbox with a throwaway state file:
+  `SUBDIRECTORY DROPS, new or changed since last look (1):` then
+  `from-RC-verbatim/ - 49 files, 702434 bytes, contains: .claude, .github, ops,
+  scripts, tests, tools`.
+
+**THE DROP IS LIVE, and that is the strongest argument for the content key.**
+Three measurements of the same directory inside one session: the hand-off
+recorded 48 files and 792 KB; `find -type f | wc -l` and the watcher agreed on
+49 files and 702,434 bytes; and eleven minutes later the same watcher reported
+**50 files and 707,178 bytes** with a new `MANIFEST.sha256` among the immediate
+children. A sibling is appending to our inbox while we read it. A drop keyed on
+its NAME alone would have gone quiet after the first look and every later
+addition would have been invisible - which is the same failure this item was
+filed for, one level deeper. The manifest digest re-surfaced it without being
+asked.
+
+**Do not read the three figures as a contradiction.** Each was true when it was
+taken. The lesson is the one already written down here: a filed count is a
+hypothesis, and on a directory another process is still writing, it is a
+hypothesis with a short half-life.
+
+**The hook was verified to key the drop, not assumed to.** An `inbox_seen.json`
+written at 23:59:13 local carried no drop key, so the exact command string out
+of `.claude/settings.json` was executed by hand: it printed the
+`SUBDIRECTORY DROPS` block and the key is present afterwards. Reading a state
+file is a claim about the last writer, not about the current code.
+
+**The seen key is the same pair, deliberately.** A drop is keyed on
+`(name + "/", manifest digest)`, the trailing slash making a collision with a
+same-named note impossible. The manifest digest is taken over the sorted list of
+every contained file's relative POSIX path, a NUL byte, and that file's SHA-256.
+The path is inside each line on purpose - a digest over contents alone would
+call two files that swapped contents unchanged, and a rearranged drop is a
+changed drop. That case is pinned by its own test. An unreadable file
+contributes its exception class in place of a hash so it still moves the digest
+rather than silently vanishing from it.
+
+**What the report refuses to do.** It never lists the leaf files inside a drop
+and never quotes a byte of their content, and a test plants an imperative
+sentence inside a drop file and asserts it does not reach the rendered output.
+Two independent reasons, either sufficient: a drop can be hundreds of files and
+printing them buries the notes the module exists to surface, and the content is
+another project's source arriving on an untrusted channel into a PUBLIC
+repository. The module already refuses to quote note text so that a sentence
+written by someone else cannot arrive wearing the watcher's own voice; a source
+file gets identical treatment. The rendered drop block carries a standing
+reminder that a drop may be read for an IDEA and never vendored.
+
+**A claim relayed by two siblings, re-measured and REFUTED.** Notes from RC and
+independently from LW asserted that this repository's `.githooks/commit-msg` and
+`.githooks/pre-commit` are mode `100644`, non-executable, and therefore silently
+skipped. Measured this run: `git ls-files -s .githooks/` reports `100755` for
+both, and `git config core.hooksPath` reports `.githooks`. The claim was true
+before commit `5899729` and is stale now. Two siblings agreeing is not
+corroboration - it is one stale observation relayed twice.
+
 ### LL-0153 - 2026-09-06 - OPS-33 CLOSED - the cross-project inbox watcher is built and firing, keyed on the pair that a sibling's design misses
 
 **Evidence:**

@@ -108,6 +108,23 @@ KNOWN_NON_HOSTS = frozenset(
         # `ops/runtime/inbox_seen.json`, quoted by `LL-0153`. Truncated to
         # `seen.json` by the host-shaped pattern.
         "seen.json",
+        # STANDARD LIBRARY API NAMES, a TEST FILENAME and a SIBLING's file,
+        # all quoted by `LL-0154`, and every one of them arrives here
+        # TRUNCATED - which is the form the failure message named and
+        # therefore the only form that works. `Path.write_text` is seen as
+        # `Path.write` and `tests/test_inbox_watch_subdirs.py` as
+        # `subdirs.py`. `MANIFEST.sha256`, seen as `MANIFEST.sha`, is a file
+        # inside a SIBLING project's drop into our gitignored inbox -
+        # Lanternlight has no such file and `git ls-files` matches zero paths
+        # for it, exactly as the `slots.py` note above records.
+        #
+        # This block is the third consecutive cycle in which the ledger entry
+        # recording a closure was itself refused by this guard on the first
+        # post-edit run. That is `OPS-31` working, not `OPS-31` recurring.
+        "Path.iterdir",
+        "Path.write",
+        "subdirs.py",
+        "MANIFEST.sha",
         # The host-shaped pattern truncates at the first label pair, so
         # `per_file.values()` is seen as `file.values` - the TRUNCATED form
         # is what the failure message names and therefore what must be here.

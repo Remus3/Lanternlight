@@ -343,6 +343,7 @@ LANES: tuple[Lane, ...] = (
             "tests/test_ops_ids.py",
             "tests/test_docguards.py",
             "tests/test_inbox_watch.py",
+            "tests/test_inbox_watch_subdirs.py",
             # The pytest-wide conftest. It is the executable analogue of
             # pytest.ini, which is CROSS_CUTTING, so cross-cutting was the
             # obvious call and it is the wrong one TODAY: the file exists

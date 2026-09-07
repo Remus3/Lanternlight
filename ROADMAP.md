@@ -4460,6 +4460,80 @@ correct verdict.
 4. Whatever is built is proven non-vacuous against a real note that is NOT ours
    and a real note that IS.
 
+## OPS-34. The inbox watcher was blind to SUBDIRECTORIES, and a 700 KB drop sat unseen - CLOSED 2026-09-07
+
+**CLOSED 2026-09-07**, ledger `LL-0154`. `ops/inbox_watch.py` now walks the
+inbox's immediate subdirectories and reports each as a DROP;
+`tests/test_inbox_watch_subdirs.py` pins the behaviour.
+
+**The defect.** `_read_notes` listed the inbox with `Path.iterdir()` and skipped
+every entry whose suffix was not `.md`. A directory has no `.md` suffix, so a
+subdirectory was not merely unclassified - it was invisible. Riot Commander
+dropped 49 files and 702,434 bytes of its live source into
+`moon_sync_inbox/from-RC-verbatim/` on 2026-09-06 and the watcher printed
+`nothing new - 46 notes, all previously seen` over the top of it all night. That
+is the module's own forbidden output: "I could not look" and "I looked and there
+was nothing" are different facts, and here the watcher had not looked at all
+while reporting the second.
+
+**Why this is `OPS-33`'s defect in a second place rather than a new one.**
+`OPS-33` was filed because an inbound channel nobody reads is the same failure
+as continuity living in a context window. A channel that is read only one
+directory deep is the same failure again, and it hid the single largest item
+ever to arrive on it.
+
+**The operator's standing instruction, given 2026-09-06 in chat and broadcast by
+the operator to all five repositories' main sessions at the same time:** always
+properly review `moon_sync_inbox/` **and its subdirectories** for ingest,
+review, implementation and response. A top-level pass is not a review.
+
+**What was built.** Each immediate subdirectory of the inbox becomes one `Drop`
+carrying its name, file count, total byte size, and the names of its immediate
+children. It is keyed into the seen set on the pair `(name + "/", manifest
+digest)` - the same pair shape the notes use, with a trailing slash so a drop
+can never collide with a note of the same name. The manifest digest is taken
+over the sorted list of every contained file's relative POSIX path, a NUL byte,
+and that file's own SHA-256. The path is inside each line on purpose: a digest
+over contents alone would call two files that swapped contents unchanged, and a
+rearranged drop is a changed drop. An unreadable file contributes its exception
+class in place of a hash, so it still moves the digest instead of silently
+vanishing from it.
+
+**What the report deliberately does NOT do, and why it is not an oversight.**
+It never lists the leaf files inside a drop and never quotes one byte of their
+content. Two independent reasons, either sufficient. A drop can be hundreds of
+files, and printing them at every session start buries the notes the module
+exists to surface. And the content is another project's source, arriving on an
+untrusted channel into a PUBLIC repository - the module already refuses to quote
+note text so that an imperative sentence cannot arrive wearing the report's own
+voice, and a source file gets the identical treatment. The drop block carries a
+standing reminder that a drop may be read for an IDEA and never vendored.
+
+### Acceptance, all met
+
+1. **A subdirectory is seen at all.** `scan()` returns a `Drop` for it with a
+   correct file count and byte total, and files inside it do not inflate
+   `total_notes`. Met - the real inbox reports
+   `from-RC-verbatim/ - 49 files, 702434 bytes`.
+2. **A new drop can never render as "nothing new".** With zero notes present
+   and one new drop, `render()` still emits a `MAIL RECEIVED` block naming it.
+   Met.
+3. **A drop surfaces on an EDIT, on an ADDITION, and on a RENAME**, and a
+   vanished drop drops out of the seen set on its own. Met - four tests, one per
+   direction.
+4. **The report quotes nothing from inside a drop** and lists no leaf file name.
+   Met - a planted imperative sentence inside a drop file does not appear in the
+   rendered report.
+5. **The guards are proven non-vacuous.** Five mutations were applied with the
+   anchor asserted to match exactly once first, because a mutation that fails to
+   apply looks exactly like a passing test - and one did fail to apply on the
+   first attempt here, printing a false green until the anchor was checked. All
+   five mutants were killed: emptying the relative path from the digest recipe
+   (2 failed), walking `rglob` instead of `iterdir` for the children so leaf
+   names leak (1 failed), never adding the drop key to the seen set (1 failed),
+   dropping `new_drops` from the nothing-new condition (1 failed), and zeroing
+   the byte total (1 failed). Restored to 11 passed.
+
 ## 4b. Ammo-family and talent measurement - READY, cheap, needs the client
 
 Opened 2026-08-09 after the talent and skills screens were captured. The class's
