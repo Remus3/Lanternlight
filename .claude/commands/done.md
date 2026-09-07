@@ -64,22 +64,68 @@ test rather than the code is not a green suite.
    `SURFACE_STALE` or `NO_HEARTBEAT` result is reported, not re-armed, and
    nothing is ever killed - see `docs/HEADLESS.md` 4b. `SURFACE_STALE` names
    WHICH surface stopped, so quote the name rather than the state alone.
-9. **Update the Desktop handoff.** Write the next-session prompt to
-   `C:\Users\<ACCOUNT>\Desktop\LL-NEXT-SESSION.txt`, overwriting it in
-   place. That file already exists and is where the operator looks; the Desktop
-   also carries `CS-`, `LW-`, `RC-` and `RSC-NEXT-SESSION.txt`, so this is a
-   machine-wide convention across all six projects, not a Lanternlight
-   invention.
-   - **It does NOT go in the repo root.** `C:\Lanternlight\LL-NEXT-SESSION.txt`
-     is the mistake actually made on 2026-09-07: an untracked copy nobody would
-     find, in a repo whose guards walk the tree. `NEXT_SESSION_PROMPT.md` is
-     the tracked copy and it stays where it is - the Desktop file is the
-     operator's, the tracked one is the next session's.
-   - Keep it `.txt`. `test_source_register.py` walks `rglob("*.md")` over the
-     filesystem rather than git, so a stray `.md` anywhere near the tree can
-     redden a guard.
+9. **Write the hand-off, commit it, and point the Desktop at it.** The
+   next-session prompt goes to `C:\Lanternlight\LL-NEXT-SESSION.txt` - the repo
+   root - **tracked in git and committed with the session's other work**.
+   Overwrite it in place. There is one hand-off file, rewritten every session,
+   and its git history is the record of what each session actually handed over.
+   - **Why it is tracked rather than on the Desktop.** A Desktop file is
+     untracked, unversioned and unreviewable: nothing can notice it going
+     stale, and no diff shows what was handed forward. A sibling project
+     measured its own Desktop copy sitting three days stale while four others
+     were current. Tracking it also brings it inside this repo's own hygiene
+     guards, which is worth more here than anywhere: `tests/_tracked.py` asks
+     **git** what is published rather than guessing from extensions, so the
+     ASCII guard and the PII backstop both start scanning the hand-off the
+     moment it is tracked. Nothing scanned it while it lived on the Desktop,
+     and this repo is public.
+   - **The Desktop keeps a SHORTCUT, not a second copy.** Create
+     `C:\Users\<ACCOUNT>\Desktop\LL-NEXT-SESSION.lnk` with `WScript.Shell`,
+     then **delete** the retired
+     `C:\Users\<ACCOUNT>\Desktop\LL-NEXT-SESSION.txt`. Operator access is
+     unchanged; there is still one icon on the Desktop and it now opens the
+     tracked file.
+
+     ```powershell
+     $ws = New-Object -ComObject WScript.Shell
+     $lnk = $ws.CreateShortcut("C:\Users\<ACCOUNT>\Desktop\LL-NEXT-SESSION.lnk")
+     $lnk.TargetPath = "C:\Lanternlight\LL-NEXT-SESSION.txt"
+     $lnk.WorkingDirectory = "C:\Lanternlight"
+     $lnk.Save()
+     ```
+
+   - **Verify the shortcut by reading it back.** Creating a shortcut to a
+     missing target succeeds silently, so a `.lnk` pointing nowhere looks
+     exactly like one that works. Re-read `TargetPath` off the SAVED `.lnk` and
+     `Test-Path` that value. Saving without error is not evidence.
+   - **Keep the `.txt` extension.** Two current reasons. The Desktop is a
+     shared surface carrying `CS-`, `LW-`, `RC-` and `RSC-NEXT-SESSION.txt`
+     siblings, so the name and its `LL-` prefix stay distinguishable even
+     though the prefix is redundant in-repo. And a tracked `.md` at the repo
+     root joins the markdown guard set that `ops/docguards.py` derives
+     repo-wide from `git ls-files` - tracked plus untracked-but-not-ignored -
+     which is the last place the highest-variance file in the tree belongs.
+     - **Corrected 2026-09-06; do not re-derive the withdrawn reason.** The
+       reach of `test_source_register.py` is `docs/` and nothing else. This
+       step used to justify `.txt` by claiming it walks every markdown file on
+       disk, so a stray document near the tree reddens a guard. Measured, by
+       reading the module: `cited_hosts` is declared
+       `def cited_hosts(root: Path = DOCS)` with `DOCS = REPO_ROOT / "docs"`,
+       and its top-level guard calls it with that default, so the walk is a
+       directory rglob and a repo-root document is outside it entirely. The
+       extension is right; that reason was not.
+   - **`NEXT_SESSION_PROMPT.md` is collapsed into this file.** It used to be
+     "the tracked copy" while the Desktop held the operator's. Once the
+     hand-off is tracked at the repo root that distinction is gone - both
+     audiences read the same bytes - and two tracked copies of one document is
+     a drift generator. `docs/LEDGER.md` records this exact file drifting out
+     of step more than once: a stale suite count and a stale ledger position a
+     cold session would have believed, and a wrong id range it carried in
+     duplicate with `WAKEUP_NOTES.md`. Each was caught by a later pass; the
+     point is that a second copy gave the drift somewhere to hide. One
+     hand-off, one location, one name. Do not re-create the second copy.
    - **Do not send it as a file attachment.** The operator does not want a file
-     card inline; the Desktop write IS the delivery.
+     card inline; the tracked file and the fenced block below ARE the delivery.
 
 10. **Emit the next-session prompt as ONE copy-pastable block.** The whole
     prompt goes inside a single fenced code block so the operator can copy it
@@ -107,7 +153,9 @@ test rather than the code is not a green suite.
 - `ROADMAP.md` reflects reality.
 - Watcher re-checked with `check_watcher()`, and its state reported in the
   next-session prompt rather than assumed.
-- `C:\Users\<ACCOUNT>\Desktop\LL-NEXT-SESSION.txt` updated in place, and
-  no copy left in the repo root.
+- `C:\Lanternlight\LL-NEXT-SESSION.txt` rewritten in place, staged, and
+  committed with the session's other work.
+- The Desktop `.lnk` verified by reading `TargetPath` back off the saved
+  shortcut and `Test-Path`-ing it - not merely by saving without error.
 - Next-session prompt emitted as ONE copy-pastable fenced block, with nothing
   after it.

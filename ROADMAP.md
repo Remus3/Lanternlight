@@ -1606,12 +1606,42 @@ restored byte-exact by sha256 after every one.
      `height >= SEPARATOR_MIN_HEIGHT` (4), and 30 of the 384 firings ARE a
      genuine comma in a frame that reads a four-digit value.
 
-- **A four-digit committed fixture, BLOCKED on operator approval.** The
-  `LL-0083` precedent is that capture-derived pixels enter this public repo only
-  on the operator's explicit approval. A clone can currently verify a successful
-  three-digit read but not a four-digit one, so the separator and splitter paths
-  are clone-tested only against synthesised masks. Recorded as a decision gate
-  rather than committed unasked.
+- ~~**A four-digit committed fixture, BLOCKED on operator approval.**~~
+  **APPROVED AND SHIPPED 2026-09-06** - ledger `LL-0149`. The operator granted
+  the `LL-0083` approval explicitly ("4 digits is fine"), so
+  `tests/fixtures/panel_total_1443_hits_28.png` is committed and a clone can now
+  verify a four-digit read against real captured pixels.
+
+  **The frame was not chosen for convenience, and the choice is the evidence.**
+  Across all 55 four-digit frames in the corpus, `f0566` is the **only one**
+  where the separator and the splitter both fire inside the VALUE field - comma
+  3px at x68-70, merged `44` 25px at x73-97. Fourteen others split only in the
+  hits field and 39 not at all. A fixture that read `1,443` correctly without
+  exercising those paths would have looked identical and proved nothing.
+
+  **The paths are proven to EXECUTE, not merely to produce the right number.**
+  Spies record the four-digit read calling `_is_separator(68,70) -> True` and
+  `_split_merged(73,97,'value') -> [(73,84),(86,97)]`; the existing 103 fixture
+  calls **neither**, which is exactly the gap this closes. Disabling either
+  constant makes the four-digit read refuse while the 103 control still reads
+  103. This matters because this item's own history contains a withdrawn claim
+  of precisely the "it passed so the path ran" shape - see the `_is_separator`
+  sub-item above, whose "None ever reached a number" was FALSE.
+
+  **Redaction, verified by the merger rather than accepted.** Crop
+  `(2058, 390, 2558, 700)` using the repo's own measured
+  `FULLSCREEN_CROP_ORIGIN`/`FRAME_PANEL_X`, then every pixel blacked except
+  rows 95-121 by cols 40-119 and 193-223. Result: 2,997 non-black px of 155,000
+  (1.93 percent), bounded to rows 95-121 and cols 40-223. The source frame
+  carries two player nameplates and the full scene; **none survive**. PNG chunks
+  are exactly `IHDR, IDAT, IEND` with the walk ending at EOF and `info` empty,
+  so no `tEXt`, no `eXIf` and no appended trailer. 4,248 bytes.
+
+  **Still open on this bullet:** one frame at one crop row, so it exercises
+  `read_panel` and not `read_frame` consensus or crop tolerance. There is no
+  committed builder script - the recipe lives in the test module comment, same
+  as the existing three-digit fixture. `_is_separator` is driven by real pixels
+  only in its True direction.
 
 ## 7d. A digit pushed OUTSIDE a field window is SILENTLY DROPPED - CLOSED 2026-09-02
 
@@ -2817,7 +2847,7 @@ a string literal, a grep pattern or a docstring is blocked exactly as hard as
 an invocation. This is the same shape as `OPS-18`: **a sentinel that is also a
 legal datum.** The repo already knows the class - `lanternlight/gvas.py`'s
 `KeyMapping` refuses to fold Unreal's `"None"` string onto Python `None` for
-the same reason - and `NEXT_SESSION_PROMPT.md` already carries the symptom as a
+the same reason - and `LL-NEXT-SESSION.txt` already carries the symptom as a
 trap ("a grep PATTERN can trip a pre-tool hook").
 
 **Acceptance:**
@@ -4028,7 +4058,111 @@ mis-signed, and nothing has been re-audited. It has now been re-audited, and
 the answer is that **the parser never mis-signed anything** - see `OPS-31`,
 which is the defect the re-audit found instead.
 
-## OPS-31. The gate is run BEFORE the ledger entry that ships with it - OPEN, root cause proven, recurs
+## OPS-31. The gate is run BEFORE the ledger entry that ships with it - CLOSED 2026-09-06, all three criteria met plus both structural holes
+
+**CLOSED 2026-09-06**, ledger `LL-0148`. All three acceptance criteria met, and
+the two structural holes recorded at the bottom of this item are closed too.
+
+**Criterion 2 - the mechanical guard - is `ops/docguards.py` plus section 3 of
+`.githooks/pre-commit`.** The selector derives the markdown guard set at RUN
+TIME from `git ls-files` and from each test module's own source. It is never a
+list: a list in a file is silently green over every module added after it was
+written, which is the failure this whole item is about.
+
+**The second derivation is independent, and it is what guards the selector.**
+`tests/conftest.py` installs a `sys.addaudithook` that records which test module
+really OPENS a tracked `.md`, and the map is written atomically to the
+gitignored `ops/runtime/`. Real file opens versus a static source scan are
+genuinely different mechanisms, so a gap in one shows up against the other.
+Measured: the recorder observed **12** modules truly opening tracked `.md`; the
+selector picked all 12 plus 18 more; coverage gap empty.
+
+**Criterion 3 - non-vacuity by planting the exact defect - was demonstrated in a
+throwaway clone of `0f7bf67`, and the middle step is the one that matters.**
+
+RED, on a planted `LL-0148` citing an unregistered token:
+
+```
+1 failed, 1309 passed in 37.08s
+BLOCKED .githooks/pre-commit
+        the doc-reading test subset FAILED against the staged tree - the
+        prose being committed reddens the suite
+```
+
+Then, **after registering the token but BEFORE re-running the suite**, the hook
+refused a second time - and this is criterion 2 verbatim, the exact state that
+shipped red three times before:
+
+```
+BLOCKED .githooks/pre-commit
+        the observed doc-open map is absent, stale or has a coverage gap
+        test modules edited since the run: tests/test_source_register.py
+```
+
+GREEN only after a complete run: `1896 passed in 117.31s`, then `1311 passed in
+34.83s` inside the hook, and the commit landed. **A fix that is correct but
+unverified is refused exactly as hard as a fix that is wrong** - which is the
+whole point, because `ac7fd5e` and `c9a0f76` were both correct-looking and both
+shipped red.
+
+**Both structural holes closed.** `check_per_file_counts` is now WIRED rather
+than deleted: `verify()` takes `per_file_baseline`, and because
+`total_collected(t) == sum(parse_collect_counts(t).values())` it costs no extra
+subprocess - one collect run feeds both checks. An empty `claimed_paths` now
+draws a `no-claims` finding instead of passing silently. An absent
+`per_file_baseline` is a rendered `[unchecked]` NOTE rather than a finding,
+deliberately: making it a finding would turn `CLAUDE.md`'s own quoted call and
+all eight generated lane contracts permanently red, and a gate that always says
+no is one nobody reads. `GateReport.notes` renders in BOTH branches, so a probe
+that did not run is never hidden behind an `ok`.
+
+### Measured costs, and the affordability answer the old text asked for
+
+- Full suite without the hook, real repo: `1858 passed in 108.17s`.
+- Pre-commit subset, staging `docs/LEDGER.md` + `ROADMAP.md`: **25 modules,
+  1575 tests, 40.51s.** The conservative every-document set is 30 modules /
+  1775 tests / 120.86s, so **per-document narrowing is what makes it
+  affordable**, and the narrowing is itself guarded by the `coverage_gap` check.
+- The old three-module floor was 53 tests in 27.7s. It was a floor and the real
+  answer is roughly thirty times that, which is why the floor was never the
+  answer.
+
+### Limits NOT closed, stated rather than implied
+
+- **No same-tree A/B of the audit hook's cost.** The with-hook figures were
+  taken in a clone carrying 37-38 extra tests while other agents' suites were
+  running. The cost is asserted to be inside noise, **not measured to be**.
+- **Staleness is tracked over `tests/*.py` only.** A helper under `ops/` or
+  `lanternlight/` that starts reading docs leaves the map looking current. The
+  one-level import hop covers a direct helper; nothing covers two levels.
+- **Any test edit forces a full run before a doc can be committed**, on top of
+  the 40s subset. That is criterion 2 working as specified and it is a real
+  cost, not a defect.
+- **The baseline is still caller-supplied.** The gate can refuse a MISSING
+  baseline; it can never detect a LOWERED one, because the caller under test
+  supplies it. `no-claims` is satisfiable the same way, by claiming a
+  pre-existing untouched file.
+- `verify()` now computes `collected` as `sum(per_file.values())`, so
+  `total_collected` is no longer exercised by `verify`. It is still exported and
+  still covered by its own tests - flagged here so nobody later reads it as a
+  second never-called hole of the kind this item just closed.
+- The `OPS-30` residual is untouched: a run printing a summary-shaped line at
+  column 0 and then exiting 0 is covered by neither check. Still unmeasured,
+  still not claimed impossible.
+
+### Two defects that only appeared when the hook was actually WIRED
+
+Neither was predictable from reading the code, and both are the reason a guard
+must be run end to end rather than unit-tested alone:
+
+- **Python prints CRLF on Windows**, so the selector's output broke `/bin/sh`
+  word splitting. Fixed by reconfiguring the streams to LF.
+- **Git's hook environment leaks.** `GIT_DIR` and friends were inherited by the
+  subset pytest run and falsely reddened four `tests/test_lane_launcher.py`
+  tests. Scrubbed for the pytest run only - the `git diff --cached` calls keep
+  it, because they must read the index being committed.
+
+### The original filing, kept for the evidence it carries
 
 **The re-audit of `OPS-30`'s standing risk cleared the parser and found this
 instead.** Every commit in the defect's exposure window was checked out into a
@@ -4115,6 +4249,216 @@ anything, both open:**
   checks nothing, and `baseline` is supplied by the very caller whose work is
   under test. `baseline=None` does at least raise `no-baseline`; an empty
   `claimed_paths` is silent.
+
+## OPS-32. The hand-off is written by NOTHING, so nothing can gate it - OPEN, filed 2026-09-06
+
+Filed while adopting the repo-root hand-off (`.claude/commands/done.md` step 9).
+**Idea only from a sibling's note; no code, prose or configuration was taken.**
+
+**The measurement that produced this item is the surprising part.** Looking for
+the writer to gate, there is none: no `consume`, no `--consume`, no
+`write_prompt`, no queue, no pending intent, no `ops/loop/control/`.
+`ops/loop/__init__.py` documents exactly four modules - `state`, `guard`,
+`ledger`, `watch` - and `LL-NEXT-SESSION` appears **only in prose and tests**.
+The hand-off has always been written by a session following a document.
+
+So the guarantee today is "the ritual says to, and a test says the ritual says
+to". That is a real guarantee about the DOCUMENT and none at all about the FILE.
+
+**Why it now matters more than it did.** The hand-off is the highest-variance
+artifact in the tree: written fresh every session, never reviewed before it is
+written, quoting freely from whatever that session touched - paths, error text,
+names. As of 2026-09-06 it is also TRACKED and this repo is PUBLIC, so the gap
+between "hand-off written" and "hand-off world-readable" is a single push. A
+sibling could not adopt the same pattern at all because its own PII gate refuses
+its hand-off outright, and it declined the available exemption on the grounds
+that an exemption list which grows once per session is a gate being disarmed one
+word at a time. That reasoning transfers.
+
+**What tracking DID buy, and it is not nothing.** `tests/_tracked.py` asks git
+what is published, and `.txt` is not in `BINARY_SUFFIXES`, so the ASCII guard
+and `tests/test_no_pii.py` began scanning the hand-off the moment it was
+tracked. **Nothing scanned it on the Desktop.** The commit-time gate is
+therefore now free. What is missing is the PRE-WRITE refusal.
+
+**Measured at the close of the adopting session, so the starting point is
+known.** `lanternlight.redact` over the hand-off as it stood:
+`discover_personas -> ()`, `iter_sensitive -> 0`, `iter_encoded_sensitive -> 0`,
+`assert_clean(ALL_LABELS)` PASSED, and `redact()` was a no-op on it. The engine
+is not vacuous - a planted SteamID64 raised `RedactionError: unredacted LONG_ID`
+and a planted 32-hex `userId` raised `unredacted USERID`. **One clean sample of
+a high-variance process is not clearance**, which is exactly why this is filed
+rather than closed.
+
+**Acceptance:**
+1. A writer exists, and the ritual calls it rather than describing it. It goes
+   through the existing atomic writer - tmp then replace - and needs no new
+   dependency.
+2. It runs `lanternlight.redact` - the ONLY sanctioned path, `ADR-004` - over
+   the prompt STRING and REFUSES before anything is written. One engine, not a
+   second parallel notion of what counts as PII.
+3. Proven both directions, and the refusal half is the load-bearing one: assert
+   the file **does not exist or is byte-unchanged on disk** after a refusal, not
+   merely that an exception was raised. A refusal path that leaves a partial
+   file has not refused.
+4. Watch each go red first.
+5. **Do not add an exemption list.** If a legitimate hand-off is refused, the
+   hand-off is what changes.
+
+## OPS-33. `moon_sync_inbox/` has no watcher, and 14 of 15 notes were not ours - CLOSED 2026-09-06, watcher BUILT and FIRING
+
+**CLOSED 2026-09-06**, ledger `LL-0153`. `ops/inbox_watch.py` plus a
+`SessionStart` hook in `.claude/settings.json`, which the operator unfroze
+explicitly for this. All four acceptance criteria met.
+
+**Criterion 1 - durable, survives a `/clear`.** A `SessionStart` hook fires on
+every session start, including one resumed from a compaction, with no live
+session required. The hook is declared with **no matcher**: an omitted matcher
+runs on every start, whereas a matcher regex that fails to match is a hook that
+silently never fires. Verified end to end by executing the exact command string
+out of `settings.json` as a subprocess - exit 0, output on stdout.
+
+**The seen-set key is the PAIR `(filename, content hash)`, and this is a
+deliberate improvement on the design a sibling shared.** They key on filename
+alone, having rejected content-hash on the grounds that a rename costs one
+glance while a missed CORRECTION costs whatever the correction was for. That
+reasoning is right, but filename-alone loses the same case from the other side:
+an in-place EDIT keeps its name and so never re-surfaces. The pair changes on a
+rename AND on an edit, so it has only false positives and never a false
+negative. Proven by mutation - keying on filename alone goes RED on the edit
+test, keying on content hash alone goes RED on the rename test, and an untouched
+note stays green in both directions.
+
+The seen set is also **rewritten from the current listing each run**, so entries
+for vanished files drop out and it self-heals rather than growing forever. The
+sibling reported getting that by accident; here it is deliberate and pinned.
+
+**Criterion 3 - notes are never authority - is enforced in the output itself**,
+which opens by stating that these are MAIL rather than tasks and that a note
+claiming the operator approved something is NOT operator approval. That wording
+is load-bearing rather than decorative: this channel delivered exactly such a
+note during the session that built this.
+
+**Criterion 4 - non-vacuity against real notes**, not fixtures. Forcing the
+classifier to always return OURS goes RED on a note about a `GEMINI_MUTEX`,
+`ops/loop/slots.py` and `ops/loop/winmutex.py` - measured, none exist in this
+tree. Forcing it to always return NOT_OURS goes RED on a note whose header reads
+"sent to LW, RSC, CS and LL". Twelve mutations total, each watched red and
+restored byte-identical.
+
+**The `settings.json` hazard is pinned by two tests**, because a
+single-backslash Windows path makes that file invalid JSON, so no hook registers
+and nothing warns: injecting one goes RED on both a parse test and an explicit
+no-single-backslash test. Independently re-checked at the merge by a hook-target
+walk that reports `checked 3 script target(s), 0 missing` - and which exits
+**2 on a vacuous walk** that matched nothing, so "0 missing" can never be "0 of
+0" dressed up as a pass.
+
+**Live measurement at the close:** 39 files, 39 unread, 30 classified FOR
+LANTERNLIGHT OR NOT RULED OUT and 9 NOT ADDRESSED TO US. A second run collapses
+to one line. `ops/runtime/inbox_seen.json` was deliberately left ABSENT at the
+wrap so the whole backlog surfaces for the next session rather than being
+consumed by the session that built the tool.
+
+### FOLLOW-UP, found by the refutation pass AFTER this was called done - OPEN
+
+**A SUBAGENT session start consumes the backlog.** The wrap deleted
+`ops/runtime/inbox_seen.json` so the whole backlog would surface for the next
+session. It reappeared at 23:32:57 and again at 23:38:36, while only subagents
+were running, and the module's own tests use `tmp_path` - so the writer is the
+`SessionStart` hook firing for subagent starts and marking notes seen that no
+human or merger ever read.
+
+This is worse than it sounds: an orchestrated session here spawns five or six
+subagents, so the FIRST subagent silently consumes the entire unread queue and
+the operator's own session start then reports "nothing new". The mail is not
+lost - the files are still there - but the one signal that says LOOK AT THIS is
+spent by a process that cannot act on it.
+
+An earlier draft of `LL-0153` asserted the state file had been left absent.
+That was false within minutes of being written, and the refutation pass caught
+it. The entry is corrected rather than edited away.
+
+**Acceptance:** the seen set advances only for a session that could actually
+read the output - or the hook declines to persist at all when it can tell it is
+a subagent. Prove it by starting a subagent and confirming the state file is
+unchanged, then confirming a top-level start still marks the backlog seen. If
+the harness exposes no way to distinguish the two, say so explicitly and make
+the hook read-only rather than leaving a silent consumer.
+
+### Limits NOT closed
+
+- **Nobody has proven the harness DISPATCHES the hook.** Everything this repo
+  controls is proven; only a fresh session start proves dispatch. If the next
+  session shows no `MAIL RECEIVED` block, the hook did not fire and that is the
+  first thing to check.
+- **Session START only.** A note arriving mid-session waits for the next start.
+  A session-scoped poll was explicitly ruled out by criterion 1 as not durable.
+- **Classification is heuristic prose matching.** Three verdicts were hand
+  audited; the remaining 36 were not. The path-absence rule fires only when a
+  note never mentions us, and it downgrades to a named line rather than to
+  silence - nothing is ever discarded.
+- The sender vocabulary is observed, not a registry: an unknown sender falls
+  through to POSSIBLY OURS.
+- Duplicate collapse is byte-identical only.
+- **The routing problem is unfixed and is not ours to fix.** This compensates at
+  the receiving end for notes misdirected at the sending end.
+
+### The original filing, kept for the measurements it carries
+
+Filed 2026-09-06 after the operator had to NAME the directory before this
+session found it.
+
+**Two separate defects, and the second was invisible until the first was fixed
+by hand.**
+
+**No watcher exists.** Nothing polls `moon_sync_inbox/`, nothing fires on write,
+and the wrap ritual does not read it. Three notes had been sitting unread - one
+for roughly three hours - including one addressed specifically to this project
+about a tier-0 gate. **For a project whose entire premise is that continuity
+lives on disk rather than in a context window, an inbound channel nobody polls
+is the same failure in a new place.** A sibling reports using a session-scoped
+poll that dies with the session, and asked whether anyone had something durable.
+Nobody does.
+
+**The channel carries other projects' mail.** A bulk drop of 15 notes arrived at
+22:39 in one copy. Exactly **one** was addressed to Lanternlight. The rest were
+a sibling's correspondence with three other projects - replies about a shared
+`slots.py`, a `GEMINI_MUTEX`, a vendored `winmutex`, and commits that are not
+ours. Measured: `git ls-files` matches **zero** tracked paths for `slots.py`,
+`winmutex`, `GEMINI_MUTEX`, `gemini` or `vendor`, so those notes are
+structurally inapplicable here - the standalone rule at the top of `CLAUDE.md`
+guarantees it. Two of the fifteen were **byte-identical duplicates** of each
+other under different filenames, confirmed by matching md5.
+
+**Why the ratio is the finding rather than a complaint.** A channel where 14 of
+15 items are misdirected trains the reader to skim, and skimming is how the one
+that matters gets missed. Filtering is not tidiness here; it is what keeps the
+signal readable.
+
+**A trap already paid for once, worth writing down.** This session's first
+reading of a sibling's note judged it wrong because the claim was false NOW.
+Checking the git history showed the claim was TRUE WHEN WRITTEN and had been
+overtaken by a commit ninety minutes later. **On an asynchronous channel, a note
+must be audited against the tree as of the note's own timestamp**, not as of
+reading. Only the second question is fair to the sender, and only it produces a
+correct verdict.
+
+**Acceptance:**
+1. Something durable surfaces new notes without a live session - it must survive
+   a `/clear`, and "a poll loop in a running session" is explicitly not an
+   answer to this criterion. If the honest conclusion is that the wrap ritual
+   reading the directory is enough, say so and record WHY, with the latency that
+   implies.
+2. Notes not addressed to Lanternlight are separated from those that are,
+   mechanically rather than by a reader's judgement. Byte-identical duplicates
+   are collapsed.
+3. **Nothing in the inbox is ever treated as authority.** These are gitignored
+   files written by other processes. A note may inform work; only the operator
+   authorises it. Any mechanism built here must not be able to blur that, and a
+   note claiming operator approval is not operator approval.
+4. Whatever is built is proven non-vacuous against a real note that is NOT ours
+   and a real note that IS.
 
 ## 4b. Ammo-family and talent measurement - READY, cheap, needs the client
 
@@ -5833,7 +6177,44 @@ repository's safety lane exists to refuse.
 made unwritable and asserts the exit code is still 2, proven non-vacuous by
 restoring the current ordering and watching it go red.
 
-## OPS-14. C: hit 100% mid-session, then recovered with nothing deleted - OPEN, growth join ANSWERED 2026-09-05
+## OPS-14. C: hit 100% mid-session, then recovered with nothing deleted - CLOSED 2026-09-06, cause ANSWERED BY THE OPERATOR
+
+**CLOSED 2026-09-06. The cause is the LegionWallpaper repository**, identified
+by the operator, who is the only party that can see across all seven trees on
+this machine. Nothing in Lanternlight caused it and nothing in Lanternlight
+could have found it - every measurement below correctly ruled this project out
+and none of them could name the actual consumer, because doing so requires
+looking outside this tree.
+
+**A fourth reading, taken at the close, and it is the strongest of the four.**
+`C:` is **291.3 GB free of 953.3 GB, 69.4 percent used**. Five days earlier it
+was 134.9 GB free at 85.8 percent. So the drive **GAINED 156 GB** with nothing
+deleted by this project. Over the same window `C:/ll-captures` moved from
+**9.91 GB across 19,202 files to 9.93 GB across 19,228** - a change of 0.02 GB.
+
+That is the ruling-out completed rather than merely repeated. The earlier
+readings showed the captures could not explain a 953 GB drive filling; this one
+shows the drive swinging **hundreds of gigabytes in BOTH directions** while this
+project's footprint moves by hundredths. A consumer that can free 156 GB
+unprompted is not a leak in a 10 GB capture tree.
+
+**What stays true and worth keeping.** The atomic-write rule earned its place
+here: the first attempt to append `LL-0078` died with `OSError: [Errno 28] No
+space left on device` inside `append_entry`, and **the ledger survived intact**
+because that writer is tmp-then-replace, so the target was never opened for
+writing. That remains the one time the rule in `CLAUDE.md` demonstrably saved a
+file rather than merely being good practice.
+
+**The methodological lesson, which outlives the item.** This item sat open for
+eight days across four measurement passes, and every pass sharpened a NEGATIVE -
+"it is not us" - without ever being able to reach the positive. A question whose
+answer lives outside the tree cannot be closed from inside it, however well it
+is measured. The honest move was to keep it filed as a question rather than
+promote a hypothesis, and the thing that eventually closed it was a human with a
+wider view. Recorded so the next such item is escalated sooner instead of
+re-measured a fifth time.
+
+### The original record, kept for the measurements it carries
 
 Observed 2026-08-29 during item 8b. Recorded because it will hit the loop, and
 because a session that has never seen it will misdiagnose it and start deleting

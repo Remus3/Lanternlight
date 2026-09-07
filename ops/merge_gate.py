@@ -7,7 +7,7 @@ a regression. ``CLAUDE.md`` already states the rule ("never trust a subagent's
 claim"), but a rule that lives only in prose is a rule that gets skipped at
 exactly the moment it matters. This is the mechanical version.
 
-Four probes, each aimed at a distinct way a "done" claim goes wrong.
+Five probes, each aimed at a distinct way a "done" claim goes wrong.
 
 **The file was never delivered.** :func:`check_claimed_paths` asks the
 filesystem, not the agent. It separates *missing* from *empty* from *not a
@@ -22,6 +22,19 @@ coverage staying put. :func:`check_test_count` compares the collected total
 against a baseline measured *before* the work started and treats any decrease
 as a finding. Deleting a test to fix a build is an explicit stop condition in
 ``docs/HEADLESS.md``; this is what notices.
+
+**A test was deleted from one file while a different file grew.** The total is
+safe for one worker and unsafe for several: once lanes commit concurrently, a
+lane deleting 15 tests from its own file is completely hidden by a sibling lane
+adding 20 elsewhere, because the total RISES.
+:func:`check_per_file_counts` attributes a drop to the file it happened in
+rather than netting it off against unrelated work. Wired into :func:`verify` on
+2026-09-06, which is later than it should have been - the function had been
+exported in ``__all__``, cited by all eight generated lane contracts and
+covered by six of its own tests since the day it was written, and **never once
+called.** ``ROADMAP`` item ``OPS-31`` records it: a check that has never run is
+decoration with a good name, and its own passing tests are no evidence
+otherwise.
 
 **The suite did not actually run.** :func:`parse_summary` distinguishes "no
 summary line was printed" from "zero tests passed". Those are different facts,
@@ -70,7 +83,24 @@ been measured, and it is not claimed to be impossible.
 The baseline is deliberately a **parameter, not a stored constant.** A count
 checked into the repo goes stale and becomes a confident lie - ``CLAUDE.md``
 forbids restating suite counts for exactly that reason. The caller measures
-the count before dispatching work and passes what it measured.
+the count before dispatching work and passes what it measured. The same is
+true of the per-file baseline: one collect run before dispatch yields both,
+since ``sum(parse_collect_counts(text).values()) == total_collected(text)``.
+
+**A default that checks nothing is the same defect wearing a signature.** This
+was the second structural hole recorded under ``OPS-31``, and it is why
+:func:`verify` no longer accepts silence from itself. ``baseline=None`` at
+least raised ``no-baseline``; an empty ``claimed_paths`` raised nothing at all,
+so a caller could get ``ok=True`` out of a file probe that had examined ZERO
+files. It is now a ``no-claims`` finding. An absent per-file baseline is
+recorded in ``GateReport.notes`` and printed by ``GateReport.format`` even on
+an OK report, rather than being made a finding - see :func:`verify` for why
+that asymmetry is deliberate and what it costs.
+
+**And the limit none of this closes:** every baseline is handed in by the very
+caller whose work is under test. The gate can refuse a missing baseline. It
+cannot refuse a baseline that was quietly lowered, and it cannot tell a
+claimed path that was written from one that merely already existed.
 
 Every output shape parsed here was measured on this machine on 2026-08-09.
 Two of them break naive parsing and are the reason this module does not simply
@@ -95,7 +125,7 @@ from __future__ import annotations
 import re
 import subprocess
 import sys
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -209,19 +239,34 @@ class RunResult:
 
 @dataclass(frozen=True)
 class GateReport:
-    """The composed verdict. ``ok`` is true only when nothing was found."""
+    """The composed verdict. ``ok`` is true only when nothing was found.
+
+    ``notes`` is the part that keeps ``ok`` honest. A probe that could not run
+    - because the caller supplied nothing for it to compare against - has not
+    passed, and an OK report that says nothing about it is indistinguishable
+    from an OK report that checked everything. Each note names a check that
+    did NOT run, and :meth:`format` renders them even when ``ok`` is true.
+    """
 
     ok: bool
     findings: tuple[Finding, ...]
     collected: int | None
     summary: SummaryResult | None
+    notes: tuple[str, ...] = ()
 
     def format(self) -> str:
-        """Render the report for a human, one finding per line."""
+        """Render the report for a human, one finding per line.
+
+        The unchecked notes are appended in BOTH branches. Printing them only
+        on failure would hide them in exactly the case they exist for: a
+        report that says OK.
+        """
         if self.ok:
-            return f"merge gate: OK ({self.collected} tests collected)"
-        lines = [f"merge gate: {len(self.findings)} finding(s)"]
-        lines.extend(f"  [{f.kind}] {f.detail}" for f in self.findings)
+            lines = [f"merge gate: OK ({self.collected} tests collected)"]
+        else:
+            lines = [f"merge gate: {len(self.findings)} finding(s)"]
+            lines.extend(f"  [{f.kind}] {f.detail}" for f in self.findings)
+        lines.extend(f"  [unchecked] {note}" for note in self.notes)
         return "\n".join(lines)
 
 
@@ -593,24 +638,101 @@ def suite_output(root: Path = REPO_ROOT, timeout: int = 900) -> str:
     return suite_result(root=root, timeout=timeout).text
 
 
+#: Said in the report when the caller supplied no per-file baseline. Named as
+#: a constant so the note and the docstring cannot drift apart.
+_NO_PER_FILE_BASELINE_NOTE = (
+    "the per-file regression check did not run - no per_file_baseline was "
+    "supplied, so a file that lost tests stays invisible whenever another "
+    "file gained more"
+)
+
+
 def verify(
     claimed_paths: Iterable[str | Path] = (),
     baseline: int | None = None,
     root: Path = REPO_ROOT,
+    per_file_baseline: Mapping[str, int] | None = None,
 ) -> GateReport:
     """Run every probe and compose the verdict.
 
     This actually executes the suite. It is the slow, honest path - the point
     of the module is that the merger measures rather than relays.
-    """
-    findings: list[Finding] = list(check_claimed_paths(claimed_paths, root=root))
 
+    Measure both baselines from ONE collect run before dispatching work, and
+    pass what you measured::
+
+        before = merge_gate.parse_collect_counts(merge_gate.collect_output())
+        # ... dispatch the work, then ...
+        report = merge_gate.verify(
+            claimed_paths=["the/file/it/said/it/wrote.py"],
+            baseline=sum(before.values()),
+            per_file_baseline=before,
+        )
+
+    Both are parameters and neither may become a stored constant: a count
+    checked into the repository goes stale and becomes a confident lie.
+
+    **A gate that reports OK after checking nothing is the exact failure this
+    module exists to prevent**, so the two weak defaults are loud rather than
+    silent. Both were recorded as structural holes under ``ROADMAP`` item
+    ``OPS-31`` and neither was reachable by re-running anything:
+
+    ``claimed_paths`` empty
+        Draws a ``no-claims`` finding. The file probe examined zero files,
+        which proves nothing about delivery, and it used to say so nowhere -
+        the caller got ``ok=True`` from a probe that had looked at nothing.
+    ``per_file_baseline`` absent
+        Leaves :func:`check_per_file_counts` unrun, which is recorded in
+        ``GateReport.notes`` and rendered by :meth:`GateReport.format` even on
+        an OK report. That function was exported, documented and NEVER CALLED
+        until this wiring landed. It is a NOTE rather than a finding on
+        purpose: the invocation quoted in ``CLAUDE.md`` and in all eight
+        generated lane contracts passes only ``claimed_paths`` and
+        ``baseline``, so making it a finding would turn the documented call
+        permanently red, and a gate that always says no is a gate nobody
+        reads.
+
+    **The limit this cannot fix, named rather than hidden.** Every baseline is
+    supplied by the very caller whose work is under test. Nothing here holds
+    an independent record of the count before the work started, and
+    re-deriving one now would compare the tree against itself, which is
+    vacuous. The gate can refuse a MISSING baseline; it cannot refuse one that
+    was quietly lowered. ``no-claims`` is satisfiable the same way - by
+    claiming a path that already existed and was never touched.
+    """
+    claims = list(claimed_paths)
+    findings: list[Finding] = []
+    notes: list[str] = []
+
+    if not claims:
+        findings.append(
+            Finding(
+                kind="no-claims",
+                detail=(
+                    "no claimed paths were supplied, so the file probe examined 0 "
+                    "files and proved nothing about delivery - name the files the "
+                    "agent said it wrote"
+                ),
+            )
+        )
+    findings.extend(check_claimed_paths(claims, root=root))
+
+    # One collect run feeds both count checks. The total is the SUM of the
+    # per-file lines - pytest prints no grand total - so re-running collect for
+    # the second check could only introduce a disagreement.
+    #
     # A collect pass that dies returns no per-file lines, so the total comes
     # back as 0 and check_test_count reports the drop. That is why there is no
     # separate exit-code probe here: the count guard already refuses it, and
     # with no baseline the no-baseline finding refuses it instead.
-    collected = total_collected(collect_output(root=root))
+    per_file = parse_collect_counts(collect_output(root=root))
+    collected = sum(per_file.values())
     findings.extend(check_test_count(collected, baseline))
+
+    if per_file_baseline is None:
+        notes.append(_NO_PER_FILE_BASELINE_NOTE)
+    else:
+        findings.extend(check_per_file_counts(per_file, dict(per_file_baseline)))
 
     run = suite_result(root=root)
     summary = parse_summary(run.text)
@@ -621,4 +743,5 @@ def verify(
         findings=tuple(findings),
         collected=collected,
         summary=summary,
+        notes=tuple(notes),
     )

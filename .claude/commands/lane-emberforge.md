@@ -65,16 +65,19 @@ dispatching work, then re-probe:
 
 ```python
 from ops import merge_gate
+before = merge_gate.parse_collect_counts(merge_gate.collect_output())
 report = merge_gate.verify(
     claimed_paths=["files/the/agent/said/it/wrote.py"],
-    baseline=COUNT_MEASURED_BEFORE_DISPATCH,
+    baseline=sum(before.values()),
+    per_file_baseline=before,
 )
 print(report.format())
 ```
 
 A global total is not enough once lanes run concurrently - one lane's new
-tests mask another's deletions - so compare per file with
-`merge_gate.check_per_file_counts`.
+tests mask another's deletions - so pass `per_file_baseline`, which is what
+runs `merge_gate.check_per_file_counts`. Omit it and the report says the
+check did not run, rather than staying silent about a probe that never ran.
 
 ## Committing
 

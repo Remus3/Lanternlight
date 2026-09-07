@@ -19,6 +19,7 @@ match reality. Only the capture can do that.
 """
 
 import sys
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -60,6 +61,24 @@ def _pillow():
     from PIL import Image
 
     return Image
+
+
+@contextmanager
+def _module_constant(module, name, value):
+    """Swap a module constant for the duration of a block, then restore it.
+
+    Used to prove a guard is LOAD-BEARING by disabling it and watching a read
+    fail. In process and restored in a ``finally``, so nothing is written to
+    ``lanternlight/vision_meter.py`` and no other test in the run sees the
+    mutated value - editing the module on disk to prove the same thing would
+    turn any concurrent suite run red for a reason that is not theirs.
+    """
+    original = getattr(module, name)
+    setattr(module, name, value)
+    try:
+        yield
+    finally:
+        setattr(module, name, original)
 
 
 class TestTheRealCapture:
@@ -156,6 +175,38 @@ SECOND_SERIES = (
 #: which reads 103 with 10 hits in the hand-read floor series.
 FIXTURE = REPO_ROOT / "tests" / "fixtures" / "panel_total_103_hits_10.png"
 
+#: The FOUR-DIGIT committed fixture, and the gap it exists to close.
+#:
+#: `FIXTURE` above lets a clone verify a successful THREE-digit read. It cannot
+#: reach either path a four-digit value needs - the thousands separator in
+#: `vision_meter._is_separator` and the merged-run split in
+#: `vision_meter._split_merged` - so until this file existed both were
+#: clone-tested only against SYNTHESISED masks, which are painted from the very
+#: prototypes the reader scores against and so cannot prove the templates match
+#: anything the game rendered.
+#:
+#: Derived from `f0566_00.43.29.png` of the 2026-08-30 (1.0.15) capture,
+#: cropped to the 500x310 panel at the measured origin (2058, 390) - the same
+#: `FULLSCREEN_CROP_ORIGIN` the full-screen tests below use, so the pixel
+#: geometry is identical to the panel crops `FIXTURE` came from - and then
+#: redacted by exactly the rule that produced `FIXTURE`: every pixel outside
+#: `TOTAL_BAND` rows within `VALUE_WINDOW` and `HITS_WINDOW` columns is black.
+#:
+#: Its reading is ground truth three ways over: the cycle-34 human
+#: transcription recorded 1443/28 by eye before any reader was pointed at these
+#: frames, the source frame renders `1,443` and `28 Hit` legibly, and
+#: `read_panel` agrees with both.
+#:
+#: Committed 2026-09-06 on the operator's explicit approval - the `LL-0083`
+#: precedent is that capture-derived pixels enter this PUBLIC repo only that
+#: way, and `ROADMAP 7c` carried this fixture as a decision gate until then.
+FOUR_DIGIT_FIXTURE = REPO_ROOT / "tests" / "fixtures" / "panel_total_1443_hits_28.png"
+
+#: Every committed capture-derived fixture. The redaction and metadata guards
+#: run over this tuple rather than over one name, so a fixture added later
+#: inherits both guards instead of quietly shipping without them.
+COMMITTED_FIXTURES = (FIXTURE, FOUR_DIGIT_FIXTURE)
+
 
 class TestTheCommittedFixture:
     """`ROADMAP 7c`. A clone with no capture could not verify a SUCCESSFUL read.
@@ -193,15 +244,21 @@ class TestTheCommittedFixture:
         )
         assert reading.progress is None, "the white row is still unread by design"
 
-    def test_the_fixture_stays_redacted_to_the_bands_the_reader_uses(self):
+    @pytest.mark.parametrize("fixture", COMMITTED_FIXTURES, ids=lambda p: p.stem)
+    def test_the_fixture_stays_redacted_to_the_bands_the_reader_uses(self, fixture):
         """A guard on the REDACTION, so it cannot quietly erode.
 
         If someone later regenerates this fixture from a fuller crop, this goes
         red. Without it the redaction is a one-time act that nothing maintains,
         and the next person to refresh the fixture ships the scene with it.
+
+        Parametrised over every committed fixture rather than written against
+        one name: a second capture-derived file was added for `ROADMAP 7c`'s
+        four-digit read, and a guard that names one fixture protects one
+        fixture.
         """
         Image = _pillow()
-        image = Image.open(FIXTURE).convert("RGB")
+        image = Image.open(fixture).convert("RGB")
         top, bottom = vision_meter.TOTAL_BAND
         allowed = set()
         for x0, x1 in (vision_meter.VALUE_WINDOW, vision_meter.HITS_WINDOW):
@@ -224,7 +281,8 @@ class TestTheCommittedFixture:
             "screen and does not belong in a public repository"
         )
 
-    def test_the_fixture_carries_no_png_metadata(self):
+    @pytest.mark.parametrize("fixture", COMMITTED_FIXTURES, ids=lambda p: p.stem)
+    def test_the_fixture_carries_no_png_metadata(self, fixture):
         """PNG metadata is a leak a visual check cannot see.
 
         **Widened after a refutation pass caught this guard being narrower than
@@ -244,6 +302,10 @@ class TestTheCommittedFixture:
 
         The EOF assertion is the other half: a walk that ends early cannot see
         what is past it.
+
+        Parametrised over every committed fixture for the same reason as the
+        redaction guard above - the four-digit fixture was written by a
+        different tool run and has to clear the same bar.
         """
         import struct
 
@@ -251,7 +313,7 @@ class TestTheCommittedFixture:
         #: because a future fixture could legitimately be palettised.
         CRITICAL = {"IHDR", "PLTE", "IDAT", "IEND"}
 
-        raw = FIXTURE.read_bytes()
+        raw = fixture.read_bytes()
         assert raw[:8] == b"\x89PNG\r\n\x1a\n"
         offset, chunks = 8, []
         while offset < len(raw):
@@ -270,6 +332,152 @@ class TestTheCommittedFixture:
             f"{sorted(CRITICAL)} belong in a redacted screenshot; anything else "
             "can carry text, timestamps or arbitrary bytes into a public repo"
         )
+
+
+class TestTheFourDigitCommittedFixture:
+    """`ROADMAP 7c`'s last non-client blocker: a clone could verify a
+    three-digit read and never a four-digit one.
+
+    Four digits is not "three digits, longer". It is the only shape that
+    reaches the thousands separator, and on this frame it is also the only one
+    that reaches the merged-run splitter INSIDE the value field. Both paths
+    were clone-tested against synthesised masks alone, and a synthesised mask
+    is painted from the very prototypes the reader scores against, so it can
+    show the plumbing works and can never show the templates match the game's
+    own rendering.
+
+    WHY THIS FRAME, measured over the 55 four-digit frames of the 2026-08-30
+    capture. 54 read and agree with the human transcription and one (`f0581`)
+    refuses on a smeared leading glyph. Of the 54, **exactly one - `f0566` -
+    fires both the separator and the splitter inside the VALUE field**: the
+    merged `44` of `1,443` is a 25px run at x73-97 and the comma is a 3px run
+    at x68-70. On 14 others the splitter fires only in the HITS field, where
+    the merged pair is a hit count in the 40s, and on the remaining 39 nothing
+    splits at all. So this fixture is not a representative pick, it is the
+    only one that covers both paths in the field that has four digits.
+
+    THE HEADROOM, recorded so a future refusal is read as a change and not as
+    this fixture always having been marginal. Worst glyph distance on it is
+    0.0125 against `ACCEPT_DISTANCE` 0.115, and the tightest runner-up margin
+    is 0.0877 against `AMBIGUITY_MARGIN` 0.030.
+
+    WHY IT IS SAFE TO COMMIT. The same redaction as the three-digit fixture,
+    and the same two guards above run over it. The source frame was viewed
+    whole before selection and DOES carry identifying content - a player
+    nameplate top-left and a second nameplate over the target - none of which
+    is anywhere near `TOTAL_BAND`; the redaction keeps 2,997 of 155,000 pixels
+    (1.93%) and blacks the other 98.07%, including the white Progress Record
+    row directly below the orange one. The filename carries no capture
+    wall-clock.
+    """
+
+    def test_a_clone_can_verify_a_FOUR_digit_read(self):
+        """The gap this fixture exists to close. Never skips.
+
+        1443 rather than 1,443: the separator is a grouping mark the reader
+        consumes, not a digit, so a correct read returns the integer.
+        """
+        reading = read_panel(FOUR_DIGIT_FIXTURE)
+        assert (reading.total, reading.hits) == (1443, 28), (
+            f"the four-digit fixture read {reading.total}/{reading.hits}, not "
+            "1443/28. The human transcription of the source frame says 1443/28 "
+            "and the frame renders '1,443' and '28 Hit' - so either the reader "
+            "regressed or the fixture was replaced. Check which before "
+            "touching either"
+        )
+        assert reading.progress is None, "the white row is still unread by design"
+
+    def test_the_four_digit_read_really_EXECUTES_the_separator_and_the_splitter(
+        self, monkeypatch
+    ):
+        """The number coming out right does not prove the comma path ran.
+
+        This item's own history carries a withdrawn claim of exactly that
+        shape - "None ever reached a number" was false - so the paths are
+        observed rather than inferred. The spies COUNT and record; they do not
+        raise, because `AssertionError` is an `Exception` and the reader's
+        callers are not required to let one through.
+
+        Both observations are pinned to the geometry they were measured at. If
+        a constant moves and the same number arrives through a different route,
+        that is a change worth failing on rather than absorbing.
+        """
+        separator_calls = []
+        split_calls = []
+        real_separator = vision_meter._is_separator
+        real_split = vision_meter._split_merged
+
+        def spy_separator(mask, x0, x1):
+            verdict = real_separator(mask, x0, x1)
+            separator_calls.append((x0, x1, verdict))
+            return verdict
+
+        def spy_split(mask, x0, x1, field):
+            pieces = real_split(mask, x0, x1, field)
+            split_calls.append((x0, x1, field, pieces))
+            return pieces
+
+        monkeypatch.setattr(vision_meter, "_is_separator", spy_separator)
+        monkeypatch.setattr(vision_meter, "_split_merged", spy_split)
+
+        reading = read_panel(FOUR_DIGIT_FIXTURE)
+
+        assert (reading.total, reading.hits) == (1443, 28), (
+            "the spies changed the reading, so nothing below is evidence about "
+            "the unspied reader"
+        )
+        assert separator_calls == [(68, 70, True)], (
+            "the thousands separator path did not run as measured on this "
+            f"fixture. Expected exactly one call, on the 3px run at x68-70, "
+            f"answering True. Got: {separator_calls}"
+        )
+        assert split_calls == [(73, 97, "value", [(73, 84), (86, 97)])], (
+            "the merged-run splitter did not run as measured on this fixture. "
+            "Expected exactly one call, on the 25px run at x73-97 of the VALUE "
+            f"field, splitting into (73, 84) and (86, 97). Got: {split_calls}"
+        )
+
+    def test_the_separator_and_the_splitter_are_both_LOAD_BEARING_here(self):
+        """Executing a path is not the same as needing it.
+
+        Each half is disabled in turn, in process, and the read must FAIL -
+        otherwise this fixture would reach 1443 by some other route and the
+        test above would be observing decoration. The separator is disabled by
+        LOWERING `MIN_GLYPH_WIDTH` to the comma's own 3px, so the comma is no
+        longer a narrow run and `_is_separator` is never consulted; the
+        splitter by RAISING `MAX_GLYPH_WIDTH` past the 25px merged run, so
+        `_split_merged` is never called. Both mutations live in this process
+        and are undone in a `finally` - editing the module on disk to prove the
+        same thing would turn a concurrent suite run red for a reason that is
+        not its own.
+
+        The three-digit fixture is read under both mutations as the CONTROL. It
+        keeps reading 103, which is the measurement behind the claim that these
+        two paths are coverage the old fixture never had rather than coverage
+        it already carried. Measured 2026-09-06: reading `FIXTURE` calls
+        `_is_separator` zero times and `_split_merged` zero times.
+        """
+        with (
+            pytest.raises(Unreadable),
+            _module_constant(vision_meter, "MIN_GLYPH_WIDTH", 3),
+        ):
+            read_panel(FOUR_DIGIT_FIXTURE)
+        with _module_constant(vision_meter, "MIN_GLYPH_WIDTH", 3):
+            assert read_panel(FIXTURE).total == 103, (
+                "the three-digit control changed under the separator mutation, "
+                "so the mutation is not isolating the separator path"
+            )
+
+        with (
+            pytest.raises(Unreadable),
+            _module_constant(vision_meter, "MAX_GLYPH_WIDTH", 30),
+        ):
+            read_panel(FOUR_DIGIT_FIXTURE)
+        with _module_constant(vision_meter, "MAX_GLYPH_WIDTH", 30):
+            assert read_panel(FIXTURE).total == 103, (
+                "the three-digit control changed under the splitter mutation, "
+                "so the mutation is not isolating the splitter path"
+            )
 
 
 class TestSynthesisedFrames:

@@ -85,6 +85,33 @@ HOST_SHAPED = re.compile(r"(?:[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\.)+[A-Za-
 #: read before it was added. See the module docstring before extending it.
 KNOWN_NON_HOSTS = frozenset(
     {
+        # MODULE FILENAMES and dotted PYTHON PATHS quoted by `LL-0148` and
+        # `LL-0152`. Registered while closing `OPS-31`, and the sequence is
+        # the point: the entry recording that closure was itself refused by
+        # this guard on the first post-edit run, which is exactly the defect
+        # `OPS-31` exists to catch, caught before the commit rather than
+        # after the push. `slots.py` is a SIBLING project's module named in
+        # an entry about misdirected inbox mail - Lanternlight has no such
+        # file, and `git ls-files` matches zero paths for it.
+        "conftest.py",
+        "docguards.py",
+        "slots.py",
+        "sys.addaudithook",
+        "GateReport.notes",
+        # CAPTURE FILENAMES quoted by `LL-0149`. A frame is stamped
+        # `f0566_00.43.29.png` and a fixture `panel_total_1443_hits_28.png`,
+        # and the host-shaped pattern reads the dotted tails as domains. An
+        # entry that records which frame a committed fixture came from - which
+        # is the whole provenance claim - cannot avoid naming it.
+        "00.43.29.png",
+        "28.png",
+        # `ops/runtime/inbox_seen.json`, quoted by `LL-0153`. Truncated to
+        # `seen.json` by the host-shaped pattern.
+        "seen.json",
+        # The host-shaped pattern truncates at the first label pair, so
+        # `per_file.values()` is seen as `file.values` - the TRUNCATED form
+        # is what the failure message names and therefore what must be here.
+        "file.values",
         # Filenames and config KEYS quoted by `LL-0139`, not sources. The
         # host-shaped pattern cannot tell `attribution.commit` from a
         # domain, and a ledger entry that names the file it added should

@@ -157,6 +157,150 @@ done
 set +f
 IFS=$old_ifs
 
+# ---------------------------------------------------------------
+# 3. DOC GUARDS - staged Markdown is a code change. ROADMAP OPS-31
+# ---------------------------------------------------------------
+#
+# WHY THIS BLOCK EXISTS. Several test modules read tracked .md files and
+# assert on their CONTENT - tests/test_source_register.py walks every .md
+# under docs/ and requires every module-ish token it finds to be registered.
+# So a ledger or roadmap entry is a code change as far as the suite is
+# concerned. A wrap measures the suite, THEN writes the entry recording that
+# measurement, and the entry's own prose reddens the tree it is committed
+# into. Measured three times - ac7fd5e (LL-0087), c9a0f76 (LL-0140) and
+# LL-0147. CI caught all three AFTER the push, which is what a badge can do
+# and exactly what is not enough.
+#
+# WHAT IT DOES, in this order, and only when a .md is staged:
+#
+#   a. Refuses a staged .md whose content differs from the working tree copy.
+#      The suite runs against the working tree, so if the two differ the run
+#      did not measure what lands and everything below is about another file.
+#   b. Asks ops/docguards.py which test modules read the STAGED documents.
+#      That set is DERIVED at run time from git ls-files and from the modules'
+#      own source. It is never a list in a file: a list is silently green over
+#      every document and every module added after it was written. Modules
+#      that walk for Markdown rather than naming a file are always in, because
+#      they read whatever is there.
+#   c. Refuses when the persisted observed map - what an audit hook watched
+#      really being opened during the last complete suite run - names a module
+#      the selector did not pick. That is the coverage guard, and it fires
+#      here rather than in a test because here is where it matters.
+#   d. Runs the selected subset and refuses on failure.
+#
+# AN ABSENT OR STALE OBSERVED MAP REFUSES. It does not warn and proceed. The
+# map is the only evidence that the tree in front of this hook was ever run,
+# and OPS-31 is precisely a gate pointed at a tree that was not the one being
+# committed - failing open here would rebuild that defect with extra steps.
+# The cost is one `python -m pytest` after a fresh clone or after editing a
+# test module, and the refusal says so. ops/runtime/ is gitignored, so a
+# fresh clone always starts without a map.
+#
+# A REPOSITORY THAT DOES NOT CARRY ops/docguards.py IS SKIPPED, not refused.
+# tests/test_no_pii.py and tests/test_ascii_hygiene.py copy this hook into
+# throwaway repositories and commit into them, and the first of those commits
+# a README.md. There is no selector there, no test tree to select from and no
+# suite to run - it is not Lanternlight. tests/test_docguards.py pins both
+# halves: the skip there, and the refusal in a repository that does carry it.
+
+staged_md=$(printf '%s\n' "$staged" | grep '\.md$')
+repo_top=$(git rev-parse --show-toplevel 2>/dev/null) || repo_top=.
+
+if [ "$fail" -eq 0 ] && [ -n "$staged_md" ] && [ -f "$repo_top/ops/docguards.py" ]; then
+
+    # a. What lands must be what was run.
+    md_ifs=$IFS
+    IFS='
+'
+    set -f
+    for doc in $staged_md; do
+        set +f
+        IFS=$md_ifs
+        if [ -n "$(git diff --name-only -- "$doc")" ]; then
+            report "$doc" "is staged with content that differs from the working tree - the suite runs against the working tree, so no run has measured what would land"
+        fi
+        set -f
+        IFS='
+'
+    done
+    set +f
+    IFS=$md_ifs
+
+    # The interpreter. LL_PYTHON wins so a different checkout can point this
+    # somewhere else without editing a tracked hook.
+    py_bin=
+    for cand in ${LL_PYTHON:-} python python3 \
+        "C:/Users/<ACCOUNT>/AppData/Local/Programs/Python/Python314/python.exe"
+    do
+        if "$cand" -c "import sys" >/dev/null 2>&1; then
+            py_bin=$cand
+            break
+        fi
+    done
+
+    if [ "$fail" -eq 0 ] && [ -z "$py_bin" ]; then
+        report ".githooks/pre-commit" "no working python was found, so the doc-reading tests cannot run against the staged Markdown - set LL_PYTHON"
+    fi
+
+    if [ "$fail" -eq 0 ]; then
+        # b. The selector. Derived at run time; see ops/docguards.py. It reads
+        # the staged set itself, so no quoting mistake here can narrow it.
+        selected=$("$py_bin" -m ops.docguards select-staged 2>&1)
+        if [ $? -ne 0 ]; then
+            report ".githooks/pre-commit" "the doc-guard selector failed to run"
+            printf '        %s\n' "$selected" >&2
+        else
+            selected=$(printf '%s\n' "$selected" | tr -d '\r')
+            if [ -z "$selected" ]; then
+                report ".githooks/pre-commit" "the selector chose NO test module while Markdown is staged - a selector that selects nothing is not a guard"
+            fi
+        fi
+    fi
+
+    if [ "$fail" -eq 0 ]; then
+        # c. The coverage guard - the second, independent derivation.
+        observed=$("$py_bin" -m ops.docguards check-observed 2>&1)
+        if [ $? -ne 0 ]; then
+            report ".githooks/pre-commit" "the observed doc-open map is absent, stale or has a coverage gap"
+            printf '%s\n' "$observed" | tr -d '\r' | while IFS= read -r line; do
+                printf '        %s\n' "$line" >&2
+            done
+        fi
+    fi
+
+    if [ "$fail" -eq 0 ]; then
+        # d. Run the subset against the tree that is about to land.
+        #
+        # SCRUB GIT'S HOOK ENVIRONMENT FIRST, and only here. git exports
+        # GIT_DIR, GIT_INDEX_FILE and friends to a hook, and every `git`
+        # this suite runs in a THROWAWAY repository would inherit them and
+        # operate on the repository being committed instead. Measured
+        # 2026-09-06 planting the OPS-31 defect in a clone: four
+        # tests/test_lane_launcher.py tests failed inside the hook with
+        # "Unable to create .../ll-lane-ingest/.git/index.lock" and passed
+        # standalone. That is a false refusal, and a guard that cries wolf
+        # is a guard that gets switched off.
+        #
+        # The three python calls above KEEP the ambient environment on
+        # purpose: `git diff --cached` has to read the index being
+        # committed, and under `git commit -a` that index is a temporary
+        # one named only by GIT_INDEX_FILE.
+        md_count=$(printf '%s\n' "$staged_md" | wc -l | tr -d ' ')
+        mod_count=$(printf '%s\n' "$selected" | wc -l | tr -d ' ')
+        printf '%spre-commit%s %s staged .md - running %s doc-reading test module(s)\n' \
+            "$BOLD" "$RESET" "$md_count" "$mod_count" >&2
+        if ! (
+            unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE GIT_PREFIX \
+                GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES \
+                GIT_QUARANTINE_PATH GIT_COMMON_DIR GIT_CONFIG_PARAMETERS \
+                GIT_AUTHOR_DATE GIT_EDITOR
+            exec "$py_bin" -m pytest $selected
+        ) >&2; then
+            report ".githooks/pre-commit" "the doc-reading test subset FAILED against the staged tree - the prose being committed reddens the suite"
+        fi
+    fi
+fi
+
 if [ "$fail" -ne 0 ]; then
     printf '\n%s%spre-commit REFUSED the commit.%s\n' "$BOLD" "$RED" "$RESET" >&2
     printf 'Unstage the offending paths (git restore --staged <path>) and fix them.\n' >&2

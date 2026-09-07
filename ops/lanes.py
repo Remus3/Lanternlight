@@ -251,6 +251,11 @@ LANES: tuple[Lane, ...] = (
             "tests/test_source_register.py",
             "tests/test_repo_surfaces.py",
             "tests/test_tracked_walker.py",
+            # Guards the INDEX MODE of the tracked hooks this lane already
+            # owns via ".githooks/**". Git refuses to run a non-executable
+            # hook on POSIX and reports nothing when it declines, so the
+            # gate and the guard over its firability belong together.
+            "tests/test_hook_file_mode.py",
             "tests/_tracked.py",
             "tools/ascii_check.py",
             "tools/precommit_gate.py",
@@ -336,12 +341,27 @@ LANES: tuple[Lane, ...] = (
             "tests/test_merge_gate.py",
             "tests/test_lanes.py",
             "tests/test_ops_ids.py",
+            "tests/test_docguards.py",
+            "tests/test_inbox_watch.py",
+            # The pytest-wide conftest. It is the executable analogue of
+            # pytest.ini, which is CROSS_CUTTING, so cross-cutting was the
+            # obvious call and it is the wrong one TODAY: the file exists
+            # solely to host the doc-open recorder that backs ops/docguards.py,
+            # and CROSS_CUTTING means no single lane may edit it - which would
+            # leave its only maintainer unable to touch it. Move it to
+            # CROSS_CUTTING the day it carries fixtures more than one lane
+            # depends on; until then a real owner beats a shared veto.
+            "tests/conftest.py",
             "ROADMAP.md",
             "docs/LEDGER.md",
             "docs/HEADLESS.md",
             "docs/OPERATIONS.md",
             "WAKEUP_NOTES.md",
-            "NEXT_SESSION_PROMPT.md",
+            # Renamed from NEXT_SESSION_PROMPT.md 2026-09-06. The hand-off is
+            # now the tracked repo-root file the Desktop shortcut points at,
+            # and there is exactly one of it - see .claude/commands/done.md
+            # step 9 for why the second copy was collapsed rather than kept.
+            "LL-NEXT-SESSION.txt",
             ".claude/commands/*.md",
             ".claude/agents/*.md",
             "docs/ARCHITECTURE.md",

@@ -93,9 +93,11 @@ Before relaying any agent's "done", run the gate:
 
 ```python
 from ops import merge_gate
+before = merge_gate.parse_collect_counts(merge_gate.collect_output())
 report = merge_gate.verify(
     claimed_paths=["the/files/it/said/it/wrote.py"],
-    baseline=COUNT_MEASURED_BEFORE_DISPATCHING,
+    baseline=sum(before.values()),
+    per_file_baseline=before,
 )
 print(report.format())
 ```
@@ -106,6 +108,14 @@ dropped below the baseline**. The baseline is a parameter, never a stored
 constant - measure it with `python -m pytest --collect-only -q` before
 dispatching work, because a count checked into a file goes stale and becomes a
 confident lie.
+
+**Pass `per_file_baseline` and not only `baseline`.** A repository TOTAL is safe
+for one worker and unsafe for several: a lane that deletes 15 tests from its own
+file is completely hidden by a sibling lane adding 20 elsewhere, because the
+total rises and a total-only guard reports success while coverage fell. Omitting
+it is not silent - the report says the per-file check did not run - but a check
+that did not run has not passed. An empty `claimed_paths` now draws a
+`no-claims` finding for the same reason.
 
 The gate is necessary, not sufficient. It cannot tell you a claim is *true* -
 only that the mechanical parts of it are not obviously false. A claim about what
@@ -144,6 +154,32 @@ Related traps this repo has already hit or inherited:
 - A raising spy is vacuous under fail-soft code, because `AssertionError` is an
   `Exception` and a bare `except Exception` swallows it.
 - A negative assertion rules something out without pinning anything down.
+
+## Output constraints - the chat is not the deliverable
+
+**CAVEMAN ULTRA is the default chat dialect.** Confirmed by the operator in
+chat 2026-09-06. Maximum terseness, plain 7-bit ASCII, drop articles and
+filler, no hedging. Keep individual responses **under 500 output tokens**;
+break long work into more turns, or write verbose output to a file.
+
+Two things it is NOT:
+
+- It is **not** classical Chinese or any compressed non-English dialect. A
+  sibling tried that and the operator reverted it the same day as too lossy to
+  skim. Do not re-derive it.
+- It **never** applies to byte-exact content: file paths, shell commands, code,
+  identifiers, machine-parsed tokens, and every committed artifact - `.md`,
+  commit messages, docstrings, `.ps1`. Those stay exact and ASCII. **Terseness
+  is for CHAT, not for the repo.** A ledger entry or a ROADMAP acceptance
+  criterion is written in full: it is read by a cold session that has no other
+  context, and compressing it destroys the thing this project's continuity
+  design exists to preserve.
+
+**Speak in chat only to report a result, to notify, or to ask the operator for
+a ruling.** Do not narrate what a tool call is about to do - the tool call's
+own description says it. Do not recap what just happened; anything worth
+keeping goes in the ledger, `ROADMAP.md`, or the hand-off, where the next
+session can act on it. A recap is read by nobody and dies with the context.
 
 ## Authoring rules
 
@@ -186,11 +222,17 @@ a free port:
 | Block | Project |
 |---|---|
 | 8770-8789 | Red Moon (RM) |
+| 8790-8809 | ResinCompute (RSC) |
 | **8810-8819** | **Lanternlight (LL)** |
 | 8860-8879 | Daemon Slayer (DS) |
 | 8888-8895 and 2999 | Amberstone (RC) |
 | 8900-8919 | LegionWallpaper (LW) |
 | 8920-8939 | Clockspeed (CS) |
+
+Every row is a reservation its owning project reported, not a port measured
+here. RSC's was recorded 2026-09-06 from its own note; the sweep that cleared
+8790-8809 covered THIS tree only, because reading a sibling's tree is no more
+permitted than talking to one.
 
 **Knowing a neighbour's block is not permission to talk to it.** The standalone
 rule at the top of this file still holds: no shared code, no shared ports, no

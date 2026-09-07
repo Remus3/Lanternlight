@@ -24,7 +24,7 @@ import os
 import subprocess
 import sys
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 import pytest
 
@@ -1973,51 +1973,298 @@ def test_every_session_wrap_document_names_the_wrap_side_check(relpath: str) -> 
     )
 
 
-#: The handoff file the operator actually reads, and its ESTABLISHED location.
-#: Measured 2026-09-07: the Desktop already carried `LL-NEXT-SESSION.txt`
-#: alongside `CS-`, `LW-`, `RC-` and `RSC-` siblings, so this is a machine-wide
-#: convention across all six projects rather than a Lanternlight invention.
-DESKTOP_HANDOFF = r"C:\Users\<ACCOUNT>\Desktop\LL-NEXT-SESSION.txt"
+#: The hand-off document the operator reads, by name.
+HANDOFF_NAME = "LL-NEXT-SESSION.txt"
+
+#: Where the wrap writes it, spelled out in full, SINCE 2026-09-06. It moved
+#: OFF the Desktop and INTO the repo root, tracked in git and committed with
+#: the session's other work. The reason is that a Desktop file is untracked,
+#: unversioned and unreviewable: nothing can notice it going stale, and there
+#: is no diff showing what the last session actually handed over. A sibling
+#: project measured its own Desktop hand-off sitting three days stale while
+#: four others were current, which is what started this. The operator approved
+#: the move in chat and it REVERSES the pin this class used to carry.
+#:
+#: This is a LITERAL rather than ``REPO_ROOT / HANDOFF_NAME`` on purpose.
+#: Embedding the live ``REPO_ROOT`` in a comparison against tracked prose is a
+#: defect this repo has already paid for - ``ops/lane_contract.py`` briefly
+#: rendered ``lanes.REPO_ROOT`` into its contract text and every WORKTREE run
+#: then reported a red that was pure path-dependence. The literal is not
+#: trusted either: it is taken apart with pure-path algebra by
+#: ``test_the_two_constants_are_a_repo_root_path_and_a_desktop_path`` below.
+REPO_HANDOFF = r"C:\Lanternlight\LL-NEXT-SESSION.txt"
+
+#: What the Desktop keeps instead - a SHORTCUT, not a second copy. Operator
+#: access is unchanged; there is still exactly one file and it is the tracked
+#: one. The ``LL-`` prefix is redundant inside the repo and stays anyway,
+#: because the Desktop is a shared surface carrying ``CS-``, ``LW-``, ``RC-``
+#: and ``RSC-`` siblings that need distinguishable names.
+DESKTOP_SHORTCUT = r"C:\Users\<ACCOUNT>\Desktop\LL-NEXT-SESSION.lnk"
+
+#: The RETIRED location. ``done.md`` is still REQUIRED to name this path,
+#: because the ritual has to say to delete it; what it may not do is describe
+#: it as a write target.
+RETIRED_DESKTOP_HANDOFF = r"C:\Users\<ACCOUNT>\Desktop\LL-NEXT-SESSION.txt"
+
+#: The second tracked copy the move collapsed. Once the hand-off is tracked at
+#: the repo root, a tracked ``NEXT_SESSION_PROMPT.md`` is a second tracked copy
+#: of one document - a drift generator, and ``docs/LEDGER.md`` already records
+#: that exact file carrying contradictions nobody reconciled.
+COLLAPSED_SECOND_COPY = "NEXT_SESSION_PROMPT.md"
+
+
+def _done_md() -> str:
+    """The wrap ritual's text."""
+    return (REPO_ROOT / ".claude" / "commands" / "done.md").read_text(encoding="utf-8")
+
+
+def _collapsed(text: str) -> str:
+    """Whitespace-collapsed prose, so a match cannot depend on line breaks.
+
+    ``done.md`` is hard-wrapped near 80 columns, so a qualifier and the path it
+    qualifies routinely land on different lines. Two withdrawal checks in this
+    repo's history returned false clean bills exactly that way, and a
+    line-oriented search here would be a claim about the file's line breaks
+    rather than about its content.
+    """
+    return " ".join(text.split())
+
+
+def _windows_around(collapsed: str, needle: str, radius: int = 280) -> list[str]:
+    """Every ``radius``-character neighbourhood of ``needle`` in ``collapsed``.
+
+    Returns ``[]`` when the needle is absent, which is why every caller asserts
+    the list is non-empty BEFORE asserting anything about its contents. A
+    per-item loop over an empty list passes silently, and this repo's name for
+    that is a mutation that failed to apply looking exactly like a passing
+    test.
+    """
+    found: list[str] = []
+    start = 0
+    while True:
+        at = collapsed.find(needle, start)
+        if at < 0:
+            return found
+        found.append(collapsed[max(0, at - radius) : at + len(needle) + radius])
+        start = at + len(needle)
 
 
 class TestTheWrapOutputShapeIsPinned:
     """The operator has had to restate this, so it is a test rather than a habit.
 
-    A wrap that writes the handoff into the repo, or that buries the
-    next-session prompt in prose the operator cannot copy in one action, has
-    lost the only two things the wrap output is FOR. Nothing in code can force
-    a session to format its final message correctly; what is enforceable is
-    that the document telling it how says so, and that dropping either half is
-    a red test rather than silence. Same honest limit as the check_watcher
-    twin directly above.
+    RE-AIMED 2026-09-06, not relaxed. The previous version of this class pinned
+    the OPPOSITE destination - "the Desktop handoff, never a repo path" - and
+    it was right about everything except where the file goes. The operator
+    adopted the cross-project convention in chat, so the destination reversed
+    and the guard moved with it: the SHAPE assertions are unchanged, the
+    LOCATION assertions now refuse the Desktop ``.txt`` as a write target, and
+    the reversal is visible in the test names rather than hidden in a deletion.
+
+    A wrap that writes the hand-off somewhere nothing reviews, or that buries
+    the next-session prompt in prose the operator cannot copy in one action,
+    has lost the only two things the wrap output is FOR.
+
+    HONEST LIMIT, unchanged from the previous version and from the
+    ``check_watcher`` twin directly above: nothing in code can force a session
+    to format its final message correctly, or to write a file at all. What is
+    enforceable is that the document telling it how says so, and that dropping
+    any half of it is a red test rather than silence.
     """
 
-    def test_the_wrap_doc_names_the_DESKTOP_handoff_not_a_repo_path(self) -> None:
-        text = (REPO_ROOT / ".claude" / "commands" / "done.md").read_text(
-            encoding="utf-8"
-        )
-        assert DESKTOP_HANDOFF in text, (
-            "done.md no longer names the Desktop handoff path, so a wrap would "
-            f"write the file somewhere the operator does not look. It is "
-            f"{DESKTOP_HANDOFF}, updated in place every wrap, and it is a "
-            "machine-wide convention shared with the sibling projects"
-        )
+    def test_the_two_constants_are_a_repo_root_path_and_a_desktop_path(self) -> None:
+        """The constants are taken apart, not trusted.
 
-    def test_the_wrap_doc_forbids_writing_the_handoff_into_the_repo(self) -> None:
-        text = (REPO_ROOT / ".claude" / "commands" / "done.md").read_text(
-            encoding="utf-8"
+        A sibling project hit the trap this guards: they renamed the "where
+        does it go" parameter to ``base``, an existing local shadowed it, and
+        every write landed in the control directory instead of the repo root.
+        It was caught ONLY because their tests assert the RESOLVED PATH rather
+        than merely that a write happened.
+
+        The analogue here is that a future session could satisfy every other
+        test in this class by editing ``REPO_HANDOFF`` back to the Desktop and
+        leaving the prose to match. This one refuses that with pure-path
+        algebra: the write target's directory must be the repo root, must NOT
+        be the Desktop, and the name must keep the ``LL-`` prefix and the
+        ``.txt`` suffix.
+        """
+        target = PureWindowsPath(REPO_HANDOFF)
+        retired = PureWindowsPath(RETIRED_DESKTOP_HANDOFF)
+        shortcut = PureWindowsPath(DESKTOP_SHORTCUT)
+
+        assert target.name == HANDOFF_NAME
+        assert target.parent == PureWindowsPath(r"C:\Lanternlight"), (
+            "the wrap's write target no longer resolves to the repo root - "
+            f"{target.parent} is not C:\\Lanternlight, so the hand-off would "
+            "land outside the tree that reviews it"
         )
-        assert "LL-NEXT-SESSION.txt" in text
-        assert "repo root" in text, (
-            "done.md must say explicitly that the handoff does NOT go in the "
-            "repo, because that is the mistake actually made on 2026-09-07 - "
-            "an untracked copy was written to C:/Lanternlight instead"
+        assert target.parent != retired.parent, (
+            "the repo-root hand-off and the retired Desktop one resolved to "
+            "the same directory, so this class would pass while the file went "
+            "back to the untracked location the move exists to leave"
         )
+        assert retired.parent.name == "Desktop"
+        assert target.name.startswith("LL-"), (
+            "the LL- prefix is redundant in-repo and is kept deliberately - "
+            "the Desktop shortcuts are a shared surface across six projects "
+            "and need distinguishable names"
+        )
+        assert target.suffix == ".txt"
+        # The Desktop keeps a LINK, and a link is not a copy.
+        assert shortcut.parent == retired.parent
+        assert shortcut.suffix == ".lnk"
+        assert shortcut.stem == target.stem
+
+    def test_the_wrap_doc_names_the_repo_root_handoff_as_the_write_target(self) -> None:
+        """The new location, and that it is tracked and committed.
+
+        Naming the bare filename is not enough: for one cycle "the hand-off"
+        meant two different directories, which is the ambiguity this move
+        exists to remove.
+        """
+        text = _collapsed(_done_md())
+        # Anchor first - everything below is a claim about this path's
+        # neighbourhood and would pass vacuously if the path were absent.
+        assert REPO_HANDOFF in text, (
+            "done.md no longer names the repo-root hand-off, so a wrap would "
+            f"have to guess where it goes. It is {REPO_HANDOFF}, tracked in "
+            "git and committed with the session's other work"
+        )
+        windows = _windows_around(text, REPO_HANDOFF)
+        # "tracked in git", not the bare word. Measured while proving this
+        # guard non-vacuous: `tracked` alone was satisfied by the unrelated
+        # module name `tests/_tracked.py` sitting in the same neighbourhood,
+        # so deleting the tracking requirement left the class green.
+        assert any("tracked in git" in window for window in windows), (
+            "done.md names the repo-root path but never says it is TRACKED IN "
+            "GIT. An untracked file at the repo root is exactly as invisible "
+            "as the Desktop one was, and looks identical to success"
+        )
+        assert any("commit" in window for window in windows), (
+            "done.md names the repo-root path but never says to COMMIT it "
+            "with the session's work, which is the whole reason it moved - a "
+            "diff showing what the last session handed over"
+        )
+        # Naming the path is not enough: the PREVIOUS version of this document
+        # named it too, as the mistake to avoid. Measured while re-aiming this
+        # class - the anchor and the "tracked" check both passed against a
+        # document that FORBADE the repo root. So no occurrence may sit next
+        # to a phrase that forbids it.
+        forbidding = ("does not go", "never the repo", "not in the repo")
+        for window in windows:
+            lowered = window.lower()
+            assert not any(phrase in lowered for phrase in forbidding), (
+                "done.md names the repo-root hand-off in order to FORBID it, "
+                "which is the pre-2026-09-06 arrangement the operator "
+                f"reversed: ...{window}..."
+            )
+
+    def test_the_wrap_doc_refuses_the_retired_desktop_txt_as_a_write_target(self) -> None:
+        """The reversal, pinned. A session that drifts back to the Desktop goes red.
+
+        A bare ``assert RETIRED_DESKTOP_HANDOFF not in text`` would be wrong
+        twice over. It would forbid the ritual from naming the file it has to
+        delete, and it would be the negative assertion this repo warns about -
+        ruling something out without pinning anything down. So the path must
+        APPEAR, and every place it appears must retire it rather than instruct
+        a write to it.
+        """
+        text = _collapsed(_done_md())
+        windows = _windows_around(text, RETIRED_DESKTOP_HANDOFF)
+        assert windows, (
+            "done.md never mentions the retired Desktop hand-off. The ritual "
+            "has to name it to say it is deleted and replaced by a shortcut; "
+            "silence leaves a session that remembers the old path with nothing "
+            "to correct it"
+        )
+        retiring = ("delete", "retired", "no longer", "replaced")
+        for window in windows:
+            assert any(word in window for word in retiring), (
+                "done.md names the Desktop .txt somewhere that does not retire "
+                "it, so a wrap could still read it as a write target. The "
+                f"neighbourhood was: ...{window}..."
+            )
+
+    def test_the_desktop_keeps_a_verified_shortcut_rather_than_a_copy(self) -> None:
+        """A shortcut to a MISSING target saves silently - so verify it.
+
+        Naming the ``.lnk`` is not enough. The ritual has to say to read
+        ``TargetPath`` back off the SAVED shortcut and ``Test-Path`` it,
+        because a shortcut that points nowhere looks exactly like a shortcut
+        that works. That is the same shape as every other failure this module
+        exists to catch.
+        """
+        text = _collapsed(_done_md())
+        assert DESKTOP_SHORTCUT in text, (
+            "done.md no longer names the Desktop shortcut, so operator access "
+            f"to the hand-off would silently disappear. It is {DESKTOP_SHORTCUT}"
+        )
+        for token in ("WScript.Shell", "TargetPath", "Test-Path"):
+            assert token in text, (
+                f"done.md no longer names {token}, so the shortcut step loses "
+                "either its creation method or its verification. Creating a "
+                "shortcut to a missing target succeeds without error"
+            )
+
+    def test_the_wrap_doc_records_that_the_second_tracked_copy_was_collapsed(self) -> None:
+        """Two tracked copies of one document is a drift generator.
+
+        Before the move, ``NEXT_SESSION_PROMPT.md`` was "the tracked copy" and
+        the Desktop file was the operator's. Tracking the repo-root hand-off
+        makes that distinction vanish - both audiences would read the same
+        bytes from two files - so the two collapse into one. This pins the
+        decision so the next session does not re-litigate it, and so a second
+        copy cannot quietly come back.
+        """
+        text = _collapsed(_done_md())
+        windows = _windows_around(text, COLLAPSED_SECOND_COPY)
+        assert windows, (
+            f"done.md no longer says what happened to {COLLAPSED_SECOND_COPY}. "
+            "It was the second tracked copy of the hand-off; without the "
+            "decision written down a session re-creates it and the two drift"
+        )
+        collapsing = ("collapse", "retired", "no longer", "single", "one tracked")
+        for window in windows:
+            assert any(word in window for word in collapsing), (
+                f"done.md mentions {COLLAPSED_SECOND_COPY} without saying it "
+                f"was collapsed into the one hand-off: ...{window}..."
+            )
+
+    def test_the_txt_extension_reason_is_the_measured_scope_not_the_retired_one(self) -> None:
+        """The reason done.md used to give for ``.txt`` was FALSE.
+
+        It said ``test_source_register.py`` walks ``rglob("*.md")`` "over the
+        filesystem, so a stray ``.md`` near the tree reddens a guard".
+        Measured 2026-09-06 by reading the module: it declares
+        ``def cited_hosts(root: Path = DOCS)`` with ``DOCS = REPO_ROOT /
+        "docs"``, and its top-level guard calls ``cited_hosts()`` with that
+        default - so the walk is a directory rglob scoped to ``docs/`` and a
+        repo-root ``.md`` is outside it entirely.
+
+        The extension stays ``.txt`` for reasons that survive measurement. What
+        this pins is that the WITHDRAWN reason does not come back, because a
+        decline reason goes stale faster than a count does and gets cited
+        again.
+        """
+        text = _collapsed(_done_md())
+        windows = _windows_around(text, "test_source_register.py")
+        assert windows, (
+            "done.md no longer records why the old .txt justification was "
+            "withdrawn, so the next session can re-derive the false reason and "
+            "be wrong the same way"
+        )
+        for window in windows:
+            assert "docs/" in window, (
+                "done.md cites test_source_register.py without naming the "
+                f"measured scope, which is docs/ only: ...{window}..."
+            )
+            assert "over the filesystem" not in window, (
+                "the withdrawn justification is back in done.md - the walk is "
+                f"scoped to docs/, not to the filesystem: ...{window}..."
+            )
 
     def test_the_wrap_doc_requires_ONE_copy_pastable_block(self) -> None:
-        text = (REPO_ROOT / ".claude" / "commands" / "done.md").read_text(
-            encoding="utf-8"
-        )
+        """Unchanged by the move. The delivery shape did not reverse."""
+        text = _done_md()
         assert "copy-pastable" in text, (
             "done.md no longer requires the next-session prompt be emitted as "
             "ONE copy-pastable fenced block. The operator pastes it into the "
@@ -2025,13 +2272,27 @@ class TestTheWrapOutputShapeIsPinned:
         )
 
     def test_the_wrap_doc_forbids_a_review_recap(self) -> None:
-        text = (REPO_ROOT / ".claude" / "commands" / "done.md").read_text(
-            encoding="utf-8"
-        )
+        """Unchanged by the move."""
+        text = _done_md()
         assert "no recap" in text.lower(), (
             "done.md must forbid a review/recap after the prompt. Anything "
             "worth knowing goes INSIDE the prompt, where the next session can "
             "act on it - a recap in chat is read by nobody and is lost"
+        )
+
+    def test_the_wrap_doc_forbids_delivering_the_prompt_as_a_file_attachment(self) -> None:
+        """Never pinned before, and it is half of the delivery rule.
+
+        done.md has carried this instruction since the shape was written down,
+        but the previous version of this class did not assert it - so it could
+        have been dropped in any edit without going red. Re-aiming the class
+        was the moment to close that.
+        """
+        text = _collapsed(_done_md()).lower()
+        assert "attachment" in text, (
+            "done.md no longer forbids delivering the next-session prompt as a "
+            "file attachment. The operator does not want a file card inline; "
+            "the fenced block and the tracked file ARE the delivery"
         )
 
 

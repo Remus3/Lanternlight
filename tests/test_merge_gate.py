@@ -611,3 +611,216 @@ class TestTheExitCodeIsActuallyCarried:
         assert any(
             f.kind == "exit-mismatch" for f in merge_gate.check_run_completed(run)
         )
+
+
+def _write_two_file_project(root, a_count=1, b_count=2):
+    """Build a real, runnable pytest project with tests split across two files.
+
+    Two files is the minimum that can express the failure
+    :func:`merge_gate.check_per_file_counts` exists for - one file losing
+    tests while another gains more, so the repository total RISES and a
+    total-only guard reports success. Everything written here passes; the
+    thing under test is the COUNT, not the outcome.
+    """
+    (root / "tests").mkdir(parents=True, exist_ok=True)
+    (root / "pytest.ini").write_text(
+        "[pytest]\ntestpaths = tests\npython_files = test_*.py\naddopts = -q\n",
+        encoding="utf-8",
+    )
+    for stem, count in (("a", a_count), ("b", b_count)):
+        body = "\n\n\n".join(
+            f"def test_{stem}_{i}():\n    assert True" for i in range(count)
+        )
+        (root / "tests" / f"test_{stem}.py").write_text(body + "\n", encoding="utf-8")
+
+
+class TestVerifyActuallyRunsThePerFileGuard:
+    """The first structural hole recorded under ROADMAP ``OPS-31``.
+
+    ``check_per_file_counts`` was exported in ``__all__``, cited by all eight
+    generated lane contracts, covered by six of its own tests - and NEVER
+    CALLED. Nothing outside its own definition and those tests invoked it,
+    which is precisely how a check that has never run reads as a live guard.
+
+    The algorithm is already covered by ``TestPerFileRegressionGuard`` above,
+    and every one of those tests stayed green for as long as the function was
+    dead code. These tests cover the WIRING instead: that ``verify`` reaches
+    it, and that the finding survives into the composed report.
+    """
+
+    def test_a_per_file_drop_is_caught_although_the_repository_total_ROSE(self, tmp_path):
+        # 1 + 5 = 6 collected now, against a baseline of 4. The TOTAL guard is
+        # clean by construction, so any finding here can only have come from
+        # the per-file comparison - and `check_test_count` never names a path
+        # in its detail, so the path assertion below cannot be satisfied by it.
+        _write_two_file_project(tmp_path, a_count=1, b_count=5)
+        report = merge_gate.verify(
+            claimed_paths=["pytest.ini"],
+            baseline=4,
+            per_file_baseline={"tests/test_a.py": 3, "tests/test_b.py": 1},
+            root=tmp_path,
+        )
+        assert report.collected == 6
+        assert not report.ok, f"a per-file drop under a rising total was missed: {report.format()}"
+        detail = " ".join(f.detail for f in report.findings)
+        assert "tests/test_a.py" in detail, "the finding does not name the file that shrank"
+        assert "tests/test_b.py" not in detail, "the file that GREW was reported as a loss"
+
+    def test_a_file_that_vanished_entirely_reaches_the_report(self, tmp_path):
+        _write_two_file_project(tmp_path, a_count=1, b_count=2)
+        report = merge_gate.verify(
+            claimed_paths=["pytest.ini"],
+            baseline=3,
+            per_file_baseline={
+                "tests/test_a.py": 1,
+                "tests/test_b.py": 2,
+                "tests/test_gone.py": 7,
+            },
+            root=tmp_path,
+        )
+        assert not report.ok
+        assert any(f.kind == "file-vanished" for f in report.findings), report.format()
+
+    def test_a_clean_per_file_baseline_still_signs_off(self, tmp_path):
+        # The companion that stops the two tests above from passing for the
+        # wrong reason. If `verify` refused everything the moment a per-file
+        # baseline appeared, both would be green and neither would mean
+        # anything. A negative assertion rules something out without pinning
+        # anything down; this pins it.
+        _write_two_file_project(tmp_path, a_count=2, b_count=2)
+        report = merge_gate.verify(
+            claimed_paths=["pytest.ini"],
+            baseline=3,
+            per_file_baseline={"tests/test_a.py": 1, "tests/test_b.py": 2},
+            root=tmp_path,
+        )
+        assert report.ok, report.format()
+
+
+class TestVerifyDefaultsAreNotSilent:
+    """The second structural hole recorded under ROADMAP ``OPS-31``.
+
+    ``verify(claimed_paths=(), baseline=None)`` defaults BOTH arguments to
+    something that checks nothing. ``baseline=None`` at least raises a
+    ``no-baseline`` finding. An empty ``claimed_paths`` was completely silent:
+    the caller got ``ok=True`` with the file-existence probe having examined
+    ZERO files, and nothing in the report said so. A gate that reports OK
+    after checking nothing is the exact failure this module exists to prevent.
+    """
+
+    def test_claiming_nothing_is_a_finding_rather_than_a_quiet_pass(self, tmp_path):
+        _write_two_file_project(tmp_path, a_count=1, b_count=2)
+        report = merge_gate.verify(
+            baseline=3,
+            per_file_baseline={"tests/test_a.py": 1, "tests/test_b.py": 2},
+            root=tmp_path,
+        )
+        assert not report.ok, "the gate signed off having examined zero claimed files"
+        assert any(f.kind == "no-claims" for f in report.findings), report.format()
+
+    def test_claiming_one_real_file_clears_it(self, tmp_path):
+        # Non-vacuity companion: the finding above has to be caused by the
+        # empty claim list, not by anything else about this project.
+        _write_two_file_project(tmp_path, a_count=1, b_count=2)
+        report = merge_gate.verify(
+            claimed_paths=["pytest.ini"],
+            baseline=3,
+            per_file_baseline={"tests/test_a.py": 1, "tests/test_b.py": 2},
+            root=tmp_path,
+        )
+        assert report.ok, report.format()
+        assert not any(f.kind == "no-claims" for f in report.findings)
+
+    def test_an_absent_per_file_baseline_is_NAMED_in_an_otherwise_OK_report(self, tmp_path):
+        # This one cannot be a finding without breaking nine documents: the
+        # invocation quoted in CLAUDE.md and in all eight generated lane
+        # contracts passes only `claimed_paths` and `baseline`, so a hard
+        # failure here would make the documented call always red. It is
+        # recorded as an UNCHECKED note instead - visible in `format()` even
+        # on an OK report, which is the difference between a stated limit and
+        # a silence.
+        _write_two_file_project(tmp_path, a_count=1, b_count=2)
+        report = merge_gate.verify(claimed_paths=["pytest.ini"], baseline=3, root=tmp_path)
+        assert report.ok, report.format()
+        assert report.notes, "an OK report claimed nothing had been left unchecked"
+        rendered = report.format()
+        assert rendered.startswith("merge gate: OK")
+        assert "per-file" in rendered, rendered
+
+    def test_supplying_the_per_file_baseline_leaves_no_unchecked_note(self, tmp_path):
+        _write_two_file_project(tmp_path, a_count=1, b_count=2)
+        report = merge_gate.verify(
+            claimed_paths=["pytest.ini"],
+            baseline=3,
+            per_file_baseline={"tests/test_a.py": 1, "tests/test_b.py": 2},
+            root=tmp_path,
+        )
+        assert report.notes == (), report.format()
+
+    def test_the_docstring_keeps_the_weakness_the_code_cannot_fix(self):
+        """``baseline`` is supplied by the very caller whose work is under test.
+
+        Nothing in this module can close that: the gate has no independent
+        record of what the count was before the work started, and deriving one
+        after the fact would compare the tree against itself. What it CAN do
+        is refuse to let the limit go unwritten, and this pins the TEXT rather
+        than a behaviour - said plainly, because a guard that looks like a
+        behavioural check and is not is the same species of decoration as the
+        dead function above.
+        """
+        doc = merge_gate.verify.__doc__ or ""
+        assert "caller whose work is under test" in doc
+
+
+class TestUncheckedNotesRenderOnTheFAILUREBranchToo:
+    """`format` appends `[unchecked]` notes in BOTH branches - pin both.
+
+    The docstring on `GateReport.format` claims both branches. The OK branch
+    was tested; the FAILURE branch was not, so moving the `lines.extend(...)`
+    inside the `if self.ok:` arm left all merge-gate tests green. Found by the
+    cycle-51 refutation pass. A claim that is true of the code and untrue of
+    the guard is the shape this module exists to refuse.
+
+    Why the failure branch matters despite being the less surprising one: a
+    report that has findings AND a probe that never ran is the case where a
+    reader is most likely to fix the findings, re-run, see OK, and never learn
+    that a check was skipped throughout.
+    """
+
+    NOTE = "the per-file regression check did not run - no per_file_baseline"
+
+    def test_a_note_renders_when_the_report_is_OK(self):
+        report = merge_gate.GateReport(
+            ok=True, findings=(), collected=10, summary=None, notes=(self.NOTE,)
+        )
+        rendered = report.format()
+        assert "merge gate: OK" in rendered
+        assert f"[unchecked] {self.NOTE}" in rendered, rendered
+
+    def test_a_note_renders_when_the_report_has_FINDINGS(self):
+        report = merge_gate.GateReport(
+            ok=False,
+            findings=(merge_gate.Finding(kind="no-claims", detail="nothing claimed"),),
+            collected=10,
+            summary=None,
+            notes=(self.NOTE,),
+        )
+        rendered = report.format()
+        assert "1 finding(s)" in rendered
+        assert "[no-claims]" in rendered
+        assert f"[unchecked] {self.NOTE}" in rendered, (
+            "the unchecked note vanished from the FAILURE branch - a probe that "
+            "did not run must be visible whether or not other probes found "
+            "something:\n" + rendered
+        )
+
+    def test_no_note_renders_when_there_is_nothing_unchecked(self):
+        """Negative control - the marker must not appear unconditionally."""
+        report = merge_gate.GateReport(
+            ok=False,
+            findings=(merge_gate.Finding(kind="no-claims", detail="nothing claimed"),),
+            collected=10,
+            summary=None,
+            notes=(),
+        )
+        assert "[unchecked]" not in report.format()
