@@ -5,6 +5,87 @@ fidelity and archive older ones rather than deleting them.
 
 ---
 
+# Session note 2026-09-07 - inbox reviewed under `OPS-34`, four sibling questions answered by measurement, `OPS-47` filed and CLOSED by operator ruling the same session, and the operator's hand-off complaint discharged
+
+**Everything in this note is committed and pushed.** Three commits: `73b03e3`,
+`eee1188`, `1ee0ee4`. Working tree clean at the wrap. Unlike the previous
+session's note, this one is not bookkeeping for uncommitted work.
+
+**This session did NOT work `OPS-43`, which is still the next item.** The loop's
+in-flight item was carried forward as a retry rather than credited, which is the
+honest shape: nothing was done to it. What it DID do was answer the mail, which
+is a standing operator instruction (`OPS-34`), and then act on two operator
+rulings that arrived in chat while doing so.
+
+## What the mail actually needed
+
+Six unread notes were read in full and acknowledged, with the acknowledge proven
+by re-running the reporter rather than assumed from its exit code. Four sibling
+questions were answered BY MEASUREMENT rather than by citing a rule, and four
+replies were delivered and confirmed by listing each destination afterwards.
+Details and method are in `LL-0164`; the short version is that no document in
+this tree ever carried a sibling's false "RC is public" claim, nothing here
+credited LW with foresight it disclaims, this project has no dependency on the
+sibling repository being deleted and recreated, and our own `refs/pull/*` count
+is zero.
+
+**The zero carries a positive control and that is the transferable part.** A
+ref-pattern query FAILS GREEN: `for-each-ref` wants `refs/pull/`, `ls-remote`
+wants `refs/pull/*`, and neither errors when a pattern matches nothing, so an
+empty result from a broken pattern is indistinguishable from a repository with
+no pull refs. The identical command returned 1470 refs against a public
+repository that has them. Without that control the clean bill was a claim about
+the pattern wearing the costume of a claim about the remote.
+
+## `OPS-43` is now quantified, and it is worse than the item assumed
+
+NINETEEN unique `from-LL-*` notes exist across the four sibling inboxes. FIVE
+appear anywhere in the ledger. **FOURTEEN leave no trace whatsoever in this
+repository.** A cold session reading only its own disk undercounts this
+project's replies by nearly four to one. That number is now inside `OPS-43`
+itself, with the method, so the item no longer argues from a single anecdote.
+
+## Two operator rulings, both given in chat 2026-09-07
+
+**Ruling 1: "no, don't ask for the scrub."** `OPS-47` was filed when a sibling
+reported that its now-public git history carries sibling names in eight
+historical blob versions of two of its files, and offered to take a scrub
+request to its operator. The item was filed as a pending operator decision, NOT
+answered by the session, and was then ruled on the same session. It is closed,
+each criterion discharged explicitly rather than by closing the item, and the
+per-name count we had asked the sibling for was WITHDRAWN so nobody spends
+effort producing a number nobody is waiting on. The closure claims nothing about
+that sibling's count, which is unverified here.
+
+**Ruling 2: "just keep the wrap output as one copy-pastable fence."** This
+answers the complaint the operator typed by hand into `LL-NEXT-SESSION.txt` at
+13:30. **The finding is that nothing was missing from the contract** -
+`.claude/commands/done.md` step 10 already said exactly this, with its reason
+and with "Nothing after it, and NO RECAP". A session ignored a rule that was
+already written. That distinction is the whole point of `LL-0166`: a cold
+session reading the complaint alone would conclude the rule needed writing,
+would write it, and would fix nothing. No guard was added because the artifact
+is chat output, which no test here can observe, and a test asserting the rule is
+still PRESENT would pass while a session ignored it.
+
+## Left explicitly unmeasured, so it is not mistaken for clean
+
+The sibling's trap (c): a history rewrite that scrubs blob CONTENT completely
+while FILENAMES still leak, because the rename table is keyed on the HEAD path
+while the filter sees each commit's own path. This tree has not been checked on
+that axis. `OPS-40` closed the content and message axes; this is a third one.
+
+## `OPS-44` tripped a fourth time, which is `OPS-31` working
+
+The ledger entry recording this session's own work reddened the source-register
+guard, on `LL-NEXT-SESSION.txt` (ours, one tracked path) and `winmutex.py` (a
+sibling's, zero tracked paths). Both vetted and added to `KNOWN_NON_HOSTS`; the
+guard's LOGIC was left alone because `OPS-44` still holds that decision. The
+addition was proven load-bearing rather than assumed: green, mutated with the
+mutation asserted to have applied, RED, restored, green.
+
+---
+
 # Session note 2026-09-07 - `OPS-42` CLOSED in full on four operator rulings, `OPS-44` and `OPS-45` filed - NOTHING IN THIS SESSION WAS COMMITTED OR PUSHED
 
 **This entry is bookkeeping for work another part of the same session already
