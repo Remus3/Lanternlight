@@ -268,6 +268,10 @@ LANES: tuple[Lane, ...] = (
             "tools/syntax_check_hook.py",
             "tests/test_syntax_check_hook.py",
             "tests/test_precommit_gate_lint.py",
+            # OPS-38. Forbids any tracked file naming a user home directory,
+            # which is repository hygiene applied to what gets PUBLISHED -
+            # the same mandate as ascii_check and the PII backstop.
+            "tests/test_no_hardcoded_home_path.py",
             ".githooks/**",
             # CI runs this repo's own hygiene suite on a machine nobody
             # owns, and the issue form is the redaction gate applied to

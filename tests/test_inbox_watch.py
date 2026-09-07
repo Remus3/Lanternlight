@@ -438,10 +438,31 @@ def test_settings_json_registers_a_sessionstart_hook_for_the_inbox_watcher() -> 
 
 
 def test_the_sessionstart_hook_command_paths_exist() -> None:
+    """Both halves of the command must resolve - but they resolve differently.
+
+    Changed by ``OPS-38``, which removed the absolute interpreter path from
+    every hook command because it carried this machine's account name and a
+    fresh clone under another account would get a hook that silently never
+    runs. This test caught that change, correctly: it required BOTH tokens to
+    be files on disk, and a bare ``python`` is not a file.
+
+    The property being guarded did not change, only where the answer lives.
+    The SCRIPT must still exist at the named path. The INTERPRETER must still
+    resolve - now through ``PATH`` rather than by being spelled out - and
+    :func:`shutil.which` is the question actually being asked. Accepting a bare
+    name without resolving it would have turned this into a test that a string
+    is non-empty.
+    """
     parts = _sessionstart_command(_settings()).split()
     assert len(parts) == 2, parts
-    for part in parts:
-        assert Path(part).is_file(), f"hook command names a path that does not exist: {part}"
+    interpreter, script = parts
+
+    resolved = shutil.which(interpreter) or (interpreter if Path(interpreter).is_file() else None)
+    assert resolved, (
+        f"the hook interpreter {interpreter!r} resolves to nothing, so this hook "
+        "would not run and would report no error"
+    )
+    assert Path(script).is_file(), f"hook command names a script that does not exist: {script}"
 
 
 def test_the_existing_hooks_were_not_disturbed() -> None:

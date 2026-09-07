@@ -211,7 +211,8 @@ repo_top=$(git rev-parse --show-toplevel 2>/dev/null) || repo_top=.
 # checkout can point this somewhere else without editing a tracked hook.
 find_python() {
     for cand in ${LL_PYTHON:-} python python3 \
-        "C:/Users/<ACCOUNT>/AppData/Local/Programs/Python/Python314/python.exe"
+        "${USERPROFILE:-$HOME}/AppData/Local/Programs/Python/Python314/python.exe" \
+        "${LOCALAPPDATA:-}/Programs/Python/Python314/python.exe"
     do
         if "$cand" -c "import sys" >/dev/null 2>&1; then
             printf '%s\n' "$cand"

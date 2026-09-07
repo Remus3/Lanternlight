@@ -53,6 +53,7 @@ Touch these paths and nothing else. Every other path in the repository belongs t
 - `tools/syntax_check_hook.py`
 - `tests/test_syntax_check_hook.py`
 - `tests/test_precommit_gate_lint.py`
+- `tests/test_no_hardcoded_home_path.py`
 - `.githooks/**`
 - `.github/**`
 - `scripts/install_hooks.py`

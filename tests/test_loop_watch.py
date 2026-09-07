@@ -1999,12 +1999,12 @@ REPO_HANDOFF = r"C:\Lanternlight\LL-NEXT-SESSION.txt"
 #: one. The ``LL-`` prefix is redundant inside the repo and stays anyway,
 #: because the Desktop is a shared surface carrying ``CS-``, ``LW-``, ``RC-``
 #: and ``RSC-`` siblings that need distinguishable names.
-DESKTOP_SHORTCUT = r"C:\Users\<ACCOUNT>\Desktop\LL-NEXT-SESSION.lnk"
+DESKTOP_SHORTCUT = r"$env:USERPROFILE\Desktop\LL-NEXT-SESSION.lnk"
 
 #: The RETIRED location. ``done.md`` is still REQUIRED to name this path,
 #: because the ritual has to say to delete it; what it may not do is describe
 #: it as a write target.
-RETIRED_DESKTOP_HANDOFF = r"C:\Users\<ACCOUNT>\Desktop\LL-NEXT-SESSION.txt"
+RETIRED_DESKTOP_HANDOFF = r"$env:USERPROFILE\Desktop\LL-NEXT-SESSION.txt"
 
 #: The second tracked copy the move collapsed. Once the hand-off is tracked at
 #: the repo root, a tracked ``NEXT_SESSION_PROMPT.md`` is a second tracked copy

@@ -84,6 +84,153 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0157 - 2026-09-07 - OPS-38 CLOSED - eleven live surfaces stopped hardcoding this machine's account name, and every hook was proven to still FIRE rather than merely to still parse
+
+**Operator ruling, chat 2026-09-07: parameterise.** Given after this session
+measured the exposure and reported it with its own severity assessment rather
+than as an alarm - the account name is the Windows built-in one, so it was never
+an identifying leak, and the pickaxe over every ref had already returned zero
+value-shaped matches. The real cost is different and worse: a hook command
+naming an interpreter under one account is a hook that does not run under
+another, and **a hook that does not run reports nothing.**
+
+**Eleven live surfaces changed.** Four hook commands in
+`.claude/settings.json` now name a bare interpreter resolved from `PATH`; the
+last-resort candidate in `.githooks/pre-commit` is derived from the environment;
+two constants in `tests/test_loop_watch.py` and three lines of the wrap ritual
+use the PowerShell profile variable; and the Paths section of `CLAUDE.md` now
+describes how to resolve the interpreter instead of naming one, including that
+two of the obvious candidate names resolve to Microsoft Store stubs here and are
+traps.
+
+**Five historical lines were deliberately NOT changed.** `docs/LEDGER.md` is
+append-only by this project's own rule, and `ROADMAP.md` item 2d,
+`WAKEUP_NOTES.md` and `docs/OBSERVED_IDS.md` quote measurements that were true
+on their date - in 2d's case the quoted path IS the evidence for the finding.
+They are pinned by COUNT instead, so a NEW occurrence reddens the suite while the
+record stays intact. A pin that merely tolerated them would let the count grow
+forever.
+
+**The guard's shape is dictated by the prior attempt, not invented.** Item 2d
+fought this once. Its refutation pass showed that guards pinning
+`primary_checkout()` and `WORKTREE_ROOT` specifically did NOT deliver the
+property "no machine-specific path is ever committed", by embedding a home path
+into a rendered contract and watching it pass here and fail under a different
+profile. So `tests/test_no_hardcoded_home_path.py` matches the SHAPE of any home
+directory under ANY account name. A guard that only knew this machine's account
+name would pass cleanly on the day someone commits a path under a different one,
+which is the day it matters.
+
+**Evidence:**
+- TDD, red first: the guard was written before any change and failed on exactly
+  eleven live offenders, `1 failed, 11 passed`.
+- It found one case that was NOT planned for: `tests/test_lane_contract.py`
+  already plants two home-shaped needles as the positive controls of item 2d's
+  absolute-path check. Forbidding those would forbid the technique this guard
+  itself depends on, so control fixtures became a second pinned category rather
+  than an exemption.
+- Its own pin was measured rather than guessed. It was first set to the four
+  needles the file plants, went red at six, and the two extra turned out to be
+  the COMMENT naming the pair found in the other file. Prose describing a needle
+  is indistinguishable from the needle - the same lesson `LL-0156` records when
+  `tests/test_no_pii.py` refused an entry for spelling out its own search shapes.
+- Green after: `161 passed` across the guard and `tests/test_loop_watch.py`,
+  whose two constants moved in step with the ritual text they assert against.
+- **The hooks were proven to FIRE, not merely to parse.** The decisive probe:
+  a deliberately crafted shell command was REFUSED by the `PreToolUse` gate, and
+  the refusal text names the bare interpreter command from the settings file, so
+  the parameterised command demonstrably resolved and ran inside the real
+  harness. An earlier probe of the same gate did NOT trip it and was a bad probe
+  rather than a broken hook - the gate needs a PowerShell invoker beside the
+  quoted name, which was established by running the script directly before
+  drawing any conclusion. All four hook commands were then executed verbatim as
+  written in the settings file: exit 0 each, with `SessionStart` printing its
+  report.
+- `.githooks/pre-commit`: `bash -n` clean, zero CR bytes, `find_python` resolves.
+  A first attempt wrote a literal two-character escape into the shell file where
+  a line continuation belonged, which would have broken the loop; the syntax
+  check caught it before it could refuse a commit.
+- **Ten mutants, every anchor asserted to occur EXACTLY ONCE first.** Two of them
+  re-embedded a hardcoded path into a GUARDED ARTIFACT rather than into the
+  guard - the settings file and the wrap ritual - because whether a regression is
+  caught is the question that matters; both were killed. One mutant SURVIVED on
+  the first pass, flipping the frozen-count comparison to a constant. That was a
+  badly chosen mutant rather than a hole: a currently-passing assertion cannot
+  detect a mutation that only makes it pass more easily. A second pass moved the
+  DATA five ways instead - a pin too low, a pin too high, a fixture pin too high,
+  a pinned file that does not exist, and a file pinned in both sets - and all
+  five were killed.
+
+**AN EXISTING TEST CAUGHT THE PARAMETERISATION AND WAS RIGHT TO.**
+`tests/test_inbox_watch.py::test_the_sessionstart_hook_command_paths_exist`
+required BOTH tokens of the hook command to be files on disk, and a bare
+interpreter name is not a file. Relaxing a test to accommodate a change is the
+exact shape of a test weakened to go green, so the property was moved rather
+than dropped: the SCRIPT must still exist at the named path, and the
+INTERPRETER must still RESOLVE - now through `shutil.which` instead of by being
+spelled out. Accepting a bare name without resolving it would have reduced the
+test to asserting that a string is non-empty.
+
+Watched red under three mutations of `.claude/settings.json`, each anchor
+asserted to occur exactly once: an interpreter that resolves to nothing, a
+script path that does not exist, and an empty interpreter token. Baseline
+`1 passed`, all three `1 failed`, restored `1 passed`.
+
+**A sibling test in that same file already did what this session's ad-hoc probe
+failed to do.** `test_the_sessionstart_hook_command_really_runs_and_prints_the_report`
+snapshots the live seen set and restores it afterwards, with a docstring saying
+that a test which marks the real backlog as read would consume exactly the mail
+the next session is supposed to be handed. The manual probe run during this work
+had no such protection and ate three notes. The knowledge was already in the
+tree; the probe simply did not use it.
+
+**THE SECOND DERIVATION CAUGHT THIS GUARD, which is the best evidence in the
+entry that `OPS-31`'s design is sound.** The first version of
+`tests/test_no_hardcoded_home_path.py` walked the tree with its own
+`git ls-files` subprocess call. `ops/docguards.py` recognises a
+Markdown-walking module by an ENUMERATED set of idioms, a private subprocess
+call matches none of them, and the module was therefore classified as naming
+only the four documents it happens to mention - so it would have been narrowed
+away by the pre-commit hook for every OTHER document. Nothing about that is
+visible in a green suite.
+
+`tests/conftest.py` records real doc-opens through `sys.addaudithook`, and
+`coverage_gap` reported the module as a hole on the first full run. The static
+pass and the runtime recorder disagreed, and the disagreement was the finding.
+`ops/docguards.py`'s own docstring predicted exactly this: an idiom nobody
+thought of is invisible by construction, and the second derivation exists for
+that case.
+
+**The fix was to use the idiom the project already has, not to widen the
+pattern list.** The module now walks through `tests/_tracked.iter_authored_files`,
+which is the repository's single answer to "what would be published from here",
+already excludes binaries, and is one of the recognised idioms. Widening
+`DOC_READING_IDIOMS` to accept a bespoke subprocess call would have made the
+static pass agree with this one module while leaving the next bespoke walker
+just as invisible.
+
+**A heredoc lost a level of backslash escaping THREE times during this work**,
+aborting one script on a syntax error and writing a literal escape into a shell
+file on another. That is item 2d's own recorded trap - "a heredoc mangled the
+backslashes so the anchor never matched" - hit again while carrying out the item
+that quotes it. Backslash-heavy edits were moved to script FILES, which is the
+durable lesson and is why the anchor assertions exist at all.
+
+**The scope was the ACCOUNT NAME, and that limit is stated rather than implied.**
+The project root still appears in the hook commands and is deliberately left: it
+is documented rather than machine-identifying, and changing both at once doubles
+the chance of a silent hook break for no gain.
+
+**THE OPS-33 DEFECT DEMONSTRATED ITSELF DURING THIS WORK.** Running the four hook
+commands verbatim - a probe whose only purpose was to check that they resolve -
+CONSUMED three genuinely unread notes, because the `SessionStart` command
+acknowledges the mail as a side effect of reporting it. The next check honestly
+reported nothing new and the three notes had to be recovered by filename
+timestamp. Any process that runs the watcher acknowledges the mail, **including a
+process whose purpose was only to check that the watcher runs.** Recorded against
+the `OPS-33` follow-up, which is held pending the operator's instruction to wait
+for RC's updated findings.
+
 ### LL-0156 - 2026-09-07 - OPS-37 CLOSED - three guards built by three concurrent lanes, each re-probed OUTSIDE its own tests, plus a clean pickaxe over the whole published history
 
 **Three lanes ran concurrently on disjoint file sets** and every claim was

@@ -135,6 +135,13 @@ KNOWN_NON_HOSTS = frozenset(
         "hook.py",
         "lint.py",
         "m.py",
+        # `tests/test_no_hardcoded_home_path.py`, quoted by `LL-0157`,
+        # truncated to `path.py` by the host-shaped pattern.
+        "path.py",
+        # A standard-library API name quoted by `LL-0157`. The
+        # host-shaped pattern reads the dotted call as a domain, the
+        # same way it reads `Path.iterdir` above.
+        "shutil.which",
         # The host-shaped pattern truncates at the first label pair, so
         # `per_file.values()` is seen as `file.values` - the TRUNCATED form
         # is what the failure message names and therefore what must be here.

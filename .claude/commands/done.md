@@ -80,15 +80,15 @@ test rather than the code is not a green suite.
      moment it is tracked. Nothing scanned it while it lived on the Desktop,
      and this repo is public.
    - **The Desktop keeps a SHORTCUT, not a second copy.** Create
-     `C:\Users\<ACCOUNT>\Desktop\LL-NEXT-SESSION.lnk` with `WScript.Shell`,
+     `$env:USERPROFILE\Desktop\LL-NEXT-SESSION.lnk` with `WScript.Shell`,
      then **delete** the retired
-     `C:\Users\<ACCOUNT>\Desktop\LL-NEXT-SESSION.txt`. Operator access is
+     `$env:USERPROFILE\Desktop\LL-NEXT-SESSION.txt`. Operator access is
      unchanged; there is still one icon on the Desktop and it now opens the
      tracked file.
 
      ```powershell
      $ws = New-Object -ComObject WScript.Shell
-     $lnk = $ws.CreateShortcut("C:\Users\<ACCOUNT>\Desktop\LL-NEXT-SESSION.lnk")
+     $lnk = $ws.CreateShortcut("$env:USERPROFILE\Desktop\LL-NEXT-SESSION.lnk")
      $lnk.TargetPath = "C:\Lanternlight\LL-NEXT-SESSION.txt"
      $lnk.WorkingDirectory = "C:\Lanternlight"
      $lnk.Save()

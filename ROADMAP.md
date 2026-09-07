@@ -4736,6 +4736,116 @@ gate's ingredients in isolation and never calls the real writer with gated
 content, so deleting the single line that invokes the gate passes every one of
 its tests undetected. Do not mirror that shape when `OPS-32` is built.
 
+## OPS-38. Tracked files hardcoded this machine's account name - CLOSED 2026-09-07
+
+**CLOSED 2026-09-07**, ledger `LL-0157`, operator-ruled "parameterise" in chat
+the same day after this session measured and reported the exposure.
+
+**What was found.** Sixteen tracked lines carried an absolute path through this
+machine's own Windows account name. Eleven were LIVE surfaces - four hook
+commands in `.claude/settings.json`, a fallback interpreter in
+`.githooks/pre-commit`, two constants in `tests/test_loop_watch.py`, the Paths
+section of `CLAUDE.md`, and three lines of the wrap ritual in
+`.claude/commands/done.md`. Five were historical prose.
+
+**Why it mattered, and why it was not an emergency.** The account name is the
+Windows built-in one, so this was never an identifying leak, and the
+game-log PII class that actually matters here is covered by
+`tests/test_no_pii.py` - a pickaxe over every ref found zero value-shaped
+matches. The real cost is that a hook command naming an interpreter under one
+account is a hook that does not run under another, **and a hook that does not
+run reports nothing.** Silent non-execution is the failure mode this repository
+fears most.
+
+**The prior attempt is why this guard has the shape it does.** Item 2d already
+fought this and its refutation pass wrote down the trap: guards were built that
+pinned `primary_checkout()` and `WORKTREE_ROOT` specifically, and a sentence
+claimed they would catch a path re-embedded later that nobody had thought of
+yet. They did not, and the pass proved it by embedding a home path into a
+rendered contract - green here, red under a different `USERPROFILE`. Guarding
+two known sources is not the property. So `tests/test_no_hardcoded_home_path.py`
+matches the SHAPE of any home directory under ANY account name.
+
+**Historical documents are FROZEN, not edited.** `docs/LEDGER.md` is append-only
+by rule, and item 2d, `WAKEUP_NOTES.md` and `docs/OBSERVED_IDS.md` quote
+measurements that were true on their date - in 2d's case the quoted path IS the
+evidence. Each is pinned to the exact count it carries, so a NEW one makes the
+suite red while history stays intact. A pin that merely tolerated them would let
+the count grow forever.
+
+### Acceptance, all met
+
+1. **No live tracked surface carries a home-shaped path.** Met. The guard walks
+   `git ls-files`, skips only the pinned sets, and is green.
+2. **The parameterised forms actually RESOLVE**, because a clean path that does
+   not resolve is worse than a hardcoded one. Met - `python` and `pythonw` both
+   resolve on `PATH` to the real 3.14 install and a test asserts it. `python3`
+   and `py` resolve to Microsoft Store stubs here and are deliberately unused.
+3. **Every hook still FIRES**, proven in the real harness rather than by reading
+   the config. Met, and the decisive evidence is that the `PreToolUse` gate
+   REFUSED a deliberately crafted command and its refusal names the bare
+   `pythonw` command from the settings file. All four hook commands were then
+   run verbatim: exit 0 each, with `SessionStart` printing its report.
+4. **`.githooks/pre-commit` still parses as shell and keeps LF endings.** Met -
+   `bash -n` clean, zero CR bytes, and `find_python` resolves. A first attempt
+   wrote a literal escape into the shell file instead of a line continuation and
+   was caught by that check before it could break a commit.
+5. **Non-vacuous.** Met, ten mutants, every anchor asserted to occur exactly once
+   first. Two mutants re-embedded a hardcoded path into a GUARDED ARTIFACT
+   rather than into the guard, which is the question that matters, and both were
+   caught. One mutant SURVIVED on the first pass - flipping the frozen-count
+   comparison to a constant - and that survival was a badly chosen mutant rather
+   than a hole: a currently-passing assertion cannot detect a mutation that only
+   makes it pass more easily. A second pass moved the DATA instead, five ways,
+   and all five were killed.
+
+### A blind spot worth naming rather than leaving in chat
+
+The scope was the ACCOUNT NAME, not every absolute path. `C:/Lanternlight/...`
+still appears in the hook commands and is deliberately left: it is the documented
+project root rather than machine-identifying, and changing both at once doubles
+the chance of a silent hook break for no gain. `tests/test_lane_contract.py`
+already covers rendered lane contracts against ANY absolute path.
+
+## OPS-33 follow-up. A subagent SessionStart consumes the inbox backlog - OPEN, a fix SHAPE now known
+
+Still open, and **held on the operator's instruction of 2026-09-07 to wait for
+RC to update its findings** before building.
+
+**Demonstrated live twice this session.** First: the operator's own session start
+reported "nothing new - 46 notes, all previously seen" while the whole backlog
+was in fact unread, and `ops/runtime/inbox_seen.json` was observed being
+rewritten at a timestamp when only subagents were running. Second, and more
+sharply: this session ran the four hook commands VERBATIM as a resolution probe
+for `OPS-38`, the `SessionStart` one consumed three genuinely unread notes as a
+side effect, and the next check honestly reported nothing new. The notes had to
+be recovered by filename timestamp. **Any process that runs the watcher
+acknowledges the mail, including a process whose purpose was only to check that
+the watcher runs.**
+
+**A candidate fix arrived on the channel and is recorded so it is not
+re-derived.** LW reports failing the same property and fixing it by moving the
+trigger to `UserPromptSubmit`, which fires on the operator's first message rather
+than on every session start. Two design points from the same note are worth
+keeping: separate the KEY from the DISPLAY so the printed report stays readable
+while the key stays a digest, and treat acknowledgement as a distinct act from
+reporting.
+
+That is a sibling's report, not a measurement of ours. It is a starting shape,
+and the acceptance criteria below are still ours to meet.
+
+### Acceptance, when it is unblocked
+
+1. A run that only REPORTS does not acknowledge. Proven by running the reporting
+   path twice and seeing the same unread set both times.
+2. Acknowledgement happens on a distinct trigger tied to the operator's own
+   session, not to any subagent start. Proven by simulating a subagent start and
+   asserting the seen set is byte-unchanged on disk - not merely that no
+   exception was raised.
+3. The state file's modification time is asserted, because "byte-unchanged"
+   and "not written" are different facts and only one of them is what is wanted.
+4. Every guard watched red under mutation before it is believed.
+
 ## 4b. Ammo-family and talent measurement - READY, cheap, needs the client
 
 Opened 2026-08-09 after the talent and skills screens were captured. The class's

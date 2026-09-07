@@ -303,7 +303,14 @@ service can find a sibling.
 ## Paths
 
 - Project root: `C:\Lanternlight\`
-- Python: `C:\Users\<ACCOUNT>\AppData\Local\Programs\Python\Python314\python.exe`
+- Python: `python` on `PATH`, which resolves to the Python 3.14 install. Do
+  NOT hardcode the interpreter's absolute path in a tracked file - it carries
+  the account name, and a fresh clone under a different account gets a hook
+  that silently never runs rather than one that fails loudly. `python3` and
+  `py` resolve to Microsoft Store stubs here and are traps. The install
+  directory, if you genuinely need it, is
+  `%LOCALAPPDATA%\Programs\Python\Python314\`.
+  Enforced by `tests/test_no_hardcoded_home_path.py`.
 - Game install: `C:\Program Files (x86)\Steam\steamapps\common\Mistfall Hunter`
 - Game log: `%LOCALAPPDATA%\MistfallHunter\Saved\Logs\MistfallHunter.log`
 - Game saves: `%LOCALAPPDATA%\MistfallHunter\Saved\SaveGames\*.sav` (plain GVAS)
