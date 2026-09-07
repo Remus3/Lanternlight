@@ -22,6 +22,36 @@ consequence and do not file it as a defect later: a hook that fails is silent
 about its own failure by design, so this file must stay simple enough that its
 failure modes are the interpreter's rather than its own.
 
+THE SAFETY NET MUST NOT ITSELF BE ABLE TO RAISE. A refutation pass measured
+this file exiting 1 on ``<payload> | python tools/syntax_check_hook.py 2>&-``:
+the reporting write failed because closing a standard fd before the
+interpreter starts makes ``sys.stderr`` ``None`` (measured with
+``python -c "print(repr(sys.stderr))" 2>&-``) rather than a live-but-erroring
+stream object, and the ``except Exception`` handler that exists to make
+failure safe then tried to write ITS OWN diagnostic to that same ``None`` and
+raised ``AttributeError`` doing it, uncaught. ``pythonw.exe`` - which runs the
+sibling hooks in this same settings file - leaves ``sys.stderr`` exactly the
+same ``None`` for a different reason (no console attached), so this is not a
+closed-fd-only concern. A stderr wired to a PIPE whose reader has already
+exited is a THIRD, distinct failure mode: the stream is live and valid right
+up until the write, which raises only then.
+
+Two changes close all three. First, ``emit_report`` is the only thing in this
+file that touches ``sys.stderr``, and it treats ``None``, a closed stream, and
+a broken pipe as equally routine - it never raises, by construction, not by
+accident. Second, the process terminates via ``os._exit(0)`` in a ``finally``,
+not ``sys.exit(0)``. Measured directly: a script that writes to a stderr PIPE
+whose reader has already exited, guards that write in try/except, and then
+calls ``sys.exit(0)`` still exits **120**, not 0 - normal interpreter shutdown
+(``Py_FinalizeEx``) performs its OWN unconditional flush of stdout/stderr, and
+a failure in THAT flush, not in this module's own code, is what sets the exit
+status regardless of what was passed to ``sys.exit``. ``os._exit(0)`` skips
+that shutdown sequence entirely, which is the only way this file can actually
+keep its "always exits 0" promise when the dead stream is a broken pipe rather
+than a closed descriptor. The cost - no atexit handlers run, nothing left
+buffered gets flushed - is accepted deliberately: ``emit_report`` already
+flushes explicitly, so a healthy stream still gets the report before exit.
+
 IT NEVER WRITES BESIDE THE SOURCE. ``py_compile`` drops a ``.pyc`` into a
 ``__pycache__`` next to the file it compiled unless told otherwise, and a hook
 that litters the repository on every edit would be reverted within the day. The
@@ -35,6 +65,7 @@ to acquire a dependency.
 from __future__ import annotations
 
 import json
+import os
 import py_compile
 import sys
 import tempfile
@@ -111,6 +142,30 @@ def format_error(path: Path, err: py_compile.PyCompileError) -> str:
     )
 
 
+def emit_report(message: str) -> None:
+    """Write ``message`` to stderr. Never raises, whatever stderr turns out to be.
+
+    By the time this runs, ``sys.stderr`` is whatever the process that spawned
+    us decided it should be: a live console, ``None`` (no console attached -
+    ``pythonw.exe``, or any interpreter started with a standard handle the OS
+    already considered invalid before it started), a stream object whose
+    underlying descriptor has since been closed, or a stream wired to a pipe
+    whose reader has already gone. Every one of those is ordinary, not
+    exotic, and none of them is allowed to turn an advisory report into a
+    crash. The one thing this function does NOT swallow is a healthy write
+    succeeding - the report still reaches a stream that works; only the ways
+    it can fail are hidden.
+    """
+    try:
+        stream = sys.stderr
+        if stream is None:
+            return
+        stream.write(message)
+        stream.flush()
+    except Exception:
+        pass
+
+
 def main() -> int:
     """Report on stderr and return 0. It returns 0 on every path, deliberately."""
     path = target_path(read_payload(sys.stdin))
@@ -121,15 +176,26 @@ def main() -> int:
     report = describe(path)
     if report is None:
         return 0
-    sys.stderr.write(report + "\n")
+    emit_report(report + "\n")
     return 0
 
 
 if __name__ == "__main__":
     try:
-        sys.exit(main())
-    except SystemExit:
-        raise
+        main()
     except Exception as exc:  # an advisory hook must never wedge the session
-        sys.stderr.write(f"syntax_check_hook soft-failed: {exc}\n")
-        sys.exit(0)
+        emit_report(f"syntax_check_hook soft-failed: {exc}\n")
+    finally:
+        # os._exit, not sys.exit: sys.exit(0) still runs normal interpreter
+        # shutdown, which performs its OWN unconditional flush of
+        # stdout/stderr - and if that stream is a broken pipe, THAT flush
+        # failure is what decides the exit status, regardless of what
+        # sys.exit was given. Measured: a script that writes to a broken
+        # stderr pipe, guards the write in try/except, and then calls
+        # sys.exit(0) still exits 120, not 0. os._exit(0) skips the shutdown
+        # sequence entirely, so it is the only one of the two that actually
+        # delivers "always exits 0" here. There is deliberately no special
+        # case for SystemExit above: whatever happens in the try or except
+        # block, this finally is the one place that decides the process
+        # exit status, and it always decides 0.
+        os._exit(0)

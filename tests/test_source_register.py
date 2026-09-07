@@ -142,6 +142,12 @@ KNOWN_NON_HOSTS = frozenset(
         # host-shaped pattern reads the dotted call as a domain, the
         # same way it reads `Path.iterdir` above.
         "shutil.which",
+        # Quoted by `LL-0158`. `guards.md` is the tail of an ATTACKER-CHOSEN
+        # filename the entry has to reproduce, because the injected name IS
+        # the finding. `result.groups` is a dotted Python attribute in the
+        # render-path condition the same entry quotes.
+        "guards.md",
+        "result.groups",
         # The host-shaped pattern truncates at the first label pair, so
         # `per_file.values()` is seen as `file.values` - the TRUNCATED form
         # is what the failure message names and therefore what must be here.

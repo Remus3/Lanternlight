@@ -307,8 +307,10 @@ service can find a sibling.
   NOT hardcode the interpreter's absolute path in a tracked file - it carries
   the account name, and a fresh clone under a different account gets a hook
   that silently never runs rather than one that fails loudly. `python3` and
-  `py` resolve to Microsoft Store stubs here and are traps. The install
-  directory, if you genuinely need it, is
+  `py` resolve under `WindowsApps` as App Execution Aliases; measured
+  2026-09-07 they FORWARD to the same 3.14.4 and are not dead stubs, so the
+  hooks use `python` and `pythonw` for directness rather than because the
+  others are broken. The install directory, if you genuinely need it, is
   `%LOCALAPPDATA%\Programs\Python\Python314\`.
   Enforced by `tests/test_no_hardcoded_home_path.py`.
 - Game install: `C:\Program Files (x86)\Steam\steamapps\common\Mistfall Hunter`

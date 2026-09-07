@@ -55,7 +55,24 @@ report() {
     printf '        %s\n' "$2" >&2
 }
 
-staged=$(git diff --cached --name-only --diff-filter=ACM)
+# R and T are here deliberately - see OPS-39 defect 4.
+#
+# This listing gates EVERY section below, and with --diff-filter=ACM a commit
+# containing only a RENAME produced an empty listing, so the hook exited 0 and
+# ran nothing at all: no PII path check, no glyph scan, no doc guard, no lint.
+# Git reports a rename as R, which ACM excludes. Measured 2026-09-07 in a
+# throwaway repo: `git mv a.py b.py` then --diff-filter=ACM returns nothing,
+# while ACMR returns the DESTINATION path b.py - which is the path every
+# section below actually wants.
+#
+# --find-renames is explicit so that a repository with diff.renames=false
+# cannot silently re-open the hole by configuration.
+#
+# T is a type change, blob to symlink or back. It carries a destination path
+# and real content, so it is scanned rather than skipped.
+# D and U are still excluded: a deleted path has no content to scan, and an
+# unmerged one has no single staged blob to read.
+staged=$(git diff --cached --name-only --diff-filter=ACMRT --find-renames)
 if [ -z "$staged" ]; then
     exit 0
 fi

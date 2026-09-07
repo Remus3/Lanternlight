@@ -65,6 +65,29 @@ conversation is a lie in the artifact:
   reading ``python`` instead of an absolute path is clean here and still broken
   if ``python`` is not on ``PATH``. That is a different property and
   :func:`test_the_parameterised_interpreter_actually_resolves` covers it.
+
+OPS-38 asked four specific spellings to be considered by name, and each was
+MEASURED, not guessed - see ``TestKnownSpellingsDecidedOnPurpose``:
+
+* An 8.3 short name (``<ACCOUNT>``) IS caught. The username charset already
+  allows ``~`` and digits, and the short form does not start with the
+  placeholder character the lookahead excludes, so no change was needed.
+* A mixed forward/backslash spelling (``C:/Users\\x``, ``C:\\Users/x``) IS
+  caught. Each separator slot in the pattern is its own independent
+  ``[\\/]`` character class, so the two slots were never required to match
+  each other.
+* A UNC path is BLIND when the share itself is named ``Users`` or ``home``
+  with no drive letter in front of it (``\\\\fileserver\\Users\\x``) - the
+  prefix requires ``[A-Za-z]:`` immediately before the separator, and a UNC
+  share has no drive letter or colon there. Deliberately out of scope: widening
+  the prefix to also accept a bare UNC share is a broader change than the
+  case-blindness and line-orientation defect this file was written to close.
+* A URL-encoded separator (``C%3A%5CUsers%5Csomeone``) is BLIND. The pattern
+  needs the literal ``:`` and ``\\``/``/`` characters; percent-encoding
+  replaces both with harmless-looking ASCII digits and letters. Deliberately
+  out of scope for the same reason as the UNC case - decoding percent-escapes
+  before matching is a separate feature, and paths in this repository's own
+  tracked prose are never URL-encoded in the first place.
 """
 
 from __future__ import annotations
@@ -88,11 +111,26 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 #: The trailing separator or end-anchor matters: without it, the pattern would
 #: match the bare directory ``C:\Users`` and report a sentence that merely names
 #: where Windows keeps home directories.
+#:
+#: ``re.IGNORECASE`` - OPS-38. Windows paths are case-insensitive, so the
+#: title-case, all-lowercase and all-uppercase spelling of the same directory
+#: all name one place, and a committed lowercase or uppercase spelling is
+#: exactly as live a leak as the title-case one (see
+#: ``test_it_fires_case_insensitively`` for the literal strings - not
+#: repeated here, because prose describing a needle is indistinguishable from
+#: the needle, the same lesson ``CONTROL_FIXTURES`` records below). The drive
+#: letter and the username charset were already case-complete (``[A-Za-z]``
+#: and ``[A-Za-z0-9._~-]`` both spell out both ranges), so the flag's only
+#: real effect is on the two literal words ``Users`` and ``home``. The
+#: placeholder lookahead below is unaffected on purpose: ``%$<~`` are
+#: punctuation, not letters, so ``re.IGNORECASE`` cannot widen or narrow what
+#: it exempts - proven by ``test_it_still_exempts_placeholders_under_ignorecase``.
 HOME_SHAPED = re.compile(
     r"(?:[A-Za-z]:[\\/]Users[\\/]|/home/|/Users/)"
     r"(?![%$<~])"
     r"[A-Za-z0-9._~-]+"
-    r"(?:[\\/]|\b)"
+    r"(?:[\\/]|\b)",
+    re.IGNORECASE,
 )
 
 #: Documents that RECORD what was true on a date. See the module docstring.
@@ -124,16 +162,31 @@ FROZEN_HISTORICAL: dict[str, int] = {
 #: Pinned by COUNT for the same reason the historical documents are - a
 #: tolerated file grows forever, and a real leak dropped into a test module
 #: would hide behind the fixtures.
-#: This file's own count is SIX rather than the four planted needles: the two
-#: extra are in the comment above, which names the pair it found in
-#: ``test_lane_contract.py``. That was measured after the pin was first guessed
-#: at four and went red - prose describing a needle is indistinguishable from
-#: the needle, which is the same lesson ``docs/LEDGER.md`` records when
-#: ``tests/test_no_pii.py`` refused an entry for spelling out its own search
-#: shapes.
+#: This file's own count MOVED from SIX to TWELVE at OPS-38, re-measured
+#: rather than guessed - see :func:`findings_in` applied to this very file.
+#: The original six were the four planted needles in
+#: ``test_it_fires_on_a_planted_home_path_in_every_spelling`` plus the two in
+#: the comment above naming the pair found in ``test_lane_contract.py``. The
+#: broader (case-insensitive) pattern adds no NEW matches to any of those six
+#: lines - they were already title-case or already lowercase-literal
+#: (``/home/``, ``/Users/`` are always lowercase by convention) - so the rise
+#: is entirely from OPS-38's OWN new tests: four case-variant needles in
+#: ``test_it_fires_case_insensitively``, one 8.3-short-name needle in
+#: ``test_it_fires_on_an_8_3_short_name``, and one mixed-slash needle in
+#: ``test_it_fires_on_either_mixed_forward_and_back_slash_spelling`` - its
+#: SECOND variant only, because the FIRST is written as an escaped string
+#: (``"...\\\\someone..."``) whose ON-DISK source text is a double backslash,
+#: which this guard - reading raw file bytes, not parsed Python values - does
+#: not recognise as one path separator. Each was inspected by hand and is a
+#: literal planted test string, not a leak. Prose describing a needle is
+#: still indistinguishable from the needle, the same lesson ``docs/LEDGER.md``
+#: records when ``tests/test_no_pii.py`` refused an entry for spelling out its
+#: own search shapes - which is why the new tests' own docstrings describe
+#: their spellings abstractly ("title-case", "all-lowercase") instead of
+#: repeating the literal strings a second time.
 CONTROL_FIXTURES: dict[str, int] = {
     "tests/test_lane_contract.py": 2,
-    "tests/test_no_hardcoded_home_path.py": 6,
+    "tests/test_no_hardcoded_home_path.py": 12,
 }
 
 def tracked_text_files() -> list[str]:
@@ -165,6 +218,61 @@ def tracked_text_files() -> list[str]:
     )
 
 
+def _joined_with_line_numbers(text: str) -> tuple[str, list[int]]:
+    """Collapse ``text`` by DROPPING every line break, OPS-38.
+
+    Returns the joined string plus a same-length parallel array recording,
+    for each KEPT character, the 1-based line number it came from in the
+    original text.
+
+    Dropped rather than replaced by a space: this repository's prose
+    hard-wraps near 80 columns as a bare newline with no intervening space
+    (see the module docstring's anti-pattern list - "a line-oriented grep is
+    a claim about the file's line breaks"). A long, space-free path can be
+    split right there, e.g. ``C:\\Users\\`` ending one line and ``someone\\...``
+    opening the next. Replacing the newline with a space would leave the two
+    halves separated by whitespace and the match would still fail; dropping
+    it reconstructs exactly what the author typed before the wrap.
+
+    This can only ever ADD matches relative to a pure per-line scan, never
+    remove one: no character that makes up an existing single-line match is a
+    newline, so every such match survives as an unbroken substring of the
+    joined text too. The only new risk is a coincidental join of the last
+    characters of one line with the first characters of the next forming a
+    spurious match - accepted deliberately, because the required literal
+    prefixes (``C:\\Users\\``, ``/home/``, ``/Users/``) are specific enough
+    that this is far more likely to be a real split path than an accident,
+    and a false positive here costs a human a look while a false negative
+    costs a silent leak.
+    """
+    kept_chars: list[str] = []
+    kept_lines: list[int] = []
+    line_no = 1
+    for ch in text:
+        if ch == "\n":
+            line_no += 1
+            continue
+        kept_chars.append(ch)
+        kept_lines.append(line_no)
+    return "".join(kept_chars), kept_lines
+
+
+def _findings_in_text(text: str) -> list[tuple[int, str]]:
+    """Return ``[(line_number, matched_text)]`` for already-read file text.
+
+    Split out from :func:`findings_in` so the line-join matching can be
+    exercised directly against a constructed string in a test, with no file
+    on disk required. The reported line number is where the match's FIRST
+    character sits in the original text - always a real, openable line, even
+    for a match that itself continues onto the next one.
+    """
+    joined, line_numbers = _joined_with_line_numbers(text)
+    return [
+        (line_numbers[match.start()], match.group(0))
+        for match in HOME_SHAPED.finditer(joined)
+    ]
+
+
 def findings_in(rel: str) -> list[tuple[int, str]]:
     """Return ``[(line_number, matched_text)]`` for one tracked file."""
     path = REPO_ROOT / rel
@@ -172,11 +280,7 @@ def findings_in(rel: str) -> list[tuple[int, str]]:
         text = path.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return []
-    hits = []
-    for number, line in enumerate(text.splitlines(), start=1):
-        for match in HOME_SHAPED.finditer(line):
-            hits.append((number, match.group(0)))
-    return hits
+    return _findings_in_text(text)
 
 
 class TestThePatternItselfIsArmed:
@@ -206,6 +310,97 @@ class TestThePatternItselfIsArmed:
 
     def test_it_does_not_fire_on_the_bare_users_directory(self):
         assert not HOME_SHAPED.search("Windows keeps home directories under C:/Users")
+
+    def test_it_fires_case_insensitively(self):
+        """Windows paths are case-insensitive - OPS-38.
+
+        The title-case, all-lowercase and all-uppercase spellings of the same
+        directory all name ONE place. A guard that only catches the first
+        spelling lets a lowercase or uppercase path through a fresh clone
+        untouched.
+        """
+        variants = [
+            "C:/Users/someone/x",  # baseline spelling - already caught
+            "c:/users/someone/x",
+            "C:/USERS/SOMEONE/X",
+            "C:/UseRs/SomeOne/MiXed/x",
+        ]
+        missed = [text for text in variants if not HOME_SHAPED.search(text)]
+        assert not missed, f"pattern is case-blind, missed: {missed!r}"
+
+    def test_it_still_exempts_placeholders_under_ignorecase(self):
+        """The negative lookahead that exempts placeholders must not soften
+        once the pattern is case-insensitive - a placeholder is exempt by
+        SHAPE (the character right after the separator), not by the case of
+        the account label, so an uppercase placeholder must stay exempt too.
+        """
+        correct = [
+            r"C:\Users\<USER>\Desktop",
+            r"C:\USERS\<user>\Desktop",
+        ]
+        for text in correct:
+            assert not HOME_SHAPED.search(text), f"pattern wrongly fired on {text!r}"
+
+    def test_it_fires_across_a_hard_wrapped_line_break(self, monkeypatch, tmp_path):
+        """A line-oriented match is a claim about the file's line breaks -
+        OPS-38, and this repository's own anti-pattern list. Prose here is
+        hard-wrapped near 80 columns, so a long path can be split by a bare
+        newline with no space at the join. Plant exactly that split in a real
+        file and require ``findings_in`` to still find it, at a line number
+        the reader can actually open.
+        """
+        planted = tmp_path / "wrapped.md"
+        planted.write_text(
+            "The interpreter used to live under C:\\Users\\\n"
+            "someone\\AppData\\Local\\Programs\\Python\\python.exe on this box.\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", tmp_path)
+        hits = findings_in("wrapped.md")
+        assert hits, "a path split by a hard line-wrap was not found"
+        line_no, matched = hits[0]
+        assert line_no == 1, f"expected the match attributed to line 1, got {line_no}"
+        assert "someone" in matched, f"unexpected matched text: {matched!r}"
+
+
+class TestKnownSpellingsDecidedOnPurpose:
+    """OPS-38 named four specific spellings to decide on. Each is MEASURED
+    here rather than merely asserted in prose - see the module docstring's
+    "WHAT THIS GUARD IS BLIND TO" section for the write-up of each decision.
+    """
+
+    def test_it_fires_on_an_8_3_short_name(self):
+        # A long or spaced username collapses to a TILDE-and-digit short
+        # form - a real example from this very machine's own scratchpad path.
+        # The username charset already allows "~" and digits, and the short
+        # form does not start with the lookahead's excluded character, so
+        # this was already covered with no change needed.
+        assert HOME_SHAPED.search(r"C:\Users\<ACCOUNT>\AppData\Local\Temp")
+
+    def test_it_fires_on_either_mixed_forward_and_back_slash_spelling(self):
+        # Each separator slot in the pattern is its OWN independent [\\/]
+        # class, so the two slots were never required to match each other.
+        mixed = [
+            "C:/Users\\someone/AppData",
+            r"C:\Users/someone\AppData",
+        ]
+        for text in mixed:
+            assert HOME_SHAPED.search(text), f"pattern failed to fire on {text!r}"
+
+    def test_it_does_NOT_fire_on_a_driveless_unc_share(self):
+        # DECIDED OUT OF SCOPE. A UNC path has no drive-letter-plus-colon,
+        # which the prefix requires immediately before the separator.
+        unc = [
+            r"\\fileserver\Users\someone\docs",
+            r"\\fileserver\home\someone\docs",
+        ]
+        for text in unc:
+            assert not HOME_SHAPED.search(text), f"pattern unexpectedly fired on {text!r}"
+
+    def test_it_does_NOT_fire_on_a_url_encoded_separator(self):
+        # DECIDED OUT OF SCOPE. Percent-encoding replaces the literal ":"
+        # and "\\"/"/" characters the pattern needs with harmless ASCII.
+        assert not HOME_SHAPED.search("C%3A%5CUsers%5Csomeone%5Cdocs")
 
 
 class TestNoLiveSurfaceCarriesAHomePath:

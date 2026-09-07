@@ -34,6 +34,8 @@ observable from inside the interpreter that is doing the asserting.
 from __future__ import annotations
 
 import json
+import shlex
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -307,3 +309,190 @@ def test_no_artifact_lands_in_the_repository(tmp_path: Path) -> None:
     if cache.is_dir():
         strays += [p.as_posix() for p in cache.glob(f"*{STEM}*")]
     assert strays == [], f"the hook wrote into the repository: {strays}"
+
+
+# ---------------------------------------------------------------------------
+# exit 0 is unconditional - even when the streams the hook reports on are
+# dead. Reproduces the refutation pass's finding:
+#
+#     <payload> | python tools/syntax_check_hook.py 2>&-        ->  exit = 1
+#
+# With stderr closed, the reporting write fails, and the `except Exception`
+# handler that exists to make failure safe then tries to write ITS OWN
+# diagnostic to the SAME dead stream and raises again, uncaught. Measured
+# on this machine: closing a standard fd before the interpreter starts makes
+# CPython hand back `None` rather than a live-but-erroring stream object -
+# `python -c "print(repr(sys.stderr))" 2>&-` prints `None` - which is the
+# exact condition `pythonw.exe` (no console attached) produces too, for a
+# different reason. A stderr wired to a PIPE whose reader has already exited
+# is a THIRD, distinct failure mode: `sys.stderr` is a live object right up
+# until the write, and the write raises only then. Measured separately: a
+# script that guards that write in try/except and then calls `sys.exit(0)`
+# still exits **120**, not 0, because normal interpreter shutdown performs
+# its OWN unconditional stdio flush and a failure in THAT flush - not in this
+# module's own code - is what decides the exit status. Only `os._exit(0)`,
+# which skips that shutdown sequence, actually reaches 0 in that case.
+#
+# None of this is reachable by monkeypatching an internal function and
+# asserting no exception was raised - the defect is in what the real process,
+# spawned for real, with a real dead stream, hands back as its exit code.
+# ---------------------------------------------------------------------------
+
+
+BASH = shutil.which("bash")
+
+
+def _bash_command(redirect_tokens: list[str]) -> str:
+    """The shell command line: the hook, run under ``sys.executable``.
+
+    ``redirect_tokens`` (``"1>&-"``, ``"2>&-"``) are shell syntax, not
+    arguments, so they are appended raw rather than through ``shlex.quote``.
+    """
+    parts = [shlex.quote(sys.executable), shlex.quote(str(HOOK)), *redirect_tokens]
+    return " ".join(parts)
+
+
+def run_hook_with_closed_streams(
+    stdin_text: str, cwd: Path, *, close_stdout: bool, close_stderr: bool
+) -> subprocess.CompletedProcess:
+    """Run the hook with a standard fd closed BEFORE the interpreter starts.
+
+    This is what the refutation pass's own repro does (``2>&-``), and it is
+    not the same thing as redirecting to ``os.devnull`` or to a pipe: closing
+    the descriptor first is what makes CPython hand the hook a `None`
+    stream rather than a live one that merely errors on write - see the
+    module-level comment above for the direct measurement.
+    ``subprocess``'s own stdio parameters (``PIPE``, ``DEVNULL``, an
+    inherited handle) cannot express a genuinely closed descriptor for a
+    freshly spawned process, so this shells out to a real POSIX shell -
+    present on this machine as part of the same Git for Windows install the
+    repo's own ``.githooks`` already require to run at all.
+    """
+    assert BASH, "bash not found on PATH - needed to close a standard fd for this test"
+    tokens = []
+    if close_stdout:
+        tokens.append("1>&-")
+    if close_stderr:
+        tokens.append("2>&-")
+    return subprocess.run(
+        [BASH, "-c", _bash_command(tokens)],
+        input=stdin_text,
+        capture_output=True,
+        text=True,
+        cwd=str(cwd),
+        timeout=120,
+    )
+
+
+def run_hook_with_stderr_forced_none(stdin_text: str, cwd: Path) -> subprocess.CompletedProcess:
+    """Run the hook with ``sys.stderr`` literally ``None``, as ``pythonw.exe``
+    leaves it when no console is attached.
+
+    This hook is registered under ``python.exe``, not ``pythonw.exe``, in
+    ``.claude/settings.json`` - but a SIBLING hook in that same file runs
+    under ``pythonw.exe``, so a harness handing a hook a ``None`` stderr is a
+    live condition on this machine, not a hypothetical dreamed up for this
+    test. ``runpy.run_path(..., run_name="__main__")`` re-executes the real
+    file, with its own ``if __name__ == "__main__":`` guard firing, inside a
+    driver process whose ``sys.stderr`` has already been forced to ``None`` -
+    still a real, separate OS process, and still the real script's real exit
+    behaviour under test, not a patched-and-inspected function call.
+    """
+    driver = (
+        "import runpy, sys\n"
+        "sys.stderr = None\n"
+        f"runpy.run_path({str(HOOK)!r}, run_name='__main__')\n"
+    )
+    return subprocess.run(
+        [sys.executable, "-c", driver],
+        input=stdin_text,
+        capture_output=True,
+        text=True,
+        cwd=str(cwd),
+        timeout=120,
+    )
+
+
+def run_hook_with_broken_stderr_pipe(stdin_text: str, cwd: Path) -> int:
+    """Run the hook with stderr wired to a pipe whose reader has exited.
+
+    Distinct from a closed descriptor: ``sys.stderr`` is a live, valid stream
+    object right up until something actually tries to write to it. Closing
+    our end of the pipe before the child can write anything, then never
+    reading it, reproduces exactly that. Only the exit code is meaningful
+    here - once the reader is gone there is nothing left to read stderr from.
+    """
+    proc = subprocess.Popen(
+        [sys.executable, str(HOOK)],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        cwd=str(cwd),
+    )
+    proc.stderr.close()
+    try:
+        proc.stdin.write(stdin_text)
+        proc.stdin.close()
+        proc.stdout.read()
+        proc.stdout.close()
+        return proc.wait(timeout=30)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait(timeout=30)
+
+
+DEAD_STREAM_SUBJECTS = [
+    pytest.param(f"{STEM}_deadstream_clean.py", CLEAN_SOURCE, id="clean"),
+    pytest.param(f"{STEM}_deadstream_broken.py", BROKEN_SOURCE, id="broken"),
+]
+
+CLOSED_STREAM_CASES = [
+    pytest.param(True, False, id="stderr_closed"),
+    pytest.param(False, True, id="stdout_closed"),
+    pytest.param(True, True, id="both_closed"),
+]
+
+
+@pytest.mark.parametrize(("close_stderr", "close_stdout"), CLOSED_STREAM_CASES)
+@pytest.mark.parametrize(("name", "source"), DEAD_STREAM_SUBJECTS)
+def test_exit_is_always_zero_with_a_closed_standard_stream(
+    name: str, source: str, close_stderr: bool, close_stdout: bool, tmp_path: Path
+) -> None:
+    subject = write_subject(tmp_path, name, source)
+
+    result = run_hook_with_closed_streams(
+        payload_for(subject), tmp_path, close_stdout=close_stdout, close_stderr=close_stderr
+    )
+
+    assert result.returncode == 0, (
+        f"closed stream(s) (stdout={close_stdout}, stderr={close_stderr}) made "
+        f"the hook exit {result.returncode}, which breaks the session: "
+        f"stdout={result.stdout!r} stderr={result.stderr!r}"
+    )
+
+
+@pytest.mark.parametrize(("name", "source"), DEAD_STREAM_SUBJECTS)
+def test_exit_is_always_zero_with_stderr_forced_none(
+    name: str, source: str, tmp_path: Path
+) -> None:
+    subject = write_subject(tmp_path, name, source)
+
+    result = run_hook_with_stderr_forced_none(payload_for(subject), tmp_path)
+
+    assert result.returncode == 0, (
+        f"a None sys.stderr made the hook exit {result.returncode}: "
+        f"stdout={result.stdout!r} stderr={result.stderr!r}"
+    )
+
+
+@pytest.mark.parametrize(("name", "source"), DEAD_STREAM_SUBJECTS)
+def test_exit_is_always_zero_with_a_broken_stderr_pipe(
+    name: str, source: str, tmp_path: Path
+) -> None:
+    subject = write_subject(tmp_path, name, source)
+
+    rc = run_hook_with_broken_stderr_pipe(payload_for(subject), tmp_path)
+
+    assert rc == 0, f"a broken stderr pipe made the hook exit {rc}, not 0"
