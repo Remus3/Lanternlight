@@ -10,8 +10,10 @@ READ FIRST, IN THIS ORDER
   CLAUDE.md
   ROADMAP.md          - OPS-43 is the next item. NO operator decision is
                         pending: OPS-42 and OPS-47 were both ruled and closed.
-  docs/LEDGER.md      - newest first. LL-0164, LL-0165 and LL-0166 are this
-                        session.
+  docs/LEDGER.md      - newest first. LL-0164 through LL-0167 are this
+                        session. READ LL-0167 FIRST: it is the wrap's own
+                        refutation, and it corrects two things the rest of the
+                        session wrote about itself.
   WAKEUP_NOTES.md     - top entry.
 
 FIRST ACTION, BEFORE ANY WORK
@@ -25,13 +27,13 @@ STATE AT THE WRAP
   origin/main           this wrap's commit; the three content commits before
                         it are 73b03e3, eee1188, 1ee0ee4. Working tree clean,
                         everything pushed.
-  python -m pytest bare 2225 passed, 1 skipped in 158.59s
+  python -m pytest bare 2225 passed, 1 skipped in 167.51s
   python -m ruff check. all checks passed
   loop                  cycle 54, item OPS-43. OPS-43 was CARRIED FORWARD as a
                         retry and is NOT credited as completed, because this
                         session did not touch it.
-  capture watcher       ARMED, pid 21680, identity VERIFIED, heartbeat 23 s
-                        old, all four surfaces fresh, archiving into
+  capture watcher       ARMED, pid 21680, identity VERIFIED, heartbeat 18 s
+                        old, no stale surfaces, archiving into
                         C:\ll-captures\2026-09-07. Re-check it with
                         ops.loop.watch.check_watcher() rather than believing
                         this line.
@@ -43,17 +45,22 @@ rather than assumed from its exit code. Four sibling questions answered by
 measurement, four replies delivered and confirmed by listing each destination.
 Then two operator rulings arrived in chat and were acted on: OPS-47 was filed
 as a pending decision, ruled, and closed the same session, and the operator's
-hand-off complaint was discharged. Full detail in LL-0164 through LL-0166.
+hand-off complaint was discharged. Then the wrap's refutation pass found two
+defects in what this session WROTE about its own work and both were corrected;
+that is LL-0167. Full detail in LL-0164 through LL-0167.
 
 NEXT ITEM: OPS-43, untouched, and now carrying a measured number.
 An outgoing note is written straight into a sibling's directory, no copy is
 kept here, and moon_sync_inbox is gitignored, so nothing in this repository
-records that a reply was ever sent. MEASURED AT THIS WRAP: nineteen unique
-from-LL-* notes exist across the four sibling inboxes, five appear anywhere in
-docs/LEDGER.md, and FOURTEEN leave no trace at all here. A cold session reading
-only its own disk undercounts this project's replies by nearly four to one, and
-on 2026-09-07 one did exactly that and concluded this project had never replied
-to anyone. All four acceptance criteria are in ROADMAP.md OPS-43.
+records that a reply was ever sent. MEASURED AT 2026-09-07 17:38, BEFORE this
+session's own replies were delivered: nineteen unique from-LL-* notes existed
+across the four sibling inboxes, five appeared anywhere in docs/LEDGER.md, and
+FOURTEEN left no trace at all here. That is a four to one undercount, and on
+2026-09-07 a session reading only its own disk concluded this project had never
+replied to anyone. DO NOT QUOTE THE NINETEEN AS A CURRENT FIGURE - it was
+already twenty four by the end of this session, because seven more notes were
+delivered. Re-derive it; the method is in OPS-43. All four acceptance criteria
+are in ROADMAP.md OPS-43.
 
 Two traps in that item. Criterion 2 interacts with the ruling that the watcher
 covers the ENTIRETY of moon_sync_inbox: an outbox placed inside that folder is
@@ -88,9 +95,21 @@ TRAPS THIS SESSION PAID FOR
 A ref-pattern query FAILS GREEN. `git for-each-ref` wants `refs/pull/` and
 `git ls-remote` wants `refs/pull/*`, and neither errors when the pattern
 matches nothing, so an empty result from a broken pattern is indistinguishable
-from a repository that has no pull refs. Our zero was only believable after the
-identical command returned 1470 refs against a public repository that has them.
-Run the positive control before writing down any clean bill of this shape.
+from a repository that has no pull refs. Run a positive control before writing
+down any clean bill of this shape - and NAME THE CONTROL'S SUBJECT, which this
+session failed to do until its refutation pass caught it. A control whose
+subject is unnamed cannot be re-run by the reader, so it is an assertion
+wearing a control's clothes. The named ones, re-run at this wrap:
+  git ls-remote https://github.com/anthropics/anthropic-sdk-python 'refs/pull/*'  -> 1470
+  git ls-remote https://github.com/psf/requests 'refs/pull/*'                     -> 4354
+  git ls-remote origin 'refs/pull/*'                                              ->    0
+
+A SCOPE WORD IS A CLAIM ABOUT YOUR SWEEP. This session wrote that no document
+in this tree "ever" carried a particular false claim, on the strength of a
+sweep over 25 documents in the working tree at one instant - no tests, no other
+tracked files, no historical blobs. The finding survived a proper sweep of all
+166 tracked files and all 1,646 historical blobs, but the sentence had not
+earned the word. Write the scope you measured, not the scope you hope holds.
 
 A line-oriented grep is a claim about the file's line breaks. Prose here is
 hard-wrapped near 80 columns, so search a whitespace-collapsed copy or a
