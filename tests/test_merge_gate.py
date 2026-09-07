@@ -355,6 +355,62 @@ class TestSummaryLineIsAnchoredNotGrepped:
         assert result.found
         assert result.passed == 0
 
+    def test_an_INDENTED_summary_shaped_line_is_quoted_output_not_a_summary(self):
+        """Found by the cycle 49 refutation pass - the fix's own residual hole.
+
+        pytest writes its stats line at column 0. An INDENTED one is quoted
+        output: a source line inside a traceback, or captured logging. The
+        first cut stripped leading whitespace before anchoring, which threw
+        away the one thing that tells the two apart, so this exact blob was
+        read as a real summary of 182 passed and - with returncode 0 - drew
+        ZERO findings from `check_run_completed`. The gate would have signed
+        off on it.
+
+        This is the same defect as the original whole-blob grep, one layer in:
+        anchoring that strips first is not anchoring.
+        """
+        text = "=== FAILURES ===\n    Expected output was:\n    182 passed in 12.00s\n"
+        result = merge_gate.parse_summary(text)
+        assert not result.found, (
+            "an indented, quoted stats line was read as pytest's own summary"
+        )
+        assert result.passed is None
+
+    def test_and_the_same_line_at_column_zero_IS_a_summary(self):
+        """The negative above must not be passing for the wrong reason.
+
+        Without this, deleting the whole summary-matching branch would leave
+        the indentation test green - a guard that passes because nothing is
+        ever found is decoration.
+        """
+        result = merge_gate.parse_summary("182 passed in 12.00s\n")
+        assert result.found
+        assert result.passed == 182
+
+    def test_a_stats_line_with_no_DURATION_tail_is_refused(self):
+        """Pins the `in <dur>s` requirement, which was load-bearing and
+        unpinned - the refutation pass made the tail optional and all 48
+        tests in this file stayed green. Bare "182 passed" appears in prose
+        and in assertion text; only the timed form is pytest's own line.
+        """
+        assert merge_gate.find_summary_line("182 passed\n") is None
+        assert merge_gate.find_summary_line("182 passed in 0.78s\n") is not None
+
+    def test_the_scan_runs_BACKWARD_and_the_later_summary_wins(self):
+        """Pins the scan DIRECTION, also load-bearing and unpinned - reversing
+        it to a forward scan changed the answer from 1849 to 182 while all 48
+        tests stayed green. The sibling test above uses an echo that is not
+        itself summary-shaped at column 0; this one puts two REAL summaries in
+        one blob so only the direction can decide.
+        """
+        text = "182 passed in 12.00s\n1849 passed in 118.20s\n"
+        # `find_summary_line` returns the STATS group, not the whole line, so
+        # the duration tail is matched and then dropped. Asserted on the value
+        # the function actually returns rather than the one the name suggests -
+        # the first cut of this test asserted the latter and went red for a
+        # reason that had nothing to do with scan direction.
+        assert merge_gate.find_summary_line(text) == "1849 passed"
+
 
 class TestARunThatDidNotCompleteIsNeverSignedOff:
     """ROADMAP OPS-30 criterion 4, mechanised.

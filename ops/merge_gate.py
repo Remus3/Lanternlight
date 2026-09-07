@@ -49,10 +49,23 @@ fixed here:
   :func:`check_run_completed` refuses any run whose exit code contradicts its
   own summary.
 
-The residual hole is named rather than hidden: a test that PRINTS a
-summary-shaped line, in a run that then aborts after that print, would still
-be read as a summary. The exit-code check is what covers that case, which is
-why both checks exist rather than either alone.
+A third defect was found by the cycle 49 REFUTATION pass, after the two above
+were called fixed, and it is recorded here because the sequence is the lesson.
+The anchored parser stripped leading whitespace and then anchored, which threw
+away the only thing separating pytest's own stats line - always written at
+column 0 - from one quoted inside a traceback. An indented
+``182 passed in 12.00s`` was read as a real summary, and with returncode 0 it
+drew ZERO findings, so the gate signed off exactly as before. **Anchoring that
+strips first is not anchoring.** :func:`find_summary_line` now skips any
+indented line before the strip.
+
+The residual hole is named rather than hidden, and the previous wording of
+this paragraph OVERCLAIMED how it was covered - corrected here rather than
+edited away. A test that prints a summary-shaped line AT COLUMN 0, in a run
+that then aborts after that print, is still read as a summary. The exit-code
+check covers that only when the aborted run exits non-zero; **a run that
+prints such a line and exits 0 is covered by neither check.** No such case has
+been measured, and it is not claimed to be impossible.
 
 The baseline is deliberately a **parameter, not a stored constant.** A count
 checked into the repo goes stale and becomes a confident lie - ``CLAUDE.md``
@@ -256,6 +269,17 @@ def find_summary_line(text: str) -> str | None:
     read out of the FAILURES section.
     """
     for line in reversed(_clean_lines(text or "")):
+        # An INDENTED line is quoted output - a source line inside a
+        # traceback, or captured logging - never pytest's own stats line,
+        # which it writes at column 0. Skipping it BEFORE the strip below is
+        # the whole of the anchor: the first cut stripped leading whitespace
+        # and then anchored, which threw away the one signal that separates a
+        # real summary from one quoted inside a failure body. Found by the
+        # cycle 49 refutation pass, which showed an indented decoy plus
+        # returncode 0 drawing zero findings - the gate signing off again, one
+        # layer in from the whole-blob grep this function was written to fix.
+        if line[:1].isspace():
+            continue
         candidate = line.strip().strip("=").strip()
         match = _SUMMARY_LINE_RE.match(candidate)
         if match is not None:

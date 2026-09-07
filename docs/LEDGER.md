@@ -84,6 +84,23 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0146 - 2026-09-06 - The OPS-30 fix had a THIRD hole and only the REFUTATION pass found it - anchoring that strips first is not anchoring
+
+**Evidence:**
+- Corrects LL-0145, which called the gate fixed after two defects. A third was live at that moment and the merger's own adversarial probe had passed all three of its cases.
+- THE HOLE: find_summary_line stripped leading whitespace and THEN anchored, discarding the only signal separating pytest's own stats line - always written at column 0 - from one quoted inside a traceback.
+- Verified by the merger before being written down, not relayed: the blob '=== FAILURES ===' / indented 'Expected output was:' / indented '182 passed in 12.00s' returned found=True and passed=182, and with returncode 0 check_run_completed returned an EMPTY finding list. The gate would have signed off, exactly as it did before the fix.
+- TDD observed at each step. RED: 2 failed, 50 passed - the indentation test plus one of my own tests asserting the wrong return shape. GREEN after the fix: 52 passed.
+- NON-VACUITY PROVEN: removing the skip-indented-lines guard reddened EXACTLY the indentation test, 1 failure. Restored and confirmed byte-identical by sha256 prefix 9648bec2ef43177a; 52 passed again.
+- The module docstring claimed the exit-code check covered this residual hole. That is FALSE for the returncode-0 case and is corrected in place rather than edited away.
+- TWO further behaviours were load-bearing and UNPINNED - the refutation mutated each and all 48 tests stayed green. Reversing the scan direction changed the answer from 1849 to 182; making the 'in <dur>s' tail optional let a bare '182 passed' read as a summary. Neither was BROKEN - the merger re-measured both and current behaviour was correct - but neither was GUARDED. Both are now pinned.
+- The refutation pass CONFIRMED all nine claims it was given, including re-deriving the 1781 baseline itself in a throwaway git worktree at e806747 and diffing the sorted collected node-id sets between commits: zero nodes removed, 68 added.
+
+THE SEQUENCE IS THE LESSON, NOT THE BUG. The gate was declared fixed, the merger's own adversarial probe passed, and an independent pass whose only job was to REFUTE still found a live hole. Self-verification did not substitute for an independent one. That is what CLAUDE.md's session default already says, and it is exactly the step that looks skippable once the work appears finished.
+A correction to my own test, caught by watching it go red: find_summary_line returns the STATS group, so the duration tail is matched and then dropped. The first cut asserted the whole line and failed for a reason unrelated to what it was testing. The red phase is what surfaced it - a test written and never seen failing would have shipped asserting the wrong thing.
+A RESIDUAL HOLE REMAINS AND IS NAMED IN THE DOCSTRING rather than hidden: a run that prints a column-0 summary-shaped line and then exits 0 is covered by neither the anchor nor the exit-code check. No such case has been measured, and it is NOT claimed to be impossible.
+The standing risk from LL-0145 is unchanged: every merge-gate sign-off before this cycle rests on the original broken parser, and nothing has been re-audited.
+
 ### LL-0145 - 2026-09-06 - OPS-30 CLOSED - and the finding is NOT the MemoryError: merge_gate.verify PASSED VACUOUSLY on an aborted run, by two independent routes
 
 **Evidence:**

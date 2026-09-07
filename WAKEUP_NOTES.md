@@ -53,6 +53,22 @@ place rather than edited away.
 sign-off taken before this cycle rests on the broken parser. Nothing is known
 to have been mis-signed, and **nothing has been re-audited.**
 
+**The fix then had a THIRD hole, and only the refutation pass found it.** The
+anchored parser STRIPPED leading whitespace and then anchored, throwing away
+the one thing that separates pytest's column-0 stats line from one quoted
+inside a traceback. An indented `182 passed in 12.00s` with returncode 0 drew
+**zero** findings - the gate signing off again, one layer in. **Anchoring that
+strips first is not anchoring.** Fixed under TDD and pinned; the module
+docstring's claim that the exit-code check covered this was FALSE for the rc=0
+case and is corrected in place.
+
+**That sequence is the real lesson of this wrap.** The gate was declared fixed,
+the merger's own adversarial probe passed all three of its cases, and an
+independent pass whose only job was to REFUTE still found a live hole.
+**Self-verification did not substitute for an independent one**, which is
+precisely what `CLAUDE.md`'s session default says and is easy to skip when the
+work looks finished.
+
 ## What the parallel shape actually cost and caught
 
 Three slices on disjoint file sets, plus the merger. It worked, and the two

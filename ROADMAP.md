@@ -3964,6 +3964,37 @@ the decoy blob is refused; an aborted run that still prints a stats line is
 flagged `internal-error` + `exit-mismatch`; and an ordinary clean run is still
 accepted, so the fix is not a false positive that would block good work.
 
+### A THIRD defect, found by the refutation pass AFTER the fix was called done
+
+**The fix had its own residual hole, and it was the same defect one layer in.**
+`find_summary_line` STRIPPED leading whitespace and then anchored - which
+throws away the only thing separating pytest's own stats line, always written
+at column 0, from one quoted inside a traceback. An indented
+`182 passed in 12.00s` was read as a real summary, and with returncode **0** it
+drew **zero** findings. The gate signed off exactly as it had before.
+**Anchoring that strips first is not anchoring.**
+
+Verified by the merger before being written down, then fixed under TDD: the
+test went RED naming that case, the skip-indented-lines guard made it green at
+52, and removing the guard again reddened **exactly** that one test. The file
+was restored and confirmed byte-identical by sha256 (`9648bec2...`).
+
+**The module docstring made a FALSE claim and it is corrected in place, not
+edited away.** It said the exit-code check covered the residual hole. That is
+true only when the aborted run exits non-zero; a run that prints a column-0
+summary-shaped line and exits 0 is covered by neither check. No such case has
+been measured and it is not claimed to be impossible.
+
+**Two further behaviours were load-bearing and UNPINNED** - the refutation
+mutated each and all 48 tests stayed green. Reversing the scan direction
+changed the answer from 1849 to 182; making the `in <dur>s` tail optional let a
+bare `182 passed` read as a summary. Neither was broken; both are now pinned by
+tests, which is the difference between correct and *guarded*.
+
+**The sequence is the lesson, not the bug.** The gate was declared fixed, the
+merger's own adversarial probe passed, and an independent pass trying to REFUTE
+it still found a live hole. Self-verification did not substitute for it.
+
 **Criterion 3 honoured by changing NOTHING.** `pytest.ini` carries no new flag.
 Criterion 3 demands a flag be justified against the criterion 2 measurement,
 and that measurement says the RUN is not the problem: peak RSS of a full run is

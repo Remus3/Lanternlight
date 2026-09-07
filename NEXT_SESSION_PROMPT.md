@@ -25,8 +25,21 @@ taken BEFORE that fix rests on a parser that could read a pass count out of a
 `FAILURES` body. Nothing is known to have been mis-signed, and NOTHING HAS
 BEEN RE-AUDITED. Do not treat a historical "gate OK" as evidence.
 
-The gate is now trustworthy and you should still use it. It is necessary, not
-sufficient.
+The fix then had a THIRD hole of its own, found only by the refutation pass:
+the anchored parser stripped leading whitespace and then anchored, so an
+INDENTED `182 passed in 12.00s` quoted inside a traceback was read as a real
+summary and, with returncode 0, drew zero findings. Fixed and pinned in the
+same cycle. Anchoring that strips first is not anchoring.
+
+The gate is trustworthy for every case now pinned, and you should use it. It is
+necessary, not sufficient. One residual hole is NAMED in the module docstring
+rather than hidden: a run that prints a column-0 summary-shaped line and exits
+0 is covered by neither check. No such case has been measured.
+
+**The transferable lesson, which cost this cycle two rounds:** the gate was
+declared fixed, the merger's own adversarial probe passed, and an INDEPENDENT
+pass still found a live hole. Run the refutation. Your own probe of your own
+work is not it.
 
 BLOCKED - LIST THESE FIRST, AND DO NOT START THEM
 
