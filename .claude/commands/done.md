@@ -64,9 +64,39 @@ test rather than the code is not a green suite.
    `SURFACE_STALE` or `NO_HEARTBEAT` result is reported, not re-armed, and
    nothing is ever killed - see `docs/HEADLESS.md` 4b. `SURFACE_STALE` names
    WHICH surface stopped, so quote the name rather than the state alone.
-9. **Print the next-session prompt.** A complete, self-contained prompt: what
-   was just finished, what is next, the acceptance criterion, and the files to
-   read first. Assume the reader has zero context, because they will.
+9. **Update the Desktop handoff.** Write the next-session prompt to
+   `C:\Users\<ACCOUNT>\Desktop\LL-NEXT-SESSION.txt`, overwriting it in
+   place. That file already exists and is where the operator looks; the Desktop
+   also carries `CS-`, `LW-`, `RC-` and `RSC-NEXT-SESSION.txt`, so this is a
+   machine-wide convention across all six projects, not a Lanternlight
+   invention.
+   - **It does NOT go in the repo root.** `C:\Lanternlight\LL-NEXT-SESSION.txt`
+     is the mistake actually made on 2026-09-07: an untracked copy nobody would
+     find, in a repo whose guards walk the tree. `NEXT_SESSION_PROMPT.md` is
+     the tracked copy and it stays where it is - the Desktop file is the
+     operator's, the tracked one is the next session's.
+   - Keep it `.txt`. `test_source_register.py` walks `rglob("*.md")` over the
+     filesystem rather than git, so a stray `.md` anywhere near the tree can
+     redden a guard.
+   - **Do not send it as a file attachment.** The operator does not want a file
+     card inline; the Desktop write IS the delivery.
+
+10. **Emit the next-session prompt as ONE copy-pastable block.** The whole
+    prompt goes inside a single fenced code block so the operator can copy it
+    in one action and paste it into the next session. Not prose, not markdown
+    headings, not several blocks - one fence, because the UI puts a copy button
+    on a fence and cannot put one on a section of chat.
+    - Complete and self-contained: what was just finished, what is next, the
+      acceptance criterion, the state at the wrap, and the files to read first.
+      Assume the reader has zero context, because they will.
+    - **Nothing after it, and NO RECAP.** No review, no summary of the session,
+      no notes on what you decided. If a fact is worth the operator's
+      attention, it belongs INSIDE the prompt, where the next session reads it
+      and can act on it. A recap in chat is read by nobody and is lost when the
+      context clears - which is the one failure this project's whole continuity
+      design exists to prevent.
+    - Findings, corrections and withdrawn claims are not recap - they are
+      state. Put them in the prompt, in the ledger, or in `ROADMAP.md`.
 
 ## Definition of done
 
@@ -77,4 +107,7 @@ test rather than the code is not a green suite.
 - `ROADMAP.md` reflects reality.
 - Watcher re-checked with `check_watcher()`, and its state reported in the
   next-session prompt rather than assumed.
-- Next-session prompt printed.
+- `C:\Users\<ACCOUNT>\Desktop\LL-NEXT-SESSION.txt` updated in place, and
+  no copy left in the repo root.
+- Next-session prompt emitted as ONE copy-pastable fenced block, with nothing
+  after it.

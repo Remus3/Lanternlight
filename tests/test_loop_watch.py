@@ -1973,6 +1973,68 @@ def test_every_session_wrap_document_names_the_wrap_side_check(relpath: str) -> 
     )
 
 
+#: The handoff file the operator actually reads, and its ESTABLISHED location.
+#: Measured 2026-09-07: the Desktop already carried `LL-NEXT-SESSION.txt`
+#: alongside `CS-`, `LW-`, `RC-` and `RSC-` siblings, so this is a machine-wide
+#: convention across all six projects rather than a Lanternlight invention.
+DESKTOP_HANDOFF = r"C:\Users\<ACCOUNT>\Desktop\LL-NEXT-SESSION.txt"
+
+
+class TestTheWrapOutputShapeIsPinned:
+    """The operator has had to restate this, so it is a test rather than a habit.
+
+    A wrap that writes the handoff into the repo, or that buries the
+    next-session prompt in prose the operator cannot copy in one action, has
+    lost the only two things the wrap output is FOR. Nothing in code can force
+    a session to format its final message correctly; what is enforceable is
+    that the document telling it how says so, and that dropping either half is
+    a red test rather than silence. Same honest limit as the check_watcher
+    twin directly above.
+    """
+
+    def test_the_wrap_doc_names_the_DESKTOP_handoff_not_a_repo_path(self) -> None:
+        text = (REPO_ROOT / ".claude" / "commands" / "done.md").read_text(
+            encoding="utf-8"
+        )
+        assert DESKTOP_HANDOFF in text, (
+            "done.md no longer names the Desktop handoff path, so a wrap would "
+            f"write the file somewhere the operator does not look. It is "
+            f"{DESKTOP_HANDOFF}, updated in place every wrap, and it is a "
+            "machine-wide convention shared with the sibling projects"
+        )
+
+    def test_the_wrap_doc_forbids_writing_the_handoff_into_the_repo(self) -> None:
+        text = (REPO_ROOT / ".claude" / "commands" / "done.md").read_text(
+            encoding="utf-8"
+        )
+        assert "LL-NEXT-SESSION.txt" in text
+        assert "repo root" in text, (
+            "done.md must say explicitly that the handoff does NOT go in the "
+            "repo, because that is the mistake actually made on 2026-09-07 - "
+            "an untracked copy was written to C:/Lanternlight instead"
+        )
+
+    def test_the_wrap_doc_requires_ONE_copy_pastable_block(self) -> None:
+        text = (REPO_ROOT / ".claude" / "commands" / "done.md").read_text(
+            encoding="utf-8"
+        )
+        assert "copy-pastable" in text, (
+            "done.md no longer requires the next-session prompt be emitted as "
+            "ONE copy-pastable fenced block. The operator pastes it into the "
+            "next session; prose with headings cannot be copied in one action"
+        )
+
+    def test_the_wrap_doc_forbids_a_review_recap(self) -> None:
+        text = (REPO_ROOT / ".claude" / "commands" / "done.md").read_text(
+            encoding="utf-8"
+        )
+        assert "no recap" in text.lower(), (
+            "done.md must forbid a review/recap after the prompt. Anything "
+            "worth knowing goes INSIDE the prompt, where the next session can "
+            "act on it - a recap in chat is read by nobody and is lost"
+        )
+
+
 # ---------------------------------------------------------------------------
 # cross-layer coupling - found by the cycle 38 refutation pass, not by the suite
 # ---------------------------------------------------------------------------

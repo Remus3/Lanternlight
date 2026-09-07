@@ -54,6 +54,26 @@ worktree renders. An independent refutation pass caught it and the finding was
 withdrawn. If you re-run history in a worktree, check for path-dependence
 first.
 
+THE WRAP OUTPUT SHAPE CHANGED IN CYCLE 50 - FOLLOW IT
+
+The operator had to restate this, so it is now a test rather than a habit.
+`/done` ends with exactly two deliveries and nothing else:
+
+1. Overwrite `C:\Users\<ACCOUNT>\Desktop\LL-NEXT-SESSION.txt`. **Never the
+   repo root, never as a file attachment.** The Desktop also carries `CS-`,
+   `LW-`, `RC-` and `RSC-NEXT-SESSION.txt`, so it is a machine-wide convention
+   across all six projects. Keep it `.txt` - `test_source_register.py` walks
+   `rglob("*.md")` over the filesystem, so a stray `.md` near the tree reddens
+   a guard.
+2. The next-session prompt as **ONE fenced code block**, copy-pastable in a
+   single action. Not prose, not headings, not several fences.
+
+**Nothing after that block. No recap.** A recap is read by nobody and dies with
+the context; anything worth the operator's attention goes INSIDE the prompt,
+the ledger, or `ROADMAP.md`, where the next session can act on it. Pinned by
+`TestTheWrapOutputShapeIsPinned` in `tests/test_loop_watch.py` and specified in
+`.claude/commands/done.md`.
+
 The fix then had a THIRD hole of its own, found only by the refutation pass:
 the anchored parser stripped leading whitespace and then anchored, so an
 INDENTED `182 passed in 12.00s` quoted inside a traceback was read as a real
