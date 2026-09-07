@@ -7,7 +7,8 @@ READ FIRST, IN THIS ORDER
   CLAUDE.md
   ROADMAP.md - OPS-43 is the next item; OPS-42 question 1 holds a pending
     operator decision that a session must NOT answer
-  docs/LEDGER.md - newest first; LL-0159 through LL-0162 are this session
+  docs/LEDGER.md - newest first; LL-0159 through LL-0163 are this session,
+    and LL-0163 is the wrap's refutation - read it before trusting the rest
   WAKEUP_NOTES.md - top entry
   docs/INVENTORY.md - new this session
   docs/adr/ADR-007-lane-slot-root-is-ours.md - new this session
@@ -20,11 +21,12 @@ and were deliberately left that way. Acknowledge only what you have actually
 read, with an explicit `python ops/inbox_watch.py --acknowledge`.
 
 STATE AT THE WRAP
-  origin/main            e0b82ee, working tree clean, everything pushed
-  python -m pytest bare  2204 passed, 1 skipped in 164.94s
+  origin/main            50c1ec5, working tree clean, everything pushed
+  python -m pytest bare  2225 passed, 1 skipped in 139.83s
   python -m ruff check . all checks passed
   merge gate             OK at 2205 collected against a corrected 45-module
-                         baseline of 2152, no file's count dropped
+                         baseline of 2152, no file's count dropped, measured
+                         before the wrap's own three fixes landed
   capture watcher        was DEAD at the wrap and was RE-ARMED. Now ARMED,
                          pid 21680, identity VERIFIED, heartbeat 4 s old,
                          archiving into C:\ll-captures\2026-09-07. Re-check it
@@ -92,6 +94,46 @@ WAKEUP_NOTES.md and the ledger so they are never re-litigated.
    disabled machine-wide, which makes access timestamps worthless as evidence
    in either direction. What exists is a live process whose command line
    matches - intent, not an observed read.
+
+THE WRAP'S REFUTATION PASS REFUSED THE MERGE - read this before trusting the
+list above, because two of the three blockers were inside guards this same
+session had already declared done.
+
+  BLOCKER 1. The account-name history rewrite purged blob CONTENT and left
+    COMMIT MESSAGES untouched, and the artifact claimed the job was finished.
+    A pickaxe searches diffs and never reads a message, so the clean result was
+    a claim about the TOOL, not about the repository. One published commit
+    message still carried the spelling. A second rewrite, using a message
+    replacement, was run at the wrap. NOW measured on both axes against
+    published origin/main with controls armed in both directions: 0 commit
+    messages and 0 content hits, control 14 and 10 respectively, and 0
+    refs/pull refs on the remote. Anyone re-deriving this must search MESSAGES
+    and CONTENT separately - one query does not cover both.
+
+  BLOCKER 2. The arm named for proving that an acknowledgement prunes BOTH
+    inbox records did not test that. Deleting the acknowledge branch's write of
+    the reported record left all seven inbox modules green. Root cause is the
+    part worth keeping: the arm opened by ACKNOWLEDGING, so the mutation removed
+    the only write of the record the arm claimed to check, the baseline
+    collapsed to the seen record alone, and the assertion passed for an
+    unrelated reason. The replacement drives the case from a REPORT-ONLY run.
+
+  BLOCKER 3, on THE HARD BOUNDARY. ops/lane_slot.py calls OpenProcess and was
+    missing from the hand-typed roster in tests/test_process_capability.py, so
+    widening its mask to PROCESS_ALL_ACCESS left every test green. That file's
+    own line 131 had predicted the omission and said nothing would detect it;
+    the prediction came true the same day. The roster is now DERIVED from
+    parsed source. Closed as OPS-46, with its blindness stated: the API list is
+    a denylist and the test tree is excluded by design.
+
+  A MERGER ERROR, recorded because it is this repository's trap twice over. The
+    first independent re-mutation of blocker 3 came back GREEN and looked like a
+    refutation of the fix. It had replaced the first of two occurrences of the
+    literal, which was a COMMENT rather than the constant. The second attempt
+    hit the constant but ran only the capability module, while the mask check
+    lives in tests/test_loop_watch.py. Both greens were claims about the
+    command, not about the guard. Assert the anchor AND check where the
+    assertion actually lives.
 
 NEXT ITEM - OPS-43, and why it matters more than it looks
 An outgoing note is written straight into a sibling's directory and NO copy is
