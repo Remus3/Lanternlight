@@ -376,6 +376,11 @@ LANES: tuple[Lane, ...] = (
             # re-probe a claim before it is believed, one for a subagent and
             # one for the session's own closing words.
             "tests/test_stop_audit.py",
+            # OPS-32, the hand-off writer. ops/** already covers ops/handoff.py.
+            # The hand-off is this lane's central artifact - it is the thing a
+            # cold session reads first - so its writer and its guard belong
+            # here rather than with the hygiene lane whose engine it calls.
+            "tests/test_handoff.py",
             # OPS-37 document size budget. It guards the byte growth of
             # ROADMAP.md and docs/LEDGER.md, which are this lane's own
             # continuity documents, so the budget belongs beside them

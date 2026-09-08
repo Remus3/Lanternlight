@@ -78,6 +78,16 @@ test rather than the code is not a green suite.
    root - **tracked in git and committed with the session's other work**.
    Overwrite it in place. There is one hand-off file, rewritten every session,
    and its git history is the record of what each session actually handed over.
+   - **Write it with `ops/handoff.py`, never with an editor tool or a
+     redirect** - `OPS-32`. Draft the prompt into a scratch file, then:
+     ```
+     python ops/handoff.py --from-file <draft> --target C:/Lanternlight/LL-NEXT-SESSION.txt
+     ```
+     The writer runs `lanternlight.redact` over the STRING and refuses BEFORE
+     anything is written, so a refusal leaves the previous hand-off
+     byte-unchanged and exits non-zero. There is no exemption list and no
+     override flag: if a legitimate hand-off is refused, the hand-off is what
+     changes. `--check-only` reports without writing.
    - **Why it is tracked rather than on the Desktop.** A Desktop file is
      untracked, unversioned and unreviewable: nothing can notice it going
      stale, and no diff shows what was handed forward. A sibling project

@@ -4250,7 +4250,7 @@ anything, both open:**
   under test. `baseline=None` does at least raise `no-baseline`; an empty
   `claimed_paths` is silent.
 
-## OPS-32. The hand-off is written by NOTHING, so nothing can gate it - OPEN, filed 2026-09-06
+## OPS-32. The hand-off is written by NOTHING, so nothing can gate it - CLOSED 2026-09-08
 
 Filed while adopting the repo-root hand-off (`.claude/commands/done.md` step 9).
 **Idea only from a sibling's note; no code, prose or configuration was taken.**
@@ -4304,6 +4304,151 @@ rather than closed.
 4. Watch each go red first.
 5. **Do not add an exemption list.** If a legitimate hand-off is refused, the
    hand-off is what changes.
+
+### Closed 2026-09-08
+
+`ops/handoff.py` and `tests/test_handoff.py`, with `.claude/commands/done.md`
+step 9 changed from describing the write to CALLING it.
+
+**Criterion 1, met.** `write_handoff(text, target)` exists and the ritual
+invokes it - `python ops/handoff.py --from-file <draft> --target ...`. The write
+goes through the established atomic path, a temporary beside the target then
+`replace`, and adds no dependency. A test asserts no temporary is left behind on
+either path, because a `.tmp` sitting in the repo root after a refusal is an
+untracked orphan that the lane guard would then fail on.
+
+**Criterion 2, met, with one engine and not two.** The refusal runs
+`lanternlight.redact`'s own detectors over the prompt STRING before anything is
+written: the plain pass over `FILE_SCAN_LABELS`, the encoded pass over the same
+labels, the operator-identifier pass, and the literal-joined operator pass. No
+pattern is copied into this module, and a test asserts the module names
+`lanternlight.redact` and carries no identifier-shaped literal of its own, so a
+rule added to the scrubber starts guarding the hand-off the same day.
+
+`IPV4` is excluded, and that exclusion is inherited rather than invented: a
+four-part version string is indistinguishable from a dotted quad by pattern, so
+`FILE_SCAN_LABELS` is what every other tracked file in this tree is scanned
+with. The hand-off is now held to exactly its neighbours' standard, no looser
+and no tighter.
+
+**A refusal that is NOT about identifiers, added deliberately.** A non-ASCII
+character is refused too. The hand-off is tracked and this repository is 7-bit
+ASCII everywhere, so this turns a commit-time failure into a write-time one, at
+the moment the session still has the context to fix it.
+
+**Criterion 3, met on the half that matters.** The tests do not assert that an
+exception was raised. They assert the FILE: after a refusal on a fresh target,
+the target does not exist and the directory is empty; after a refusal where a
+previous hand-off is already on disk, that file is byte-unchanged by SHA-256.
+The check runs before the temporary file is created, not merely before the
+replace.
+
+**Criterion 4, met - TWELVE mutations, each anchor asserted to match exactly
+once, each restored and verified byte-identical. The first count written here
+was nine, and three of those nine did not actually die; see the adversarial
+record below.** Re-measured after the fixes, with the failure count each one
+produced against a 26-test baseline: `check` returning nothing (13 red); the
+plain pass given an empty label set (6); the encoded pass dropped (1); the
+operator pass dropped (1); the ASCII refusal dropped (3); the check moved to
+AFTER the temporary file is written (1); the refusal writing the file anyway
+(7); the literal-joined pass dropped (1); the CLI's refusal reporting neutered
+(1); the parent directory never created (1); the refusal message listing no
+findings at all (1); and a `force` argument added to the signature (1).
+
+**TWO OF THOSE SURVIVED FIRST, AND THAT IS THE MOST USEFUL PART OF THE RESULT.**
+Deleting the operator-identifier pass left every test green, twice, for two
+different reasons.
+
+The first time, because the test planted an ordinary address - which the plain
+`EMAIL` shape rule already catches, so the test proved nothing about the pass it
+named. The fix was a SYNTHETIC identity at an RFC 2606 reserved domain, injected
+through a new `identities` parameter on `check`: the shape rule declines a
+reserved domain by design, so only the value half can reach it. That parameter
+exists for the same reason `lanternlight.redact.iter_operator_identifiers`
+carries one - so that no real value has to be written down anywhere, `LL-0175`.
+
+The second time, because the literal-joined pass runs the same value half over
+JOINED text, and joined text for a contiguous value is the same text. One pass
+was silently covering for the other, and mislabelling the finding as split
+across literals while doing it. What distinguishes them is the finding itself -
+the plain pass reports an offset and the correct label - so the test now asserts
+that, and the mutation reddens.
+
+**Criterion 5, met and enforced rather than promised.** There is no exemption
+list and no override argument. A test reads the function signature and refuses
+the names `force`, `allow`, `skip_checks`, `exempt` and `ignore`, and reads the
+module source for the word EXEMPT. An exemption list is a gate disarmed one word
+at a time, and a `force=True` is the same thing in one word.
+
+**The guard is pointed at the REAL artifact, not only at fixtures.** A test
+runs `check` over `LL-NEXT-SESSION.txt` as it stands on disk and requires it to
+be clean. If that goes red, the hand-off is what changes - never the test, and
+never the detectors.
+
+**What this does NOT do, stated so nobody reads more into it.** It cannot judge
+whether a hand-off is USEFUL, only whether it is safe to publish: a hand-off
+that omits the next item, or cites a stale count, passes here. The `OPS-45`
+stop-claim auditor covers a different slice of that, and neither is a review.
+
+### What the adversarial pass found, and what changed because of it
+
+Dispatched to REFUTE, defaulting to refuted when uncertain. It refuted four of
+seven claims and confirmed three. Everything below is fixed and pinned.
+
+**REFUTED 1 - the ASCII refusal had a live bypass.** `_ascii_findings` was built
+on `str.splitlines()`, which CONSUMES U+0085, U+2028 and U+2029 as line
+terminators - so those three characters were never inspected, `check` returned
+clean, and `write_handoff` put them on disk. The tree-wide guard scans BYTES and
+catches all three, which makes this the worst shape a gate can have: LOOSER than
+the gate it stands in front of, teaching the reader that passing here means
+passing there. The same call also treats a form feed as a break, so a reported
+line number could name a line the file does not have - the "wrong line is worse
+than no line" rule this repository already applies to the literal-joined pass.
+The scan is now character by character, counting only the newline, and both
+directions are pinned.
+
+**REFUTED 2 - a failing write left a temporary behind.** The REFUSAL path was
+clean, which is what the criterion asks about, but the OS-ERROR path was not: a
+target that is a directory, or read-only, raises after the temporary exists, so
+a stray `LL-NEXT-SESSION.txt.tmp` was left in the repository root. That is an
+untracked orphan, and this project's own lane guard fails on one - so a write
+that never landed would have reddened the suite. Now cleaned up and re-raised.
+
+**REFUTED 3 - three of the nine mutations did not actually die.** The pass ran
+twelve of its own and killed nine. The survivors were the CLI's entire
+refusal-reporting block (the test passed off an uncaught traceback, which also
+exits non-zero and also contains the word REFUSED, so the handler was never
+exercised), the `mkdir` of the target's parent, and the truncation of the
+findings list to nothing. All three now have tests and all three now redden.
+**The tally in the first draft of this closure was wrong**, and it was wrong in
+the direction this repository warns about: a count re-derived from the artifact
+rather than taken from the report. The current number is twelve mutations, all
+red, each anchor asserted to match exactly once and each restored byte-identical
+by SHA-256.
+
+**REFUTED 4, and NOT fixed - the residual, stated rather than closed.** Nothing
+prevents a session writing `LL-NEXT-SESSION.txt` with an editor tool instead of
+calling this writer. The pass is right that this is the same "guarantee about
+the DOCUMENT, none about the FILE" shape the item was filed against, one step
+smaller. What genuinely changed: the check now exists, it is callable, the
+ritual calls it, and a refusal happens BEFORE the bytes land. What did not
+change: a session that skips it still faces only the commit-time guards - the
+pre-commit hook's `*.txt` ASCII scan and `tests/test_no_pii.py`, both of which
+already cover the hand-off because it is tracked. So the residual is a
+pre-write gap, not a publication gap. Closing it properly means a staged-content
+check in the pre-commit hook, which is a separate change to a file this item
+does not own.
+
+**CONFIRMED 1 - the four PII passes match `tests/test_no_pii.py` exactly**: same
+functions, same `FILE_SCAN_LABELS`, no private copy of any pattern.
+
+**CONFIRMED 2 - no second writer exists.** No other code path writes the
+hand-off, no override argument exists, and `--check-only` writes nothing.
+
+**CONFIRMED 3 - the live-file test is non-vacuous.** The pass appended a
+synthetic identifier to the real `LL-NEXT-SESSION.txt`, watched the test go red,
+restored the file and verified it byte-identical by SHA-256, then watched it go
+green. No real identifier was written at any point.
 
 ## OPS-33. `moon_sync_inbox/` has no watcher, and 14 of 15 notes were not ours - CLOSED 2026-09-06, watcher BUILT and FIRING
 
