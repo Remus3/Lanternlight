@@ -1223,6 +1223,7 @@ def _heartbeat_file(
     surfaces: dict | None = None,
     passes: int = 42,
     intervals: dict | None = None,
+    archived: dict | None = None,
 ) -> Path:
     """Write a heartbeat in the shape pinned with the armwatch slice.
 
@@ -1244,6 +1245,13 @@ def _heartbeat_file(
     }
     if intervals is not None:
         payload["intervals"] = intervals
+    # `OPS-59`. OMITTED unless a test asks for it, and that default is the
+    # point rather than convenience: a heartbeat with no ``archived`` key is
+    # exactly what the live watcher armed 2026-09-07 is writing right now, so
+    # every call written before that item keeps producing the real-world shape
+    # the reader has to answer UNKNOWN about.
+    if archived is not None:
+        payload["archived"] = archived
     target = tmp_path / watch_mod.HEARTBEAT_FILENAME
     target.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return target
@@ -3974,3 +3982,309 @@ def test_the_refusal_to_arm_reports_the_current_root_not_the_recorded_one(
     assert watch_mod.DEST_ARMING_TIME_NOTE in result.reason, result.reason
     # The refusal itself is untouched - this item changes wording, not verdicts.
     assert "is ALIVE" in result.reason, result.reason
+
+
+# ---------------------------------------------------------------------------
+# OPS-59 - "is it polling" and "is anything arriving" are two questions
+# ---------------------------------------------------------------------------
+
+
+def _archive_evidence(status) -> str:
+    """The one evidence line about archiving, or a failure naming what was there.
+
+    Pulled out rather than indexed by position, because the evidence list grows
+    at the front whenever a new observation is added and a positional index
+    would silently start asserting about the surfaces line instead.
+    """
+    lines = [item for item in status.evidence if item.startswith("archiving:")]
+    assert len(lines) == 1, status.evidence
+    return lines[0]
+
+
+def _armed_with_archive(tmp_path: Path, record_file: Path, *, archived, since_arming_s=7200.0):
+    """An identity-verified, fully fresh watcher whose ONLY variable is ``archived``.
+
+    Every surface is stamped two seconds ago and the combined stamp with them,
+    so the verdict cannot reach ``STALE`` or ``SURFACE_STALE`` and anything the
+    archive rule says is the archive rule speaking rather than a freshness
+    failure leaking into it. That isolation is the whole reason this helper
+    exists: `OPS-59` acceptance 2 asks for a THIRD fact, and a test that let
+    freshness move at the same time could not tell the two apart.
+    """
+    started = NOW - timedelta(seconds=since_arming_s)
+    watch_mod.write_record(
+        _record(os.getpid(), tmp_path, started=watch_mod._stamp(started)), record_file
+    )
+    stamped = watch_mod._stamp(NOW - timedelta(seconds=2))
+    beat = _heartbeat_file(
+        tmp_path,
+        pid=os.getpid(),
+        written=stamped,
+        surfaces=_all_surfaces_at(NOW - timedelta(seconds=2)),
+        intervals=_declared_intervals(),
+        archived=archived,
+    )
+    status = watch_mod.check_watcher(
+        path=record_file,
+        heartbeat=beat,
+        now=NOW,
+        creation_time_fn=_fixed_creation(started),
+    )
+    return status, stamped
+
+
+class TestTheCheckSaysWhenAFileWasLastCopied:
+    """`OPS-59`. MEASURED 2026-09-08: 69,024 passes, four fresh surfaces, and
+    the newest file under the watched directories dated 2026-08-30 - nine days
+    earlier. ``ARMED, all four surfaces fresh`` reads like capture is producing
+    data, and it was not. The watcher was right; the report was silent.
+    """
+
+    def test_a_heartbeat_with_no_archived_map_reads_unknown_not_never(
+        self, tmp_path: Path, record_file: Path
+    ) -> None:
+        """Acceptance 4, and this is the shape the LIVE watcher writes today.
+
+        A watcher armed by a build older than this item carries no ``archived``
+        key at all. Defaulting that to "never archived" would report a
+        nine-day-old fault that does not exist, which is exactly the `OPS-53`
+        rule - a reporter must not assert something its record cannot support -
+        applied to a new field.
+        """
+        status, _ = _armed_with_archive(tmp_path, record_file, archived=None)
+
+        assert status.state == watch_mod.STATE_ARMED, status.reason
+        assert status.archive == watch_mod.ARCHIVE_UNKNOWN
+        assert status.archived_age_s is None
+        assert status.last_archived is None
+        assert "UNKNOWN" in _archive_evidence(status)
+        assert "UNKNOWN" in status.reason
+        assert "older" in status.reason
+
+    def test_a_recent_copy_reads_recent_and_names_the_surface(
+        self, tmp_path: Path, record_file: Path
+    ) -> None:
+        copied = watch_mod._stamp(NOW - timedelta(seconds=90))
+        status, _ = _armed_with_archive(tmp_path, record_file, archived={"logs": copied})
+
+        assert status.state == watch_mod.STATE_ARMED, status.reason
+        assert status.archive == watch_mod.ARCHIVE_RECENT
+        assert status.archived_age_s == pytest.approx(90.0)
+        assert status.last_archived == copied
+        assert "logs" in _archive_evidence(status)
+        assert "RECENT" in _archive_evidence(status)
+
+    def test_the_newest_stamp_across_surfaces_is_the_one_reported(
+        self, tmp_path: Path, record_file: Path
+    ) -> None:
+        """Four surfaces, four answers, one question. The newest wins.
+
+        The question a reader is asking is "has anything arrived", not "has
+        THIS surface archived", so an old ``logs`` stamp beside a fresh
+        ``savegames`` one is data arriving. Taking the oldest instead would
+        report QUIET through an entire play session.
+        """
+        newest = watch_mod._stamp(NOW - timedelta(seconds=30))
+        status, _ = _armed_with_archive(
+            tmp_path,
+            record_file,
+            archived={
+                "logs": watch_mod._stamp(NOW - timedelta(days=9)),
+                "savegames": newest,
+            },
+        )
+
+        assert status.archive == watch_mod.ARCHIVE_RECENT
+        assert status.last_archived == newest
+        assert "savegames" in _archive_evidence(status)
+
+    def test_a_long_silence_reads_quiet_and_is_explicitly_not_a_fault(
+        self, tmp_path: Path, record_file: Path
+    ) -> None:
+        """Acceptance 3. A status that cries wolf gets ignored.
+
+        The nine-day case, measured. The verdict must stay ARMED, must name no
+        stale surface, and must say in words that the surfaces are healthy and
+        there has been nothing to capture - because the operator not having
+        launched the game is not a failure of anything.
+        """
+        copied = watch_mod._stamp(NOW - timedelta(days=9))
+        status, _ = _armed_with_archive(tmp_path, record_file, archived={"logs": copied})
+
+        assert status.state == watch_mod.STATE_ARMED, status.reason
+        assert status.armed is True
+        assert status.stale_surfaces == ()
+        assert status.archive == watch_mod.ARCHIVE_QUIET
+        assert status.archived_age_s == pytest.approx(9 * 86400.0)
+        assert "NOT a fault" in status.reason
+        assert "nothing to capture" in status.reason
+
+    def test_the_quiet_wording_carries_no_failure_vocabulary(
+        self, tmp_path: Path, record_file: Path
+    ) -> None:
+        """The wording rule, asserted rather than trusted to review.
+
+        Scoped to the archive line so it is testing the sentence this item
+        wrote, not the freshness prose around it. ``fault`` is checked
+        separately because the clause is required to contain it, in the
+        negation.
+        """
+        status, _ = _armed_with_archive(
+            tmp_path,
+            record_file,
+            archived={"logs": watch_mod._stamp(NOW - timedelta(days=9))},
+        )
+        line = _archive_evidence(status).lower()
+
+        for word in ("wedged", "dead", "stalled", "failed", "failure", "refused", "alarm"):
+            assert word not in line, line
+        assert "not a fault" in line
+
+    @pytest.mark.parametrize(
+        ("age_s", "expected"),
+        [
+            (watch_mod.ARCHIVE_QUIET_AFTER_S - 1.0, "ARCHIVE_RECENT"),
+            (watch_mod.ARCHIVE_QUIET_AFTER_S, "ARCHIVE_RECENT"),
+            (watch_mod.ARCHIVE_QUIET_AFTER_S + 1.0, "ARCHIVE_QUIET"),
+        ],
+    )
+    def test_the_threshold_is_crossed_where_it_says_it_is(
+        self, tmp_path: Path, record_file: Path, age_s: float, expected: str
+    ) -> None:
+        """Both sides of the boundary, read off the constant rather than a literal.
+
+        A re-typed 86400 here would agree with itself forever after somebody
+        re-tuned the threshold, which is the drift this repo already paid for
+        with ``SLOWEST_POLL_INTERVAL_S``.
+        """
+        status, _ = _armed_with_archive(
+            tmp_path,
+            record_file,
+            archived={"logs": watch_mod._stamp(NOW - timedelta(seconds=age_s))},
+            since_arming_s=age_s + 3600.0,
+        )
+        assert status.archive == getattr(watch_mod, expected)
+
+    def test_an_empty_map_on_a_long_armed_watcher_reads_quiet_from_the_arming_stamp(
+        self, tmp_path: Path, record_file: Path
+    ) -> None:
+        """``{}`` is a measurement, and the floor it supports is the arming time.
+
+        The writer emits ``archived`` even when empty precisely so this case is
+        distinguishable from the absent one. What it can support is a FLOOR -
+        nothing since arming - and the prose has to say so rather than quoting
+        a stamp nobody recorded.
+        """
+        status, _ = _armed_with_archive(
+            tmp_path, record_file, archived={}, since_arming_s=9 * 86400.0
+        )
+
+        assert status.archive == watch_mod.ARCHIVE_QUIET
+        assert status.last_archived is None
+        assert status.archived_age_s is None
+        assert "at least" in _archive_evidence(status)
+        assert "NOT a fault" in status.reason
+
+    def test_an_empty_map_on_a_freshly_armed_watcher_reads_unknown(
+        self, tmp_path: Path, record_file: Path
+    ) -> None:
+        """Nothing copied yet, armed 30 s ago. That is not nine days of quiet.
+
+        UNKNOWN is the cannot-tell bucket and it is reached by two roads: a
+        record with no field, and a record whose field cannot yet support
+        either answer. Calling this QUIET would be the same overreach in the
+        opposite direction.
+        """
+        status, _ = _armed_with_archive(tmp_path, record_file, archived={}, since_arming_s=30.0)
+
+        assert status.archive == watch_mod.ARCHIVE_UNKNOWN
+        assert status.archived_age_s is None
+        assert "UNKNOWN" in _archive_evidence(status)
+
+    def test_an_unreadable_archive_stamp_is_not_taken_for_an_answer(
+        self, tmp_path: Path, record_file: Path
+    ) -> None:
+        """A corrupt value must not read as a copy, and must not read as zero."""
+        status, _ = _armed_with_archive(
+            tmp_path,
+            record_file,
+            archived={"logs": "not-a-stamp"},
+            since_arming_s=30.0,
+        )
+
+        assert status.archive == watch_mod.ARCHIVE_UNKNOWN
+        assert status.last_archived is None
+        assert "unreadable" in _archive_evidence(status)
+
+    def test_the_archive_verdict_does_not_disturb_the_freshness_verdict(
+        self, tmp_path: Path, record_file: Path
+    ) -> None:
+        """Acceptance 2 from the other side: a THIRD fact, not a fourth alarm.
+
+        Nine days without a copy leaves every existing field exactly where a
+        recent copy leaves it. If any of these moved, the archive rule would
+        have been folded into freshness rather than set beside it.
+        """
+        quiet, _ = _armed_with_archive(
+            tmp_path,
+            record_file,
+            archived={"logs": watch_mod._stamp(NOW - timedelta(days=9))},
+        )
+        busy, _ = _armed_with_archive(
+            tmp_path,
+            record_file,
+            archived={"logs": watch_mod._stamp(NOW - timedelta(seconds=5))},
+        )
+
+        assert quiet.archive != busy.archive
+        assert quiet.state == busy.state == watch_mod.STATE_ARMED
+        assert quiet.stale_surfaces == busy.stale_surfaces == ()
+        assert quiet.fresh_surfaces == busy.fresh_surfaces
+        assert quiet.unjudged_surfaces == busy.unjudged_surfaces
+        assert quiet.heartbeat_age_s == busy.heartbeat_age_s
+        assert quiet.identity == busy.identity
+
+
+def test_the_quiet_note_claims_nothing_about_thread_health(
+    tmp_path: Path, record_file: Path
+) -> None:
+    """Found by `OPS-59`'s own acceptance-5 run, not by review.
+
+    The first draft of the QUIET sentence read "the surfaces are healthy and
+    there has simply been nothing to capture". Driving a real watcher against a
+    throwaway tree and then re-reading the SAME heartbeat two days later
+    returned ``STALE`` - the combined stamp had not advanced - with the archive
+    clause underneath it still calling the surfaces healthy. A true sentence in
+    one branch became a false one in another because it asserted something the
+    archive rule has no authority over.
+
+    So the clause is pinned to its own subject. Liveness is the state's job and
+    :func:`_judge_surfaces`'s; a lack of copies says only that nothing was
+    offered.
+    """
+    started = NOW - timedelta(days=20)
+    watch_mod.write_record(
+        _record(os.getpid(), tmp_path, started=watch_mod._stamp(started)), record_file
+    )
+    long_ago = NOW - timedelta(days=2)
+    beat = _heartbeat_file(
+        tmp_path,
+        pid=os.getpid(),
+        written=watch_mod._stamp(long_ago),
+        surfaces=_all_surfaces_at(long_ago),
+        intervals=_declared_intervals(),
+        archived={"logs": watch_mod._stamp(long_ago)},
+    )
+
+    status = watch_mod.check_watcher(
+        path=record_file,
+        heartbeat=beat,
+        now=NOW,
+        creation_time_fn=_fixed_creation(started),
+    )
+
+    assert status.state == watch_mod.STATE_STALE, status.reason
+    assert status.archive == watch_mod.ARCHIVE_QUIET
+    line = _archive_evidence(status).lower()
+    assert "healthy" not in line, line
+    assert "not a fault" in line

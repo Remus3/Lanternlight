@@ -857,7 +857,13 @@ class TestHeartbeatShape:
         path = tmp_path / "beat.json"
         beat, _clock, _ticks = _beat(path)
         beat.record("logs")
-        assert set(_read_heartbeat(path)) == {"pid", "written", "passes", "surfaces"}
+        assert set(_read_heartbeat(path)) == {
+            "pid",
+            "written",
+            "passes",
+            "surfaces",
+            "archived",
+        }
 
     def test_the_surface_keys_are_the_plan_names(self, tmp_path: Path) -> None:
         """Cross-checked against session_plan, so a renamed surface breaks here.
@@ -1319,7 +1325,14 @@ class TestTheHeartbeatDescribesItsOwnCadence:
             heartbeat=beat,
         )
         data = _read_heartbeat(path)
-        assert set(data) == {"pid", "written", "passes", "surfaces", "intervals"}
+        assert set(data) == {
+            "pid",
+            "written",
+            "passes",
+            "surfaces",
+            "intervals",
+            "archived",
+        }
         assert set(data["surfaces"]) == set(data["intervals"])
         for name, stamp in data["surfaces"].items():
             assert isinstance(stamp, str), f"{name} stopped being a plain ISO stamp"
@@ -1373,8 +1386,15 @@ class TestTheHeartbeatDescribesItsOwnCadence:
         beat, _clock, _ticks = _beat(path)
         beat.record("logs")
         data = _read_heartbeat(path)
-        assert set(data) == {"pid", "written", "passes", "surfaces"}
-        assert "{}" not in path.read_text(encoding="ascii")
+        assert set(data) == {"pid", "written", "passes", "surfaces", "archived"}
+        # `OPS-59` writes ONE deliberately empty map and the blunt "no {} anywhere"
+        # form of this check would have called that a regression. Scoped to the key
+        # this test was always about, and the exception is pinned by name rather
+        # than tolerated by loosening the count.
+        text = path.read_text(encoding="ascii")
+        assert '"intervals"' not in text
+        assert text.count("{}") == 1, text
+        assert '"archived": {}' in text
         assert data["passes"] == 1
         assert datetime.fromisoformat(data["surfaces"]["logs"])
 
@@ -1954,9 +1974,15 @@ class TestARefusedDestinationFreezesItsSurface:
 
         def __init__(self) -> None:
             self.calls: list[str] = []
+            #: `OPS-59`. Parallel to calls, so a test can ask what a pass claimed
+            #: to have copied without the heartbeat file being involved.
+            self.archived: list[int] = []
 
-        def record(self, surface: str, poll_seconds: float | None = None) -> None:
+        def record(
+            self, surface: str, poll_seconds: float | None = None, *, archived: int = 0
+        ) -> None:
             self.calls.append(surface)
+            self.archived.append(archived)
 
         def flush(self) -> None:
             pass
@@ -2168,3 +2194,242 @@ class TestBOTHCallSitesRouteThroughTheFreeze:
             "poll_forever is the loop default_spawn runs in production - it must "
             "record through record_pass, not around it"
         )
+
+
+# ---------------------------------------------------------------------------
+# OPS-59 - when was a file last actually COPIED, as distinct from polled
+# ---------------------------------------------------------------------------
+
+
+class TestTheHeartbeatRecordsWhenAFileWasLastCopied:
+    """`OPS-59` acceptance 1. A poll stamp is not an archive stamp.
+
+    MEASURED 2026-09-08 against the live watcher: 69,024 completed passes,
+    every surface inside its own freshness threshold, and the newest file under
+    the watched ``Logs`` and ``SaveGames`` directories carrying an mtime of
+    2026-08-30. The game had not been launched in nine days, so the watcher was
+    correct and its status was indistinguishable from one archiving
+    continuously. Nothing anywhere recorded when a file was last COPIED.
+
+    That is not a fault in the watcher and these tests do not treat it as one.
+    They pin a second, orthogonal fact into the same file: the poll stamp says
+    a thread is alive, and the archive stamp says data is arriving.
+    """
+
+    def test_a_pass_that_copied_a_file_stamps_the_archived_map(self, tmp_path) -> None:
+        target = tmp_path / "heartbeat.json"
+        beat = armwatch.Heartbeat(target)
+        beat.record("logs", 300.0, archived=1)
+        beat.flush()
+
+        payload = json.loads(target.read_text(encoding="utf-8"))
+        assert "logs" in payload["archived"], payload
+        assert payload["archived"]["logs"] == payload["surfaces"]["logs"]
+
+    def test_a_pass_that_copied_nothing_leaves_that_surface_out_of_the_map(
+        self, tmp_path
+    ) -> None:
+        """The whole point. An idle pass still advances ``surfaces``.
+
+        A watcher polling a quiescent source is healthy, so its poll stamp must
+        keep moving. What must NOT move is the archive stamp, or the new field
+        answers the same question the old one already did.
+        """
+        target = tmp_path / "heartbeat.json"
+        beat = armwatch.Heartbeat(target)
+        beat.record("logs", 300.0)
+        beat.flush()
+
+        payload = json.loads(target.read_text(encoding="utf-8"))
+        assert payload["surfaces"]["logs"]
+        assert payload["archived"] == {}, payload
+
+    def test_the_archived_key_is_written_even_when_it_is_empty(self, tmp_path) -> None:
+        """The deliberate CONTRAST with ``intervals``, and `OPS-59` acceptance 4.
+
+        ``intervals`` is omitted when empty because ``{}`` there would assert
+        that four surfaces have no cadence, which is a claim nobody measured.
+        ``archived`` is the opposite case: an empty map is itself a
+        MEASUREMENT - this writer tracks copies and has recorded none - and it
+        is the only thing that separates a current build with nothing to
+        archive from an older build that cannot answer the question at all.
+        Omitting it would collapse those two into one shape and force the
+        reader to report a nine-day-old fault that does not exist.
+        """
+        target = tmp_path / "heartbeat.json"
+        beat = armwatch.Heartbeat(target)
+        beat.record("logs")
+        beat.flush()
+
+        payload = json.loads(target.read_text(encoding="utf-8"))
+        assert payload["archived"] == {}
+        assert "intervals" not in payload, payload
+
+    def test_the_last_copy_wins_and_the_stamp_moves_forward(self, tmp_path) -> None:
+        target = tmp_path / "heartbeat.json"
+        clock = iter(
+            [
+                datetime(2026, 9, 8, 1, 0, 0, tzinfo=UTC),
+                datetime(2026, 9, 8, 1, 0, 0, tzinfo=UTC),
+                datetime(2026, 9, 8, 2, 0, 0, tzinfo=UTC),
+                datetime(2026, 9, 8, 2, 0, 0, tzinfo=UTC),
+                datetime(2026, 9, 8, 3, 0, 0, tzinfo=UTC),
+                datetime(2026, 9, 8, 3, 0, 0, tzinfo=UTC),
+            ]
+        )
+        beat = armwatch.Heartbeat(target, now_fn=lambda: next(clock), flush_interval_s=0.0)
+        beat.record("logs", 300.0, archived=1)
+        beat.record("logs", 300.0)
+        beat.record("logs", 300.0, archived=2)
+
+        payload = json.loads(target.read_text(encoding="utf-8"))
+        assert payload["archived"]["logs"] == "2026-09-08T03:00:00+00:00"
+
+
+class TestARealCopyMovesTheArchiveStamp:
+    """`OPS-59` acceptance 5, at the armwatch layer.
+
+    No spy and no simulated copy: a real file in a real source directory, a
+    real destination, and ``run_rolling`` driving the same ``record_pass`` the
+    production loop uses. The assertion is on the file the watcher wrote.
+    """
+
+    @staticmethod
+    def _saved(tmp_path):
+        saved = tmp_path / "Saved"
+        for name in ("Logs", "SaveGames", "StandaloneLevel"):
+            (saved / name).mkdir(parents=True)
+        return saved
+
+    def test_a_quiescent_source_records_passes_and_archives_nothing(self, tmp_path) -> None:
+        saved = self._saved(tmp_path)
+        target = tmp_path / "heartbeat.json"
+        beat = armwatch.Heartbeat(target)
+
+        armwatch.run_rolling(
+            saved,
+            tmp_path / "captures",
+            max_passes=2,
+            log_fn=lambda _message: None,
+            heartbeat=beat,
+        )
+
+        payload = json.loads(target.read_text(encoding="utf-8"))
+        assert payload["passes"] == 8
+        assert sorted(payload["surfaces"]) == ["logs", "savedroot", "savegames", "standalonelevel"]
+        assert payload["archived"] == {}, payload
+
+    def test_touching_a_watched_file_moves_the_archive_stamp(self, tmp_path) -> None:
+        saved = self._saved(tmp_path)
+        target = tmp_path / "heartbeat.json"
+        beat = armwatch.Heartbeat(target)
+
+        armwatch.run_rolling(
+            saved,
+            tmp_path / "captures",
+            max_passes=1,
+            log_fn=lambda _message: None,
+            heartbeat=beat,
+        )
+        before = json.loads(target.read_text(encoding="utf-8"))["archived"]
+
+        (saved / "Logs" / "MistfallHunter.log").write_text("a launch happened\n", encoding="utf-8")
+        armwatch.run_rolling(
+            saved,
+            tmp_path / "captures",
+            max_passes=1,
+            log_fn=lambda _message: None,
+            heartbeat=beat,
+        )
+        after = json.loads(target.read_text(encoding="utf-8"))["archived"]
+
+        assert before == {}
+        assert list(after) == ["logs"], after
+        # And the copy really landed, so the stamp is not describing a copy
+        # that did not happen.
+        copied = sorted((tmp_path / "captures").rglob("*MistfallHunter.log"))
+        assert len(copied) == 1, copied
+
+
+class TestBOTHCallSitesReportWhatTheyActuallyCopied:
+    """`OPS-59`, and it exists because a mutant SURVIVED the behavioural set.
+
+    Ten mutants were run against this item's guards. Nine died. The one that
+    lived rewrote the THREADED call site - ``poll_forever``, the loop
+    ``default_spawn`` actually runs in production - to report zero copies
+    whatever ``poll_once`` returned, and the whole selection stayed green,
+    because every behavioural test in this file drives the synchronous
+    ``max_passes`` branch instead.
+
+    That is the same two-call-site hole ``TestBOTHCallSitesRouteThroughTheFreeze``
+    above was written for, arriving one field later, which is exactly why it is
+    worth a structural guard rather than a note. Under that mutant the live
+    watcher would poll forever with an ``archived`` map that stayed empty, and
+    the reader would report QUIET - "nothing to capture" - straight through a
+    play session. A wrong answer wearing the wording written to avoid crying
+    wolf is worse than the silence this item started from.
+
+    STRUCTURAL AND SECOND-BEST, stated the way its sibling states it: this pins
+    that both call sites pass the LENGTH OF WHAT ``poll_once`` RETURNED. It
+    cannot stop a change that keeps the shape and breaks the meaning - binding
+    ``taken`` to an empty list first would stay green - and it says nothing
+    about the threaded loop's behaviour. It is a guard against the specific
+    revert that was measured surviving.
+    """
+
+    @staticmethod
+    def _run_rolling_ast() -> ast.FunctionDef:
+        tree = ast.parse(Path(armwatch.__file__).read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and node.name == "run_rolling":
+                return node
+        raise AssertionError("run_rolling not found - the pattern is wrong, not the code")
+
+    def test_every_record_pass_call_hands_over_the_poll_once_result(self) -> None:
+        run_rolling = self._run_rolling_ast()
+
+        # The names bound from a poll_once() call, so the assertion below is
+        # about the RETURN VALUE rather than about a variable that happens to
+        # be spelled `taken`.
+        from_poll: set[str] = set()
+        for node in ast.walk(run_rolling):
+            if not isinstance(node, ast.Assign) or not isinstance(node.value, ast.Call):
+                continue
+            func = node.value.func
+            if isinstance(func, ast.Attribute) and func.attr == "poll_once":
+                for target in node.targets:
+                    if isinstance(target, ast.Name):
+                        from_poll.add(target.id)
+        assert from_poll, "nothing binds the result of poll_once at all"
+
+        calls = [
+            node
+            for node in ast.walk(run_rolling)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "record_pass"
+        ]
+        # TWO of them: the bounded branch and poll_forever. A single call means
+        # one of the two shapes stopped recording at all, which this file's
+        # sibling guard is about and which would make the check below vacuous.
+        assert len(calls) == 2, [node.lineno for node in calls]
+
+        for call in calls:
+            assert len(call.args) == 2, (
+                f"record_pass at line {call.lineno} passes {len(call.args)} argument(s) - "
+                "a call that omits the copy count silently reports zero, and the "
+                "archive stamp then never moves in that shape"
+            )
+            second = call.args[1]
+            assert (
+                isinstance(second, ast.Call)
+                and isinstance(second.func, ast.Name)
+                and second.func.id == "len"
+                and len(second.args) == 1
+                and isinstance(second.args[0], ast.Name)
+                and second.args[0].id in from_poll
+            ), (
+                f"record_pass at line {call.lineno} does not hand over len(<the name "
+                f"bound from poll_once>). Names bound from poll_once here: "
+                f"{sorted(from_poll)}"
+            )

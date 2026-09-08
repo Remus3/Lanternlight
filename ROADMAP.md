@@ -6567,7 +6567,7 @@ tree carries a bracket, and this repository's own path carries none either.
 Both holes are latent. The `--config` one is the one that would be invisible if
 it ever were not.
 
-## OPS-59. The watcher status answers "is it alive and polling" and cannot answer "has it archived anything" - and today those two differ by nine days - OPEN
+## OPS-59. The watcher status answers "is it alive and polling" and cannot answer "has it archived anything" - and today those two differ by nine days - CLOSED 2026-09-08
 
 Found 2026-09-08 while confirming that `OPS-53`'s newly derived destination was
 real. It is not a defect in the watcher, which is behaving correctly. It is a
@@ -6629,6 +6629,62 @@ moves on has no way to learn that the input those items wait on has not arrived.
    re-deriving it from file mtimes. A number only reachable by inspecting the
    game's own directory is a number no session will look up.
 
+
+### Outcome, 2026-09-08 - CLOSED
+
+Ledger `LL-0194`.
+
+**Three states, and the operator-facing sentence is DERIVED from the evidence
+line** rather than written twice, so the two cannot drift apart:
+
+- RECENT - a file was copied inside the quiet threshold.
+- QUIET - the last copy is older than the threshold, and the wording says in as
+  many words that this is NOT a fault, that there was nothing to capture, and
+  that an unlaunched game is exactly what it looks like. Criterion 3 was about
+  precisely this: a status that cries wolf gets ignored.
+- UNKNOWN - the heartbeat carries no archive map at all, which is what a watcher
+  armed by an older build writes. The wording says explicitly that unknown is a
+  THIRD answer and not a report that nothing has ever been copied.
+
+Two sub-cases beyond those three: an archive map that is present but EMPTY is
+reported as QUIET measured as a floor from the arming stamp, unless the watcher
+is younger than the threshold, in which case it is UNKNOWN. The threshold is
+derived from the destination's own local-day rollover rather than from a poll
+cadence, which is the right unit for a question about days.
+
+**Criterion 4 was discharged END TO END against the live process**, which is the
+best possible fixture for it: the watcher running right now was armed by the
+older build, so it writes no archive map, and the real `check_watcher` renders
+the UNKNOWN wording with an age of `None`. Re-run independently by the merger.
+An absent field defaulting to "never archived" would have reported a nine-day
+fault that does not exist - the `OPS-53` rule applied to a new field.
+
+**TEN MUTANTS, TEN KILLED - after one survived and exposed a real coverage gap
+that had nothing to do with this item.** Rewriting the THREADED call site, which
+is the production loop, to report zero copies left the entire suite green,
+because every behavioural test drives the bounded `max_passes` branch instead.
+Under that mutant the live watcher would report QUIET straight through a play
+session. Closed with a structural guard requiring both call sites to pass the
+real copy count, watched turning the mutant red.
+
+**The slice also refuted its own first wording during criterion 5.** The QUIET
+note originally said "the surfaces are healthy", which is false under the STALE
+verdict a two-days-later read returns. Reworded and pinned by test. A sentence
+that is true in the case you tested and false in the case you did not is the
+same defect this session has now met four times.
+
+**Criterion 6 was finished by the merger, not by the slice**, because its home is
+this file and this file was outside the slice's list. The slice said so rather
+than reaching for it. The durable answer is the query printed beside the blocked
+items above, deliberately a QUERY and not a date, because a date typed into a
+document goes stale the day after it is written.
+
+**What is NOT proven:** the threaded production loop is guarded structurally
+only - no behavioural test drives it, and the guard checks the shape of the call
+rather than the behaviour of the thread. And the archive number is an upper
+bound on "when game data last arrived" for the two measured reasons recorded
+above.
+
 ## OPS-58. The store-drift detector exists and NOTHING CALLS IT - CLOSED 2026-09-08
 
 Filed 2026-09-08, immediately after `OPS-54` closed, because that item's own
@@ -6652,8 +6708,11 @@ merger reads. Drift is a different KIND of finding: it is not about the claim,
 it is about whether the measurement of the claim was taken on a stable tree.
 
 That difference matters for the report's meaning. A drift finding must not be
-mistaken for "the work is wrong", because it usually will not be - three stashes
-happened in this repository during a session where nothing was lost. It says
+mistaken for "the work is wrong", because it usually will not be - real stashes
+were taken in this repository during a session where nothing was lost. (This
+sentence used to say "three stashes", a number derived by halving a commit
+count. `OPS-60` measured that conversion unsound and it is not repeated here.)
+It says
 "your numbers were taken on a moving target", which changes what you do next
 rather than whether you merge.
 
@@ -6740,7 +6799,7 @@ remembers, and absent for one that does not.
 stash subject prefixes miss half of a MESSAGED stash. See that item, which also
 corrects an arithmetic claim made in `OPS-54`'s own closure.
 
-## OPS-60. The stash detector misses HALF of a messaged stash, and its "one stash is two commits" arithmetic is wrong in both directions - OPEN
+## OPS-60. The stash detector misses HALF of a messaged stash, and its "one stash is two commits" arithmetic is wrong in both directions - CLOSED 2026-09-08, and the enumeration found a THIRD stash commit nobody knew about
 
 Found 2026-09-08 by the slice wiring the detector into the merge gate, and the
 second half found by the merger re-measuring the first. Both are defects in
@@ -10565,7 +10624,29 @@ what is blocked.
 Item 1's remainder, and items 5 and 6, all need the client open. None of them
 needs a *deliberate* capture session any more - the 2026-08-09 pass showed the
 log alone was sufficient - so fold them into whichever session next has the game
-running rather than scheduling them. **Item 4b and items 5 and 6 are held as
+running rather than scheduling them.
+
+**HOW LONG HAVE THEY BEEN BLOCKED? ASK, do not guess.** `OPS-59` criterion 6.
+The answer is not in this file, because a date typed here goes stale the day
+after it is written - this repository's own first anti-pattern. It is in the
+watcher, and this is the query:
+
+```
+python -c "from ops.loop import watch; print(watch.check_watcher().reason)"
+```
+
+That reports when a file was last actually COPIED, as distinct from when a
+surface was last polled, and it distinguishes RECENT, QUIET and UNKNOWN. As
+measured on 2026-09-08 the game's own tree had not changed since **2026-08-30**,
+nine days, so all three of these items had been blocked that whole time and
+nothing in this repository said so.
+
+Read the number as an UPPER BOUND on "when game data last arrived", not as the
+instant it did. Two reasons, both measured: the heartbeat lives under
+`ops/runtime/`, which is gitignored, so a fresh clone starts with no history at
+all; and re-arming the watcher re-copies unchanged files, because the copier's
+seen-set is per instance. A QUIET answer is trustworthy - nothing arrived. A
+RECENT one means a copy happened, which is not quite the same as new data. **Item 4b and items 5 and 6 are held as
 open items on the `research` and `capture` lanes**, each naming what it is
 blocked on, so they are no longer only a paragraph in a document nobody reads
 mid-session.

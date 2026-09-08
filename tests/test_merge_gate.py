@@ -956,10 +956,11 @@ class TestADriftAnswerReachesTheRenderedReport:
     def test_a_drift_answer_does_not_by_itself_refuse_the_merge(self) -> None:
         """Drift changes what you check next, not whether you merge.
 
-        Three stashes happened in this repository during a session in which
-        nothing was lost. Turning that into a refusal would make the gate
-        say no on a routine day, and a gate that always says no is a gate
-        nobody runs.
+        Real stashes have been taken in this repository during a session in
+        which nothing was lost. Turning that into a refusal would make the
+        gate say no on a routine day, and a gate that always says no is a
+        gate nobody runs. No count is stated: ``OPS-60`` measured that a
+        commit count cannot be converted into a stash count.
         """
         before, after = self._stashed()
         measurement, _ = merge_gate.describe_store_drift(before, after)

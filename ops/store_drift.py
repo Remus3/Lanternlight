@@ -12,10 +12,17 @@ audit reported a ``git cat-file --batch-all-objects`` histogram of 1219 blobs,
 305 and 864. Neither reading was wrong: a concurrently running slice was writing
 objects into the shared repository between them. ``git reflog`` then showed
 ``HEAD@{0}: reset: moving to HEAD`` and ``git fsck --unreachable`` listed six
-unreachable commits whose subjects are the ``WIP on `` / ``index on `` pair that
-``git stash`` writes - four inside that session's dispatch window, two from the
-session before. An audit taken while other agents work in the repository is an
-audit of a moving target, and nothing in the merge gate noticed.
+unreachable commits carrying stash subjects - four inside that session's
+dispatch window, two from the session before. An audit taken while other agents
+work in the repository is an audit of a moving target, and nothing in the merge
+gate noticed.
+
+**Six commits is not three stashes, and this module's own closure said it was.**
+``OPS-60`` corrects it, measured rather than reasoned: one stash writes two
+commits and three with ``--include-untracked``, while N stashes taken from an
+unchanged index write N+1 rather than 2N, because their ``index on `` commits
+are byte-identical and hash to one object. The number of stashes behind those
+six commits is not recoverable from the store, and nothing here claims it.
 
 What this module does about it: :func:`snapshot` records the store at dispatch,
 :func:`snapshot` again at merge, and :func:`compare` says what appeared in
@@ -76,6 +83,7 @@ from pathlib import Path
 __all__ = [
     "CommitFact",
     "DriftReport",
+    "MESSAGED_STASH_SUBJECT",
     "SHARED_WORKTREE_BAN",
     "STASH_SUBJECT_PREFIXES",
     "StoreSnapshot",
@@ -90,11 +98,56 @@ __all__ = [
 #: Repository root, resolved from this file's location: ops/store_drift.py.
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
-#: The two subjects ``git stash`` writes, in the order git writes them. The
-#: trailing space is load-bearing: without it "WIPocalypse" and "reindex on
-#: main" both read as stashes, and a report full of false alarms is a report
-#: the reader learns to skip.
-STASH_SUBJECT_PREFIXES = ("WIP on ", "index on ")
+#: The subjects ``git stash`` writes with a fixed opening word, in the order
+#: git writes them. The trailing space is load-bearing: without it
+#: "WIPocalypse" and "reindex on main" both read as stashes, and a report full
+#: of false alarms is a report the reader learns to skip.
+#:
+#: ``OPS-60``. This held only ``WIP on `` and ``index on `` and was described as
+#: "the two subjects git stash writes". Every form below was then run in a
+#: throwaway repository, git 2.53.0.windows.3 on 2026-09-08, and the subject git
+#: wrote was read back off the commit object:
+#:
+#: - ``git stash`` - ``WIP on <branch>: <sha> <subject>`` and
+#:   ``index on <branch>: <sha> <subject>``. Both already matched.
+#: - ``git stash push -m "msg"`` - ``On <branch>: msg`` and the same
+#:   ``index on `` commit. The head of a messaged stash matches NEITHER old
+#:   prefix, which is defect 1. It is handled by :data:`MESSAGED_STASH_SUBJECT`
+#:   rather than by a fourth entry here, for the reason recorded there.
+#: - ``git stash push --keep-index`` and ``git stash push --staged`` - the
+#:   unmessaged pair, unchanged. Those flags change which tree is committed and
+#:   what is left in the worktree, not the subject. Nothing to add.
+#: - ``git stash push -u`` - the unmessaged pair PLUS a third commit,
+#:   ``untracked files on <branch>: <sha> <subject>``, added below. It is the
+#:   one that carries a sibling's brand-new untracked module, so missing it
+#:   missed the most destructive form.
+#: - a stash taken on a DETACHED HEAD - every form above with the branch field
+#:   written as the literal ``(no branch)``. Prefixes are unaffected; only the
+#:   messaged form's shape check had to allow it. A rebase or bisect detaches
+#:   HEAD the same way, so it is reasoned to be the same string there - that
+#:   one was not run.
+#: - ``git stash create "msg"`` - the messaged pair, on no ref at all. Same
+#:   subjects, so it needs no separate handling, and it is worth knowing that
+#:   this form leaves commits nothing points at from the very first instant.
+STASH_SUBJECT_PREFIXES = ("WIP on ", "index on ", "untracked files on ")
+
+#: The head commit of a MESSAGED stash: ``On <branch>: <the operator's message>``.
+#:
+#: This one gets a shape check instead of a prefix because ``On `` alone is an
+#: ordinary English sentence opener - "On the third pass: rewrite the parser" is
+#: a plausible commit subject in this repository, and matching it would name a
+#: real commit as a stash. What separates them is that the field before the
+#: colon is a BRANCH NAME, and git refuses a branch name containing a space;
+#: that refusal is itself pinned by a test rather than assumed. ``(no branch)``
+#: is spelled out because it is the one value of that field git writes with
+#: spaces in it, on a detached HEAD.
+#:
+#: This still cannot be exact. ``On main: rewrite the parser`` is a legal
+#: ordinary subject and is indistinguishable from a stash message by text
+#: alone. The report names commits for a human to read rather than blocking a
+#: merge, so a rare false name costs a reader one glance; a missed stash costs a
+#: sibling its work.
+MESSAGED_STASH_SUBJECT = re.compile(r"On (?:\(no branch\)|[^\s:]+): ")
 
 #: A git object name. Forty hex digits for SHA-1, sixty-four for a SHA-256
 #: repository - both are accepted so this does not quietly report an empty
@@ -176,7 +229,12 @@ def _now() -> str:
 
 
 def is_stash_subject(subject: object) -> bool:
-    """True when ``subject`` is one of the two subjects ``git stash`` writes.
+    """True when ``subject`` is a subject ``git stash`` writes.
+
+    All four forms, not the two ``OPS-54`` shipped: the three fixed openers in
+    :data:`STASH_SUBJECT_PREFIXES`, and the messaged head matched by
+    :data:`MESSAGED_STASH_SUBJECT`. Both constants carry the measurement each
+    was derived from.
 
     Accepts any object and answers False for anything that is not a string,
     because it is called on data read back out of a snapshot that may have come
@@ -184,7 +242,9 @@ def is_stash_subject(subject: object) -> bool:
     """
     if not isinstance(subject, str):
         return False
-    return subject.startswith(STASH_SUBJECT_PREFIXES)
+    if subject.startswith(STASH_SUBJECT_PREFIXES):
+        return True
+    return MESSAGED_STASH_SUBJECT.match(subject) is not None
 
 
 def parse_batch_check(text: str) -> dict[str, str]:
@@ -343,6 +403,15 @@ class DriftReport:
                 "  A stash takes the WHOLE working tree and index, including files the "
                 "stashing slice was told not to touch. Check every sibling slice's "
                 "files against what it believes it wrote before merging."
+            )
+            lines.append(
+                "  That number is a count of COMMITS and is not a count of stashes - "
+                "OPS-60, measured. One stash writes two commits, or three with "
+                "--include-untracked; and N stashes taken from an unchanged index "
+                "write N+1, because their identical 'index on ' commits hash to one "
+                "object. Divide it by nothing. Count LIVE stashes with git stash "
+                "list; a dropped one is in neither that list nor any ref, so the "
+                "store cannot tell you how many there were."
             )
         elif self.moved:
             lines.append(

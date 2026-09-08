@@ -84,6 +84,37 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0194 - 2026-09-08 - OPS-59 closed: the watcher now reports whether it has ARCHIVED anything as a third state distinct from polling freshness, and a mutation exposed that the production loop had no behavioural coverage at all
+
+**Evidence:**
+- Three states, with the operator-facing sentence DERIVED from the evidence line rather than written twice, so the two cannot drift: RECENT, QUIET, and UNKNOWN.
+- The QUIET wording says in as many words that this is NOT a fault, that there was nothing to capture, and that an unlaunched game is exactly what it looks like. That was the criterion most at risk of being got wrong: a status that cries wolf gets ignored.
+- The UNKNOWN wording says explicitly that unknown is a THIRD answer and not a report that nothing has ever been copied.
+- Two sub-cases beyond the three: an archive map present but EMPTY reads as QUIET measured as a floor from the arming stamp, unless the watcher is younger than the threshold, in which case it reads UNKNOWN. The threshold is derived from the destination's own local-day rollover rather than from a poll cadence, which is the right unit for a question about days.
+- CRITERION 4 DISCHARGED END TO END AGAINST THE LIVE PROCESS, which is the best fixture available for it: the watcher running right now was armed by the older build and writes no archive map, so the real reader renders the UNKNOWN wording with an age of None. Re-run independently by the merger against that same live process.
+- TEN MUTANTS, TEN KILLED - after one survived and exposed a coverage gap unrelated to this item. Rewriting the THREADED call site, which is the production loop, to report zero copies left the whole suite green, because every behavioural test drives the bounded branch instead. Under that mutant the live watcher would report QUIET straight through a play session. Closed with a structural guard requiring both call sites to pass the real copy count, watched turning the mutant red.
+- Suite at the close of the slice: 2548 passed, 1 skipped. ruff: All checks passed. Zero non-ASCII bytes in all four touched files.
+
+THE SLICE REFUTED ITS OWN FIRST WORDING during the end-to-end run: the QUIET note said the surfaces were healthy, which is false under the STALE verdict a two-days-later read returns. Reworded and pinned. A sentence true in the case you tested and false in the case you did not is the defect this session has now met four separate times.
+CRITERION 6 WAS FINISHED BY THE MERGER because its home is ROADMAP.md, which was outside the slice's file list - and the slice said so rather than reaching for it, which is the behaviour the file lists exist to produce. The durable answer is a QUERY printed beside the blocked items, not a date, because a date typed into a document goes stale the day after it is written.
+THE NUMBER IS AN UPPER BOUND on when game data last arrived, for two measured reasons that are written beside it: the heartbeat lives in a gitignored runtime directory so a fresh clone starts with no history, and re-arming re-copies unchanged files because the copier's seen-set is per instance. A QUIET answer is trustworthy; a RECENT one means a copy happened, which is not quite the same as new data.
+NOT PROVEN: the threaded production loop is guarded STRUCTURALLY only. The guard checks the shape of the call rather than the behaviour of the thread, and no behavioural test drives that path.
+
+### LL-0193 - 2026-09-08 - OPS-60 closed: the stash-subject set is derived from what git actually writes - including a THIRD commit nobody knew about - and the commit-count-to-stash-count conversion is removed rather than repaired
+
+**Evidence:**
+- Measured against git 2.53.0 for Windows by building real stashes in throwaway repositories and reading the subjects off the commit objects, rather than by typing expected strings into a fixture.
+- THE FULL FORM TABLE: a plain stash writes a work-in-progress subject plus an index subject; a MESSAGED stash writes a subject beginning On with the branch and the message, plus the index one; keep-index and staged write the unmessaged pair unchanged; INCLUDING UNTRACKED FILES writes a THIRD commit with its own subject; on a detached HEAD the branch field is the literal text for no branch; and creating a stash without storing it writes the messaged pair on no ref at all.
+- THE THIRD COMMIT WAS NOT KNOWN BEFORE THIS ITEM and was found only because the criterion demanded the forms be enumerated by RUNNING git rather than extended by one string. Re-measured independently by the merger: including untracked files leaves three commits, not two.
+- ONLY ONE PREFIX WAS ADDED. The messaged head cannot be matched by prefix, because a subject beginning On is an ordinary English opener, so it gets a SHAPE check instead. The discrimination rests on git refusing a branch name containing a space - verified independently by the merger, which fails with a not-a-valid-branch-name error - and that dependency is pinned by its own test rather than left implicit.
+- THE COUNT CONVERSION WAS REMOVED, not re-derived. The report now states the number is COMMITS, gives both reasons it cannot be halved - two or three commits per stash, and N plus one for a repeat from an unchanged index - and says that a dropped stash sits on no ref, so the object store cannot answer how many stashes there were at all.
+- SIX MUTANTS, SIX KILLED, every anchor asserted to occur exactly once first. One of them encodes the wrong belief itself, capping the named commits at two, which is the mutation that would have caught the original defect.
+- Suite at the close of the slice: 2534 passed, 1 skipped. ruff: All checks passed.
+
+AN HONEST RESIDUAL, stated by the slice rather than found later: an ordinary commit whose subject happens to begin On, a branch name and a colon is still indistinguishable from a messaged stash. The shape check narrows the false-positive surface and does not eliminate it.
+THE SLICE FOUND THREE PROSE SITES OUTSIDE ITS FILE LIST still asserting the refuted count, reported them and correctly did not edit them. The merger fixed those three and a FOURTH the slice had not seen, in the roadmap section of the item that shipped the wiring. Every surviving mention of that number in this tree now quotes it in order to correct it; none asserts it.
+NOT PROVEN: the behaviour of a stash taken during a rebase or a bisect, which the slice reasoned about and labelled as reasoned rather than measured; and the behaviour of any git version other than the one on this machine.
+
 ### LL-0192 - 2026-09-08 - OPS-56 closed: the filename-to-external-tool sweep found TWO more defects, both in the pre-commit hook itself, and one of them let a commit LAND after running a different test module
 
 **Evidence:**

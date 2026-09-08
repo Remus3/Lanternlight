@@ -401,6 +401,68 @@ IDENTITY_UNCHECKED = "UNCHECKED"
 IDENTITY_REFUTED = "REFUTED"
 
 
+#: `OPS-59`. A file was copied inside :data:`ARCHIVE_QUIET_AFTER_S`. Game data
+#: is arriving, and the archive is growing.
+ARCHIVE_RECENT = "RECENT"
+
+#: `OPS-59`. Nothing has been copied for longer than
+#: :data:`ARCHIVE_QUIET_AFTER_S`.
+#:
+#: **THIS IS NOT A FAULT AND NOTHING HERE TREATS IT AS ONE.** It is the correct
+#: state when the game has not been launched, which on 2026-09-08 it had not
+#: been for nine days. ``OPS-26``'s frozen-surface rule fires only on passes
+#: that HAD files to copy and archived none, and is right never to fire here: a
+#: surface with nothing to copy has not failed at anything. This value changes
+#: no verdict, re-arms nothing, and stops nothing - it exists so a cold session
+#: reading ``ARMED, all four surfaces fresh`` is not left to complete that into
+#: "capture is producing data".
+ARCHIVE_QUIET = "QUIET"
+
+#: `OPS-59` acceptance 4, and the whole reason the writer emits an EMPTY
+#: ``archived`` map rather than omitting it.
+#:
+#: Reached by two roads, and the prose says which:
+#:
+#: * the heartbeat carries no ``archived`` key at all, which is what every
+#:   watcher armed by a build older than this item writes - including the one
+#:   live on this machine when the item was closed; or
+#: * the map is present and holds no usable stamp, and the watcher has been
+#:   armed for less than :data:`ARCHIVE_QUIET_AFTER_S`, so neither answer is
+#:   supported yet.
+#:
+#: Defaulting either of those to "never archived" would report a nine-day-old
+#: fault that does not exist. That is ``OPS-53``'s rule - a reporter must not
+#: assert something its record cannot support - applied to a new field, and
+#: :data:`DEST_UNKNOWN_NOTE` is the same decision one field over.
+ARCHIVE_UNKNOWN = "UNKNOWN"
+
+#: How long without a copy before the archive reads :data:`ARCHIVE_QUIET`,
+#: seconds. ONE LOCAL DAY, and the number is derived rather than picked.
+#:
+#: WHERE IT COMES FROM: the rolling watcher re-derives its destination root
+#: from ``lanternlight.armwatch.DEST_DATE_FORMAT`` on every pass, so the
+#: archive is already organised in local days and rolls over at midnight. A gap
+#: longer than one rollover therefore guarantees that at least one dated
+#: directory is empty or absent, which is a fact about the archive's own
+#: structure rather than a threshold invented here.
+#:
+#: WHY NOT DERIVED FROM A POLL CADENCE, which is where every other threshold in
+#: this module comes from: how often a thread wakes has nothing to do with how
+#: often the operator launches the game. ``surface_stale_after_s`` judges
+#: whether a thread is alive and its terms are the watcher's own; this judges
+#: whether the world outside the watcher has produced anything, and no poll
+#: interval says a word about that.
+#:
+#: WHAT IS NOT MEASURED, stated rather than implied: nobody here has measured
+#: how often this operator plays, so this number is NOT a claim that a day
+#: without capture is unusual. It is only the point past which the report stops
+#: staying silent. That is affordable in a way a staleness threshold is not,
+#: because crossing it produces no alarm and changes no verdict - see
+#: :data:`ARCHIVE_QUIET`. An operator who plays daily at the same hour will
+#: cross it routinely and lose nothing by it.
+ARCHIVE_QUIET_AFTER_S = 24.0 * 60.0 * 60.0
+
+
 def record_path() -> Path:
     """Return the default arming-record path, inside the gitignored runtime dir."""
     return guard.runtime_dir() / WATCH_RECORD_FILENAME
@@ -1759,6 +1821,194 @@ def _surface_stale_reason(
     )
 
 
+def _duration_phrase(seconds: float) -> str:
+    """Render a span the way a reader thinks about it, plus the raw seconds.
+
+    Nine days as ``777600 s`` is technically the answer and practically
+    unreadable, and this check's whole complaint is about a reader completing a
+    true sentence into a false one. The seconds are KEPT alongside rather than
+    replaced, because they are what a consumer compares against
+    :data:`ARCHIVE_QUIET_AFTER_S` and a rounded phrase alone would make the
+    boundary untestable from the prose.
+    """
+    if seconds >= 86400.0:
+        return f"{seconds / 86400.0:.1f} days ({seconds:.0f} s)"
+    if seconds >= 3600.0:
+        return f"{seconds / 3600.0:.1f} hours ({seconds:.0f} s)"
+    return f"{seconds:.0f} s"
+
+
+#: The sentence every QUIET rendering ends with. One copy, because the wording
+#: IS the acceptance here - `OPS-59` criterion 3 - and two copies free to drift
+#: is how a status that was written not to cry wolf starts crying wolf in one
+#: branch. The negation is explicit ("NOT a fault") rather than merely absent,
+#: because a reader who has just been handed a new field will read silence as
+#: an accusation.
+#:
+#: IT CLAIMS NOTHING ABOUT THREAD HEALTH, and an earlier draft did. That draft
+#: read "the surfaces are healthy and there has simply been nothing to
+#: capture", which was MEASURED false during this item's own acceptance-5 run:
+#: the same heartbeat read two days later returns ``STALE``, and the archive
+#: clause went on calling the surfaces healthy underneath a verdict saying the
+#: watcher had stopped flushing. The archive rule has no authority over
+#: liveness - that is what :func:`_judge_surfaces` and the state above are for -
+#: so this sentence now says only what a lack of copies does and does not mean.
+ARCHIVE_QUIET_NOTE = (
+    "That is NOT a fault: there was nothing to capture, and an unlaunched game "
+    "is exactly what this looks like"
+)
+
+
+@dataclass(frozen=True)
+class _ArchiveReport:
+    """What the ``archived`` map supports, before it becomes prose.
+
+    Attributes:
+        state: One of the three ``ARCHIVE_*`` constants.
+        age_s: Seconds since the newest recorded copy, or ``None`` when no
+            stamp was readable. Absent, never zero - "unmeasured" and "measured
+            zero" are different facts, and zero here would read as a copy that
+            just landed.
+        stamp: The newest recorded copy's stamp verbatim, or ``None``.
+        surface: Which surface that stamp belonged to, or ``None``.
+        evidence: The one line appended to the status evidence. Every rendering
+            of it begins ``archiving:`` so a reader - and a test - can find it
+            without counting positions in a list that grows.
+    """
+
+    state: str
+    age_s: float | None
+    stamp: str | None
+    surface: str | None
+    evidence: str
+
+
+def _judge_archive(
+    payload: dict, *, when: datetime, started: datetime | None
+) -> _ArchiveReport:
+    """Answer "when did this watcher last actually COPY a file" - `OPS-59`.
+
+    A THIRD fact, deliberately set beside freshness rather than folded into it.
+    ``surfaces`` says a thread completed a pass, which an idle watcher does
+    69,024 times over nine days; this says whether any of those passes put a
+    file on disk. One map could only ever answer one of the two, and conflating
+    them is what let ``ARMED, all four surfaces fresh`` describe a watcher that
+    had archived nothing since the game was last launched.
+
+    The NEWEST stamp across surfaces wins, not the oldest. The question is
+    "has anything arrived", so a fresh ``savegames`` beside a nine-day-old
+    ``logs`` is data arriving; taking the oldest would report QUIET through an
+    entire play session, because ``logs`` copies at a 300 s cadence and a
+    transient save copies far more often.
+
+    The ABSENT case is the one this function exists to get right. A heartbeat
+    with no ``archived`` key was written by a build older than this item and
+    supports NO answer - see :data:`ARCHIVE_UNKNOWN`. An EMPTY map is a
+    different fact: that writer tracks copies and has recorded none, so it
+    supports a FLOOR measured from the arming stamp, and only once that floor
+    is itself past the threshold. Below it, the honest answer is still unknown.
+
+    ``started`` may be ``None`` - an unparseable arming stamp - and then the
+    floor cannot be computed either and the answer stays unknown. Nothing here
+    guesses a start.
+    """
+    raw = payload.get("archived")
+    if not isinstance(raw, dict):
+        return _ArchiveReport(
+            state=ARCHIVE_UNKNOWN,
+            age_s=None,
+            stamp=None,
+            surface=None,
+            evidence=(
+                f"archiving: {ARCHIVE_UNKNOWN} - this heartbeat carries no 'archived' "
+                "map, which is what a watcher armed by a build older than OPS-59 "
+                "writes. Unknown is a third answer and NOT a report that nothing has "
+                "ever been copied"
+            ),
+        )
+
+    newest: datetime | None = None
+    newest_name: str | None = None
+    newest_text: str | None = None
+    unreadable: list[str] = []
+    for name in sorted(raw):
+        parsed = _parse_stamp(raw[name])
+        if parsed is None:
+            unreadable.append(str(name))
+            continue
+        if newest is None or parsed > newest:
+            newest, newest_name, newest_text = parsed, str(name), raw[name]
+
+    note = ""
+    if unreadable:
+        note = f"; unreadable archive stamp(s) for {', '.join(unreadable)}, ignored"
+
+    if newest is not None:
+        age = (when - newest).total_seconds()
+        if age <= ARCHIVE_QUIET_AFTER_S:
+            return _ArchiveReport(
+                state=ARCHIVE_RECENT,
+                age_s=age,
+                stamp=str(newest_text),
+                surface=newest_name,
+                evidence=(
+                    f"archiving: {ARCHIVE_RECENT} - {newest_name} last copied a file at "
+                    f"{newest_text}, {_duration_phrase(age)} ago, inside the "
+                    f"{_duration_phrase(ARCHIVE_QUIET_AFTER_S)} quiet threshold"
+                    f"{note}"
+                ),
+            )
+        return _ArchiveReport(
+            state=ARCHIVE_QUIET,
+            age_s=age,
+            stamp=str(newest_text),
+            surface=newest_name,
+            evidence=(
+                f"archiving: {ARCHIVE_QUIET} - the last file copied was {newest_name} at "
+                f"{newest_text}, {_duration_phrase(age)} ago, past the "
+                f"{_duration_phrase(ARCHIVE_QUIET_AFTER_S)} quiet threshold. "
+                f"{ARCHIVE_QUIET_NOTE}{note}"
+            ),
+        )
+
+    floor = None if started is None else (when - started).total_seconds()
+    if floor is not None and floor > ARCHIVE_QUIET_AFTER_S:
+        return _ArchiveReport(
+            state=ARCHIVE_QUIET,
+            age_s=None,
+            stamp=None,
+            surface=None,
+            evidence=(
+                f"archiving: {ARCHIVE_QUIET} - the heartbeat's 'archived' map holds no "
+                "usable stamp and this watcher was armed "
+                f"{_stamp(started)}, so nothing has been copied for at least "
+                f"{_duration_phrase(floor)}. {ARCHIVE_QUIET_NOTE}{note}"
+            ),
+        )
+
+    if floor is None:
+        why = (
+            "and the arming stamp could not be read, so not even a floor can be "
+            "measured from it"
+        )
+    else:
+        why = (
+            f"and this watcher has only been armed {_duration_phrase(floor)}, less than "
+            f"the {_duration_phrase(ARCHIVE_QUIET_AFTER_S)} quiet threshold, so neither "
+            "answer is supported yet"
+        )
+    return _ArchiveReport(
+        state=ARCHIVE_UNKNOWN,
+        age_s=None,
+        stamp=None,
+        surface=None,
+        evidence=(
+            f"archiving: {ARCHIVE_UNKNOWN} - the heartbeat's 'archived' map holds no "
+            f"usable stamp {why}{note}"
+        ),
+    )
+
+
 def read_heartbeat(path: Path | None = None) -> dict | None:
     """Read the watcher's heartbeat as a plain dict, or return ``None``.
 
@@ -1839,6 +2089,22 @@ class WatcherStatus:
             verified identity and an unanswerable one used to reach the same
             branch and produce the same sentence, so an ARMED verdict could
             rest on an assumption while reading like an observation.
+        archive: One of the three ``ARCHIVE_*`` constants - `OPS-59`. A THIRD
+            fact beside :attr:`state` and the surface tuples, never folded into
+            them: polled recently, archived recently, and archived nothing for
+            a long time are three different things, and only the first was
+            answerable before this. It NEVER changes :attr:`state`, and
+            :data:`ARCHIVE_QUIET` is not a fault - see that constant.
+            ``ARCHIVE_UNKNOWN`` is the default because it is what every verdict
+            reached before the heartbeat is read can honestly say.
+        archived_age_s: Seconds since the newest recorded copy, or ``None``
+            when no stamp was readable - which covers both roads into
+            ``ARCHIVE_UNKNOWN`` and the floor-measured ``ARCHIVE_QUIET``.
+            Absent, not zero: zero would read as a copy that just landed.
+        last_archived: That stamp verbatim, or ``None``. Kept as the raw string
+            rather than a parsed datetime for the reason :attr:`dest_root` is
+            one - it is what the record said, and a consumer re-parsing it can
+            see exactly what it was handed.
     """
 
     state: str
@@ -1851,6 +2117,9 @@ class WatcherStatus:
     unjudged_surfaces: tuple[str, ...] = ()
     fresh_surfaces: tuple[str, ...] = ()
     identity: str = IDENTITY_NOT_REACHED
+    archive: str = ARCHIVE_UNKNOWN
+    archived_age_s: float | None = None
+    last_archived: str | None = None
 
     @property
     def all_surfaces_stale(self) -> bool:
@@ -2213,6 +2482,19 @@ def check_watcher(
                 rendered.append(f"{name} {(when - stamp).total_seconds():.0f} s ago")
         evidence.append("surfaces: " + ", ".join(rendered))
 
+    # `OPS-59`. Judged HERE, above the staleness branches, so every verdict
+    # that has a readable payload carries the same answer. A wedged watcher's
+    # reader wants to know whether anything was arriving just as much as a
+    # healthy one's, and computing it inside the ARMED branch alone would have
+    # made this field silently mean "unknown" on two states that could answer.
+    archived = _judge_archive(payload, when=when, started=started)
+    evidence.append(archived.evidence)
+    # ONE rendering, reused verbatim by all three verdicts below. The evidence
+    # line and the operator's sentence drifted apart once already in this
+    # module - that is the whole of ``OPS-53`` - and deriving the sentence from
+    # the line rather than writing it twice means they cannot.
+    archive_clause = f" {archived.evidence[0].upper()}{archived.evidence[1:]}."
+
     if age > HEARTBEAT_STALE_AFTER_S:
         return WatcherStatus(
             state=STATE_STALE,
@@ -2231,7 +2513,11 @@ def check_watcher(
                 "ONLY: nothing is re-armed, because a second poller on the same four "
                 "sources is worse than a wedged one, and nothing is stopped, because "
                 "killing is not in scope."
+                + archive_clause
             ),
+            archive=archived.state,
+            archived_age_s=archived.age_s,
+            last_archived=archived.stamp,
         )
 
     # ROADMAP 4f. Only reached once the COMBINED stamp is fresh, so whatever
@@ -2249,10 +2535,14 @@ def check_watcher(
             identity=identity,
             reason=_surface_stale_reason(
                 report, confirmed=confirmed, beat=beat, written_text=written_text, age=age
-            ),
+            )
+            + archive_clause,
             stale_surfaces=report.stale,
             unjudged_surfaces=report.unjudged,
             fresh_surfaces=report.fresh,
+            archive=archived.state,
+            archived_age_s=archived.age_s,
+            last_archived=archived.stamp,
         )
 
     # The closing sentence has to match what was actually observed. "Alive,
@@ -2282,9 +2572,13 @@ def check_watcher(
             f"{confirmed}; its heartbeat at {beat} was written {written_text}, "
             f"{age:.0f} s ago, inside the {HEARTBEAT_STALE_AFTER_S:.0f} s threshold, and "
             f"every judged surface is inside its own. {armed_tail}{unjudged_note}"
+            f"{archive_clause}"
         ),
         unjudged_surfaces=report.unjudged,
         fresh_surfaces=report.fresh,
+        archive=archived.state,
+        archived_age_s=archived.age_s,
+        last_archived=archived.stamp,
     )
 
 

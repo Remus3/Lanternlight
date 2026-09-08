@@ -108,6 +108,52 @@ is absent - never ``null``, never ``{}``. That is this project's measurement
 doctrine applied to its own instruments: conflating "not reported" with
 "reported as nothing" is how a reader starts judging a healthy surface against
 a cadence nobody measured.
+
+OPS-59 - a poll stamp is not an archive stamp
+----------------------------------------------
+
+MEASURED 2026-09-08 against the live watcher: 69,024 completed passes, every
+surface inside its own freshness threshold, and the newest file under the
+watched ``Logs`` and ``SaveGames`` directories carrying an mtime of
+2026-08-30. The game had not been launched in nine days. So the watcher had
+archived nothing across sixty-nine thousand passes and its status was
+indistinguishable from one archiving continuously.
+
+**That is not a fault in this module and nothing here treats it as one.** A
+surface with nothing to copy has not failed at anything, and
+``FAILING_PASSES_BEFORE_SURFACE_FREEZES`` above is right never to fire on it -
+it counts passes that HAD files to copy and landed none, which is a refused
+destination and a different fact entirely. What was missing is a SECOND,
+orthogonal reading: ``surfaces`` says a thread is alive, and ``archived`` says
+data is arriving. Those are two questions and one map could only ever answer
+one of them.
+
+``archived`` is written even when it is EMPTY, and that is the deliberate
+contrast with ``intervals`` two paragraphs up rather than an inconsistency.
+``{"intervals": {}}`` would assert that four surfaces have no cadence, a claim
+nobody measured. ``{"archived": {}}`` asserts that this writer tracks copies
+and has recorded none, which is a measurement. It is also the only thing that
+separates a current build with nothing to archive from a build older than this
+item, which cannot answer the question at all - and a reader that could not
+tell those apart would have to report a nine-day-old fault that does not
+exist. See ``ops.loop.watch``'s ``ARCHIVE_UNKNOWN``.
+
+HOW IT SURVIVES A RESTART, which is the acceptance's own wording and is worth
+being exact about. Nothing is loaded back off disk: like ``passes`` and
+``surfaces``, the map starts empty and is re-established from the live world.
+What re-establishes it is that :class:`~lanternlight.savewatch.SaveWatcher`
+remembers its ``(name, size, mtime_ns)`` seen-set per INSTANCE, so a restarted
+watcher considers every file present to be new and copies all of them on its
+first pass. The stamp therefore reappears within one poll interval of a
+restart, exactly as the other two fields do.
+
+THE COST THAT BUYS, stated rather than left implied, because it bounds what
+this field means: a re-arm produces a real copy of unchanged files, so the
+stamp then reads fresh even though no NEW game data arrived. The field answers
+"when did this watcher last copy a file", which equals "when did game data
+last arrive" only for a watcher that has been running since before the arrival
+in question. A reader wanting the stronger claim has to check the arming stamp
+too, and ``ops.loop.watch`` renders both in the same sentence for that reason.
 """
 
 from __future__ import annotations
@@ -443,10 +489,18 @@ class Heartbeat:
         # Parallel to _surfaces, never merged into it: the stamps have a
         # reader that already parses them, and the cadences do not.
         self._intervals: dict[str, float] = {}
+        # `OPS-59`. Parallel again, and for a stronger reason than intervals:
+        # this map is keyed by the surfaces that have COPIED something, which
+        # is a strict subset of the ones that have polled. Folding it into
+        # _surfaces would make an idle surface indistinguishable from an
+        # archiving one, which is the whole defect the item names.
+        self._archived: dict[str, str] = {}
         self._last_flush: float | None = None
         self._lock = threading.Lock()
 
-    def record(self, surface: str, poll_seconds: float | None = None) -> None:
+    def record(
+        self, surface: str, poll_seconds: float | None = None, *, archived: int = 0
+    ) -> None:
         """Count one COMPLETED poll pass for ``surface``, flushing if due.
 
         Called after ``poll_once`` returns. An EMPTY pass is not treated
@@ -484,10 +538,24 @@ class Heartbeat:
         LAST REPORT WINS, not first. An interval re-tuned between passes is a
         new fact, and a file still quoting the old one would have a reader
         judging a 300-second surface against a 30-second window.
+
+        ``archived`` is how many files THIS pass actually copied - `OPS-59`. It
+        defaults to zero, which is what every caller written before that item
+        passes, and zero leaves the archive map untouched rather than stamping
+        it: an idle pass is exactly as much evidence of liveness as a
+        productive one and exactly none that data arrived. Any non-zero count
+        stamps the surface with the same reading the poll stamp gets, so the
+        two are comparable without a reader having to reconcile two clocks.
+        The COUNT itself is deliberately not stored: how many files a pass
+        copied is a fact about that pass, and what a cold reader needs is the
+        moment, which is the thing it can subtract from now.
         """
         with self._lock:
             self._passes += 1
-            self._surfaces[surface] = self._stamp()
+            stamp = self._stamp()
+            self._surfaces[surface] = stamp
+            if archived:
+                self._archived[surface] = stamp
             if poll_seconds is not None:
                 self._intervals[surface] = float(poll_seconds)
             now = self._monotonic_fn()
@@ -602,6 +670,15 @@ class Heartbeat:
             "written": self._stamp(),
             "passes": self._passes,
             "surfaces": dict(sorted(self._surfaces.items())),
+            # PRESENT EVEN WHEN EMPTY, and the one field here that is - see the
+            # OPS-59 section of the module docstring. An empty map is a
+            # measurement ("this writer tracks copies and has recorded none"),
+            # not an absence, and it is the only signal that separates a
+            # current build with nothing to archive from an older build that
+            # cannot answer the question. Reading `{}` as "never archived" and
+            # a missing key as "unknown" is the reader's job; emitting them as
+            # the same shape would take that choice away from it.
+            "archived": dict(sorted(self._archived.items())),
         }
         # ABSENT, not empty. ``{}`` would assert that four surfaces have no
         # cadence, which is a claim nobody measured; leaving the key out says
@@ -852,7 +929,7 @@ def run_rolling(
 
     frozen: set[str] = set()
 
-    def record_pass(surface: _RollingSurface) -> None:
+    def record_pass(surface: _RollingSurface, archived: int = 0) -> None:
         """Record one completed pass, unless this surface's copies are refused.
 
         `OPS-26`. A surface whose destination refuses every copy stops
@@ -864,6 +941,14 @@ def run_rolling(
         Everything here stays behind ``heartbeat is not None``, because this
         function's contract is that a caller which passes no heartbeat gets the
         behaviour it had before one existed - no writes and no output.
+
+        ``archived`` is the length of the list ``poll_once`` just returned -
+        `OPS-59`. It comes from the RETURN VALUE rather than from a second
+        listing of the destination, because the snapshots that call handed back
+        are the copies that demonstrably landed on this pass; anything derived
+        from the directory afterwards would also count what an earlier pass
+        put there. A frozen surface returns before this is used, which is
+        right: a surface archiving nothing has no copy to stamp either.
         """
         if heartbeat is None:
             return
@@ -886,7 +971,7 @@ def run_rolling(
         if name in frozen:
             frozen.discard(name)
             say(f"{name} is archiving again - resuming its heartbeat")
-        heartbeat.record(name, surface.plan.poll_seconds)
+        heartbeat.record(name, surface.plan.poll_seconds, archived=archived)
 
     if max_passes is not None:
         for _ in range(max_passes):
@@ -894,8 +979,8 @@ def run_rolling(
             for surface in surfaces:
                 if surface.retarget(now):
                     say(f"rolled {surface.plan.name} over to {surface.plan.dest}")
-                surface.watcher.poll_once(now=now)
-                record_pass(surface)
+                taken = surface.watcher.poll_once(now=now)
+                record_pass(surface, len(taken))
         if heartbeat is not None:
             heartbeat.flush()
         return [surface.watcher for surface in surfaces]
@@ -911,14 +996,14 @@ def run_rolling(
                 # with it and nothing on the console says so.
                 say(f"stopping {surface.plan.name} - {exc}")
                 return
-            surface.watcher.poll_once(now=now)
+            taken = surface.watcher.poll_once(now=now)
             # After the pass, never before: the stamp claims a COMPLETED pass.
             # A surface whose thread returned above (a destination that has
             # acquired a git checkout) correctly stops advancing here, which
             # is what makes a stopped surface visible to a reader. Since
             # `OPS-26` a surface whose copies are being REFUSED stops advancing
             # too, through the same reader and without dying - see record_pass.
-            record_pass(surface)
+            record_pass(surface, len(taken))
             sleep_fn(surface.plan.poll_seconds)
 
     threads = [

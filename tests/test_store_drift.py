@@ -370,6 +370,231 @@ class TestARealStashInAThrowawayRepository:
         assert report.stash_commits == ()
 
 
+def _stash_subjects(report: store_drift.DriftReport) -> list[str]:
+    """The prefix-and-branch half of every named stash subject, sorted.
+
+    The tail of a stash subject carries a commit sha that changes every run, so
+    the assertions below pin the half git's own format decides.
+    """
+    return sorted(fact.subject.split(":")[0] for fact in report.stash_commits)
+
+
+class TestEveryFormOfStashGitCanWrite:
+    """``OPS-60`` criterion 2. Every subject form, measured rather than assumed.
+
+    ``OPS-54`` shipped a prefix set holding ``WIP on `` and ``index on `` and
+    called them "the two subjects git stash writes". They are two of five, and
+    the missing ones are not exotic: a MESSAGED stash - the form a careful agent
+    is most likely to use, because it labels its own work - writes neither of
+    them for its first commit.
+
+    Enumerated by running each form in a throwaway repository, git
+    2.53.0.windows.3, 2026-09-08, and reading back the subject git wrote:
+
+    ===================================  =====================================
+    command                              subjects, in git's parent order
+    ===================================  =====================================
+    ``git stash``                        ``WIP on <branch>: <sha> <subject>``
+                                         ``index on <branch>: <sha> <subject>``
+    ``git stash push -m "msg"``          ``On <branch>: msg``
+                                         ``index on <branch>: <sha> <subject>``
+    ``git stash push --keep-index``      the unmessaged pair, unchanged
+    ``git stash push --staged``          the unmessaged pair, unchanged
+    ``git stash push -u``                the unmessaged pair, plus a THIRD
+                                         ``untracked files on <branch>: ...``
+    ``git stash push -u -m "msg"``       the messaged pair, plus that third
+    on a detached HEAD                   every form above with the branch field
+                                         the literal ``(no branch)``
+    ``git stash create "msg"``           the messaged pair, on no ref at all
+    ===================================  =====================================
+
+    Each test below builds the stash with a real ``git stash`` in a repository
+    under ``tmp_path`` and reads the subject back. A test that types the subject
+    string by hand and asserts the prefix matches asserts on a coincidence
+    between two literals in the same repository, which is a defect this project
+    has already shipped once.
+    """
+
+    def test_a_messaged_stash_names_BOTH_of_its_commits(self, tmp_path: Path) -> None:
+        """Criterion 1. The defect: only the ``index on `` half used to match."""
+        repo = _new_repo(tmp_path / "messaged")
+        before = store_drift.snapshot(repo)
+        (repo / "a.txt").write_text("one\ntwo\n", encoding="utf-8", newline="\n")
+        _git(repo, "stash", "push", "-q", "-m", "my message")
+
+        report = store_drift.compare(before, store_drift.snapshot(repo))
+        assert _stash_subjects(report) == ["On master", "index on master"], report.format()
+
+    def test_an_include_untracked_stash_names_all_THREE_of_its_commits(
+        self, tmp_path: Path
+    ) -> None:
+        repo = _new_repo(tmp_path / "untracked")
+        before = store_drift.snapshot(repo)
+        (repo / "a.txt").write_text("one\ntwo\n", encoding="utf-8", newline="\n")
+        (repo / "b.txt").write_text("new\n", encoding="utf-8", newline="\n")
+        _git(repo, "stash", "push", "-q", "--include-untracked")
+
+        report = store_drift.compare(before, store_drift.snapshot(repo))
+        assert _stash_subjects(report) == [
+            "WIP on master",
+            "index on master",
+            "untracked files on master",
+        ], report.format()
+
+    def test_a_messaged_include_untracked_stash_names_all_three(self, tmp_path: Path) -> None:
+        """The two defective forms at once - the messaged head and the third commit."""
+        repo = _new_repo(tmp_path / "untracked-messaged")
+        before = store_drift.snapshot(repo)
+        (repo / "a.txt").write_text("one\ntwo\n", encoding="utf-8", newline="\n")
+        (repo / "b.txt").write_text("new\n", encoding="utf-8", newline="\n")
+        _git(repo, "stash", "push", "-q", "-u", "-m", "with untracked")
+
+        report = store_drift.compare(before, store_drift.snapshot(repo))
+        assert _stash_subjects(report) == [
+            "On master",
+            "index on master",
+            "untracked files on master",
+        ], report.format()
+
+    def test_keep_index_writes_the_ordinary_unmessaged_pair(self, tmp_path: Path) -> None:
+        """Measured, not assumed: ``--keep-index`` changes the tree, not the subject."""
+        repo = _new_repo(tmp_path / "keep-index")
+        before = store_drift.snapshot(repo)
+        (repo / "a.txt").write_text("one\ntwo\n", encoding="utf-8", newline="\n")
+        _git(repo, "add", "a.txt")
+        (repo / "a.txt").write_text("one\ntwo\nthree\n", encoding="utf-8", newline="\n")
+        _git(repo, "stash", "push", "-q", "--keep-index")
+
+        report = store_drift.compare(before, store_drift.snapshot(repo))
+        assert _stash_subjects(report) == ["WIP on master", "index on master"], report.format()
+
+    def test_a_stash_on_a_detached_head_is_named_with_no_branch(self, tmp_path: Path) -> None:
+        """There is no branch name, so git writes the literal ``(no branch)``."""
+        repo = _new_repo(tmp_path / "detached")
+        _git(repo, "checkout", "-q", "--detach", "HEAD")
+        before = store_drift.snapshot(repo)
+        (repo / "a.txt").write_text("one\ntwo\n", encoding="utf-8", newline="\n")
+        _git(repo, "stash", "-q")
+
+        report = store_drift.compare(before, store_drift.snapshot(repo))
+        assert _stash_subjects(report) == [
+            "WIP on (no branch)",
+            "index on (no branch)",
+        ], report.format()
+
+    def test_a_messaged_stash_on_a_detached_head_is_named_too(self, tmp_path: Path) -> None:
+        repo = _new_repo(tmp_path / "detached-messaged")
+        _git(repo, "checkout", "-q", "--detach", "HEAD")
+        before = store_drift.snapshot(repo)
+        (repo / "a.txt").write_text("one\ntwo\n", encoding="utf-8", newline="\n")
+        _git(repo, "stash", "push", "-q", "-m", "on a detached head")
+
+        report = store_drift.compare(before, store_drift.snapshot(repo))
+        assert _stash_subjects(report) == [
+            "On (no branch)",
+            "index on (no branch)",
+        ], report.format()
+
+    def test_a_branch_name_cannot_contain_a_space(self, tmp_path: Path) -> None:
+        """The assumption the messaged form's shape check rests on, measured.
+
+        ``On <branch>: <message>`` is only distinguishable from an ordinary
+        English subject beginning "On " because the field before the colon is a
+        branch name and git refuses a branch name with a space in it. If that
+        were not true the check would have to be a bare ``On `` prefix, which
+        would name every commit subject starting with that word.
+        """
+        repo = _new_repo(tmp_path / "branch-names")
+        refused = subprocess.run(
+            ["git", "branch", "a name with spaces"],
+            cwd=repo,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=120,
+        )
+        assert refused.returncode != 0, refused.stdout + refused.stderr
+
+    def test_an_ordinary_commit_that_starts_with_On_is_not_named_as_a_stash(
+        self, tmp_path: Path
+    ) -> None:
+        """The false-positive control for the widened match.
+
+        A real commit, written by a real ``git commit``, whose subject opens
+        with the same word a messaged stash does. Widening the match to a bare
+        ``On `` prefix names this one, and a report full of false alarms is a
+        report the reader learns to skip.
+        """
+        repo = _new_repo(tmp_path / "prose")
+        before = store_drift.snapshot(repo)
+        (repo / "a.txt").write_text("one\ntwo\n", encoding="utf-8", newline="\n")
+        _git(repo, "add", "a.txt")
+        _git(repo, "commit", "-q", "-m", "On the third pass: rewrite the parser")
+
+        report = store_drift.compare(before, store_drift.snapshot(repo))
+        assert report.moved is True, report.format()
+        assert report.stash_commits == (), report.format()
+
+
+class TestTheArithmeticThatWasWrong:
+    """``OPS-60`` criteria 3 and 4. A commit count is not a stash count.
+
+    ``OPS-54``'s closure and ``LL-0188`` both stated that one stash writes two
+    commits, and inferred that six unreachable commits were three stashes. The
+    first half is right about one stash in isolation and the inference is wrong
+    in both directions - the counterexample is below, so the next person to
+    reason about it meets it rather than the intuition.
+    """
+
+    def test_two_stashes_from_an_unchanged_index_leave_THREE_commits_not_four(
+        self, tmp_path: Path
+    ) -> None:
+        """The deduplication counterexample, built by running the real commands.
+
+        The second stash's ``index on `` commit has the same tree, the same
+        parent and the same subject as the first one, so it hashes to the same
+        object and git stores one commit rather than two. N stashes taken from
+        an unchanged index leave N+1 commits, not 2N.
+        """
+        repo = _new_repo(tmp_path / "dedup")
+        before = store_drift.snapshot(repo)
+
+        (repo / "a.txt").write_text("one\ntwo\n", encoding="utf-8", newline="\n")
+        _git(repo, "stash", "push", "-q", "-m", "first stash")
+        _git(repo, "stash", "drop", "-q")
+
+        (repo / "a.txt").write_text("one\ntwo\nthree\n", encoding="utf-8", newline="\n")
+        _git(repo, "stash", "-q")
+        _git(repo, "stash", "drop", "-q")
+
+        report = store_drift.compare(before, store_drift.snapshot(repo))
+        assert len(report.stash_commits) == 3, report.format()
+        assert _stash_subjects(report) == [
+            "On master",
+            "WIP on master",
+            "index on master",
+        ], report.format()
+        assert all(fact.unreachable for fact in report.stash_commits), report.format()
+
+    def test_the_report_refuses_to_convert_its_commit_count_into_a_stash_count(
+        self, tmp_path: Path
+    ) -> None:
+        """The rendered report has to carry the caveat, not just this test.
+
+        A caveat stated in a test and dropped from the artifact is a lie in the
+        artifact: the merger reads ``format()``, not this file.
+        """
+        repo = _new_repo(tmp_path / "caveat")
+        before = store_drift.snapshot(repo)
+        (repo / "a.txt").write_text("one\ntwo\n", encoding="utf-8", newline="\n")
+        _git(repo, "stash", "push", "-q", "-m", "my message")
+
+        rendered = store_drift.compare(before, store_drift.snapshot(repo)).format()
+        assert "STASH-SHAPED COMMITS: 2" in rendered
+        assert "not a count of stashes" in rendered
+        assert "git stash list" in rendered
+
+
 class TestTheWrittenBan:
     """Criterion 1. The list is prose, so the test pins that it stays complete."""
 

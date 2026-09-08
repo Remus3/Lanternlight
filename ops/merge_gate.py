@@ -45,9 +45,9 @@ took before the work and compares it with one taken here.
 
 Two things about it are deliberate and easy to get wrong. It is reported in
 ``GateReport.measurement`` rather than as a finding, because drift changes
-what a merger checks next rather than whether the merge proceeds - three
-stashes happened in this repository during a session in which nothing was
-lost. And when no dispatch-time reading exists it says the check DID NOT RUN;
+what a merger checks next rather than whether the merge proceeds - this
+repository has had real stashes taken in it during a session in which nothing
+was lost. And when no dispatch-time reading exists it says the check DID NOT RUN;
 it never says there was no drift, which would be an answer its record cannot
 support. The detector itself was built and proved under ``OPS-54`` and then
 left with no caller at all for a week, which is the ``OPS-31`` shape again.
@@ -261,8 +261,11 @@ class RunResult:
 #: line says nothing whatever about the work: it says the numbers above it were
 #: taken while the object store was moving. A merger who reads the two as one
 #: list either ignores both or blocks on both, and blocking on drift is the
-#: worse mistake - three stashes happened in this repository during a session
-#: in which nothing was lost.
+#: worse mistake - real stashes have been taken in this repository during a
+#: session in which nothing was lost. No count is given here on purpose: a
+#: stash writes two commits, or three when untracked files are included, and a
+#: repeat taken from an unchanged index adds only one because its index commit
+#: hashes to the object the first one already wrote. See ``OPS-60``.
 MEASUREMENT_HEADER = (
     "  --- measurement conditions - NOT a verdict on the claimed work ---",
     "  a finding above says the work may be wrong; a line below says the "
