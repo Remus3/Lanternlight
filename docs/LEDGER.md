@@ -84,6 +84,19 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0181 - 2026-09-08 - OPS-39 defect 7 closed: every inbox-chosen NOTE filename is sanitised before it is rendered, and a test that named the wrong branch was found by a surviving mutation
+
+**Evidence:**
+- ops/inbox_watch.py sanitises a note name at all FOUR sites - the head name of a group, the 'same bytes also arrived as' tail, the NOT ADDRESSED list, and the problem string the reader builds for an unreadable file. Full suite 2402 passed and 1 skipped in 146.61s; --collect-only reports 2403; ruff All checks passed.
+- THE READER IS SANITISED AT THE SOURCE, not only at the render, because that string travels into the scan result's detail field and callers other than the renderer read it - and because two of the drop leak's three copies lived in failure paths, which is where a name is most likely to be strange and least likely to have been looked at.
+- ACCEPTANCE MET BY THE SUBSTITUTION THE CRITERION ITSELF NAMES. Windows cannot create a filename containing a newline, so the hostile names are injected - into group objects for the three render sites, and through iterdir for the reader - and each test asserts the raw forged string is ABSENT while the neutered form is present. A name is still shown; it simply cannot be a line.
+- SIX MUTATIONS, each anchor asserted to match exactly once, each restored and verified byte-identical by SHA-256, all RED against a 110-test baseline: the head name rendered raw (1); the duplicate-name tail rendered raw (1); the NOT ADDRESSED list rendered raw (1); the problem string built raw (1); the limit argument ignored (2); and the unsafe byte class widened to admit control characters (8).
+- A SECOND DISPLAY LIMIT WAS ADDED ON A MEASUREMENT, NOT A PREFERENCE. The drop limit of 48 characters truncated the real notes in this channel, whose naming convention is a date, the sending project and a subject and which run to 82 characters on disk - so 48 removes the subject, the half the operator identifies a note by, defeating the report's whole purpose. The note limit is 120 and the sanitiser takes the bound as an argument. The BYTE CLASS IS IDENTICAL; only the length differs. Found by two existing real-note tests going red, not by inspection.
+
+ONE MUTATION SURVIVED FIRST AND IT EXPOSED A TEST ASSERTING ON A COINCIDENCE. The NOT ADDRESSED mutation passed because the test built its group with a verdict typed as NOT_OURS with an underscore, while the module's constant is NOT OURS with a space. The group therefore landed in the OURS list, which the same change had just sanitised, so the test asserted the right property about the wrong branch and was green in both directions. Fixed by importing the constant rather than retyping it. A LITERAL THAT DUPLICATES A CONSTANT IS A TEST ASSERTING ON A COINCIDENCE, and only a mutation asked the question.
+WHAT THIS DOES NOT CLOSE: the count is still unbounded. Two hundred notes still contribute two hundred names, and this change bounds what each name can BE, not how many there are. The other open item under OPS-39 is unchanged - the staged diff passes paths to git as bare pathspecs, so a tracked file named with glob metacharacters is glob-interpreted rather than matched literally. Latent, not exercised by anything in the tree, still open.
+THE ORIGINAL FILING'S ASYMMETRY HELD UP ON CONTACT. Note names are worse than drop names in that the count is unbounded, and better in that the note banner never CLAIMED the names were withheld - so this was a true report of dangerous data rather than a false promise about it, which is why it was correctly filed as the smaller of the two failures and fixed second.
+
 ### LL-0180 - 2026-09-08 - OPS-27 closed on a write at DISPATCH rather than a compaction hook, and its adversarial pass proved the closure's own privacy guarantee false before it was committed
 
 **Evidence:**

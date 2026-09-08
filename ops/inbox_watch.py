@@ -288,6 +288,7 @@ __all__ = [
     "SCHEMA",
     "REPO_ROOT",
     "NAME_DISPLAY_LIMIT",
+    "NOTE_NAME_DISPLAY_LIMIT",
     "Drop",
     "Group",
     "Scan",
@@ -498,8 +499,20 @@ _UNSAFE_LABEL_BYTE = re.compile(r"[^A-Za-z0-9._-]")
 #: the whole justification for showing one at all - see the module docstring.
 NAME_DISPLAY_LIMIT = 48
 
+#: The same bound for a NOTE name, and it is larger for a measured reason.
+#: This channel's real notes are named by convention - a date, the sending
+#: project, and a subject - and the ones actually on disk run to 82
+#: characters. Truncating those at 48 removes the subject, which is the
+#: half the operator identifies a note by, and the report's whole purpose
+#: is that the operator can go and find the note. The byte class is
+#: IDENTICAL, so a name still cannot forge a line, repaint a terminal or
+#: close a delimiter; only the length differs. A drop name is bounded
+#: harder because one drop contributes one name and nothing in the
+#: convention makes it long.
+NOTE_NAME_DISPLAY_LIMIT = 120
 
-def safe_label(name: str) -> str:
+
+def safe_label(name: str, limit: int = NAME_DISPLAY_LIMIT) -> str:
     """Render a name chosen by whoever wrote into the inbox, bounded and restricted.
 
     This is the ONLY function through which a channel-chosen string may reach
@@ -513,15 +526,15 @@ def safe_label(name: str) -> str:
 
     Returns:
         The name with every byte outside ``[A-Za-z0-9._-]`` replaced by ``?``,
-        truncated to :data:`NAME_DISPLAY_LIMIT` characters with the true length
+        truncated to ``limit`` characters with the true length
         appended when it was longer. An empty name renders as ``(unnamed)`` so
         the field can never collapse to nothing and shift the line's meaning.
     """
     cleaned = _UNSAFE_LABEL_BYTE.sub("?", name)
     if not cleaned:
         return "(unnamed)"
-    if len(cleaned) > NAME_DISPLAY_LIMIT:
-        return f"{cleaned[:NAME_DISPLAY_LIMIT]}...[truncated from {len(name)} chars]"
+    if len(cleaned) > limit:
+        return f"{cleaned[:limit]}...[truncated from {len(name)} chars]"
     return cleaned
 
 
@@ -983,7 +996,16 @@ def _read_entries(inbox: Path) -> tuple[list[tuple[str, bytes]], str]:
         try:
             entries.append((entry.name, entry.read_bytes()))
         except OSError as exc:
-            problems.append(f"{entry.name} ({exc.__class__.__name__})")
+            # SANITISED AT THE SOURCE, not only where it is rendered.
+            # OPS-39 defect 7: this string travels into Scan.detail, which
+            # callers other than render() read, and a failure path is where
+            # a name is most likely to be strange and least likely to have
+            # been looked at - two of the drop leak's three copies lived in
+            # failure paths for exactly that reason.
+            problems.append(
+                f"{safe_label(entry.name, NOTE_NAME_DISPLAY_LIMIT)} "
+                f"({exc.__class__.__name__})"
+            )
     return entries, ("could not read: " + ", ".join(problems) if problems else "")
 
 
@@ -1548,10 +1570,27 @@ def render(result: Scan) -> str:
     if mine:
         lines.append(f"FOR LANTERNLIGHT, OR NOT RULED OUT ({mine_files} files):")
         for group in mine:
-            head = group.names[0]
+            # EVERY note name here is chosen by whoever writes into our
+            # gitignored inbox - the same untrusted party as a drop's
+            # directory name, which OPS-39 defect 1 already routed
+            # through safe_label(). Note names are WORSE in one way: a
+            # drop contributes ONE such name and two hundred notes
+            # contribute two hundred. They were better in another - this
+            # banner never claimed the names were withheld - so it was a
+            # true report of dangerous data rather than a false promise
+            # about it. On Windows a filename cannot hold a newline; on
+            # Linux it can, and this repository is public.
+            head = safe_label(group.names[0], NOTE_NAME_DISPLAY_LIMIT)
             extra = ""
             if len(group.names) > 1:
-                extra = " (same bytes also arrived as: " + ", ".join(group.names[1:]) + ")"
+                extra = (
+                    " (same bytes also arrived as: "
+                    + ", ".join(
+                        safe_label(name, NOTE_NAME_DISPLAY_LIMIT)
+                        for name in group.names[1:]
+                    )
+                    + ")"
+                )
             lines.append(f"  [{group.verdict}] {head}{extra}")
             lines.append(f"      why: {group.reason}")
     else:
@@ -1559,7 +1598,9 @@ def render(result: Scan) -> str:
 
     lines.append("")
     if theirs:
-        names = [n for group in theirs for n in group.names]
+        names = [
+            safe_label(n, NOTE_NAME_DISPLAY_LIMIT) for group in theirs for n in group.names
+        ]
         lines.append(f"NOT ADDRESSED TO US ({theirs_files} files), listed so none is lost:")
         for name in sorted(names):
             lines.append(f"  {name}")

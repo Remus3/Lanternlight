@@ -5169,7 +5169,7 @@ project root rather than machine-identifying, and changing both at once doubles
 the chance of a silent hook break for no gain. `tests/test_lane_contract.py`
 already covers rendered lane contracts against ANY absolute path.
 
-## OPS-39. Six defects the wrap's refutation found in the SAME session that shipped them - defects 1-5 CLOSED 2026-09-07, defect 7 OPEN
+## OPS-39. Six defects the wrap's refutation found in the SAME session that shipped them - defects 1-5 CLOSED 2026-09-07, defect 7 CLOSED 2026-09-08
 
 Filed 2026-09-07 by the wrap refutation pass against commits `f04d394`,
 `b98cf91` and `2e56714`. Every one was reproduced with a command and its output,
@@ -5261,7 +5261,7 @@ Three, all corrected in place before the wrap commit rather than left standing:
 - **A present-tense claim about a directory another process was writing to**,
   and then deleted. Corrected under `OPS-34` criterion 1.
 
-### 7. NOTE filenames have the identical exposure, and are WORSE in one way - OPEN
+### 7. NOTE filenames have the identical exposure, and are WORSE in one way - CLOSED 2026-09-08
 
 Found while fixing defect 1, by the lane doing the fixing, and filed here
 because that lane could not edit this file.
@@ -5294,6 +5294,60 @@ Acceptance: no byte an inbox writer controls reaches the rendered report from
 the note lists either, proven by a note whose filename contains a newline on a
 platform that permits one, or by an explicit test that the sanitiser is applied
 to the note path if the platform cannot produce that filename.
+
+**CLOSED 2026-09-08.** Every note name now goes through `safe_label()`, at all
+four sites: the head name of a group, the "same bytes also arrived as" tail, the
+NOT ADDRESSED list, and the `could not read:` problem string that `_read_entries`
+builds. The last of those is sanitised AT THE SOURCE rather than at the render,
+because that string travels into `Scan.detail` and callers other than `render()`
+read it - and because two of the drop leak's three copies lived in failure paths,
+which is where a name is most likely to be strange and least likely to have been
+looked at.
+
+**A SECOND LIMIT WAS ADDED, and the reason is measured rather than aesthetic.**
+`NAME_DISPLAY_LIMIT` is 48, and applying it to note names truncated the real
+notes in this channel: their convention is a date, the sending project and a
+subject, and the ones actually on disk run to 82 characters, so 48 removes the
+subject - the half the operator identifies a note by. That defeats the report's
+whole purpose, which is that the operator can go and find the note. So
+`NOTE_NAME_DISPLAY_LIMIT` is 120 and `safe_label` takes the bound as an
+argument. **The byte class is IDENTICAL** - a note name still cannot forge a
+line, repaint a terminal or close a delimiter - and only the length differs. A
+drop name stays bounded harder because one drop contributes one name and nothing
+in the convention makes it long. This was found by two existing tests going red,
+not by inspection: the real-note tests assert the full name appears.
+
+**Acceptance, met by the substitution the criterion itself names.** Windows
+cannot create a filename containing a newline, so the hostile names are injected
+- into `Group` objects for the three render sites, and through `iterdir` for the
+reader - and each test asserts the raw forged string is ABSENT from the output
+while the neutered form is present. A name is still shown; it simply cannot be a
+line.
+
+**Six mutations, each anchor asserted to match exactly once, each restored and
+verified byte-identical by SHA-256, all RED against a 110-test baseline:** the
+head name rendered raw (1); the duplicate-name tail rendered raw (1); the NOT
+ADDRESSED list rendered raw (1); the problem string built raw (1); the limit
+argument ignored so every name truncates at 48 (2); and the unsafe byte class
+widened to admit control characters (8).
+
+**ONE OF THOSE SURVIVED FIRST, and the reason is worth keeping.** The NOT
+ADDRESSED mutation passed because the test built its group with the verdict
+string `"NOT_OURS"` while the module's constant is `NOT OURS` - a space, not an
+underscore. The group therefore landed in the OURS list, which the same change
+had just sanitised, so the test asserted the right property about the wrong
+branch and would have passed no matter what happened to the branch it named.
+Fixed by importing the constant instead of retyping it. **A literal that
+duplicates a constant is a test asserting on a coincidence**, and this one was
+green in both directions until a mutation asked.
+
+**What is NOT closed by this.** The count is still unbounded - two hundred notes
+still contribute two hundred names - and this change does not alter that. It
+bounds what each name can BE, not how many there are. The other open item from
+`OPS-39` is `staged_diff` passing paths to git as bare pathspecs, so a tracked
+file named with glob metacharacters is glob-interpreted rather than matched
+literally. Still latent, still not exercised by anything in the tree, still open.
+
 
 ### Acceptance
 
@@ -5406,8 +5460,8 @@ for that file moved 6 to 12: the widened pattern sees its own new literals, and
 two prose passages were rewritten to describe spellings abstractly to hold the
 count at 12 rather than 16.
 
-**Still open from this item: defect 7**, the note-filename exposure, above. And
-one more, filed here rather than fixed: `staged_diff` passes paths to git as
+**Defect 7 CLOSED 2026-09-08**, above. Still open from this item, filed here
+rather than fixed: `staged_diff` passes paths to git as
 bare pathspecs, so a tracked file named with glob metacharacters - `foo[1].py` -
 is glob-interpreted rather than matched literally. A latent false PASS in the
 lint gate. Not exercised by anything in the tree today.

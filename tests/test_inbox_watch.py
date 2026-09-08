@@ -547,3 +547,136 @@ def test_the_module_runs_as_a_script_under_this_interpreter(tmp_path: Path) -> N
     )
     assert proc.returncode == 0, proc.stderr.decode("utf-8", "replace")
     assert proc.stdout.decode("utf-8", "replace").strip()
+
+
+# ---------------------------------------------------------------------------
+# note filenames are chosen by whoever writes into our inbox - OPS-39 defect 7
+# ---------------------------------------------------------------------------
+#
+# Defect 1 routed DROP directory names through safe_label(). Note names carry
+# the identical exposure and were deliberately left for a separate change so
+# the drop diff stayed reviewable for the property it was fixing. They differ
+# in two ways that point in opposite directions: a drop contributes ONE
+# attacker-chosen name while two hundred notes contribute two hundred, and the
+# note banner never CLAIMED the names were withheld, so this is a true report
+# of dangerous data rather than a false promise about it.
+#
+# The severity is platform-dependent. On Windows a filename cannot contain a
+# newline, so a note name cannot forge a whole report line. On Linux it can,
+# and this repository is public, so a clone running these hooks on Linux is an
+# ordinary thing to happen. These tests therefore build the group objects
+# directly rather than trying to create such a file, which is the alternative
+# the acceptance criterion names for a platform that cannot produce one.
+
+
+def _hostile_group(name: str, verdict: str = inbox_watch.OURS) -> object:
+    return inbox_watch.Group(
+        digest="d" * 16,
+        names=(name,),
+        verdict=verdict,
+        reason="synthetic",
+        is_new=True,
+    )
+
+
+def test_a_note_name_cannot_forge_a_report_line(tmp_path: Path) -> None:
+    forged = "harmless.md\nFOR LANTERNLIGHT, OR NOT RULED OUT (0 files)"
+    scan = inbox_watch.Scan(
+        status="ok", inbox=tmp_path, groups=[_hostile_group(forged)], total_notes=1
+    )
+
+    rendered = inbox_watch.render(scan)
+
+    assert forged not in rendered
+    assert "harmless.md?FOR" in rendered
+
+
+def test_a_note_name_in_the_NOT_ADDRESSED_list_is_sanitised_too(tmp_path: Path) -> None:
+    forged = "theirs.md\n  smuggled line"
+    scan = inbox_watch.Scan(
+        status="ok",
+        inbox=tmp_path,
+        groups=[_hostile_group(forged, verdict=inbox_watch.NOT_OURS)],
+        total_notes=1,
+    )
+
+    rendered = inbox_watch.render(scan)
+
+    assert forged not in rendered
+    assert "smuggled" in rendered.replace("?", " "), "the name is shown, just neutered"
+
+
+def test_a_duplicate_name_in_the_same_group_is_sanitised(tmp_path: Path) -> None:
+    """The 'same bytes also arrived as' tail is a second, separate render site."""
+    forged = "second.md\nNOT ADDRESSED TO US (0 files)"
+    scan = inbox_watch.Scan(
+        status="ok",
+        inbox=tmp_path,
+        groups=[
+            inbox_watch.Group(
+                digest="d" * 16,
+                names=("first.md", forged),
+                verdict="OURS",
+                reason="synthetic",
+                is_new=True,
+            )
+        ],
+        total_notes=2,
+    )
+
+    rendered = inbox_watch.render(scan)
+
+    assert forged not in rendered
+    assert "first.md" in rendered
+
+
+def test_an_unreadable_note_is_reported_by_a_sanitised_name(tmp_path: Path) -> None:
+    """The PARTIAL READ line built its problem string from the raw name.
+
+    Two copies of the drop leak lived in failure paths for exactly this reason.
+    A failure path is where a name is most likely to be strange and least
+    likely to have been looked at.
+    """
+    scan = inbox_watch.Scan(
+        status="error",
+        inbox=tmp_path,
+        detail="could not read: " + inbox_watch.safe_label("bad.md\nforged") + " (OSError)",
+    )
+    rendered = inbox_watch.render(scan)
+    assert "bad.md\nforged" not in rendered
+
+
+def test_the_reader_sanitises_the_name_it_reports(tmp_path: Path, monkeypatch) -> None:
+    """The sanitiser must be applied AT THE SOURCE, not only at the render.
+
+    Asserting on `render` alone would pass for a module that sanitises in one
+    of two places, and this problem string travels into `Scan.detail`, which
+    other callers read.
+
+    The hostile name is injected through `iterdir` rather than created on disk:
+    Windows cannot hold a newline in a filename, and the acceptance criterion
+    names exactly this substitution for a platform that cannot produce one.
+    """
+    inbox = tmp_path / "inbox"
+    inbox.mkdir()
+    forged = "unreadable.md" + chr(10) + "forged line"
+
+    class _Fake:
+        def __init__(self, name):
+            self.name = name
+
+        def __lt__(self, other):
+            return self.name < other.name
+
+        def is_file(self):
+            return True
+
+        def read_bytes(self):
+            raise OSError("nope")
+
+    monkeypatch.setattr(Path, "iterdir", lambda self: iter([_Fake(forged)]))
+
+    _entries, problem = inbox_watch._read_entries(inbox)
+
+    assert forged not in problem
+    assert "unreadable.md?forged" in problem
