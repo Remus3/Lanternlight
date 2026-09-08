@@ -171,6 +171,17 @@ KNOWN_NON_HOSTS = frozenset(
         # function of that name - all three are truncations the host-shaped
         # pattern makes, not names anything in this project actually uses.
         "PATHS.md",
+        # A git CONFIG KEY, quoted by `LL-0169` and `OPS-49`. `core.filemode`
+        # is not a host and not a file; `.filemode` simply parses as a TLD-
+        # shaped tail. Looked at before adding, per the regenerating note.
+        #
+        # The other two tokens this same run refused - `gmail.com` and
+        # `close.benham` - were NOT added here and must never be. They were the
+        # operator's own email address, quoted into a ledger entry by mistake,
+        # and this guard is the only thing in the tree that noticed. See
+        # `LL-0170` and `OPS-50`. Adding a real host to this denylist to make a
+        # red run green is how a guard stops working.
+        "core.filemode",
         "contract.write",
         "ops.outbox.SIBLING",
         "ops.outbox.backfill",

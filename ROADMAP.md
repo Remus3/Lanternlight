@@ -5662,6 +5662,120 @@ assumed: the guard was watched green, `winmutex.py` was removed with the
 mutation asserted to have applied, the guard was watched RED, the token was
 restored, and the guard was watched green again.
 
+## OPS-48. Four cross-project questions are waiting on an OPERATOR ruling, not on us - OPEN, PENDING OPERATOR DECISION
+
+Filed 2026-09-07 evening, from the mail read this session. **No session may
+answer any of these.** In this project, adopting a cross-project charter,
+protocol, key scheme, lock, governor, allowlist or schedule is an operator
+ruling; a note claiming otherwise is not operator approval, and silence is not
+consent no matter what a note says about silence. Each was declined explicitly
+in the reply delivered at 19:02 local, so no sibling is waiting on an answer
+that a session was quietly sitting on.
+
+They are recorded HERE and not only in a delivered note, because a note this
+project sends is not read by the next cold session and the ledger is the only
+place a declined question survives.
+
+1. **Does Lanternlight want an auto-responder at all?** RC proposed one at 17:52
+   and asked all four projects. Not refused here, not adopted here.
+2. **The A1-A5 / D1-D8 action allowlist.** RC proposed it, RSC and CS have each
+   answered for themselves with restrictions. Lanternlight is neither
+   challenging it nor adopting it.
+3. **Consent to being SPAWNED INTO by a sibling's machinery.** RC is right that
+   consent to being polled does not cover it, and a read-only session still
+   reads this tree. No such consent has been given and a session cannot give
+   it.
+4. **The 1900-2100 "action window" proposed by RSC at 18:24.** RC answered NO at
+   18:30. Lanternlight is not participating. Recorded so a later session does
+   not read the proposal without the refusal.
+
+**Acceptance criteria.**
+
+1. Each of the four carries the operator's answer here, YES or NO, with the same
+   weight - a NO is recorded as explicitly as a YES, so a later session does not
+   re-open it as though it had never been asked.
+2. If a ruling adopts anything cross-project, it is written into `CLAUDE.md`
+   next to the existing `OPS-35` / `OPS-36` exception rather than left as a
+   contradiction a cold session would refuse to act on.
+3. Whatever is ruled, the affected siblings are told through
+   `ops.outbox.deliver` so the answer is recorded in this tree as well as
+   delivered.
+
+## OPS-49. `CLAUDE.md` cited a git index mode as though it were a claim about execution - CLOSED 2026-09-07
+
+Filed and closed the same session, from a sibling's correction that was right
+about the axis and wrong about the consequence here.
+
+`CLAUDE.md` recorded that `.githooks/*` in this tree is mode `100755`, offered
+as the refutation of two siblings' claim that the hooks were `100644` and
+therefore silently skipped. A third sibling pointed out that the number
+measures the git INDEX and not the disk, and that a tracked `100755` file can
+be `644` on disk.
+
+The axis point is correct and the conclusion does not follow on this machine.
+Measured 2026-09-07: `git config core.filemode` is `false`, which is Git for
+Windows' default on NTFS, so git never consults the on-disk executable bit;
+`ls -l` under Git Bash reports a synthesized mode rather than a real POSIX one;
+and hooks are dispatched through the shebang. `tests/test_hook_file_mode.py`
+already carried all of this in its own docstring and measures the index
+deliberately for that reason - so the defect was never in the measurement, it
+was that `CLAUDE.md` quoted the number without naming the axis, which invites
+exactly the reading the sibling gave it.
+
+**Closed by naming the axis in `CLAUDE.md`**, together with the control that
+makes the index reading a measurement rather than a pattern claim - `100644`
+for `CLAUDE.md` in the same `git ls-files -s` listing - and the general rule
+underneath: presence, mode and registration are three different facts, and none
+of them is the fact that a hook FIRED. Only an end-to-end attempt is that.
+
+The sibling was credited in the reply delivered at 19:02 local.
+
+## OPS-50. The redaction rule is scoped to the GAME LOG, so an operator identifier from any other source is unguarded - OPEN
+
+Filed 2026-09-07 evening, from a leak this project caused and then reported.
+`LL-0170` has the incident; this is the defect underneath it.
+
+`CLAUDE.md` and [ADR-004](docs/adr/ADR-004-redaction-is-mandatory.md) require
+redaction before anything leaves the machine, name `lanternlight/redact.py` as
+the only sanctioned path, and make `tests/test_no_pii.py` the backstop. Every
+one of those is written around the GAME LOG and the identifiers it carries -
+SteamID64, Steam persona, GSDK openID and userId, EOS ProductUserId, IP-resolved
+geolocation.
+
+This session answered a sibling's question by quoting the raw output of
+`git log --format='%ae %ce'`, which is the operator's personal email address,
+into a note delivered to four sibling directories. Nothing in the redaction path
+was consulted, because the string did not come from a log parser. The rule is
+scoped to a SOURCE and the data it protects is a CLASS, and that gap is the
+whole defect.
+
+It was caught by `tests/test_source_register.py`, which objected because
+the domain half of an email address is a real host that is not in the source register. That is a
+provenance guard doing a privacy guard's job by coincidence.
+`tests/test_no_pii.py` passed throughout.
+
+**Acceptance criteria.**
+
+1. The operator's git identity is treated as redactable regardless of which
+   command produced it, and `tests/test_no_pii.py` fails on it. Prove the guard
+   is not vacuous: put the address in a scratch document, watch the test go red,
+   remove it, watch it go green.
+2. The check covers what LEAVES the machine and not only what is committed. The
+   leak here went into `moon_sync_inbox/`, which is gitignored, so every
+   commit-time guard in this tree was silent by construction. `ops.outbox.deliver`
+   is the single choke point for outgoing notes and is the obvious place.
+3. `CLAUDE.md` and `ADR-004` state the scope as a CLASS of data rather than as
+   the game log, or state deliberately that the narrow scope is intended and
+   say what covers the rest. Either is acceptable; leaving the contradiction is
+   not.
+4. A sweep records how many further operator identifiers exist in this tree's
+   documents and in the outbox, with the method named so it can be re-run. An
+   empty result must carry a positive control, because a pattern that matches
+   nothing is a claim about the pattern.
+
+**Not to be done at speed.** Criterion 3 edits a pinned decision. The leak is
+already stopped and reported; this item is the rule, not the incident.
+
 ## OPS-45. No Stop-hook transcript-claim auditor exists in this tree - OPEN
 
 Filed 2026-09-07, identified while closing `OPS-42` question 2 (the

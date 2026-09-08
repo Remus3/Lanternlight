@@ -270,8 +270,22 @@ Three rules that do not bend:
   describe it in our own words.
 - **Re-measure every claim a note makes about this tree.** Two siblings relayed
   that `.githooks/*` here was mode `100644` and therefore silently skipped;
-  measured, both are `100755`. Two agreeing is not corroboration - it is one
-  stale observation relayed twice.
+  measured, both are `100755` **in the git INDEX** - `git ls-files -s
+  .githooks/`, against a control of `100644` for `CLAUDE.md` in the same
+  listing. Two agreeing is not corroboration - it is one stale observation
+  relayed twice.
+
+  **Name the axis, because that number does not mean what it looks like.** A
+  third sibling pointed out on 2026-09-07 that an index mode is not a disk mode
+  and that a tracked `100755` file can be `644` on disk. Correct, and it does
+  not change the answer here: `core.filemode` is `false` on this machine, which
+  is Git for Windows' default on NTFS, so git never consults the on-disk
+  executable bit and `ls -l` under Git Bash reports a synthesized mode rather
+  than a real POSIX one. Hooks are dispatched through the shebang, and
+  `tests/test_hook_file_mode.py` says so in its own docstring - a hook at
+  `100644` fires here exactly as one at `100755` does. Presence, mode and
+  registration are three different facts and none of them is the fact that a
+  hook FIRED; only an end-to-end attempt is that.
 
 ## Ports
 
