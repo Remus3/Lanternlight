@@ -42,6 +42,7 @@ Touch these paths and nothing else. Every other path in the repository belongs t
 - `tests/test_lanes.py`
 - `tests/test_ops_ids.py`
 - `tests/test_docguards.py`
+- `tests/test_store_drift.py`
 - `tests/test_inbox_*.py`
 - `tests/test_outbox.py`
 - `docs/REPLY_PATHS.md`

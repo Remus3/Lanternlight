@@ -18,6 +18,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from ops import store_drift  # noqa: E402
 from ops.loop import state as state_mod  # noqa: E402
 from ops.loop.state import LoopState  # noqa: E402
 
@@ -949,3 +950,49 @@ def test_the_summary_warns_that_a_record_is_not_proof_of_life(state_path: Path) 
     summary = state_mod.in_flight_summary(state_mod.load(state_path))
     assert "not proof the work is still alive" in summary
     assert "Reconcile" in summary
+
+
+class TestTheSharedWorktreeBanIsCarriedByTheDispatchRitual:
+    """``OPS-54`` criterion 5.
+
+    Parallel slices share one worktree. Their file lists scope their EDITS and
+    do nothing about a command whose scope is the repository, so a slice can
+    obey its list perfectly and still stash every sibling's half-written work.
+    The rule has to travel with the dispatch ritual: a rule that lives only in
+    ``ROADMAP.md`` is a rule the next cold session dispatches straight past.
+
+    There is deliberately ONE copy of the prose - ``ops.store_drift`` owns it
+    and this module renders it - so the two cannot drift apart.
+    """
+
+    def test_the_summary_carries_the_ban_when_slices_are_running(self, state_path: Path) -> None:
+        state_mod.dispatch("OPS-28", lane="ops", path=state_path)
+        summary = state_mod.in_flight_summary(state_mod.load(state_path))
+        assert store_drift.SHARED_WORKTREE_BAN in summary
+
+    def test_the_summary_carries_the_ban_when_nothing_is_running(self, state_path: Path) -> None:
+        """The empty case is the one that matters most, and it early-returned.
+
+        A dispatcher reads this summary precisely when it is about to start
+        work, which is usually when nothing is in flight yet. A ban printed
+        only once slices are already running is a ban printed too late.
+        """
+        summary = state_mod.in_flight_summary(state_mod.load(state_path))
+        assert store_drift.SHARED_WORKTREE_BAN in summary
+
+    @pytest.mark.parametrize(
+        "command",
+        ["git stash", "git stash pop", "git reset", "git checkout -- .", "git clean"],
+    )
+    def test_the_rendered_summary_names_each_command_a_slice_must_not_run(
+        self, state_path: Path, command: str
+    ) -> None:
+        assert command in state_mod.in_flight_summary(state_mod.load(state_path))
+
+    def test_the_summary_still_names_the_running_slices(self, state_path: Path) -> None:
+        """The ban must not have displaced what the summary was already for."""
+        state_mod.dispatch("OPS-28", lane="ingest", paths=["ops/store_drift.py"], path=state_path)
+        summary = state_mod.in_flight_summary(state_mod.load(state_path))
+        assert "OPS-28" in summary
+        assert "ops/store_drift.py" in summary
+        assert "1 slice(s)" in summary

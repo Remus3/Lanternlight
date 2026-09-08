@@ -240,6 +240,15 @@ class StagedListingFailed(GateFailed):
 _RUFF_COMMAND: list[str] | None = None
 _RUFF_PROBED = False
 
+#: The project's ruff configuration, named RELATIVE and never as an absolute
+#: path. ruff glob-expands the value of ``--config`` (`OPS-55`), so an absolute
+#: name drags the repository root's own characters into a pattern: a clone
+#: living under a directory called ``r[x]`` would silently be linted against a
+#: ``rx/ruff.toml`` next door. A bare ``ruff.toml`` carries no metacharacter to
+#: expand, and :func:`ruff_findings` pins ``cwd`` to the repository so the
+#: relative name still resolves to exactly one file.
+RUFF_CONFIG_NAME = "ruff.toml"
+
 
 def ruff_command() -> list[str] | None:
     """The argv prefix that runs ruff, or ``None`` when ruff is not installed.
@@ -554,10 +563,36 @@ def ruff_findings(repo: Path, path: str, source: str) -> list[LintFinding]:
     the exact text that is about to be committed, and it still applies the
     per-file rules in ``ruff.toml`` that are keyed on where the file lives.
 
-    ruff reports an ABSOLUTE filename even for stdin input, so the path here
-    is normalised back to repo-relative and falls back to the path that was
-    asked about. That fallback cannot mis-attribute anything, because ruff is
-    invoked once per staged path.
+    **RUFF'S REPORTED FILENAME IS NOT USED, AND THAT IS THE FIX FOR `OPS-55`.**
+    ruff GLOB-EXPANDS the value of ``--stdin-filename``: handed ``a[b].py`` it
+    reports the finding against ``ab.py`` whenever such a file exists in the
+    working directory, and against ``a[b].py`` when one does not. Measured
+    against ruff 0.15.12 and re-derived at run time by
+    ``tests/test_precommit_gate_lint.py``. An earlier version of this docstring
+    claimed the repo-relative normalisation "cannot mis-attribute anything,
+    because ruff is invoked once per staged path". THAT WAS FALSE, and it is
+    why nobody looked: the reasoning only holds while the name that comes back
+    is either the asked path or unusable, and here it is a THIRD thing - a
+    different, real, repo-relative path. Normalisation succeeded, the fallback
+    never engaged, and the finding landed on an innocent file.
+
+    **THE DECISION, and what it costs.** Two fixes were available: refuse any
+    finding whose reported path is not the asked path, or stop consulting the
+    reported path at all. This function takes the SECOND. ruff is invoked once
+    per staged path, with one payload on stdin that came from
+    :func:`staged_source` for exactly that path, so the asked path is ground
+    truth on our side of the pipe and ruff's answer adds nothing to it.
+    Refusing on a mismatch was rejected because the mismatch is the NORMAL case
+    for any bracket-named file: it would arrive as :class:`RuffFailed`, which
+    :func:`lint_staged_main` turns into a refusal of the whole commit, so every
+    commit touching such a file would be blocked for being named awkwardly. A
+    guard that refuses correct commits gets deleted, and then the real one goes
+    with it. The cost of the choice made instead is real and is stated here so
+    it is not rediscovered: this function no longer has any cross-check on
+    ruff's scoping. A refutation pass measured the corruption as LABEL-ONLY -
+    ruff still lints the stdin payload it was given - but if a future ruff ever
+    linted something else, nothing here would notice. The tripwire for that is
+    the run-time re-measurement in the tests, not this function.
 
     Raises :class:`RuffFailed` when ruff runs but does not produce findings -
     a broken ``ruff.toml`` or an unparseable payload. Exit 0 is "clean" and
@@ -568,10 +603,11 @@ def ruff_findings(repo: Path, path: str, source: str) -> list[LintFinding]:
     if command is None:
         return []
     args = [*command, "check", "--output-format", "json", "--no-cache", "--force-exclude"]
-    config = repo / "ruff.toml"
-    if config.is_file():
-        # Explicit, so the answer does not depend on where the caller stood.
-        args += ["--config", str(config)]
+    if (repo / RUFF_CONFIG_NAME).is_file():
+        # Explicit, so the answer does not depend on ruff's discovery walk -
+        # but RELATIVE, resolved against the ``cwd=repo`` pinned below. See
+        # RUFF_CONFIG_NAME for why an absolute path here is a live defect.
+        args += ["--config", RUFF_CONFIG_NAME]
     args += ["--stdin-filename", path, "-"]
     try:
         result = subprocess.run(
@@ -603,22 +639,14 @@ def ruff_findings(repo: Path, path: str, source: str) -> list[LintFinding]:
             continue
         findings.append(
             LintFinding(
-                path=_relative_to(repo, item.get("filename"), path),
+                # ``path``, never ``item["filename"]`` - see `OPS-55` above.
+                path=path,
                 line=row,
                 code=str(item.get("code") or "?"),
                 message=str(item.get("message") or "").strip(),
             )
         )
     return findings
-
-
-def _relative_to(repo: Path, reported: object, fallback: str) -> str:
-    if not isinstance(reported, str) or not reported:
-        return fallback
-    try:
-        return Path(reported).resolve().relative_to(repo.resolve()).as_posix()
-    except (OSError, ValueError):
-        return fallback
 
 
 def lint_staged(repo: Path) -> list[LintFinding]:

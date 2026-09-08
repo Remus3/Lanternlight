@@ -32,6 +32,8 @@ from dataclasses import dataclass, field, replace as dc_replace
 from datetime import UTC, datetime
 from pathlib import Path
 
+from ops import store_drift
+
 __all__ = [
     "LoopState",
     "STATE_FILENAME",
@@ -595,6 +597,11 @@ def dispatch(
 
     Additive and de-duplicating: dispatching an item already recorded leaves
     one record, so a lane re-dispatched after a retry does not accumulate.
+
+    **Dispatching parallel slices means they share one worktree.** Read the ban
+    that :func:`in_flight_summary` renders before handing any of them a file
+    list, and pass it on: the list scopes their edits and cannot scope a
+    repo-wide git command. ``OPS-54``.
     """
     if not items:
         raise ValueError("dispatch() needs at least one item id")
@@ -652,17 +659,38 @@ def in_flight_summary(state: LoopState) -> str:
 
     Written for the reader who has just resumed and needs to know whether
     dispatching an item would collide with work already under way.
+
+    **It also carries the shared-worktree command ban** - ``OPS-54``. The
+    file-list rule scopes a slice's EDITS and says nothing about a command whose
+    scope is the whole repository, so a slice can obey its list perfectly and
+    still stash, reset or clean away every sibling's half-finished work. That
+    was measured here on 2026-09-08, twice in one session and twice in the one
+    before. The ban is rendered from :data:`ops.store_drift.SHARED_WORKTREE_BAN`
+    rather than restated, because two copies of a rule are one stale copy
+    waiting to happen.
+
+    **It is printed even when nothing is in flight**, which is the case the
+    first version early-returned on. A dispatcher reads this summary precisely
+    when it is about to START work, which is usually when the list is still
+    empty; a ban shown only once slices are already running is shown too late
+    to prevent anything.
     """
     if not state.in_flight:
-        return "in flight: nothing recorded as running"
-    lines = [f"in flight: {len(state.in_flight)} slice(s) recorded as RUNNING"]
-    for row in state.in_flight:
-        lane = f" lane={row['lane']}" if row.get("lane") else ""
-        files = f" paths={','.join(row['paths'])}" if row.get("paths") else ""
-        lines.append(f"  {row['item']} dispatched {row.get('at', 'UNKNOWN')}{lane}{files}")
-    lines.append(
-        "  A record here is not proof the work is still alive - it is proof it "
-        "was STARTED and never retired. Reconcile against git and the roadmap "
-        "before dispatching any of these again."
-    )
+        lines = ["in flight: nothing recorded as running"]
+    else:
+        lines = [f"in flight: {len(state.in_flight)} slice(s) recorded as RUNNING"]
+        for row in state.in_flight:
+            lane = f" lane={row['lane']}" if row.get("lane") else ""
+            files = f" paths={','.join(row['paths'])}" if row.get("paths") else ""
+            lines.append(f"  {row['item']} dispatched {row.get('at', 'UNKNOWN')}{lane}{files}")
+        lines.append(
+            "  A record here is not proof the work is still alive - it is proof it "
+            "was STARTED and never retired. Reconcile against git and the roadmap "
+            "before dispatching any of these again."
+        )
+    # Rendered VERBATIM, trailing newline and all. Reformatting it here would
+    # make this a second, slightly different copy of the rule - which is the
+    # exact failure the single-constant arrangement exists to prevent.
+    lines.append("")
+    lines.append(store_drift.SHARED_WORKTREE_BAN)
     return "\n".join(lines)

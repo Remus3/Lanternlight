@@ -6424,7 +6424,7 @@ of them is the fact that a hook FIRED. Only an end-to-end attempt is that.
 
 The sibling was credited in the reply delivered at 19:02 local.
 
-## OPS-55. ruff GLOB-EXPANDS `--stdin-filename`, so a finding can be attributed to a DIFFERENT REAL FILE - and the docstring says that cannot happen - OPEN
+## OPS-55. ruff GLOB-EXPANDS `--stdin-filename`, so a finding can be attributed to a DIFFERENT REAL FILE - and the docstring says that cannot happen - CLOSED 2026-09-08, and the sweep it forced found a SILENT-PASS hole in `--config`
 
 Found 2026-09-08 by the slice fixing `OPS-39`'s pathspec defect, and re-measured
 independently by the merger before it was filed, because it is a claim about a
@@ -6512,7 +6512,185 @@ story unproven - which is the narrower and better-supported claim.
    and the mutants vary the INPUT - neighbour present, neighbour absent - not
    only the implementation, since the neighbour's presence is the whole trigger.
 
-## OPS-54. Parallel slices share ONE worktree, and a slice that runs `git stash` stashes every other slice's uncommitted work - OPEN
+
+### Outcome, 2026-09-08 - CLOSED, and the item got bigger on the way
+
+Ledger `LL-0187`. Measured against ruff 0.15.12.
+
+**THE FIX CHOSEN, with its cost stated, which criterion 4 asked for.** The gate
+stops consulting ruff's reported filename entirely: a finding's path is the path
+that was asked about, and the normalising helper is deleted. The refusing branch
+was considered and REJECTED for a specific measured reason - a refusal
+propagates out to a non-zero exit, so it would cleanly block every commit
+touching a bracket-named file whose glob neighbour exists, and a guard that
+refuses correct commits is a guard that gets deleted. The accepted cost is that
+no cross-check on ruff's own scoping remains; the tripwire in its place is a
+test that re-measures the behaviour at run time and fails in BOTH directions, so
+a silent upstream fix is as visible as a silent regression.
+
+**THE SWEEP THAT CRITERION 5 FORCED FOUND A SECOND, WORSE DEFECT, AND IT IS NOT
+LABEL-ONLY.** `--config` is glob-expanded too. Measured with a config at
+`r[x]/ruff.toml` selecting `F401` and a sibling `rx/ruff.toml` selecting
+nothing, and re-measured independently by the merger before it was written here:
+pointing `--config` at the bracketed path loads the SIBLING's config, and the
+run reports `All checks passed!` on code the named config would have flagged.
+Move the sibling directory away and the identical command finds the error.
+
+That is the direction that matters. `--stdin-filename` mangles a LABEL while
+ruff still lints what it was handed; `--config` changes WHICH RULES RUN. A clone
+of this repository under a bracketed directory path would have had its
+pre-commit gate lint against the wrong ruleset and report a pass - a guard
+reporting clean because it was not checking. Fixed by passing the relative
+literal config name with the repository as the working directory. Escaping the
+glob also works and was rejected as a hand-rolled escape.
+
+**Site enumeration:** eight places hand something to an external tool, four of
+them a filename. Three are fixed - one already by `OPS-39` - and one is
+confirmed glob-safe BY MEASUREMENT rather than by reading: the index read uses
+an object name rather than a pathspec, and was measured returning each file's
+own bytes.
+
+**Mutation tally: six mutants, five killed, one deliberate survivor.** One anchor
+aborted as ambiguous and was widened rather than applied, which is the assertion
+doing its job. The survivor is the neighbour-absent input, which is what proves
+the neighbour's presence is the trigger - the consumer test exits 1 with the
+neighbour present and 0 without it.
+
+**What is NOT closed, and is now filed as `OPS-56`:** the sweep covered the
+pre-commit gate module only. Every other tool in this tree that hands a filename
+to an external process is unswept. Two tools have now been measured answering
+about a different file than the one asked about, so the prior on a third is not
+low.
+
+**Reachability, so this is not read as an emergency:** nothing in the tracked
+tree carries a bracket, and this repository's own path carries none either.
+Both holes are latent. The `--config` one is the one that would be invisible if
+it ever were not.
+
+## OPS-57. Both continuity documents will outgrow their budgets within days, and raising the numbers is not the fix - OPEN
+
+Filed 2026-09-08, the moment the roadmap's size budget fired for real and the
+pre-commit hook refused a commit over it. The guard did exactly what it was
+built to do. What it revealed is not "one file is large".
+
+**The measured curve, all in git BLOB bytes, which is the only figure a fresh
+clone can reproduce.** This document was 424,019 bytes on 2026-09-07 when the
+budget was set at 600,000, leaving 175,981 bytes of headroom described at the
+time as sized for ordinary future growth plus the uncertainty of two lanes
+appending concurrently. By the START of the 2026-09-08 session it was already
+569,870. That session added 30,685 more and hit 600,555, and the hook refused
+the commit.
+
+So the headroom sized for future growth was consumed in about a day, and the
+rate to plan against is roughly 30 KB per session rather than whatever the
+original budget assumed.
+
+**The ledger is on the same curve, one step behind.** It measured 813,780 at the
+start of that session and 842,387 at the end, against a 900,000 budget: 57,613
+bytes, under two sessions at the observed rate. It has NOT been raised, because
+it has not fired and a budget moved before it fires is a budget nobody trusts.
+Expect it to fire next and do not treat that as a surprise.
+
+**The roadmap budget WAS raised, to 700,000, and that raise is a DEFERRAL rather
+than a fix.** It is recorded here rather than absorbed silently, because raising
+a limit to make a red run green is precisely the antipattern this repository has
+already written down about pins. The raise is deliberately small - about three
+sessions of headroom at the measured rate - since a budget that buys a year
+stops being a tripwire and becomes a rubber stamp.
+
+**Why this matters beyond disk.** These two documents exist to be READ by a cold
+session that has no other context. That is their whole function. A 600 KB
+roadmap is not read; it is grepped, and grepping is exactly the access pattern
+this repository has repeatedly measured returning false clean bills - an empty
+grep is a claim about the pattern, a line-oriented grep is a claim about the
+line breaks, and prose here is hard-wrapped near 80 columns so a quoted
+sentence routinely spans two lines. The larger these files get, the more the
+continuity design depends on the one tool that keeps lying to it.
+
+**What is NOT the answer, so nobody re-litigates it.** Deleting closed items is
+ruled out: `CLAUDE.md` and this document both keep closed items deliberately,
+because the shape of a bug is the useful part, and the ledger is append-only by
+a rule that exists for good reasons. Whatever is done here preserves every word
+somewhere a cold session can still find it.
+
+### Acceptance
+
+1. The growth rate is re-derived at the time the work is done rather than taken
+   from this item. Both figures above are hypotheses like any other count, and
+   two sessions of data is a slope through two points.
+2. A structural answer is chosen and its cost is stated: splitting closed items
+   into a dated archive document that the roadmap links to; or moving the long
+   outcome sections to the ledger, which already carries that kind of evidence,
+   and leaving the roadmap holding acceptance criteria and status only; or
+   something better. "We chose X and accepted Y" is the deliverable, not a
+   preference.
+3. Whatever moves, a cold session can still reach it from `ROADMAP.md` in one
+   hop, and the entry point says where the rest went. The failure this whole
+   design exists to prevent is work that is invisible to the next cold session;
+   an archive nobody is told about is that failure wearing a tidy filename.
+4. No content is deleted, and no ledger entry is edited, reordered or reflowed -
+   the append-only rule is not suspended for a reorganisation.
+5. The budgets are re-derived AFTER the split and set from the new measurements,
+   with headroom stated in SESSIONS at the measured rate rather than in bytes or
+   in a percentage. Bytes and percentages are what made the last budget look
+   generous while it had about a day left in it.
+6. A test proves the entry point actually resolves - that every archived item is
+   reachable from the roadmap - rather than asserting only that the archive file
+   exists. A file that exists and is unreferenced is the invisible-work failure.
+
+## OPS-56. Only ONE module has been swept for filename-to-external-tool glob defects - OPEN
+
+Filed 2026-09-08 out of `OPS-55`'s criterion 5, which asked for an enumeration
+and got an honest one: the sweep covered `tools/precommit_gate.py` and nothing
+else.
+
+**The prior is not low, and that is measured rather than felt.** Two independent
+tools have now been caught treating a filename argument as a glob:
+
+- git, in a pathspec, which OVER-matches for a bracket name and UNDER-matches
+  for a leading colon (`OPS-39`);
+- ruff, in `--stdin-filename`, which mis-labels a finding, and in `--config`,
+  which loads a DIFFERENT RULESET and reports a pass (`OPS-55`).
+
+Three defects, two tools, one shape - and all three were found only because
+somebody went looking in one file. Nothing has looked anywhere else.
+
+**Why this is not paranoia.** The dangerous direction is the quiet one. A tool
+that answers about the wrong file makes a guard report clean while checking
+something else, and every guard in this repository exists precisely to be
+believed. `OPS-55`'s `--config` case is that failure in its purest form: the
+linter said all checks passed, and it had not run the check.
+
+**What makes this hard, and why it needs a real sweep rather than a grep.** An
+empty grep is a claim about the pattern. A filename reaches an external tool
+through a variable far more often than as a literal, so the sweep has to follow
+the ARGUMENT, not match the name. And two of this repository's own search traps
+apply directly: `grep -iF` aborts with SIGABRT here and looks exactly like a
+clean negative, and prose is hard-wrapped near 80 columns so a single-line
+pattern misses a wrapped sentence.
+
+### Acceptance
+
+1. Every module in this tree that spawns an external process is enumerated from
+   the code - not from a guess about which ones matter - by following the call
+   sites of whatever spawns processes, and the list is recorded with its
+   derivation so the next person can check the enumeration itself.
+2. For each spawn site, every argument that carries a FILENAME or a PATH is
+   identified, and each one is decided about in writing: matched literally,
+   confirmed glob-safe BY MEASUREMENT against a bracket-named file, or fixed.
+   "Looks fine" is not a verdict. `OPS-55` confirmed one site glob-safe by
+   measurement and that is the standard.
+3. Any site that cannot be decided is named as undecided rather than omitted. A
+   sweep that quietly drops the hard cases is worse than no sweep, because it
+   licenses the belief that the tree is clean.
+4. The result records which tools were involved and the versions measured, since
+   two of the three known defects are third-party behaviour that can change
+   under us in either direction.
+5. At least one negative control: a site believed safe is deliberately fed a
+   bracket-named file and shown to answer correctly, so the sweep's method is
+   proven able to detect the defect it is looking for.
+
+## OPS-54. Parallel slices share ONE worktree, and a slice that runs `git stash` stashes every other slice's uncommitted work - CLOSED 2026-09-08 on a ban plus a detector, NOT on worktrees
 
 Found 2026-09-08, live, while three slices were in flight. Not a hypothesis: it
 had already happened twice in this session and twice in the previous one.
@@ -6578,6 +6756,74 @@ parallel dispatch through the Agent tool does not use it, and that is the gap.
 5. The dispatch ritual in `ops.loop.state` carries the ban where a dispatching
    session will actually read it. A rule that lives only in this roadmap item is
    a rule the next cold session dispatches straight past.
+
+
+### Outcome, 2026-09-08 - CLOSED
+
+Ledger `LL-0188`. `ops/store_drift.py` and `tests/test_store_drift.py` are new;
+the ban is carried in the dispatch ritual in `ops/loop/state.py`.
+
+**THIS ITEM'S OWN FILING WAS WRONG ABOUT A NUMBER, and the work found it.** The
+filing above says six unreachable commits were observed. That is true and it is
+NOT six stash events: **one `git stash` writes TWO commits**, the `WIP on` and
+the `index on` pair. Six unreachable commits are THREE stashes - two inside this
+session's dispatch window and one from the previous session. Re-measured in a
+throwaway repository, where a single stash produced exactly two. The count was
+right and the inference from it was not, which is this project's "a filed count
+is a hypothesis" rule landing on the item that was filed to catch drift.
+
+**A SECOND CORRECTION, and it changes what the detector can see.** `git stash
+drop` does NOT remove those commits - it unlinks the ref and leaves both objects
+in the store, which is precisely the state the live repository was found in.
+Measured directly: while the stash EXISTS, `git fsck --unreachable` reports
+nothing, because the stash ref keeps the pair reachable; after `drop` both
+appear as unreachable and stay there. Only `reflog expire --expire-unreachable`
+plus `gc --prune` erases them. So the evidence is durable against a drop and
+perishable against a prune, and a session that garbage-collects loses the only
+trace that a sibling's tree was ever swept.
+
+**Criterion 3 was discharged against a real stash, not a simulated one.** In a
+throwaway repository the report named both commits by subject while the stash
+was live, named the same two as unreachable after the drop, and went quiet only
+after the prune. That is the full three-state sequence rather than the one
+transition a weaker test would have shown.
+
+**Criterion 4, decided rather than deferred: the ban plus the detector, NOT
+per-slice worktrees.** The operator has not ruled on this and was not asked - it
+is a decision about this project's own session machinery, not a cross-project
+charter question, and it is recorded here so it is not silently re-decided.
+The costs accepted, written down because a decision without its cost is a
+preference: the ban is ADVISORY and nothing enforces it; detection is after the
+fact and recovers nothing; the evidence is perishable under a prune; and a slice
+that dies mid-write still leaves a half-edited tree that no detector addresses.
+The revisit trigger is named: the ban being broken again after it ships in the
+dispatch ritual.
+
+**THE MUTATION RUN FOUND TWO REAL TEST DEFECTS, which is the whole reason it is
+run.** Ten mutants, eight killed, two survivors on the first pass - a prefix
+test whose "counterexamples" were not counterexamples, so trimming a trailing
+space changed nothing it asserted; and a deleted `except FileNotFoundError`
+that survived because that exception is an `OSError` and a later handler caught
+it. Both tests were fixed and the set re-run: ten applied, ten killed, no
+survivors. The tally was re-derived after the fix rather than carried forward.
+
+**Four input states are distinguished, not just detected:** an untouched
+repository, an ordinary commit, a real stash, and a path that is not a
+repository at all - the last answering "not answerable" rather than raising,
+because a guard that explodes is a guard that gets removed.
+
+**Two files outside the assigned list were touched, both mechanically forced and
+both one line:** the lane roster, because the orphan guard refused a test file
+with no owning lane, and the regenerated lane command file the contract test
+requires. Disclosed by the slice rather than found afterwards.
+
+**What is NOT proven, and is not claimed.** That any agent will READ the ban -
+nothing enforces it, which is the accepted cost above rather than an oversight.
+That the detector works across a real concurrent dispatch window in THIS
+repository - it was exercised against throwaway repositories plus one clean
+snapshot pair of the live one, which correctly reported no movement. And it is
+not wired into the merge-gate ritual; that was out of scope and remains
+undone, so the detector exists and nothing calls it yet.
 
 ## OPS-53. The watcher status reporter says "archiving into <a date that has passed>" in the PRESENT TENSE - CLOSED 2026-09-08
 

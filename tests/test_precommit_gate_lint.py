@@ -43,6 +43,7 @@ module touches this repository's own index.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -1034,3 +1035,320 @@ class TestAFilenameCarryingPathspecMetacharacters:
         args = seen[0]
         pathspecs = list(args[args.index("--") + 1 :])
         assert pathspecs == [":(literal)solo[0-9].py"], pathspecs
+
+
+# ---------------------------------------------------------------------------
+# ROADMAP OPS-55 - ruff glob-expands the filenames it is handed.
+# ---------------------------------------------------------------------------
+
+#: The ruff release the behaviour below was measured against, recorded rather
+#: than asserted so a future ruff that CHANGES it is reported with the version
+#: that was true when the fix was written. The measurement itself is re-derived
+#: at run time by :class:`TestRuffGlobExpandsTheFilenamesItIsHanded`; this
+#: string only makes the failure message useful.
+RUFF_VERSION_MEASURED = "ruff 0.15.12"
+
+#: The stdin payload used by the direct-ruff probes: exactly one F401.
+ONE_UNUSED_IMPORT = "import os\n"
+
+#: What the staged commits below ADD at the top of an existing file: one
+#: unused import plus the blank line isort insists on, so the only finding is
+#: the F401 these tests are actually about and not an incidental I001.
+STAGED_ADDITION = "import os\n\nVALUE = 1\n"
+
+
+def _ruff_version() -> str:
+    command = precommit_gate.ruff_command()
+    assert command is not None, "the autouse fixture should have skipped"
+    probe = subprocess.run(
+        [*command, "--version"],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    return probe.stdout.strip()
+
+
+def _ruff_reported_filename(cwd: Path, stdin_filename: str) -> str:
+    """Ask ruff about ``stdin_filename`` from ``cwd``; return the name it says.
+
+    ``--isolated`` and an explicit ``--select`` so the answer depends on the
+    working directory's FILES and on nothing that a stray ``ruff.toml`` above
+    ``tmp_path`` could contribute.
+    """
+    command = precommit_gate.ruff_command()
+    assert command is not None
+    result = subprocess.run(
+        [
+            *command,
+            "check",
+            "--no-cache",
+            "--isolated",
+            "--select",
+            "F401",
+            "--output-format",
+            "json",
+            "--stdin-filename",
+            stdin_filename,
+            "-",
+        ],
+        cwd=cwd,
+        input=ONE_UNUSED_IMPORT,
+        capture_output=True,
+        text=True,
+        timeout=300,
+        check=False,
+    )
+    payload = json.loads(result.stdout or "[]")
+    assert len(payload) == 1, (
+        "the probe payload no longer produces exactly one finding, so nothing "
+        f"below is measuring what it claims: {result.stdout}\n{result.stderr}"
+    )
+    return Path(payload[0]["filename"]).name
+
+
+class TestRuffGlobExpandsTheFilenamesItIsHanded:
+    """The third-party behaviour, re-derived here instead of trusted.
+
+    ``ruff check --stdin-filename <name>`` treats ``<name>`` as a GLOB. The
+    payload on stdin is unchanged between the two probes below and only the
+    contents of the working directory differ, so a difference in the reported
+    name can come from nothing else.
+
+    THIS TEST IS A TRIPWIRE IN BOTH DIRECTIONS, which is the point. If ruff
+    stops mangling the name, this fails and says so - a fix that has silently
+    stopped being needed is as much a problem as one that has stopped working,
+    because the next reader cannot tell the two apart from a green suite.
+    """
+
+    def test_a_bracket_name_is_reported_as_its_glob_neighbour(self, tmp_path):
+        near = tmp_path / "with_neighbour"
+        near.mkdir()
+        (near / "ab.py").write_text("VALUE = 1\n", encoding="ascii", newline="\n")
+
+        reported = _ruff_reported_filename(near, BRACKET_NAME)
+
+        assert reported == "ab.py", (
+            f"{_ruff_version()} no longer glob-expands --stdin-filename "
+            f"(measured against {RUFF_VERSION_MEASURED}, where it reported "
+            f"'ab.py' here). It reported {reported!r}. Re-read ROADMAP OPS-55 "
+            "and decide whether the fix in ruff_findings is still earning its "
+            "place before deleting this test."
+        )
+
+    def test_the_same_name_is_reported_intact_with_no_neighbour_on_disk(
+        self, tmp_path
+    ):
+        """The control that makes the probe above mean something.
+
+        Nothing about the stdin payload or the argument changes between these
+        two cases. Without this one, a reported ``ab.py`` could just as well be
+        ruff ignoring the argument altogether.
+        """
+        far = tmp_path / "no_neighbour"
+        far.mkdir()
+
+        reported = _ruff_reported_filename(far, BRACKET_NAME)
+
+        assert reported == BRACKET_NAME, (
+            f"{_ruff_version()} did not report the name it was handed even "
+            f"with no file for it to expand onto: {reported!r}"
+        )
+
+
+class TestABracketedFilesFindingIsAttributedToThatFile:
+    """``ruff_findings`` must not label a finding with ruff's reported name.
+
+    The whole trigger is the glob NEIGHBOUR being on disk, so every case here
+    is paired with the same case without it. ``ab.py`` is seeded but never
+    STAGED, which makes the defect loud rather than merely wrong: the gate
+    blocks on a path the commit does not touch at all.
+    """
+
+    def test_the_gate_blocks_on_the_bracketed_path_and_not_its_neighbour(
+        self, tmp_path
+    ):
+        repo = _make_repo(tmp_path / "attribution", hooked=False)
+        _seed(repo, "ab.py", "VALUE = 1\n")
+        _seed(repo, BRACKET_NAME, "VALUE = 1\n")
+        _stage(repo, BRACKET_NAME, STAGED_ADDITION)
+
+        findings = precommit_gate.lint_staged(repo)
+
+        assert [f.code for f in findings] == ["F401"], (
+            "the control is gone - the staged added line really does carry one "
+            f"unused import and nothing else: {findings}"
+        )
+        assert any("os" in f.message for f in findings), (
+            f"the finding is not the one this test staged: {findings}"
+        )
+        assert {f.path for f in findings} == {BRACKET_NAME}, (
+            "the finding was attributed to a file this commit never staged. "
+            "ruff glob-expanded the --stdin-filename it was handed and the "
+            f"gate believed the name it got back: {findings}"
+        )
+
+    def test_the_answer_is_the_same_with_no_glob_neighbour_present(self, tmp_path):
+        """The input mutant. Identical staging, no ``ab.py`` anywhere.
+
+        This case is green with or without the fix, and that is what it is for:
+        it pins the neighbour's PRESENCE as the trigger, so the case above
+        cannot be explained by anything else the repository does.
+        """
+        repo = _make_repo(tmp_path / "attribution_alone", hooked=False)
+        _seed(repo, BRACKET_NAME, "VALUE = 1\n")
+        _stage(repo, BRACKET_NAME, STAGED_ADDITION)
+
+        findings = precommit_gate.lint_staged(repo)
+
+        assert [f.code for f in findings] == ["F401"], findings
+        assert {f.path for f in findings} == {BRACKET_NAME}, findings
+
+    def test_a_real_refusal_names_the_bracketed_file_and_not_its_neighbour(
+        self, tmp_path
+    ):
+        """End to end, because the reported name is what the operator READS.
+
+        ``CLAUDE.md`` is explicit that only an end-to-end attempt proves a hook
+        fired, and the mis-attribution's whole damage is in the text a person
+        is shown when the commit is refused. ``ab.py`` is committed clean
+        through the hook first, so it exists on disk for ruff to expand onto
+        while being nothing this commit touches.
+        """
+        repo, before = _hooked_repo(tmp_path)
+        _stage(repo, "ab.py", "VALUE = 1\n")
+        clean = _git(repo, "commit", "-m", "probe: the glob neighbour")
+        assert clean.returncode == 0, (
+            f"the neighbour itself was refused.\n{clean.stdout}\n{clean.stderr}"
+        )
+        before = _head(repo)
+        _stage(repo, BRACKET_NAME, STAGED_ADDITION)
+
+        result = _git(repo, "commit", "-m", "probe: must be refused")
+
+        assert _head(repo) == before, "the violating commit landed"
+        combined = result.stdout + result.stderr
+        assert "F401" in combined, f"refused by something other than lint:\n{combined}"
+        assert BRACKET_NAME in combined, (
+            "the refusal does not name the file that actually violates - the "
+            f"operator is told to look somewhere else:\n{combined}"
+        )
+        assert "ab.py" not in combined.replace(BRACKET_NAME, ""), (
+            "the refusal names a file this commit never staged, because ruff "
+            f"glob-expanded the name it was handed:\n{combined}"
+        )
+
+    def test_ruff_findings_labels_with_the_path_it_was_asked_about(self, tmp_path):
+        """The unit-level statement, one layer under the consumer above."""
+        repo = _make_repo(tmp_path / "unit", hooked=False)
+        _write(repo, "ab.py", "VALUE = 1\n")
+
+        findings = precommit_gate.ruff_findings(repo, BRACKET_NAME, ONE_UNUSED_IMPORT)
+
+        assert [f.path for f in findings] == [BRACKET_NAME], (
+            f"ruff_findings returned ruff's reported name, not the asked path: "
+            f"{findings}"
+        )
+
+
+class TestEveryFilenameHandedToAnExternalTool:
+    """ROADMAP OPS-55 criterion 5 - the sweep, pinned rather than described.
+
+    ``tools/precommit_gate.py`` starts four external processes. Two of them
+    (``git diff --cached --name-only`` and ``ruff --version``) are handed no
+    filename at all. The remaining argument-carrying sites are covered here
+    and by ``TestAFilenameCarryingPathspecMetacharacters`` above:
+
+    * ``staged_diff`` pathspecs - FIXED under ``OPS-39`` with ``:(literal)``.
+    * ``staged_source``'s ``git show :<path>`` - CONFIRMED glob-safe below.
+    * ``ruff --stdin-filename`` - FIXED, see the class above.
+    * ``ruff --config`` - FIXED below, and this one was not label-only.
+    """
+
+    def test_git_show_reads_a_bracketed_index_path_literally(self, tmp_path):
+        """``:<path>`` is an object name, not a pathspec. Characterization.
+
+        Recorded because "git took a filename" was the whole of ``OPS-39`` and
+        an unmeasured assumption that this second git site behaves differently
+        is exactly the kind of thing this project gets wrong. It does behave
+        differently, and here is the evidence rather than the assertion.
+        """
+        repo = _make_repo(tmp_path / "show", hooked=False)
+        _seed(repo, "ab.py", "NEIGHBOUR = 1\n")
+        _seed(repo, BRACKET_NAME, "BRACKET = 2\n")
+
+        bracket = precommit_gate.staged_source(repo, BRACKET_NAME)
+        neighbour = precommit_gate.staged_source(repo, "ab.py")
+
+        assert bracket is not None and neighbour is not None
+        assert "BRACKET = 2" in bracket and "NEIGHBOUR" not in bracket, bracket
+        assert "NEIGHBOUR = 1" in neighbour and "BRACKET" not in neighbour, neighbour
+
+    def test_a_bracketed_repository_root_does_not_swap_the_ruff_config(
+        self, tmp_path
+    ):
+        """The loud one: ``--config`` glob expansion changes the RULESET.
+
+        Unlike ``--stdin-filename``, this is not a mislabelled finding. The
+        neighbour directory ``rx`` holds a ruff.toml selecting NOTHING, so a
+        gate that hands ruff an absolute ``<root>/ruff.toml`` from a root named
+        ``r[x]`` lints the staged file against the wrong configuration and
+        reports it clean. That is a guard that did not run, reporting a pass.
+        """
+        neighbour = tmp_path / "rx"
+        neighbour.mkdir(parents=True)
+        (neighbour / "ruff.toml").write_text(
+            "[lint]\nselect = []\n", encoding="ascii", newline="\n"
+        )
+        repo = _make_repo(tmp_path / "r[x]", hooked=False)
+        (repo / "ruff.toml").write_text(
+            '[lint]\nselect = ["F401"]\n', encoding="ascii", newline="\n"
+        )
+        _seed(repo, "mod.py", "VALUE = 1\n")
+        _stage(repo, "mod.py", STAGED_ADDITION)
+
+        findings = precommit_gate.lint_staged(repo)
+
+        assert [f.code for f in findings] == ["F401"], (
+            "the gate linted against the neighbour directory's permissive "
+            "ruff.toml, so a real violation on an added line was reported "
+            f"clean: {findings}"
+        )
+
+    def test_the_ruff_arguments_carry_no_glob_metacharacter(
+        self, tmp_path, monkeypatch
+    ):
+        """Argument level, because a behavioural test cannot see the shape.
+
+        The repository root here carries brackets on purpose: an absolute
+        ``--config`` would drag them into the argument, and asserting on a
+        root without them would pass whatever the code did.
+        """
+        repo = _make_repo(tmp_path / "a[r]gs", hooked=False)
+        seen: dict[str, object] = {}
+
+        class _Result:
+            returncode = 0
+            stdout = "[]"
+            stderr = ""
+
+        def _capture(args, **kwargs):
+            seen["args"] = list(args)
+            seen["cwd"] = kwargs.get("cwd")
+            return _Result()
+
+        monkeypatch.setattr(precommit_gate.subprocess, "run", _capture)
+        precommit_gate.ruff_findings(repo, BRACKET_NAME, ONE_UNUSED_IMPORT)
+
+        args = seen["args"]
+        assert args[args.index("--stdin-filename") + 1] == BRACKET_NAME, args
+        config = args[args.index("--config") + 1]
+        assert not set("[]*?") & set(config), (
+            "the --config argument carries a glob metacharacter from the "
+            f"repository root, and ruff expands it: {config!r}"
+        )
+        assert seen["cwd"] == repo, (
+            "a relative --config is only meaningful with the working "
+            f"directory pinned to the repository: {seen['cwd']!r}"
+        )

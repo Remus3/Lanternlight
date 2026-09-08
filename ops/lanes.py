@@ -355,6 +355,7 @@ LANES: tuple[Lane, ...] = (
             "tests/test_lanes.py",
             "tests/test_ops_ids.py",
             "tests/test_docguards.py",
+            "tests/test_store_drift.py",
             # A GLOB rather than the two names that used to be listed here.
             # ops/inbox_watch.py grew four more test modules in one sitting -
             # acknowledgement, withdrawals, whole-inbox coverage, key shape -
