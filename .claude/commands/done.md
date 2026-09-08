@@ -64,6 +64,15 @@ test rather than the code is not a green suite.
    `SURFACE_STALE` or `NO_HEARTBEAT` result is reported, not re-armed, and
    nothing is ever killed - see `docs/HEADLESS.md` 4b. `SURFACE_STALE` names
    WHICH surface stopped, so quote the name rather than the state alone.
+8b. **Read the stop-claim audit before you write the hand-off.**
+   `python ops/stop_audit.py --show-last` prints what `ops/stop_audit.py`
+   (`OPS-45`) made of the LAST turn's closing claims - a numeric suite result
+   whose outcomes do not sum to what pytest collects, or a file the session
+   said it wrote that is missing or empty. It never blocks and it never
+   speaks, so a refutation sits in that file unread unless a wrap asks for it.
+   Treat a `[FAIL]` line as a question about what you just wrote, not as a
+   verdict: the auditor cannot tell a claim from a QUOTATION of one, so a
+   number you discussed reads the same as a number you asserted.
 9. **Write the hand-off, commit it, and point the Desktop at it.** The
    next-session prompt goes to `C:\Lanternlight\LL-NEXT-SESSION.txt` - the repo
    root - **tracked in git and committed with the session's other work**.

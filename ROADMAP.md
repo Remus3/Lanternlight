@@ -6095,7 +6095,7 @@ as an identifier: it appears 9 times across `LICENSE`, `NOTICE` and
 `CITATION.cff` as the published copyright holder, so redacting it would be
 redacting a deliberate publication. Recorded in the module docstring.
 
-## OPS-45. No Stop-hook transcript-claim auditor exists in this tree - OPEN
+## OPS-45. The Stop-hook transcript-claim auditor - CLOSED 2026-09-08
 
 Filed 2026-09-07, identified while closing `OPS-42` question 2 (the
 inventory-exchange ruling) rather than acted on there, because it was out of
@@ -6147,6 +6147,161 @@ tree has no counterpart.
 4. Watched red under mutation before it is believed: break a claim it is
    supposed to catch, confirm the hook flags it, restore, confirm it does not
    flag a true claim.
+
+### Closed 2026-09-08
+
+`ops/stop_audit.py` and `tests/test_stop_audit.py`, with the hook registered in
+`.claude/settings.json`, the test module given an owner in `ops/lanes.py`, and a
+row added to `docs/INVENTORY.md`.
+
+**What it does.** At the `Stop` event the harness hands the hook a JSON payload
+naming the session's own transcript. The module reads that transcript, takes the
+MAIN agent's text blocks since the last operator prompt, extracts the two claim
+shapes below, and checks them against ground truth:
+
+- a numeric suite result - "2305 passed, 1 skipped", "2306 collected" - against
+  what `python -m pytest --collect-only` reports for the tree as it stands at
+  that moment. The outcomes have to SUM to the collected total, which is what
+  catches a number carried forward from an earlier tree state.
+- a file-creation claim - a creation verb plus a backticked path - against the
+  filesystem, refusing a path that is missing and a path that is empty.
+
+An unnumbered "the suite is green" is extracted and reported as NOT CHECKABLE
+rather than dropped, because the hook does not run the full suite: at nearly
+three minutes that cost would be paid at the end of every turn.
+
+**Criterion 1, met.** Nothing was read out of `moon_sync_inbox/`. The design
+came from measuring THIS harness: the transcript's JSONL record shape, the
+`isSidechain` flag that marks a subagent's records, and the fact that a
+tool result is also a user-role record and therefore is not a turn boundary. The
+siblings' `stop_claim_gate.py` was never opened, and no description of it was
+requested, because none was needed - the observable behaviour of this harness
+was enough to build from.
+
+**Criterion 2, met for the event that could be observed, and NOT claimed
+further.** The hook fired, unprompted, from the harness: trace ordinal 4, the
+session id of the session that built it, 222 transcript lines, 1620 ms, at the
+end of the assistant turn that registered it. Two facts fall out of that and are
+worth not re-deriving:
+
+- **A `Stop` hook registered mid-session takes effect in that session.** It was
+  not there when the session started and it fired the same session.
+- **`Stop` fires at the end of an assistant TURN, not only at session end.**
+  That is a different shape from the `UserPromptSubmit` fact recorded in
+  `LL-0174`, and it is why the collection is run lazily - only when the turn
+  actually asserted a number - rather than on every fire.
+
+What is NOT proven is that it also fires at final session teardown. That cannot
+be observed from inside the session it would end. The trace makes it checkable
+by the NEXT session instead: read the last row of
+`ops/runtime/stop_audit/trace.jsonl` and compare its timestamp against the end
+of the previous session. This is stated rather than glossed, because the same
+gap stated vaguely is what got `OPS-41`'s criterion 1 refuted at its own wrap.
+
+**Criterion 3, met.** Both required shapes are checked. The uncovered shapes are
+named in `NOT_CHECKED` and printed at the foot of every report - eleven of them,
+each one a shape this project's own ledger records being wrong about, including
+test vacuity, an asserted absence with no positive control, a universal written
+from a narrow measurement, and any claim about a sibling tree or about the game.
+
+**Criterion 4, met twice over.**
+
+- Eight mutations of the module, each anchor asserted to match exactly once
+  before it was applied, each restored and verified byte-identical by SHA-256:
+  the missing-file arm returning OK (4 red), the empty-file arm returning OK (1),
+  a tool result treated as an operator prompt (1), subagent turns audited (1),
+  the snippet written without redaction (1), the outcome-sum mismatch accepted
+  (2), the hook returning non-zero on a refutation (2), and the trace ordinal
+  restarting on a corrupt row (2). No survivors.
+- A claim-level mutation END TO END through the registered entry point, which is
+  what the criterion actually asks for. A synthetic transcript claiming a file
+  that does not exist and a count that does not sum was refuted 2 of 2; the same
+  wrap with a real file and the tree's true count was confirmed 3 of 3; both
+  exited 0.
+
+**A limit measured on its first live fire, kept rather than patched.** The
+auditor cannot tell a claim from a QUOTATION of one. Its first real report
+refuted a number the session had written down as an EXAMPLE of a false claim.
+That is correct behaviour reported confusingly, and it is left alone
+deliberately: a rule that excuses a number inside quotes excuses the easiest
+place to hide a real false claim, and a false positive costs a reader ten
+seconds while a false negative costs the thing this item exists to prevent. It
+is written into the module docstring and pinned by a test so that nobody
+"fixes" it without reading why.
+
+**What this does not become.** The auditor never blocks. Exit code 2 on `Stop`
+refuses to let the session end and feeds the hook's stderr back to the model,
+which on this event is a loop rather than a warning, so `run_hook` returns 0 on
+every path - including a payload that is not JSON, a missing transcript, a
+failed report write, and its own unexpected exceptions. It is a record for the
+next session to read (`python ops/stop_audit.py --show-last`), not a gate.
+
+### What the adversarial pass found, and what changed because of it
+
+The pass was dispatched to REFUTE this item's claims, defaulting to refuted when
+uncertain, and it refuted four of eight. All four are fixed and pinned; the two
+it confirmed are recorded as confirmed rather than restated.
+
+**REFUTED 1 - the hook could raise past its own boundary.** A payload of 200000
+nested brackets raises `RecursionError`, which is not a `json.JSONDecodeError`
+and so was not caught. The whole point of this module returning 0 on every path
+is that a `Stop` hook which raises breaks the session it was auditing. The parse
+guard now catches the general case as well, and
+`test_a_payload_that_blows_the_parser_stack_still_returns_zero` drives exactly
+that payload. Twelve other hostile inputs the pass tried - a JSON list payload,
+a directory as the transcript, non-dict records, an uncreatable runtime
+directory, a NUL in the path - all already returned 0.
+
+**REFUTED 2 - a thousands separator was MISREAD, not missed.** "1,234 passed"
+parsed as 234. That is the worse of the two failure directions: a miss leaves
+the auditor silent, while a misread refutes a true claim and can confirm a false
+one. Fixed, and pinned by a test that says why the direction matters.
+
+**REFUTED 3 - a synthetic identifier reached the report on disk.** Only the
+QUOTED snippet was redacted. The claimed PATH is pulled out of the raw line by a
+different expression, so an identifier inside a path - and the finding reason
+built from that path - was written verbatim while the snippet beside it was
+correctly masked. This is this repository's contiguity lesson in a second dress,
+`LL-0175`'s rule pointing at fields rather than at string literals: the value was
+still on disk, just not where the sweep was looking. Every string that reaches a
+written artifact now goes through one function, `safe_text`, including the
+transcript path in both the report and the trace.
+
+**REFUTED 4 - two different situations wrote a byte-identical trace row.** An
+ABSENT transcript and an EMPTY one were indistinguishable in the evidence: same
+line count, same empty uuid, same counts, same notes. That is precisely the
+objection that refuted `OPS-41`'s criterion 1, arriving against the artifact
+built in answer to it. `iter_transcript` was already computing the note that
+distinguishes them and `run_hook` was discarding it. The row now carries
+`transcript_exists` and the read note, and a test asserts the two rows differ.
+
+**CONFIRMED 1 - subagent turns never reach the report.** A sidechain record
+carrying a fabricated file and a fabricated count produced no findings and
+appears nowhere in the output.
+
+**CONFIRMED 2 - the mutations.** The pass ran five of its own choosing against
+`ops/stop_audit.py`, each anchor asserted to match exactly once and each restored
+by SHA-256, and found no survivor.
+
+**Two suite failures the pass caught that this session had not.** Both were this
+change's, and both are the sort that a single-file run cannot see. `ops/lanes.py`
+gained an ownership pattern without `scripts/write_lane_contracts.py` being
+re-run, so the rendered contracts were stale. And the source-register guard
+tripped for the ELEVENTH time, on the new `docs/INVENTORY.md` row: its extractor
+truncates `stop_audit.py` at the underscore and `audit.py` reads as an
+unregistered host. It was resolved with ZERO denylist additions by `git add`-ing
+the new module - `is_repo_filename` asks the live tracked listing, and an
+untracked file is not in it. That is `OPS-44`'s mechanism working exactly as
+designed, and it is worth knowing that a new module is invisible to it until it
+is staged.
+
+**The stated misses, enumerated rather than left to be discovered.** A numeric
+claim is only seen when a digit sits in front of an outcome word, so "2295 tests
+pass", "passing", "passed: 2295" and "the suite is at 2295" are invisible. A file
+claim is only seen when the path is backticked after a creation verb, so a bare
+`I created ops/foo.py`, a Markdown link, a bolded path and a quoted path are
+invisible. Those are misses rather than misreads, they are written into the
+module docstring, and widening the patterns is the obvious next increment.
 
 ## OPS-46. The hard-boundary capability backstop is now DERIVED rather than hand-typed - CLOSED 2026-09-07
 

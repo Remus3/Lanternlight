@@ -370,6 +370,12 @@ LANES: tuple[Lane, ...] = (
             # thing a cold session was found re-deriving by listing the disk.
             "tests/test_outbox.py",
             "docs/REPLY_PATHS.md",
+            # OPS-45, the Stop-hook claim auditor. ops/** already covers
+            # ops/stop_audit.py; the test module matches no glob here. It is
+            # this lane's work for the same reason the merge gate is: both
+            # re-probe a claim before it is believed, one for a subagent and
+            # one for the session's own closing words.
+            "tests/test_stop_audit.py",
             # OPS-37 document size budget. It guards the byte growth of
             # ROADMAP.md and docs/LEDGER.md, which are this lane's own
             # continuity documents, so the budget belongs beside them
