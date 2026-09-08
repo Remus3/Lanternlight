@@ -6567,6 +6567,254 @@ tree carries a bracket, and this repository's own path carries none either.
 Both holes are latent. The `--config` one is the one that would be invisible if
 it ever were not.
 
+## OPS-59. The watcher status answers "is it alive and polling" and cannot answer "has it archived anything" - and today those two differ by nine days - OPEN
+
+Found 2026-09-08 while confirming that `OPS-53`'s newly derived destination was
+real. It is not a defect in the watcher, which is behaving correctly. It is a
+gap in what a reader can learn from it.
+
+**The measurement.** `check_watcher` reports `ARMED`, `IDENTITY VERIFIED`, a
+fresh heartbeat, and all four surfaces inside their staleness thresholds. The
+heartbeat behind that reports 69,024 completed passes and a last-POLL timestamp
+per surface. What none of it reports is when a file was last actually COPIED.
+
+Measured directly against the game's own tree: the newest file under the watched
+`Logs` and `SaveGames` directories has an mtime of **2026-08-30**. The game has
+not been launched in nine days. So the watcher has completed sixty-nine thousand
+passes and archived nothing, and its status is indistinguishable from a watcher
+archiving continuously.
+
+**Why the existing freezing logic does not cover this, and is right not to.**
+`OPS-26` added a frozen state for a surface that archives nothing on consecutive
+passes THAT HAD FILES TO COPY. That is the correct trigger for a destination
+that is refusing writes. A surface with nothing to copy has not failed at
+anything, so it correctly never freezes. The two situations - "nothing to
+archive" and "archiving fine" - are both healthy, and neither is currently
+distinguishable from the other in the report.
+
+**Why it is worth closing anyway.** This project's continuity design assumes a
+cold session can read a status line and know where it stands. `ARMED, all four
+surfaces fresh` reads like capture is producing data. It is not, and it has not
+for nine days. That is the same shape as `OPS-53` - a true sentence a reader
+will complete into a false one - except here the sentence is not wrong, it is
+merely silent on the thing the reader wants.
+
+**The dependent fact that makes it matter.** Several roadmap items are blocked on
+the operator playing: item 1's remainder needs a run with a non-zero `matchId`,
+and items 5 and 6 need the client open. All of them have been blocked for nine
+days and nothing in this repository says so. A session that reads `ARMED` and
+moves on has no way to learn that the input those items wait on has not arrived.
+
+### Acceptance
+
+1. The heartbeat records, per surface, the moment a file was last actually
+   COPIED - distinct from the moment that surface was last polled - and the
+   record survives a restart in the same way the existing fields do.
+2. `check_watcher` renders that number, and renders it as a THIRD state rather
+   than folding it into freshness: polled recently, archived recently, and
+   archived nothing for a long time are three different facts.
+3. "Archived nothing for a long time" is NOT reported as a fault. It is the
+   correct state when the game has not been launched, and a status that cries
+   wolf gets ignored. The wording says what is true - the surfaces are healthy
+   and there has been nothing to capture since X - without implying a failure.
+4. The absent case is decided: a heartbeat written by an older build carries no
+   such field, and the reader must say the answer is unknown rather than
+   defaulting to "never archived", which would report a nine-day-old fault that
+   does not exist. This is `OPS-53`'s rule applied to a new field.
+5. Proven non-vacuous by making a real copy happen - touch a watched source file
+   in a THROWAWAY tree, not the game's - and watching the rendered status move
+   from one state to another, then watching it age back.
+6. The blocked-on-the-operator roadmap items get a single durable place that
+   says when game data last arrived, so a cold session learns it without
+   re-deriving it from file mtimes. A number only reachable by inspecting the
+   game's own directory is a number no session will look up.
+
+## OPS-58. The store-drift detector exists and NOTHING CALLS IT - CLOSED 2026-09-08
+
+Filed 2026-09-08, immediately after `OPS-54` closed, because that item's own
+closure says so in as many words: the detector was built, proved against a real
+stash in all three of its states, and then left unwired. It is not in the merge
+gate, not in the dispatch ritual's checks, and not in any hook. A guard nobody
+calls is a file, not a guard.
+
+**This is a shape this repository has already paid for twice, in the same
+week.** A hook can be present, executable and registered and still never fire -
+`CLAUDE.md` says presence, mode and registration are three different facts and
+none of them is the fact that a hook FIRED. `OPS-54`'s detector is one step
+worse than that: there is no wiring at all to mistake for wiring.
+
+**Where it belongs is not obvious, and picking wrong is worse than waiting.**
+The natural home is `ops/merge_gate.py`, because the gate is already the thing a
+merger runs before believing an agent's "done", and store drift is exactly a
+reason not to believe one. But the gate's current contract is mechanical - files
+exist, tests collect, counts did not fall - and it returns findings that a
+merger reads. Drift is a different KIND of finding: it is not about the claim,
+it is about whether the measurement of the claim was taken on a stable tree.
+
+That difference matters for the report's meaning. A drift finding must not be
+mistaken for "the work is wrong", because it usually will not be - three stashes
+happened in this repository during a session where nothing was lost. It says
+"your numbers were taken on a moving target", which changes what you do next
+rather than whether you merge.
+
+**And there is a real ordering problem to solve, not just a call to add.** The
+gate is invoked at MERGE time, after the work is done. A drift check needs a
+BEFORE reading, taken at dispatch, or it has nothing to compare against. The
+dispatch ritual is where that reading has to be taken, and the ritual is
+documented as a ritual rather than a mechanism - `state.dispatch` is called by a
+session that remembers to call it, and no code calls it for anyone. So wiring
+the detector means deciding what happens when the before-reading is simply
+absent, which will be the common case for a while.
+
+### Acceptance
+
+1. A failing test written FIRST that shows the drift finding reaching a merge
+   gate report, watched red. Not a test that the detector works - `OPS-54`
+   already has those - but that the WIRING carries its answer to a reader.
+2. The absent-baseline case is decided and tested: what the gate reports when no
+   dispatch-time snapshot exists. It must not report "no drift", because that is
+   an unqualified answer to a question nobody asked - the same defect as
+   `OPS-53`. Saying the check did not run is the floor.
+3. The drift finding is distinguishable in the rendered report from a finding
+   about the WORK. A merger reading the output must be able to tell "your
+   measurement was taken on a moving tree" from "a file you claimed is missing".
+4. The snapshot is taken where it can actually be taken - at dispatch - and the
+   storage for it is named and atomic, since a reader may poll it. If the
+   dispatch ritual is the only place it can live, say so, and say plainly that a
+   session which skips the ritual gets no drift check, rather than implying
+   coverage that does not exist.
+5. Proven non-vacuous end to end: a real stash created in a THROWAWAY repository
+   between a snapshot and a gate run, with the gate's rendered output shown
+   naming it, then the stash pruned and the same path shown going quiet.
+6. The gate must not become able to CRASH on this. It is consulted at merge time
+   and a merger who cannot run the gate stops running it. Every failure mode of
+   the underlying commands is handled as "not answerable" rather than as an
+   exception.
+
+
+### Outcome, 2026-09-08 - CLOSED
+
+Ledger `LL-0191`.
+
+**Where the dispatch-time reading lives, and why not in the loop state.** A
+separate file beside the loop state, written atomically through the same helper,
+which was factored out rather than copied. It is deliberately NOT a field on the
+loop state record: that record's per-field regex shape IS the `OPS-27` privacy
+control, and a reading here is 181,970 bytes across 2,446 objects. Putting it
+inside would have quietly turned a validated record into a bucket.
+
+**Criterion 2, the absent-baseline case, which was the one most likely to be got
+wrong.** With no dispatch-time reading, the gate reports that the check DID NOT
+RUN, in the same channel and the same shape as the existing per-file
+did-not-run note, and says the answer is UNKNOWN rather than settled. Four
+parametrised tests assert the rendered text never contains "no drift", "did not
+move", "no movement" or "clean". The path is rendered relative and never
+absolute, because an absolute path here carries the account name.
+
+**Criterion 3, distinguishability, is a third channel rather than a wording
+change.** Drift is reported separately from findings about the work and never
+touches the gate's pass or fail, behind a header saying in plain words that it
+is not a verdict on the claimed work - that the measurement was taken on a
+moving tree, and that this changes what you check next rather than whether you
+merge. The render order is pinned by test.
+
+**Criterion 5 was discharged end to end against a real stash** in a throwaway
+repository, showing both commits named while the stash was live, the same two
+marked unreachable after the drop, and the check going quiet only after an
+expire and a prune.
+
+**ELEVEN MUTANTS, ELEVEN KILLED - after one survived the first pass and exposed
+a real gap in the EXISTING tests.** The mutant that folded drift into the gate's
+pass or fail survived, because all 86 gate tests built their report object by
+hand and none of them ever asserted the verdict of a report that had drift in
+it. Closed by asserting the verdict in the real-stash test, and the tally
+re-derived afterwards rather than carried forward.
+
+**What is NOT closed, stated plainly.** The wiring only fires if a session
+performs the dispatch ritual, and nothing calls that ritual for anyone. That
+limit is written into three docstrings rather than fixed, and it is the same
+honest gap `OPS-54` accepted: the check is available to a session that
+remembers, and absent for one that does not.
+
+**And it found a defect in the detector itself**, now filed as `OPS-60`: the
+stash subject prefixes miss half of a MESSAGED stash. See that item, which also
+corrects an arithmetic claim made in `OPS-54`'s own closure.
+
+## OPS-60. The stash detector misses HALF of a messaged stash, and its "one stash is two commits" arithmetic is wrong in both directions - OPEN
+
+Found 2026-09-08 by the slice wiring the detector into the merge gate, and the
+second half found by the merger re-measuring the first. Both are defects in
+`ops/store_drift.py`, which `OPS-54` shipped and this item corrects.
+
+**DEFECT 1 - a messaged stash is detected by HALF.** `STASH_SUBJECT_PREFIXES`
+holds `WIP on ` and `index on `. Measured in a throwaway repository:
+
+    git stash push -m "my message"   ->  "On master: my message"
+                                          + "index on master: <sha> seed"
+    git stash                        ->  "WIP on master: <sha> seed"
+                                          + "index on master: <sha> seed"
+
+A messaged stash writes `On <branch>: <message>` where an unmessaged one writes
+`WIP on <branch>: ...`. Only the `index on ` half of a messaged stash matches
+the prefix set. So the detector still FIRES on a messaged stash - it is not
+blind to it - but it names one commit where two exist, and its count understates
+by half.
+
+That is the direction that hurts least and still hurts: a reader who compares
+the reported count against `git fsck` sees a mismatch and has no way to tell a
+detector limitation from a second, unexplained thing in the store.
+
+**DEFECT 2 - the arithmetic in `OPS-54`'s own closure is wrong, and it is wrong
+in BOTH directions.** That item states, and `LL-0188` repeats, that one stash
+writes two commits, so six unreachable commits are three stashes. The first half
+is right about OBJECTS and the inference from it is not.
+
+Measured in the same throwaway repository, in this order: a messaged stash then
+a drop left TWO unreachable commits. A second, unmessaged stash then a drop left
+THREE, not four. The second stash added only its `WIP on ` commit, because its
+`index on ` commit had the same tree, the same parent and the same subject as
+the first one and therefore hashed to the same object. Git stored one commit,
+not two.
+
+So N stashes taken from an unchanged index produce N+1 commits, not 2N. Dividing
+a count of unreachable commits by two can overcount stashes when index commits
+deduplicate, and can undercount them when a messaged stash contributes a subject
+the prefix set does not match. **A count of stash-shaped commits is not a count
+of stashes**, and the closure of `OPS-54` asserted that it was.
+
+**Why this matters more than the number.** `OPS-54` exists because an object
+count moved underneath an audit and nobody could say why. Answering "why" with a
+number derived by an unsound conversion puts the same class of error one level
+up, in the tool built to catch it. This is the third time in two sessions that
+the defect was in the CLOSURE PROSE rather than the code, and the second time
+that a count filed by a closure did not survive re-derivation.
+
+### Acceptance
+
+1. A failing test written FIRST for a MESSAGED stash, asserting both of its
+   commits are named, watched red before the prefix set is widened. Build the
+   stash for real; a fixture subject string typed by hand is a test asserting on
+   a coincidence.
+2. The prefix set is derived from what git actually writes rather than extended
+   by one string. Enumerate the subject forms git can produce for a stash -
+   messaged, unmessaged, `--keep-index`, `--include-untracked` (which writes a
+   THIRD commit), and a stash taken on a detached HEAD, where the branch name is
+   not a branch name - and decide about each in writing.
+3. Every place that converts a commit count into a stash count is found and
+   fixed, or the conversion is removed. The safest fix is to stop claiming a
+   stash count at all and report stash-shaped COMMITS, which is what is actually
+   observed. If a stash count is kept, it must be derived from something sound.
+4. The deduplication case is pinned by a test: two stashes taken from an
+   unchanged index, asserting the observed commit count is 3 and not 4, so the
+   next person to reason about this arithmetic meets the counterexample rather
+   than the intuition.
+5. `OPS-54`'s outcome section and the ledger entry it produced are corrected by
+   a NEW ledger entry naming the one it corrects, not by editing either. The
+   append-only rule is not suspended for a correction that happens to be ours.
+6. Watched red under mutation with each anchor asserted to occur exactly once,
+   and the mutants vary the INPUT - messaged, unmessaged, repeated-from-identical
+   index, untracked-included - not only the implementation.
+
 ## OPS-57. Both continuity documents will outgrow their budgets within days, and raising the numbers is not the fix - OPEN
 
 Filed 2026-09-08, the moment the roadmap's size budget fired for real and the
@@ -6613,6 +6861,27 @@ because the shape of a bug is the useful part, and the ledger is append-only by
 a rule that exists for good reasons. Whatever is done here preserves every word
 somewhere a cold session can still find it.
 
+**MEASURED 2026-09-08, so the structural decision has a basis rather than a
+hunch.** Counting top-level `## ` sections and the characters between them -
+CHARACTERS, not git blob bytes, so it is a shape measurement rather than a
+budget one:
+
+- 83 sections, 612,780 characters.
+- **61 sections carry CLOSED or REFUTED in their heading, and they are 445,307
+  characters - 72% of the document.**
+- The remaining 22 sections are 166,553 characters, 27%.
+
+So moving closed and refuted items out would leave a roadmap of roughly 167 KB,
+which is a document a cold session can actually read, and it would do it without
+deleting a word. That is the strongest single argument for the archive option in
+criterion 2, and it is worth knowing before anyone spends effort compressing
+prose that is only 27% of the problem.
+
+The five largest sections, for scale: one is 45,120 characters on its own, and
+three of the top ten are still OPEN, so an archive of closed items is not by
+itself a complete answer to length - it is the large, easy, non-destructive
+majority of it.
+
 ### Acceptance
 
 1. The growth rate is re-derived at the time the work is done rather than taken
@@ -6638,7 +6907,7 @@ somewhere a cold session can still find it.
    reachable from the roadmap - rather than asserting only that the archive file
    exists. A file that exists and is unreferenced is the invisible-work failure.
 
-## OPS-56. Only ONE module has been swept for filename-to-external-tool glob defects - OPEN
+## OPS-56. Only ONE module has been swept for filename-to-external-tool glob defects - CLOSED 2026-09-08, and it found two more, one of them SILENT
 
 Filed 2026-09-08 out of `OPS-55`'s criterion 5, which asked for an enumeration
 and got an honest one: the sweep covered `tools/precommit_gate.py` and nothing
@@ -6689,6 +6958,84 @@ pattern misses a wrapped sentence.
 5. At least one negative control: a site believed safe is deliberately fed a
    bracket-named file and shown to answer correctly, so the sweep's method is
    proven able to detect the defect it is looking for.
+
+
+### Outcome, 2026-09-08 - CLOSED
+
+Ledger `LL-0192`. Measured against Python 3.14.4, git 2.53.0.windows.3, ruff
+0.15.12, with `core.filemode` false.
+
+**The enumeration was derived from the code, as criterion 1 required.** All 100
+tracked Python files were AST-walked for attribute calls on `subprocess`, `os`,
+`shutil` and `asyncio`; the wrappers those revealed were then followed to their
+own call sites; and an alias check, a `ctypes`/`psutil` sweep and a
+`git ls-files` for shell scripts were run on top. Result: 36 modules spawn
+processes across 71 sites - 11 non-test modules at 19 sites and 25 test modules
+at 52 - plus 2 shell hooks, 1 CI workflow and 5 settings-file hook commands.
+
+**Verdicts on 63 real path arguments:** 8 measured-safe, 5 glob-intended, about
+55 literal, 4 DEFECTIVE, 5 UNDECIDED. The undecided ones are named rather than
+dropped, per criterion 3: leading-colon names outside the gate, backslash names,
+`shutil.which` semantics, one test parameter that may or may not be able to
+receive a bracket, and filenames arriving through the environment.
+
+**TWO OF THE FOUR DEFECTS WERE NEW, AND BOTH WERE IN THE PRE-COMMIT HOOK
+ITSELF** - the file that gates every commit in this repository, and the one
+place nobody had thought to sweep.
+
+1. `git diff --name-only -- "$doc"` passed a real staged filename as a bare
+   pathspec. OVER-match, so the guard reports a document as differing from the
+   working tree because a DIFFERENT file differs. Loud - a false refusal.
+2. `exec "$py_bin" -m pytest $selected` is deliberately unquoted so it
+   word-splits into module paths, which is correct, but globbing was ON there:
+   `set -f` is set earlier and cleared before this line. SILENT. The hook runs a
+   DIFFERENT test module and then reports that the doc-reading guard ran.
+
+**BOTH WERE REPRODUCED WITH REAL COMMITS BEFORE BEING FIXED**, which is what
+turns this from a plausible reading of the code into a measurement. For the
+second, in a throwaway repository: the selector chose a bracket-named module,
+the hook announced "running 1 doc-reading test module(s)", pytest actually ran
+the glob NEIGHBOUR - a module that reads no document - the subset passed, and
+THE COMMIT LANDED. A guard that runs the wrong thing and reports success, caught
+in the act.
+
+**The fixes:** a `:(literal)` pathspec, and `set -f` / `set -- $selected` /
+`set +f` / `exec ... "$@"` inside the existing environment-scrubbing subshell,
+which turns globbing off while preserving the word splitting and leaves the
+subshell undisturbed.
+
+**Five mutants, five killed**, each checked with `sh -n` for syntax and the hook
+restored byte-for-byte afterwards. Worth keeping: the mutant that moves `set -f`
+to AFTER the split is killed only by the behavioural test - the text assertion
+survives it, which is exactly why a test that greps the hook for a string is not
+a test of the hook.
+
+**End-to-end in both directions**, in a throwaway clone wired the way
+`scripts/install_hooks.py` wires it: a banned glyph refused with HEAD unchanged,
+and a clean document committed successfully with HEAD advancing. Both, because a
+hook that refuses everything passes the first probe alone. The hook is still
+`POSIX shell script, ASCII text executable` with zero CR bytes.
+
+**A caveat kept in the artifact rather than only in chat:** pytest refuses a
+bracketed path argument, so this fix converts a silent wrong-module PASS into a
+loud refusal. It does not make a bracket-named test module runnable, and it was
+never going to.
+
+**The other two defects were the ruff ones already fixed under `OPS-55`,
+re-measured here with one useful nuance:** `--stdin-filename` still mangles at
+0.15.12, but the gate now reads only the finding's row and never the reported
+filename, so that path is closed twice over. `--config` remains glob-expandable;
+this repository is safe only because the config name happens to carry no
+metacharacter.
+
+**Both hook defects were latent.** `git ls-files | grep -c "\["` is 0, against a
+control of 174 for a dot.
+
+**What is NOT proven:** that these are the only globbing defects. The sweep's own
+method misses are recorded - a module held in a variable, an exec'd string, a
+third-party spawn, untracked files, environment-borne and stdin-borne filenames,
+and expansion inside a `-c` string - and three path arguments that the mechanical
+counter missed were found only by hand.
 
 ## OPS-54. Parallel slices share ONE worktree, and a slice that runs `git stash` stashes every other slice's uncommitted work - CLOSED 2026-09-08 on a ban plus a detector, NOT on worktrees
 
@@ -6771,6 +7118,17 @@ session's dispatch window and one from the previous session. Re-measured in a
 throwaway repository, where a single stash produced exactly two. The count was
 right and the inference from it was not, which is this project's "a filed count
 is a hypothesis" rule landing on the item that was filed to catch drift.
+
+**THE STASH ARITHMETIC ABOVE IS ITSELF WRONG, corrected 2026-09-08 by `OPS-60`
+and left here rather than edited away.** The paragraph below says one stash
+writes two commits, so six unreachable commits are three stashes. The first half
+is right about OBJECTS; the inference is not. Measured: a second stash taken
+from an UNCHANGED index adds only its `WIP on ` commit, because its `index on `
+commit has the same tree, parent and subject as the first and hashes to the same
+object. N stashes from an unchanged index produce N+1 commits, not 2N - and a
+MESSAGED stash writes `On <branch>: <message>` instead of `WIP on `, which the
+detector's prefix set does not match at all. A count of stash-shaped commits is
+not a count of stashes. See `OPS-60`.
 
 **A SECOND CORRECTION, and it changes what the detector can see.** `git stash
 drop` does NOT remove those commits - it unlinks the ref and leaves both objects

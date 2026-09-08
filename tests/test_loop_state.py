@@ -9,6 +9,7 @@ test that can break a running loop.
 """
 
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -996,3 +997,305 @@ class TestTheSharedWorktreeBanIsCarriedByTheDispatchRitual:
         assert "OPS-28" in summary
         assert "ops/store_drift.py" in summary
         assert "1 slice(s)" in summary
+
+
+# ---------------------------------------------------------------------------
+# the dispatch-time object-store reading - ROADMAP OPS-58
+# ---------------------------------------------------------------------------
+
+
+def _git(repo: Path, *args: str) -> None:
+    """Run one git command inside ``repo`` with a FABRICATED identity.
+
+    The identity is invented and passed with ``-c`` rather than read from this
+    machine or written into a config file. A test that reached for the real
+    committer identity would put an operator identifier into a tracked file,
+    which ``ADR-004`` forbids regardless of how the string was produced.
+
+    Every call here is scoped to a throwaway repository under ``tmp_path``.
+    None of these commands may ever be aimed at the shared worktree - that is
+    the whole content of :data:`ops.store_drift.SHARED_WORKTREE_BAN`.
+    """
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.name=Lanternlight Test",
+            "-c",
+            "user.email=test@example.invalid",
+            "-c",
+            "commit.gpgsign=false",
+            *args,
+        ],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+
+def _throwaway_repo(root: Path) -> Path:
+    """Build a real, one-commit git repository under ``root`` and return it."""
+    repo = root / "throwaway"
+    repo.mkdir(parents=True, exist_ok=True)
+    _git(repo, "init", "-q", "-b", "main")
+    (repo / "seed.txt").write_text("one\n", encoding="utf-8")
+    _git(repo, "add", "seed.txt")
+    _git(repo, "commit", "-q", "-m", "seed")
+    return repo
+
+
+class TestDispatchTakesTheBeforeReadingTheDriftCheckNeeds:
+    """``OPS-58`` criterion 4 - the snapshot is taken where it CAN be taken.
+
+    The drift detector compares two readings and the merge gate runs at merge
+    time, after the work. There is exactly one moment in this project's
+    machinery that happens before the work: dispatch. So the before-reading is
+    taken here, beside the loop state, and a session that never calls
+    :func:`ops.loop.state.dispatch` gets no drift check at all - stated
+    plainly rather than implied away, because the ritual is a ritual and
+    nothing calls it for anyone.
+    """
+
+    def test_dispatching_writes_a_reading_beside_the_loop_state(self, tmp_path: Path) -> None:
+        repo = _throwaway_repo(tmp_path)
+        path = repo / "loop_state.json"
+
+        state_mod.dispatch("OPS-58", path=path)
+
+        snapshot_path = state_mod.store_snapshot_path(path)
+        assert snapshot_path.parent == path.parent
+        assert snapshot_path.exists(), "dispatch recorded no store reading"
+
+        before = state_mod.load_store_snapshot(snapshot_path)
+        assert before is not None
+        assert before.usable, before.errors
+        # The seed commit, its tree and its blob. A reading that found nothing
+        # would be indistinguishable from one taken outside a repository.
+        assert before.histogram().get("commit") == 1, before.histogram()
+
+    def test_the_reading_survives_disk_without_inventing_drift(self, tmp_path: Path) -> None:
+        """A lossy round trip would report movement on a repository nobody touched.
+
+        This is the companion that stops the stash test below from passing for
+        the wrong reason: if serialisation dropped objects, EVERY comparison
+        would show drift and the detector would be a random number generator
+        with a good docstring.
+        """
+        repo = _throwaway_repo(tmp_path)
+        path = repo / "loop_state.json"
+        state_mod.dispatch("OPS-58", path=path)
+
+        before = state_mod.load_store_snapshot(state_mod.store_snapshot_path(path))
+        assert before is not None
+        report = store_drift.compare(before, store_drift.snapshot(repo))
+
+        assert report.answered, report.errors
+        assert not report.moved, report.format()
+
+    def test_a_real_stash_after_dispatch_is_visible_against_the_recorded_reading(
+        self, tmp_path: Path
+    ) -> None:
+        """One ``git stash`` writes TWO commits, and both are named.
+
+        Measured on this machine: while the stash still EXISTS the pair is
+        reachable through the stash ref, so ``git fsck --unreachable`` says
+        nothing about it. Reachability is therefore not what makes a stash
+        visible here - appearing between two readings is.
+        """
+        repo = _throwaway_repo(tmp_path)
+        path = repo / "loop_state.json"
+        state_mod.dispatch("OPS-58", path=path)
+        before = state_mod.load_store_snapshot(state_mod.store_snapshot_path(path))
+        assert before is not None
+
+        (repo / "seed.txt").write_text("two\n", encoding="utf-8")
+        _git(repo, "stash", "push")
+
+        report = store_drift.compare(before, store_drift.snapshot(repo))
+
+        assert report.moved, report.format()
+        assert len(report.stash_commits) == 2, report.format()
+        assert all(
+            store_drift.is_stash_subject(fact.subject) for fact in report.stash_commits
+        ), report.format()
+
+    def test_a_stash_given_a_MESSAGE_is_still_seen_but_only_half_named(
+        self, tmp_path: Path
+    ) -> None:
+        """Measured 2026-09-08, and it is not what the prefixes assume.
+
+        ``git stash push -m "..."`` does NOT write ``WIP on main: ...``. It
+        writes the operator's own message as the subject - measured shape
+        ``On main: <message>`` - so only the second of the two commits, the
+        ``index on `` one, matches
+        :data:`ops.store_drift.STASH_SUBJECT_PREFIXES`. The stash is therefore
+        still SEEN and still named, by half.
+
+        Pinned as a lower bound rather than as an exact count, so widening the
+        prefixes later fixes this rather than breaking it. The gap belongs to
+        ``ops/store_drift.py``, which this lane does not own.
+        """
+        repo = _throwaway_repo(tmp_path)
+        path = repo / "loop_state.json"
+        state_mod.dispatch("OPS-58", path=path)
+        before = state_mod.load_store_snapshot(state_mod.store_snapshot_path(path))
+        assert before is not None
+
+        (repo / "seed.txt").write_text("two\n", encoding="utf-8")
+        _git(repo, "stash", "push", "-m", "a sibling's whole working tree")
+
+        report = store_drift.compare(before, store_drift.snapshot(repo))
+
+        assert report.moved, report.format()
+        assert len(report.stash_commits) >= 1, report.format()
+        assert any(
+            fact.subject.startswith("index on ") for fact in report.stash_commits
+        ), report.format()
+
+
+class TestTheDispatchReadingIsWrittenLikeEveryOtherPollableFile:
+    def test_the_write_goes_through_a_temporary_file_and_leaves_no_debris(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        seen: list[str] = []
+        real_mkstemp = state_mod.tempfile.mkstemp
+
+        def spy(*args: object, **kwargs: object):
+            seen.append(str(kwargs.get("prefix")))
+            return real_mkstemp(*args, **kwargs)
+
+        monkeypatch.setattr(state_mod.tempfile, "mkstemp", spy)
+
+        path = tmp_path / "loop_state.json"
+        state_mod.dispatch("OPS-58", path=path)
+
+        snapshot_path = state_mod.store_snapshot_path(path)
+        assert state_mod.temp_prefix_for(snapshot_path) in seen, seen
+        assert list(tmp_path.glob(state_mod.TEMP_PREFIX + "*")) == []
+
+    def test_the_reading_carries_subjects_only_and_never_a_commit_header(
+        self, tmp_path: Path
+    ) -> None:
+        """A commit header carries an author and a committer identity.
+
+        ``ops.store_drift`` keeps subjects only for that reason. This pins it
+        at the STORAGE layer too, because this file is what a later reader
+        loads and what a report is rendered from.
+        """
+        repo = _throwaway_repo(tmp_path)
+        path = repo / "loop_state.json"
+        state_mod.dispatch("OPS-58", path=path)
+
+        text = state_mod.store_snapshot_path(path).read_text(encoding="utf-8")
+        assert "author " not in text
+        assert "committer " not in text
+        assert "test@example.invalid" not in text
+
+
+class TestNothingAboutTheReadingMayBreakDispatch:
+    """``OPS-58`` criterion 6, at the dispatch end.
+
+    Dispatch is the interlock that stops two sessions writing the same files.
+    A store reading is a nice-to-have bolted onto it, and a nice-to-have that
+    can abort the interlock is a net loss.
+    """
+
+    def test_a_directory_that_is_not_a_repository_records_the_failure_not_a_crash(
+        self, state_path: Path
+    ) -> None:
+        state_mod.dispatch("OPS-28", path=state_path)
+
+        assert [row["item"] for row in state_mod.load(state_path).in_flight] == ["OPS-28"]
+        recorded = state_mod.load_store_snapshot(state_mod.store_snapshot_path(state_path))
+        assert recorded is not None
+        assert not recorded.usable, "a non-repository produced a clean bill of health"
+        assert recorded.errors
+
+    def test_a_snapshot_that_raises_outright_still_leaves_the_interlock_written(
+        self, state_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def explode(*args: object, **kwargs: object):
+            raise RuntimeError("git went away mid-read")
+
+        monkeypatch.setattr(state_mod.store_drift, "snapshot", explode)
+
+        state_mod.dispatch("OPS-28", path=state_path)
+
+        assert [row["item"] for row in state_mod.load(state_path).in_flight] == ["OPS-28"]
+
+    def test_a_snapshot_that_cannot_be_written_still_leaves_the_interlock_written(
+        self, state_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def refuse(*args: object, **kwargs: object):
+            raise OSError("no space left on device")
+
+        monkeypatch.setattr(state_mod, "save_store_snapshot", refuse)
+
+        state_mod.dispatch("OPS-28", path=state_path)
+
+        assert [row["item"] for row in state_mod.load(state_path).in_flight] == ["OPS-28"]
+
+
+class TestLoadingAReadingAnswersNoneRatherThanRaising:
+    """Absent and unusable are the same answer here: there is no baseline.
+
+    They must never come back as an EMPTY snapshot, because an empty snapshot
+    compared against a live repository reports every object in it as drift -
+    a false alarm loud enough that a reader stops reading.
+    """
+
+    def test_a_missing_file_is_none(self, tmp_path: Path) -> None:
+        assert state_mod.load_store_snapshot(tmp_path / "nothing.json") is None
+
+    @pytest.mark.parametrize(
+        "body",
+        [
+            "",
+            "{",
+            "[]",
+            '"a string"',
+            '{"schema": 99, "root": ".", "at": "", "objects": {}}',
+            '{"root": ".", "at": "", "objects": "not a map"}',
+            '{"root": ".", "at": "", "objects": {}, "unreachable": "not a list"}',
+        ],
+        ids=[
+            "empty",
+            "truncated",
+            "a list",
+            "a bare string",
+            "an unknown schema",
+            "objects of the wrong type",
+            "unreachable of the wrong type",
+        ],
+    )
+    def test_unusable_content_is_none_rather_than_an_exception(
+        self, tmp_path: Path, body: str
+    ) -> None:
+        target = tmp_path / "store_snapshot.json"
+        target.write_text(body, encoding="utf-8")
+
+        assert state_mod.load_store_snapshot(target) is None
+
+    def test_a_reading_this_module_wrote_is_accepted(self, tmp_path: Path) -> None:
+        """Non-vacuity companion: the parametrisation above must reject content,
+        not everything."""
+        target = tmp_path / "store_snapshot.json"
+        state_mod.save_store_snapshot(
+            store_drift.StoreSnapshot(
+                root="somewhere",
+                at="2026-09-08T00:00:00+00:00",
+                objects={"a" * 40: "commit"},
+                subjects={"a" * 40: "WIP on main: deadbeef something"},
+                unreachable=frozenset({"a" * 40}),
+                errors=(),
+            ),
+            target,
+        )
+
+        loaded = state_mod.load_store_snapshot(target)
+        assert loaded is not None
+        assert loaded.objects == {"a" * 40: "commit"}
+        assert loaded.subjects == {"a" * 40: "WIP on main: deadbeef something"}
+        assert loaded.unreachable == frozenset({"a" * 40})
+        assert loaded.usable

@@ -268,6 +268,11 @@ LANES: tuple[Lane, ...] = (
             "tools/syntax_check_hook.py",
             "tests/test_syntax_check_hook.py",
             "tests/test_precommit_gate_lint.py",
+            # OPS-56. The pre-commit hook's own globbing behaviour: a bare
+            # pathspec that over-matched, and an unquoted split that ran a
+            # DIFFERENT test module while reporting the guard had run. It
+            # belongs to safety for the same reason ".githooks/**" does.
+            "tests/test_precommit_hook_globbing.py",
             # OPS-38. Forbids any tracked file naming a user home directory,
             # which is repository hygiene applied to what gets PUBLISHED -
             # the same mandate as ascii_check and the PII backstop.

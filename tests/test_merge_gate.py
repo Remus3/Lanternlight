@@ -14,16 +14,20 @@ that goes green after an agent deleted or weakened a test is the exact failure
 this module exists to catch, and it is invisible to an exit code.
 """
 
+import builtins
 import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from ops import merge_gate  # noqa: E402
+from ops import merge_gate, store_drift  # noqa: E402
+from ops.loop import state as state_mod  # noqa: E402
 
 # Measured verbatim from `python -m pytest --collect-only -q` on 2026-08-09,
 # CRs included. Assembled with explicit \r so the shape survives any editor.
@@ -747,7 +751,18 @@ class TestVerifyDefaultsAreNotSilent:
         assert rendered.startswith("merge gate: OK")
         assert "per-file" in rendered, rendered
 
-    def test_supplying_the_per_file_baseline_leaves_no_unchecked_note(self, tmp_path):
+    def test_supplying_the_per_file_baseline_leaves_no_PER_FILE_unchecked_note(
+        self, tmp_path
+    ):
+        """Narrowed from ``notes == ()`` when ``OPS-58`` wired the drift check.
+
+        A tmp root has never been dispatched into, so it never has a
+        dispatch-time store reading and the drift check honestly reports that
+        it did not run. Asserting an EMPTY notes tuple would now be asserting
+        that a second unchecked probe stays silent, which is the opposite of
+        what this class exists to defend. The assertion is therefore made
+        exact rather than loosened: one note, and it is the drift one.
+        """
         _write_two_file_project(tmp_path, a_count=1, b_count=2)
         report = merge_gate.verify(
             claimed_paths=["pytest.ini"],
@@ -755,7 +770,9 @@ class TestVerifyDefaultsAreNotSilent:
             per_file_baseline={"tests/test_a.py": 1, "tests/test_b.py": 2},
             root=tmp_path,
         )
-        assert report.notes == (), report.format()
+        assert len(report.notes) == 1, report.format()
+        assert "per-file" not in report.notes[0], report.notes[0]
+        assert "store-drift" in report.notes[0], report.notes[0]
 
     def test_the_docstring_keeps_the_weakness_the_code_cannot_fix(self):
         """``baseline`` is supplied by the very caller whose work is under test.
@@ -824,3 +841,408 @@ class TestUncheckedNotesRenderOnTheFAILUREBranchToo:
             notes=(),
         )
         assert "[unchecked]" not in report.format()
+
+
+# ---------------------------------------------------------------------------
+# store drift reaches the gate - ROADMAP OPS-58
+# ---------------------------------------------------------------------------
+
+
+def _git(repo, *args: str) -> None:
+    """Run one git command inside a THROWAWAY repository, with a fabricated
+    identity passed by ``-c`` rather than read from this machine.
+
+    Every command here is scoped to ``tmp_path``. None of them may ever be
+    aimed at the shared worktree - that is the whole content of
+    :data:`ops.store_drift.SHARED_WORKTREE_BAN`.
+    """
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.name=Lanternlight Test",
+            "-c",
+            "user.email=test@example.invalid",
+            "-c",
+            "commit.gpgsign=false",
+            *args,
+        ],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+
+def _snapshot(objects, subjects=None, unreachable=(), errors=(), at="2026-09-08T00:00:00+00:00"):
+    """Build a StoreSnapshot by hand, so the comparison logic needs no git."""
+    return store_drift.StoreSnapshot(
+        root="somewhere",
+        at=at,
+        objects=dict(objects),
+        subjects=dict(subjects or {}),
+        unreachable=frozenset(unreachable),
+        errors=tuple(errors),
+    )
+
+
+SHA_SEED = "a" * 40
+SHA_WIP = "b" * 40
+SHA_INDEX = "c" * 40
+
+
+class TestADriftAnswerReachesTheRenderedReport:
+    """``OPS-58`` criterion 1 - the WIRING, not the detector.
+
+    ``OPS-54`` already proves :func:`ops.store_drift.compare` names a stash.
+    Every one of those tests stayed green for the whole week the detector was
+    called by nothing at all, which is the same shape as the dead per-file
+    guard recorded under ``OPS-31``. What is under test here is that the
+    answer travels: out of the detector, into a :class:`GateReport`, and out
+    of :meth:`GateReport.format` where a merger actually reads it.
+    """
+
+    def _stashed(self):
+        before = _snapshot({SHA_SEED: "commit"}, {SHA_SEED: "seed"})
+        after = _snapshot(
+            {SHA_SEED: "commit", SHA_WIP: "commit", SHA_INDEX: "commit"},
+            {
+                SHA_SEED: "seed",
+                SHA_WIP: "WIP on main: 6acc6b7 seed",
+                SHA_INDEX: "index on main: 6acc6b7 seed",
+            },
+        )
+        return before, after
+
+    def test_a_stash_between_the_readings_is_named_in_the_rendered_report(self) -> None:
+        before, after = self._stashed()
+
+        measurement, notes = merge_gate.describe_store_drift(before, after)
+
+        assert notes == (), notes
+        report = merge_gate.GateReport(
+            ok=True, findings=(), collected=10, summary=None, measurement=measurement
+        )
+        rendered = report.format()
+        assert SHA_WIP in rendered, rendered
+        assert SHA_INDEX in rendered, rendered
+        assert "WIP on main" in rendered, rendered
+
+    def test_verify_itself_carries_the_answer_and_not_only_the_helper(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """The helper being right proves nothing about ``verify`` calling it.
+
+        ``check_per_file_counts`` was right and uncalled for weeks. This
+        drives the composed entry point and reads its rendered output.
+        """
+        before, after = self._stashed()
+        monkeypatch.setattr(
+            merge_gate,
+            "read_store_drift",
+            lambda *args, **kwargs: merge_gate.describe_store_drift(before, after),
+        )
+        _write_two_file_project(tmp_path, a_count=1, b_count=2)
+
+        report = merge_gate.verify(
+            claimed_paths=["pytest.ini"],
+            baseline=3,
+            per_file_baseline={"tests/test_a.py": 1, "tests/test_b.py": 2},
+            root=tmp_path,
+        )
+
+        assert SHA_WIP in report.format(), report.format()
+
+    def test_a_drift_answer_does_not_by_itself_refuse_the_merge(self) -> None:
+        """Drift changes what you check next, not whether you merge.
+
+        Three stashes happened in this repository during a session in which
+        nothing was lost. Turning that into a refusal would make the gate
+        say no on a routine day, and a gate that always says no is a gate
+        nobody runs.
+        """
+        before, after = self._stashed()
+        measurement, _ = merge_gate.describe_store_drift(before, after)
+
+        report = merge_gate.GateReport(
+            ok=True, findings=(), collected=10, summary=None, measurement=measurement
+        )
+        assert report.ok
+        assert report.format().startswith("merge gate: OK")
+
+
+class TestAnAbsentBaselineIsNeverReportedAsNoDrift:
+    """``OPS-58`` criterion 2, and the ``OPS-53`` defect one level down.
+
+    The dispatch ritual is a ritual: no code calls it for anyone, so for a
+    while the common case is that no before-reading exists. A gate that
+    answers "no drift" from an empty record has asserted something its record
+    cannot support. Saying the check DID NOT RUN is the floor.
+    """
+
+    def test_no_baseline_produces_an_unchecked_note_and_no_measurement(self) -> None:
+        after = _snapshot({SHA_SEED: "commit"}, {SHA_SEED: "seed"})
+
+        measurement, notes = merge_gate.describe_store_drift(None, after)
+
+        assert measurement == (), measurement
+        assert len(notes) == 1, notes
+        assert "did not run" in notes[0], notes[0]
+
+    @pytest.mark.parametrize(
+        "forbidden",
+        ["no drift", "did not move", "no movement", "clean"],
+    )
+    def test_the_note_never_claims_the_store_held_still(self, forbidden: str) -> None:
+        after = _snapshot({SHA_SEED: "commit"})
+
+        _, notes = merge_gate.describe_store_drift(None, after)
+
+        assert forbidden not in notes[0].lower(), notes[0]
+
+    def test_the_note_says_where_the_reading_should_have_come_from(self) -> None:
+        _, notes = merge_gate.describe_store_drift(None, _snapshot({}), where="ops/runtime/x.json")
+
+        assert "ops/runtime/x.json" in notes[0], notes[0]
+        assert "dispatch" in notes[0], notes[0]
+
+    def test_the_note_renders_in_the_same_unchecked_shape_as_the_per_file_one(self) -> None:
+        _, notes = merge_gate.describe_store_drift(None, _snapshot({}))
+
+        report = merge_gate.GateReport(
+            ok=True, findings=(), collected=10, summary=None, notes=notes
+        )
+        assert f"[unchecked] {notes[0]}" in report.format()
+
+    def test_verify_reports_the_unchecked_note_when_no_reading_was_taken(
+        self, tmp_path
+    ) -> None:
+        """End of the wire: a tmp root has never been dispatched into."""
+        _write_two_file_project(tmp_path, a_count=1, b_count=2)
+
+        report = merge_gate.verify(
+            claimed_paths=["pytest.ini"],
+            baseline=3,
+            per_file_baseline={"tests/test_a.py": 1, "tests/test_b.py": 2},
+            root=tmp_path,
+        )
+
+        rendered = report.format()
+        assert report.ok, rendered
+        assert any("store-drift" in note for note in report.notes), report.notes
+        assert "[unchecked]" in rendered, rendered
+
+
+class TestADriftAnswerIsDistinguishableFromAFindingAboutTheWork:
+    """``OPS-58`` criterion 3.
+
+    "a file you claimed is missing" and "your numbers were taken on a moving
+    tree" are different KINDS of statement. The first says the work may be
+    wrong. The second says nothing whatever about the work, and a merger who
+    reads them as one list will either ignore both or block on both.
+    """
+
+    def _both(self):
+        before = _snapshot({SHA_SEED: "commit"}, {SHA_SEED: "seed"})
+        after = _snapshot(
+            {SHA_SEED: "commit", SHA_WIP: "commit"},
+            {SHA_SEED: "seed", SHA_WIP: "WIP on main: 6acc6b7 seed"},
+        )
+        measurement, _ = merge_gate.describe_store_drift(before, after)
+        return merge_gate.GateReport(
+            ok=False,
+            findings=(
+                merge_gate.Finding(
+                    kind="missing", detail="a.py was claimed but does not exist"
+                ),
+            ),
+            collected=10,
+            summary=None,
+            measurement=measurement,
+        )
+
+    def test_the_rendered_report_separates_the_two_with_a_header(self) -> None:
+        rendered = self._both().format()
+
+        assert merge_gate.MEASUREMENT_HEADER[0] in rendered, rendered
+        finding_at = rendered.index("a.py was claimed")
+        header_at = rendered.index(merge_gate.MEASUREMENT_HEADER[0])
+        drift_at = rendered.index(SHA_WIP)
+        assert finding_at < header_at < drift_at, rendered
+
+    def test_the_header_says_in_words_that_it_is_not_a_verdict_on_the_work(self) -> None:
+        header = " ".join(merge_gate.MEASUREMENT_HEADER).lower()
+
+        assert "not a verdict" in header, header
+        assert "moving tree" in header, header
+
+    def test_the_header_is_absent_when_there_is_nothing_to_say(self) -> None:
+        """Negative control - the separator must not print unconditionally."""
+        report = merge_gate.GateReport(
+            ok=True, findings=(), collected=10, summary=None
+        )
+
+        assert merge_gate.MEASUREMENT_HEADER[0] not in report.format()
+
+    def test_a_drift_line_is_never_counted_as_a_finding(self) -> None:
+        report = self._both()
+
+        assert "1 finding(s)" in report.format(), report.format()
+
+
+class TestTheGateCannotCrashOnThis:
+    """``OPS-58`` criterion 6.
+
+    The gate is consulted at merge time. A merger who cannot run it stops
+    running it, and then the claim goes unchecked AND the drift goes
+    unwatched. Every failure of the underlying git commands is an
+    unanswerable question, never an exception.
+    """
+
+    def test_an_unimportable_detector_is_a_note_rather_than_a_traceback(
+        self, monkeypatch
+    ) -> None:
+        real_import = builtins.__import__
+
+        def refuse(name, *args, **kwargs):
+            if name.startswith("ops"):
+                raise ImportError(f"no module named {name}")
+            return real_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", refuse)
+
+        measurement, notes = merge_gate.read_store_drift(REPO_ROOT)
+
+        assert measurement == ()
+        assert len(notes) == 1
+        assert "did not run" in notes[0], notes[0]
+
+    def test_a_detector_that_raises_outright_is_a_note_rather_than_a_traceback(
+        self, monkeypatch
+    ) -> None:
+        def explode(*args, **kwargs):
+            raise RuntimeError("git went away mid-read")
+
+        monkeypatch.setattr(store_drift, "snapshot", explode)
+        monkeypatch.setattr(
+            state_mod, "load_store_snapshot", lambda path=None: _snapshot({SHA_SEED: "commit"})
+        )
+
+        measurement, notes = merge_gate.read_store_drift(REPO_ROOT)
+
+        assert measurement == ()
+        assert len(notes) == 1
+        assert "did not run" in notes[0], notes[0]
+
+    def test_a_probe_failure_is_reported_as_unanswerable_not_as_clean(self) -> None:
+        before = _snapshot({SHA_SEED: "commit"})
+        after = _snapshot({}, errors=["git fsck: exit 128: not a git repository"])
+
+        measurement, notes = merge_gate.describe_store_drift(before, after)
+
+        rendered = "\n".join(measurement).lower()
+        assert "could not answer" in rendered, rendered
+        assert notes == (), notes
+
+    def test_reading_an_unusable_root_answers_rather_than_raising(self, tmp_path) -> None:
+        """No repository, no snapshot file, no git objects - and no exception."""
+        measurement, notes = merge_gate.read_store_drift(tmp_path)
+
+        assert measurement == ()
+        assert len(notes) == 1
+
+    def test_a_clean_pair_says_the_store_held_still_in_so_many_words(self) -> None:
+        """Non-vacuity companion for the whole class.
+
+        Every test above asserts something did NOT happen. This one pins the
+        positive case, so a describe_store_drift that returned empty tuples
+        forever would fail here rather than pass everything.
+        """
+        before = _snapshot({SHA_SEED: "commit"}, {SHA_SEED: "seed"})
+        after = _snapshot({SHA_SEED: "commit"}, {SHA_SEED: "seed"})
+
+        measurement, notes = merge_gate.describe_store_drift(before, after)
+
+        assert notes == (), notes
+        assert measurement, "a clean, ANSWERED comparison said nothing at all"
+        assert "did not move" in "\n".join(measurement), measurement
+
+
+class TestEndToEndAgainstARealStashInAThrowawayRepository:
+    """``OPS-58`` criterion 5. Real git, real stash, real rendered gate output.
+
+    Everything above builds snapshots by hand, which proves the wiring and
+    proves nothing about whether git behaves as the wiring assumes. This runs
+    the whole path: a dispatch inside a throwaway repository, a real
+    ``git stash``, then ``verify`` rendering the two commits it wrote.
+
+    A measured fact worth keeping, because it is counter-intuitive: while the
+    stash EXISTS, ``git fsck --unreachable`` reports nothing, because the
+    stash ref keeps the pair reachable. Detection here does not depend on
+    reachability - it depends on the pair not being in the earlier reading.
+    """
+
+    def _project_repo(self, tmp_path):
+        repo = tmp_path / "throwaway"
+        repo.mkdir()
+        _write_two_file_project(repo, a_count=1, b_count=2)
+        _git(repo, "init", "-q", "-b", "main")
+        _git(repo, "add", "-A")
+        _git(repo, "commit", "-q", "-m", "seed")
+        return repo
+
+    def test_a_real_stash_reaches_the_rendered_gate_output(self, tmp_path) -> None:
+        repo = self._project_repo(tmp_path)
+        state_mod.dispatch("OPS-58", path=repo / "loop_state.json")
+
+        (repo / "tests" / "test_a.py").write_text(
+            "def test_a_0():\n    assert True\n\n\ndef test_extra():\n    assert True\n",
+            encoding="utf-8",
+        )
+        # No ``-m``. Measured 2026-09-08: a message REPLACES the WIP commit's
+        # subject with the operator's own text, so only the ``index on `` half
+        # of the pair matches STASH_SUBJECT_PREFIXES. A plain stash is the
+        # shape a slice actually produces by accident, and it is the shape
+        # that shows both commits.
+        _git(repo, "stash", "push")
+
+        report = merge_gate.verify(
+            claimed_paths=["pytest.ini"],
+            baseline=3,
+            per_file_baseline={"tests/test_a.py": 1, "tests/test_b.py": 2},
+            root=repo,
+            snapshot_path=repo / state_mod.STORE_SNAPSHOT_FILENAME,
+        )
+
+        rendered = report.format()
+        assert "STASH-SHAPED COMMITS: 2" in rendered, rendered
+        assert "WIP on main" in rendered, rendered
+        assert merge_gate.MEASUREMENT_HEADER[0] in rendered, rendered
+        # And it did NOT refuse the merge. Added after the mutation pass:
+        # folding `measurement` into `ok` survived every other test in this
+        # file, because they all build a GateReport by hand and none of them
+        # drove `verify` with drift actually present. Drift changes what you
+        # check next, not whether you merge.
+        assert report.ok, rendered
+
+    def test_the_same_path_goes_quiet_when_nothing_stashed(self, tmp_path) -> None:
+        """The companion without which the test above proves nothing.
+
+        If the drift block rendered on every run, the stash assertions would
+        be satisfied by a report that says the same thing about an untouched
+        repository.
+        """
+        repo = self._project_repo(tmp_path)
+        state_mod.dispatch("OPS-58", path=repo / "loop_state.json")
+
+        report = merge_gate.verify(
+            claimed_paths=["pytest.ini"],
+            baseline=3,
+            per_file_baseline={"tests/test_a.py": 1, "tests/test_b.py": 2},
+            root=repo,
+            snapshot_path=repo / state_mod.STORE_SNAPSHOT_FILENAME,
+        )
+
+        rendered = report.format()
+        assert "STASH-SHAPED COMMITS" not in rendered, rendered
+        assert "did not move" in rendered, rendered

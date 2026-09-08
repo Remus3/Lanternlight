@@ -37,15 +37,21 @@ from ops import store_drift
 __all__ = [
     "LoopState",
     "STATE_FILENAME",
+    "STORE_SNAPSHOT_FILENAME",
+    "STORE_SNAPSHOT_SCHEMA",
     "advance_cycle",
     "credit",
     "default_state_path",
     "dispatch",
     "in_flight_summary",
     "load",
+    "load_store_snapshot",
     "retire",
     "runtime_dir",
     "save",
+    "save_store_snapshot",
+    "snapshot_store",
+    "store_snapshot_path",
     "temp_prefix_for",
 ]
 
@@ -54,6 +60,19 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 #: Name of the state file inside the runtime directory.
 STATE_FILENAME = "loop_state.json"
+
+#: Name of the dispatch-time object-store reading, written BESIDE the state
+#: file - ``OPS-58``. Its own file rather than a field on the loop state,
+#: for three reasons that are all about the loop state rather than about it:
+#: the state record is shape-validated down to a regex per field and holds ids
+#: and paths only, a reading is a few thousand shas and would dwarf it, and a
+#: reader polling the state file for "where was I" should not have to re-read
+#: 150 KB of object names to find out.
+STORE_SNAPSHOT_FILENAME = "store_snapshot.json"
+
+#: Schema marker for that file, independent of :data:`SCHEMA`. The two files
+#: are versioned separately because they change for unrelated reasons.
+STORE_SNAPSHOT_SCHEMA = 1
 
 #: Prefix given to every temporary file this module creates. Tests assert on
 #: it to prove the temp-then-replace path was actually taken.
@@ -353,11 +372,22 @@ def save(state: LoopState, path: Path | None = None) -> Path:
         The path that was written.
     """
     target = Path(path) if path is not None else default_state_path()
-    target.parent.mkdir(parents=True, exist_ok=True)
 
     state.updated = _now()
     body = json.dumps(state.to_dict(), indent=2, sort_keys=True, ensure_ascii=True) + "\n"
 
+    return _write_atomically(target, body)
+
+
+def _write_atomically(target: Path, body: str) -> Path:
+    """Write ``body`` to ``target`` through a temp file in the same directory.
+
+    Factored out of :func:`save` when ``OPS-58`` added a second pollable file
+    beside the state. Two copies of this dance would be two chances for one of
+    them to grow a plain ``open(path, "w")`` later, and the whole property is
+    that a reader never sees a splice of the old file and the new one.
+    """
+    target.parent.mkdir(parents=True, exist_ok=True)
     handle, tmp_name = tempfile.mkstemp(
         prefix=temp_prefix_for(target),
         suffix=".tmp",
@@ -376,6 +406,150 @@ def save(state: LoopState, path: Path | None = None) -> Path:
         raise
 
     return target
+
+
+def store_snapshot_path(state_path: Path | None = None) -> Path:
+    """Where the dispatch-time object-store reading for ``state_path`` lives.
+
+    Beside the state file, always. The two are written by the same call and a
+    reading that outlived its state file, or vice versa, would be a pair of
+    facts about different moments.
+    """
+    base = default_state_path() if state_path is None else Path(state_path)
+    return base.parent / STORE_SNAPSHOT_FILENAME
+
+
+def _snapshot_payload(snap: store_drift.StoreSnapshot) -> dict:
+    """Render a snapshot as JSON-able data.
+
+    ``subjects`` carries commit SUBJECT lines and never a commit header, which
+    is where an author and a committer identity live. That is
+    :mod:`ops.store_drift`'s choice and it is preserved here rather than
+    re-decided, because this file is what a later reader loads and what a
+    merge-gate report is rendered from.
+    """
+    return {
+        "schema": STORE_SNAPSHOT_SCHEMA,
+        "root": snap.root,
+        "at": snap.at,
+        "objects": dict(snap.objects),
+        "subjects": dict(snap.subjects),
+        "unreachable": sorted(snap.unreachable),
+        "errors": list(snap.errors),
+    }
+
+
+def _snapshot_from_payload(payload: object) -> store_drift.StoreSnapshot:
+    """Rebuild a snapshot from decoded JSON.
+
+    Raises:
+        ValueError: If the payload is not a reading this module wrote. The
+            caller (:func:`load_store_snapshot`) turns that into ``None``,
+            never into an empty snapshot - an empty reading compared against a
+            live repository reports every object in it as drift, which is a
+            false alarm loud enough that a reader stops reading.
+    """
+    if not isinstance(payload, dict):
+        raise ValueError(f"expected a JSON object, got {type(payload).__name__}")
+    schema = payload.get("schema", STORE_SNAPSHOT_SCHEMA)
+    if schema != STORE_SNAPSHOT_SCHEMA:
+        raise ValueError(
+            f"unsupported store-snapshot schema {schema!r}, this build reads "
+            f"{STORE_SNAPSHOT_SCHEMA}"
+        )
+
+    def _str_map(key: str) -> dict[str, str]:
+        value = payload.get(key, {})
+        if not isinstance(value, dict) or not all(
+            isinstance(k, str) and isinstance(v, str) for k, v in value.items()
+        ):
+            raise ValueError(f"{key} must be a mapping of string to string")
+        return dict(value)
+
+    def _str_list(key: str) -> list[str]:
+        value = payload.get(key, [])
+        if not isinstance(value, list) or not all(isinstance(one, str) for one in value):
+            raise ValueError(f"{key} must be a list of strings")
+        return list(value)
+
+    root = payload.get("root", "")
+    at = payload.get("at", "")
+    if not isinstance(root, str) or not isinstance(at, str):
+        raise ValueError("root and at must both be strings")
+
+    return store_drift.StoreSnapshot(
+        root=root,
+        at=at,
+        objects=_str_map("objects"),
+        subjects=_str_map("subjects"),
+        unreachable=frozenset(_str_list("unreachable")),
+        errors=tuple(_str_list("errors")),
+    )
+
+
+def save_store_snapshot(
+    snap: store_drift.StoreSnapshot, path: Path | None = None
+) -> Path:
+    """Write a store reading atomically and return the path written.
+
+    Args:
+        snap: The reading to persist.
+        path: Destination file. Defaults to :func:`store_snapshot_path`.
+
+    Returns:
+        The path that was written.
+    """
+    target = store_snapshot_path() if path is None else Path(path)
+    body = json.dumps(_snapshot_payload(snap), indent=2, sort_keys=True, ensure_ascii=True)
+    return _write_atomically(target, body + "\n")
+
+
+def load_store_snapshot(path: Path | None = None) -> store_drift.StoreSnapshot | None:
+    """Read a stored reading back, or ``None``. Never raises.
+
+    ``None`` means exactly one thing: there is no baseline to compare against.
+    Absent, unreadable, truncated and wrong-shaped all collapse to it on
+    purpose, because every one of them leaves the caller with nothing to
+    compare and the caller's job is to say the check did not run rather than
+    to guess which kind of nothing it got.
+    """
+    target = store_snapshot_path() if path is None else Path(path)
+    try:
+        raw = target.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    try:
+        return _snapshot_from_payload(payload)
+    except ValueError:
+        return None
+
+
+def snapshot_store(state_path: Path | None = None) -> store_drift.StoreSnapshot | None:
+    """Take the BEFORE reading and store it beside ``state_path``. Never raises.
+
+    The repository read is the one CONTAINING the state file, found by running
+    git with that directory as its working directory - git searches upward, so
+    ``ops/runtime`` and the repository root give the same answer, and a state
+    file redirected outside any repository gives a reading that records the
+    failure instead of pretending to a clean one.
+
+    Returns the reading, or ``None`` if it could not be taken or stored at all.
+    A ``None`` here is never allowed to reach the caller as an exception: this
+    runs inside :func:`dispatch`, whose actual job is the interlock that stops
+    two sessions writing the same files, and a nice-to-have that can abort the
+    interlock is a net loss.
+    """
+    target = store_snapshot_path(state_path)
+    try:
+        snap = store_drift.snapshot(target.parent)
+        save_store_snapshot(snap, target)
+        return snap
+    except Exception:
+        return None
 
 
 def credit(
@@ -602,6 +776,18 @@ def dispatch(
     that :func:`in_flight_summary` renders before handing any of them a file
     list, and pass it on: the list scopes their edits and cannot scope a
     repo-wide git command. ``OPS-54``.
+
+    **It also takes the BEFORE reading of the object store** - ``OPS-58``.
+    :func:`ops.store_drift.compare` needs two readings and the merge gate runs
+    after the work, so the earlier one can only be taken here. It is written by
+    :func:`snapshot_store` to :func:`store_snapshot_path`, atomically, beside
+    the state file.
+
+    **What that does NOT cover, said plainly.** This is a ritual: nothing calls
+    it on anyone's behalf, so a session that dispatches work without calling it
+    leaves no reading and gets no drift check at all. The merge gate reports
+    that as a check which did not run - never as an absence of drift, which is
+    an answer its record cannot support.
     """
     if not items:
         raise ValueError("dispatch() needs at least one item id")
@@ -627,6 +813,16 @@ def dispatch(
         rows.append(_checked_record(record))
     current.in_flight = rows
     save(current, target)
+    # THE BEFORE READING - OPS-58. The drift detector compares two readings and
+    # the merge gate runs at MERGE time, after the work; this is the one moment
+    # in the machinery that happens before it. Taken after the state is written
+    # so the interlock lands even if this does not.
+    #
+    # Say the limit plainly rather than implying coverage: this is a ritual and
+    # no code calls it for anyone, so a session that dispatches without it gets
+    # NO drift check. The gate says so in as many words rather than reporting a
+    # clean bill it cannot support.
+    snapshot_store(target)
     return current
 
 

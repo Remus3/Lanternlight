@@ -36,6 +36,22 @@ called.** ``ROADMAP`` item ``OPS-31`` records it: a check that has never run is
 decoration with a good name, and its own passing tests are no evidence
 otherwise.
 
+**The numbers were taken on a tree that was moving.** ``OPS-58``. Every probe
+above measures the repository as it is at merge time and none of them notices
+that a parallel slice ran ``git stash`` in the middle - which takes the whole
+working tree and index, including the files that slice was told not to touch.
+:func:`read_store_drift` loads the reading :func:`ops.loop.state.dispatch`
+took before the work and compares it with one taken here.
+
+Two things about it are deliberate and easy to get wrong. It is reported in
+``GateReport.measurement`` rather than as a finding, because drift changes
+what a merger checks next rather than whether the merge proceeds - three
+stashes happened in this repository during a session in which nothing was
+lost. And when no dispatch-time reading exists it says the check DID NOT RUN;
+it never says there was no drift, which would be an answer its record cannot
+support. The detector itself was built and proved under ``OPS-54`` and then
+left with no caller at all for a week, which is the ``OPS-31`` shape again.
+
 **The suite did not actually run.** :func:`parse_summary` distinguishes "no
 summary line was printed" from "zero tests passed". Those are different facts,
 and a gate that conflates them will approve a run that crashed during
@@ -132,9 +148,12 @@ from pathlib import Path
 __all__ = [
     "Finding",
     "GateReport",
+    "MEASUREMENT_HEADER",
     "RunResult",
     "SummaryResult",
     "check_claimed_paths",
+    "describe_store_drift",
+    "read_store_drift",
     "check_per_file_counts",
     "check_run_completed",
     "check_test_count",
@@ -237,6 +256,21 @@ class RunResult:
     returncode: int
 
 
+#: Printed above the measurement block, and only when there is one -
+#: ``OPS-58`` criterion 3. A finding says the WORK may be wrong. A measurement
+#: line says nothing whatever about the work: it says the numbers above it were
+#: taken while the object store was moving. A merger who reads the two as one
+#: list either ignores both or blocks on both, and blocking on drift is the
+#: worse mistake - three stashes happened in this repository during a session
+#: in which nothing was lost.
+MEASUREMENT_HEADER = (
+    "  --- measurement conditions - NOT a verdict on the claimed work ---",
+    "  a finding above says the work may be wrong; a line below says the "
+    "numbers above were taken on a moving tree, which changes what you check "
+    "next rather than whether you merge",
+)
+
+
 @dataclass(frozen=True)
 class GateReport:
     """The composed verdict. ``ok`` is true only when nothing was found.
@@ -246,6 +280,11 @@ class GateReport:
     passed, and an OK report that says nothing about it is indistinguishable
     from an OK report that checked everything. Each note names a check that
     did NOT run, and :meth:`format` renders them even when ``ok`` is true.
+
+    ``measurement`` is the third channel and it is neither of the other two.
+    It carries what was true of the REPOSITORY while the numbers above were
+    being taken - ``OPS-58``. It never touches ``ok``: drift changes what a
+    merger checks next, not whether the merge proceeds.
     """
 
     ok: bool
@@ -253,6 +292,7 @@ class GateReport:
     collected: int | None
     summary: SummaryResult | None
     notes: tuple[str, ...] = ()
+    measurement: tuple[str, ...] = ()
 
     def format(self) -> str:
         """Render the report for a human, one finding per line.
@@ -260,6 +300,10 @@ class GateReport:
         The unchecked notes are appended in BOTH branches. Printing them only
         on failure would hide them in exactly the case they exist for: a
         report that says OK.
+
+        The measurement block is fenced by :data:`MEASUREMENT_HEADER` and is
+        printed only when there is something in it, so the separator never
+        becomes furniture a reader stops seeing.
         """
         if self.ok:
             lines = [f"merge gate: OK ({self.collected} tests collected)"]
@@ -267,6 +311,9 @@ class GateReport:
             lines = [f"merge gate: {len(self.findings)} finding(s)"]
             lines.extend(f"  [{f.kind}] {f.detail}" for f in self.findings)
         lines.extend(f"  [unchecked] {note}" for note in self.notes)
+        if self.measurement:
+            lines.extend(MEASUREMENT_HEADER)
+            lines.extend(f"  {one}" for one in self.measurement)
         return "\n".join(lines)
 
 
@@ -647,11 +694,124 @@ _NO_PER_FILE_BASELINE_NOTE = (
 )
 
 
+#: Said when there is no dispatch-time reading to compare against - ``OPS-58``
+#: criterion 2. It never says the store held still, and that is the whole
+#: point: an unqualified clean bill drawn from an empty record is the
+#: ``OPS-53`` defect, an answer to a question the record cannot answer. The
+#: wording also names the ritual, because "take a snapshot" is useless advice
+#: without the call that takes it.
+_NO_DRIFT_BASELINE_NOTE = (
+    "the store-drift check (OPS-54) did not run - no dispatch-time reading of "
+    "the object store was found at {where}, so whether the store shifted while "
+    "these numbers were taken is UNKNOWN rather than settled; that reading is "
+    "written by ops.loop.state.dispatch, and a session which skips the dispatch "
+    "ritual leaves no baseline here at all"
+)
+
+#: Said when the detector could not even be consulted. Same shape as the note
+#: above on purpose: from a reader's position "there was no reading" and "the
+#: reader broke" are the same fact - the check did not run.
+_DRIFT_UNAVAILABLE_NOTE = (
+    "the store-drift check (OPS-54) did not run - it could not be consulted "
+    "({why}), so whether the object store shifted while these numbers were "
+    "taken is UNKNOWN rather than settled"
+)
+
+#: Default for the ``where`` wording. Deliberately NOT an absolute path: a
+#: rendered report is pasted into notes and logs, and an absolute path on this
+#: machine carries the account name.
+_DEFAULT_DRIFT_WHERE = "the loop runtime directory"
+
+
+def describe_store_drift(
+    before: object | None,
+    after: object | None,
+    *,
+    where: str = _DEFAULT_DRIFT_WHERE,
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Turn a pair of store readings into ``(measurement lines, notes)``.
+
+    Pure - it reads no repository and spawns no process, so the whole wiring
+    is testable without a git tree. ``OPS-58`` criteria 2 and 3 live here:
+
+    - ``before is None`` yields NO measurement and one ``[unchecked]`` note.
+      It must never yield "the store did not move", because with one reading
+      there is nothing that could have moved between two of them.
+    - Otherwise the detector's own rendering is returned as measurement lines,
+      which :meth:`GateReport.format` prints under
+      :data:`MEASUREMENT_HEADER` rather than among the findings.
+
+    A comparison built on a failed probe renders its own ``COULD NOT ANSWER``
+    banner and stays in the measurement channel: it is still a statement about
+    the measurement rather than about the work.
+    """
+    if before is None:
+        return (), (_NO_DRIFT_BASELINE_NOTE.format(where=where),)
+    try:
+        from ops import store_drift
+    except Exception as exc:  # pragma: no cover - covered by read_store_drift
+        return (), (_DRIFT_UNAVAILABLE_NOTE.format(why=f"{type(exc).__name__}: {exc}"),)
+    report = store_drift.compare(before, after)
+    lines = [f"readings: dispatch {before.at} -> merge {after.at}"]
+    lines.extend(report.format().splitlines())
+    return tuple(lines), ()
+
+
+def read_store_drift(
+    root: Path = REPO_ROOT, snapshot_path: Path | None = None
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Load the dispatch-time reading, take a second one, and describe the gap.
+
+    **This never raises, for any reason at all** - ``OPS-58`` criterion 6. The
+    gate is consulted at merge time and a merger who cannot run the gate stops
+    running it, at which point the claim goes unchecked AND the drift goes
+    unwatched. Every failure below becomes a note saying the check did not run:
+
+    - the detector or the loop state module cannot be imported at all
+    - the stored reading is absent, truncated or of the wrong shape
+    - git is missing, the directory is not a repository, a probe times out
+
+    The second reading is taken by the CALLER as late as it can be - see
+    :func:`verify`, which takes it after the suite has run, so the window it
+    covers is the whole measurement rather than a slice of the front of it.
+    """
+    try:
+        from ops import store_drift
+        from ops.loop import state as loop_state
+    except Exception as exc:
+        return (), (_DRIFT_UNAVAILABLE_NOTE.format(why=f"{type(exc).__name__}: {exc}"),)
+
+    try:
+        base = Path(root)
+        if snapshot_path is None:
+            # The runtime directory's position is derived from the loop state
+            # module rather than spelled again here, so "ops/runtime" has one
+            # definition and cannot drift into two.
+            relative = loop_state.runtime_dir().relative_to(loop_state.REPO_ROOT)
+            target = loop_state.store_snapshot_path(
+                base / relative / loop_state.STATE_FILENAME
+            )
+        else:
+            target = Path(snapshot_path)
+        try:
+            where = target.relative_to(base).as_posix()
+        except ValueError:
+            where = target.name
+
+        before = loop_state.load_store_snapshot(target)
+        if before is None:
+            return describe_store_drift(None, None, where=where)
+        return describe_store_drift(before, store_drift.snapshot(base), where=where)
+    except Exception as exc:
+        return (), (_DRIFT_UNAVAILABLE_NOTE.format(why=f"{type(exc).__name__}: {exc}"),)
+
+
 def verify(
     claimed_paths: Iterable[str | Path] = (),
     baseline: int | None = None,
     root: Path = REPO_ROOT,
     per_file_baseline: Mapping[str, int] | None = None,
+    snapshot_path: Path | None = None,
 ) -> GateReport:
     """Run every probe and compose the verdict.
 
@@ -691,6 +851,21 @@ def verify(
         ``baseline``, so making it a finding would turn the documented call
         permanently red, and a gate that always says no is a gate nobody
         reads.
+
+    **Store drift is reported, never blocked on** - ``OPS-58``. The readings
+    above are only worth what the tree they were taken on is worth, and a
+    parallel slice running ``git stash`` moves that tree wholesale. The gap
+    between the dispatch-time reading and one taken here goes into
+    ``GateReport.measurement``, printed under :data:`MEASUREMENT_HEADER` and
+    kept out of ``findings``: it says the numbers were taken on a moving
+    target, not that the work is wrong.
+
+    ``snapshot_path`` overrides where the dispatch-time reading is looked for;
+    by default it is the one :func:`ops.loop.state.dispatch` writes under
+    ``root``. **When there is none, the report says the check did not run.** It
+    does not say there was no drift - the dispatch ritual is a ritual, nothing
+    calls it for anyone, and a gate that answered "no drift" from an empty
+    record would be asserting something its record cannot support.
 
     **The limit this cannot fix, named rather than hidden.** Every baseline is
     supplied by the very caller whose work is under test. Nothing here holds
@@ -738,10 +913,18 @@ def verify(
     summary = parse_summary(run.text)
     findings.extend(check_run_completed(run, summary))
 
+    # LAST, deliberately. The second store reading is taken after the suite has
+    # run, so the interval it covers is the whole measurement rather than the
+    # front of it - the collect pass and the suite are exactly the long window
+    # in which a sibling slice has time to stash. ``OPS-58``.
+    measurement, drift_notes = read_store_drift(root=root, snapshot_path=snapshot_path)
+    notes.extend(drift_notes)
+
     return GateReport(
         ok=not findings,
         findings=tuple(findings),
         collected=collected,
         summary=summary,
         notes=tuple(notes),
+        measurement=tuple(measurement),
     )

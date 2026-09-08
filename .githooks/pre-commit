@@ -249,7 +249,13 @@ if [ "$fail" -eq 0 ] && [ -n "$staged_md" ] && [ -f "$repo_top/ops/docguards.py"
     for doc in $staged_md; do
         set +f
         IFS=$md_ifs
-        if [ -n "$(git diff --name-only -- "$doc")" ]; then
+        # :(literal) - a BARE pathspec is a wildmatch glob, so a document
+        # named docs/N[O]TE.md is compared against docs/NOTE.md and not
+        # against itself. Measured 2026-09-08 (OPS-56): with the bracket
+        # document staged and identical to the working tree, and only its glob
+        # neighbour edited, this guard refused the commit and named the clean
+        # document. Same fix OPS-39 applied in tools/precommit_gate.py.
+        if [ -n "$(git diff --name-only -- ":(literal)$doc")" ]; then
             report "$doc" "is staged with content that differs from the working tree - the suite runs against the working tree, so no run has measured what would land"
         fi
         set -f
@@ -312,12 +318,26 @@ if [ "$fail" -eq 0 ] && [ -n "$staged_md" ] && [ -f "$repo_top/ops/docguards.py"
         mod_count=$(printf '%s\n' "$selected" | wc -l | tr -d ' ')
         printf '%spre-commit%s %s staged .md - running %s doc-reading test module(s)\n' \
             "$BOLD" "$RESET" "$md_count" "$mod_count" >&2
+        # $selected is unquoted ON PURPOSE so the selector's newline-separated
+        # answer splits into one argument per module. Globbing has to be OFF
+        # across that split, and it is not off by default here: the set -f
+        # above was cleared before this section ran. Measured 2026-09-08
+        # (OPS-56) with globbing left on: the selector chose
+        # tests/test_a[b].py, pytest ran tests/test_ab.py - a different module
+        # that reads no document - it passed, and THE COMMIT LANDED while this
+        # hook printed that it had run the doc-reading subset. A guard that
+        # runs the wrong thing and reports success is worse than no guard.
+        # set -f suppresses the expansion and leaves word splitting alone;
+        # quoting "$selected" would fix the glob and break the split.
         if ! (
             unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE GIT_PREFIX \
                 GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES \
                 GIT_QUARANTINE_PATH GIT_COMMON_DIR GIT_CONFIG_PARAMETERS \
                 GIT_AUTHOR_DATE GIT_EDITOR
-            exec "$py_bin" -m pytest $selected
+            set -f
+            set -- $selected
+            set +f
+            exec "$py_bin" -m pytest "$@"
         ) >&2; then
             report ".githooks/pre-commit" "the doc-reading test subset FAILED against the staged tree - the prose being committed reddens the suite"
         fi
