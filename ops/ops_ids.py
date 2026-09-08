@@ -8,11 +8,35 @@ because somebody resumed numbering from the highest id visible among the OPEN
 items rather than the highest ever allocated. ``docs/LEDGER.md`` already knew
 about ``LL-0039`` and ``LL-0040``; nothing asked it.
 
-**Nothing here is checked in.** The spent set is recomputed from
-``ROADMAP.md`` and ``docs/LEDGER.md`` on every call. A stored list of spent ids
-would go stale the first time an item was added without touching it, and this
-project's recorded failure mode is exactly that - a filed count that reads as
-authoritative and is not.
+**Nothing here is checked in.** The spent set is recomputed on every call from
+``ROADMAP.md``, ``docs/LEDGER.md`` and the two archives those were split into
+by ``OPS-57``. A stored list of spent ids would go stale the first time an item
+was added without touching it, and this project's recorded failure mode is
+exactly that - a filed count that reads as authoritative and is not.
+
+Four documents, and EVERY reader here reads all of them
+-------------------------------------------------------
+
+``OPS-57`` split the two documents into four: ``ROADMAP.md`` kept its open
+sections and an archive index of stubs, ``docs/LEDGER.md`` kept its 60 newest
+entries, and the rest moved verbatim into ``docs/ROADMAP_ARCHIVE.md`` and
+``docs/LEDGER_ARCHIVE.md``.
+
+**The repair for that split was applied to two of this module's five readers
+and it is worth knowing exactly how that looked, because it looked fine.**
+:func:`spent_ids` and :func:`next_free_id` learned about the archives;
+:func:`roadmap_items`, :func:`ledger_closures` and :func:`over_allocated` did
+not. The suite stayed green. The visible result was that :func:`over_allocated`
+returned ``{}`` - a clean bill of health for a repository carrying two known
+collisions, because ``OPS-7`` and ``OPS-8`` are closed items whose every piece
+of evidence had moved into the archives. A detector that answers "nothing is
+wrong" because it stopped looking cannot be told apart from one that works.
+
+The general lesson, since a sixth reader will be added one day: when a module
+changes WHERE it reads from, that is a change to every reader in it, not to the
+ones whose tests happened to be red. ``tests/test_ops_ids.py`` therefore
+enumerates the module's public document readers by signature and holds each one
+to the archive rule, rather than testing them one at a time.
 
 What counts as ALLOCATING an id
 -------------------------------
@@ -46,8 +70,11 @@ moment ``LL-0068`` was written. What holds is the shape:
 How far this guard can see
 --------------------------
 
-**It is blind to 4 of the 12 ids in use, and that number is measured, not
-estimated.** ``OPS-4``, ``OPS-6``, ``OPS-10`` and ``OPS-11`` all score 0,
+**It is blind to four ids that are genuinely in use, and that set is measured,
+not estimated - re-derive it rather than trusting the sentence after this one,
+which named "4 of the 12 ids in use" and was left behind by a namespace now 63
+ids deep.** Re-measured 2026-09-08 across all four documents, the blind set is
+unchanged: ``OPS-4``, ``OPS-6``, ``OPS-10`` and ``OPS-11`` all score 0,
 because each was opened or closed only in ledger BODY prose - never in an entry
 heading and never as a roadmap item heading. ``OPS-6`` is called "THE ONLY OPEN
 OPS ITEM" in ``docs/LEDGER.md`` and this module cannot see it at all. A second
@@ -70,6 +97,7 @@ that has already happened because somebody did not use the allocator.
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -133,6 +161,88 @@ def default_ledger_path() -> Path:
     return REPO_ROOT / "docs" / "LEDGER.md"
 
 
+def default_archive_paths() -> list[Path]:
+    """Return the archive documents that carry ids moved out by ``OPS-57``.
+
+    **Why these are read at all, given that erring wide is this module's whole
+    posture.** The split moves closed roadmap sections and the oldest ledger
+    entries into archives. The roadmap half is self-protecting: every archived
+    section leaves a stub line naming its id, and :func:`spent_ids` matches any
+    mention rather than only headings. The LEDGER half leaves nothing behind,
+    so an id discussed in an entry but never given a roadmap heading - the case
+    :func:`spent_ids` names in its own docstring - goes out with the tail.
+
+    Measured on the split of 2026-09-08: the spent set fell from 60 ids to 55
+    without this, losing ``OPS-1``, ``OPS-3``, ``OPS-4``, ``OPS-5`` and
+    ``OPS-9``. :func:`next_free_id` was unaffected on that day because it takes
+    the maximum and the maximum was recent, which makes this a live hole in
+    :func:`spent_ids` and a dormant one in the allocator.
+
+    **That measurement has since gone stale, and the correction is the
+    interesting part.** Re-measured 2026-09-08 after the ledger entry recording
+    the split was written: the spent set is 63 ids WITH the archives and 63
+    WITHOUT, because that entry discusses the very ids the split moved. So the
+    archive read is today a DORMANT guard in :func:`spent_ids` - it will matter
+    again the moment an old id stops being mentioned live - and a LIVE one in
+    :func:`over_allocated`, which loses both known collisions without it.
+    Do not re-derive the 60-to-55 figure from this docstring; it is a record of
+    one day's documents, not a property of the code.
+
+    A path that does not exist is not an error: a fresh clone has no archive
+    until a budget fires, and :func:`_read` already answers a missing file with
+    empty text.
+    """
+    return [
+        REPO_ROOT / "docs" / "ROADMAP_ARCHIVE.md",
+        REPO_ROOT / "docs" / "LEDGER_ARCHIVE.md",
+    ]
+
+
+def _resolve_archives(
+    archives: Sequence[Path] | None, *documents: Path | None
+) -> list[Path]:
+    """Decide which archives a call meant, from what else it named.
+
+    **This closes an API footgun rather than documenting one.** ``archives=None``
+    used to mean "the real repository's archives" unconditionally, so a caller
+    who handed the module a fixture ``roadmap`` and ``ledger`` and omitted
+    ``archives`` silently measured a THIRD tree - two fixture files plus the
+    live repository. The wrong answer looked exactly like a right one: the
+    module was asked about a fixture and answered about the repository.
+
+    The rule, in the order it is applied:
+
+    - an explicit ``archives`` sequence is used verbatim, ``[]`` included
+    - otherwise, if any document path was named explicitly, NO archives, because
+      a caller who scoped the scan to their own tree meant their own tree
+    - otherwise the repository defaults, which is what every real caller gets
+
+    A caller who genuinely wants fixture documents beside the real archives can
+    still say so with ``archives=default_archive_paths()``. That is one explicit
+    line, and it is visible in the call rather than hidden in a default.
+    """
+    if archives is not None:
+        return list(archives)
+    if any(document is not None for document in documents):
+        return []
+    return default_archive_paths()
+
+
+def _cite(path: Path) -> str:
+    """Return a short label for ``path``, for use in a citation.
+
+    Repository-relative where possible so a reader can open the file named. A
+    site that says ``ROADMAP.md`` for a heading which now lives in
+    ``docs/ROADMAP_ARCHIVE.md`` sends the reader to a file that does not contain
+    the line, and the reader concludes the DETECTOR is broken rather than the
+    citation.
+    """
+    try:
+        return path.resolve().relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        return path.name
+
+
 @dataclass(frozen=True)
 class RoadmapItem:
     """One ``## OPS-<n>.`` heading found in the roadmap.
@@ -141,11 +251,16 @@ class RoadmapItem:
         item_id: The numeric part of the id.
         title: Heading text after the id, verbatim.
         closed: True when the heading carries the word ``CLOSED``.
+        source: Label of the document the heading was read from, for citing.
+            Defaults to empty so a caller constructing one by hand - a test
+            fixture, say - is not forced to invent a provenance it does not
+            have. Every heading this module produces carries a real one.
     """
 
     item_id: int
     title: str
     closed: bool
+    source: str = ""
 
 
 @dataclass(frozen=True)
@@ -175,9 +290,17 @@ def _read(path: Path) -> str:
 
 
 def spent_ids(
-    *, roadmap: Path | None = None, ledger: Path | None = None
+    *,
+    roadmap: Path | None = None,
+    ledger: Path | None = None,
+    archives: Sequence[Path] | None = None,
 ) -> set[int]:
-    """Return every ``OPS-`` id mentioned anywhere in the two documents.
+    """Return every ``OPS-`` id mentioned anywhere in the documents.
+
+    ``archives`` follows the documents: name a ``roadmap`` or a ``ledger``
+    explicitly and it defaults to NONE, name nothing and it defaults to
+    :func:`default_archive_paths`. See :func:`_resolve_archives` for why, and
+    :func:`default_archive_paths` for why an archive is read at all.
 
     Deliberately wider than :func:`over_allocated`'s notion of allocation, and
     it does not skip fenced lines either. For deciding whether an id is FREE,
@@ -191,25 +314,43 @@ def spent_ids(
     and would have left a future reader hunting for an item that never existed.
     Write examples with a placeholder, not a digit.
     """
-    roadmap = roadmap or default_roadmap_path()
-    ledger = ledger or default_ledger_path()
-    text = _read(roadmap) + "\n" + _read(ledger)
+    paths = [roadmap or default_roadmap_path(), ledger or default_ledger_path()]
+    paths.extend(_resolve_archives(archives, roadmap, ledger))
+    text = "\n".join(_read(path) for path in paths)
     return {int(match.group(1)) for match in _ANY_ID.finditer(text)}
 
 
-def next_free_id(*, roadmap: Path | None = None, ledger: Path | None = None) -> int:
+def next_free_id(
+    *,
+    roadmap: Path | None = None,
+    ledger: Path | None = None,
+    archives: Sequence[Path] | None = None,
+) -> int:
     """Return the lowest id above everything ever spent.
 
     Above the MAXIMUM, not the lowest gap. A gap in the sequence means an id
     was retired or reserved, and handing it out again re-creates precisely the
     confusion this module exists to prevent.
+
+    ``archives`` follows the documents - see :func:`_resolve_archives`.
     """
-    spent = spent_ids(roadmap=roadmap, ledger=ledger)
+    spent = spent_ids(roadmap=roadmap, ledger=ledger, archives=archives)
     return max(spent) + 1 if spent else 1
 
 
-def roadmap_items(*, roadmap: Path | None = None) -> list[RoadmapItem]:
-    """Return every ``## OPS-<n>.`` item heading in the roadmap, in file order.
+def roadmap_items(
+    *, roadmap: Path | None = None, archives: Sequence[Path] | None = None
+) -> list[RoadmapItem]:
+    """Return every ``## OPS-<n>.`` item heading found, in file order.
+
+    Reads the roadmap AND the archives, because ``OPS-57`` moved 65 closed
+    sections out of ``ROADMAP.md`` into ``docs/ROADMAP_ARCHIVE.md`` and an
+    allocation does not stop being an allocation when it is filed away. The
+    first repair for that split taught only :func:`spent_ids` about the
+    archives, which left this function reading half the roadmap; see
+    :func:`over_allocated` for what that cost.
+
+    ``archives`` follows the document - see :func:`_resolve_archives`.
 
     Fenced lines are skipped, via the one shared scan in :mod:`ops.mdscan`. The
     roadmap documents its own id format - the preamble shows how to allocate one
@@ -217,24 +358,64 @@ def roadmap_items(*, roadmap: Path | None = None) -> list[RoadmapItem]:
     inside a code block is a real hazard here, not a hypothetical. Counting one
     would report a live item as over-allocated against itself.
     """
-    text = _read(roadmap or default_roadmap_path())
+    paths = [roadmap or default_roadmap_path()]
+    paths.extend(_resolve_archives(archives, roadmap))
     items = []
-    for line in mdscan.scan_unfenced(text).lines:
-        match = _ROADMAP_HEADING.match(line.text)
-        if match is None:
-            continue
-        items.append(
-            RoadmapItem(
-                item_id=int(match.group(1)),
-                title=match.group(2).strip(),
-                closed=bool(_CLOSED_WORD.search(match.group(2))),
+    for path in paths:
+        label = _cite(path)
+        for line in mdscan.scan_unfenced(_read(path)).lines:
+            match = _ROADMAP_HEADING.match(line.text)
+            if match is None:
+                continue
+            items.append(
+                RoadmapItem(
+                    item_id=int(match.group(1)),
+                    title=match.group(2).strip(),
+                    closed=bool(_CLOSED_WORD.search(match.group(2))),
+                    source=label,
+                )
             )
-        )
     return items
 
 
-def ledger_closures(*, ledger: Path | None = None) -> dict[int, list[str]]:
+def _closure_sites(
+    ledger: Path | None, archives: Sequence[Path] | None
+) -> dict[int, list[tuple[str, str]]]:
+    """Map each id to ``(entry_id, source_label)`` pairs announcing its closure.
+
+    The private half of :func:`ledger_closures`, which keeps the public return
+    shape it already had. The label is needed only so :func:`over_allocated` can
+    cite the file an entry was actually read from.
+    """
+    paths = [ledger or default_ledger_path()]
+    paths.extend(_resolve_archives(archives, ledger))
+    closures: dict[int, list[tuple[str, str]]] = {}
+    for path in paths:
+        label = _cite(path)
+        for line in mdscan.scan_unfenced(_read(path)).lines:
+            match = _LEDGER_HEADING.match(line.text)
+            if match is None:
+                continue
+            entry_id, summary = match.group(1), match.group(2)
+            announcement = _CLOSURE_ANNOUNCEMENT.match(summary.strip())
+            if announcement is None:
+                continue
+            for found in _ANY_ID.finditer(announcement.group(1)):
+                closures.setdefault(int(found.group(1)), []).append((entry_id, label))
+    return closures
+
+
+def ledger_closures(
+    *, ledger: Path | None = None, archives: Sequence[Path] | None = None
+) -> dict[int, list[str]]:
     """Map each id to the ledger entries whose HEADING announces its closure.
+
+    Reads the ledger AND the archives. ``OPS-57`` moved the oldest 135 entries
+    into ``docs/LEDGER_ARCHIVE.md``, which is where both known collisions'
+    closures now live - so without this, the two entries that PROVE ``OPS-7``
+    and ``OPS-8`` were each spent twice are invisible.
+
+    ``archives`` follows the document - see :func:`_resolve_archives`.
 
     Only entry headings are read, never entry bodies. A body mentions ids for
     all sorts of reasons - an open item filed in passing, a cross-reference, a
@@ -243,31 +424,38 @@ def ledger_closures(*, ledger: Path | None = None) -> dict[int, list[str]]:
     One heading may close several ids: ``LL-0042`` reads
     ``OPS-1, OPS-3 and OPS-5 closed - ...`` and credits all three.
     """
-    text = _read(ledger or default_ledger_path())
-    closures: dict[int, list[str]] = {}
-    for line in mdscan.scan_unfenced(text).lines:
-        match = _LEDGER_HEADING.match(line.text)
-        if match is None:
-            continue
-        entry_id, summary = match.group(1), match.group(2)
-        announcement = _CLOSURE_ANNOUNCEMENT.match(summary.strip())
-        if announcement is None:
-            continue
-        for found in _ANY_ID.finditer(announcement.group(1)):
-            closures.setdefault(int(found.group(1)), []).append(entry_id)
-    return closures
+    return {
+        item_id: [entry for entry, _ in sites]
+        for item_id, sites in _closure_sites(ledger, archives).items()
+    }
 
 
 def over_allocated(
-    *, roadmap: Path | None = None, ledger: Path | None = None
+    *,
+    roadmap: Path | None = None,
+    ledger: Path | None = None,
+    archives: Sequence[Path] | None = None,
 ) -> dict[int, Collision]:
     """Return every id that names more than one item, with its evidence.
 
     See this module's docstring for the counting rule and for why it is allowed
     to under-report but never to over-report.
+
+    **Why the archives are not optional here.** ``OPS-57`` moved every closed
+    roadmap section and the oldest ledger entries into archives, and both of
+    this repository's known collisions - ``OPS-7`` and ``OPS-8`` - are closed
+    items whose evidence went with them. Reading only the live documents, this
+    function returned ``{}``: a clean bill of health for a repository that has
+    carried two collisions for weeks. That is the vacuous guard this project
+    fears most, and it arrived not as a bug but as a fix applied to two of the
+    module's five readers and not the other three. When a module changes where
+    it reads from, every reader in it changes; a half-migrated module reports
+    confidently about the half it can still see.
+
+    ``archives`` follows the documents - see :func:`_resolve_archives`.
     """
-    items = roadmap_items(roadmap=roadmap)
-    closures = ledger_closures(ledger=ledger)
+    items = roadmap_items(roadmap=roadmap, archives=archives)
+    closures = _closure_sites(ledger, archives)
 
     found: dict[int, Collision] = {}
     for item_id in sorted({*(item.item_id for item in items), *closures}):
@@ -284,8 +472,16 @@ def over_allocated(
         if allocations <= 1:
             continue
 
-        sites = [f"ROADMAP.md: ## OPS-{item_id}. {item.title}" for item in headings]
-        sites.extend(f"docs/LEDGER.md: {entry} closes OPS-{item_id}" for entry in closed_by)
+        # Each site names the file it was READ from, never a hardcoded
+        # `ROADMAP.md`. After OPS-57 most of this evidence lives in an archive,
+        # and a citation pointing at a file that does not contain the line
+        # teaches the reader to distrust the detector instead of the citation.
+        sites = [
+            f"{item.source}: ## OPS-{item_id}. {item.title}" for item in headings
+        ]
+        sites.extend(
+            f"{label}: {entry} closes OPS-{item_id}" for entry, label in closed_by
+        )
         found[item_id] = Collision(
             item_id=item_id, allocations=allocations, sites=tuple(sites)
         )

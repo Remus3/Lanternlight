@@ -393,6 +393,14 @@ LANES: tuple[Lane, ...] = (
             # rather than with the content-refusing hygiene guards.
             "tools/doc_size_budget.py",
             "tests/test_doc_size_budget.py",
+            # OPS-57 split the two continuity documents. The splitter plans
+            # the move and asserts conservation; the link guard proves every
+            # archived item is still reachable from ROADMAP.md in one hop.
+            # Both act on this lane's own documents, beside the budget above.
+            "tools/doc_archive.py",
+            "tests/test_doc_archive.py",
+            "tools/archive_link_guard.py",
+            "tests/test_archive_link_guard.py",
             # The pytest-wide conftest. It is the executable analogue of
             # pytest.ini, which is CROSS_CUTTING, so cross-cutting was the
             # obvious call and it is the wrong one TODAY: the file exists
@@ -404,6 +412,12 @@ LANES: tuple[Lane, ...] = (
             "tests/conftest.py",
             "ROADMAP.md",
             "docs/LEDGER.md",
+            # OPS-57. The archives are the same two documents' closed history,
+            # moved out verbatim so the live ones stay readable. Same owner as
+            # the originals: splitting a document must never split its
+            # ownership, or a lane could archive what another lane governs.
+            "docs/ROADMAP_ARCHIVE.md",
+            "docs/LEDGER_ARCHIVE.md",
             "docs/HEADLESS.md",
             "docs/OPERATIONS.md",
             # Added 2026-09-07 closing OPS-42 question 2. The inventory is a

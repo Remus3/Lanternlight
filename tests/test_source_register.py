@@ -323,6 +323,35 @@ KNOWN_NON_HOSTS = frozenset(
         # `ops.outbox.SIBLING_INBOXES`, and `ops.outbox.backfill` of the
         # function of that name - all three are truncations the host-shaped
         # pattern makes, not names anything in this project actually uses.
+        # `OPS-57`, 2026-09-08. All three are the SAME truncation the entries
+        # above describe: an underscore is not a host character, so the pattern
+        # keeps only the tail after it. `ids.default` is the tail of
+        # `ops.ops_ids.default_archive_paths` and `ops.ops` of `ops.ops_ids` -
+        # dotted module paths, which the filename subtraction deliberately does
+        # not resolve, so they belong here where a human vetted them.
+        #
+        # `ROADMAP-ARCHIVE.md` is kept for a different reason. It is a real
+        # historical string: `LL-0197` records that the splitter and the link
+        # guard defaulted to DIFFERENT filenames, and quoting the rejected
+        # hyphen form is that entry's evidence. It is host-shaped precisely
+        # because it has a hyphen where the name actually shipped has an
+        # underscore - a small demonstration of why `docs/` uses underscores.
+        #
+        # TWO MORE WERE ADDED HERE AND THEN REMOVED, which is worth recording
+        # because the module's own guidance above predicted it as case 2.
+        # `ARCHIVE.md` (from `docs/ROADMAP_ARCHIVE.md`) and `archive.py` (from
+        # `tools/doc_archive.py`) looked like denylist material while those
+        # files were still untracked. The moment they were STAGED,
+        # `is_repo_filename` covered them and
+        # `test_the_filename_check_covers_our_own_files_and_the_denylist_does_not`
+        # went red demanding their removal - which is the guard doing exactly
+        # its job. The full suite could not see it: it ran against the working
+        # tree, and the fact only exists once `git ls-files` reports the files.
+        # The pre-commit hook, which runs against the STAGED tree, caught it and
+        # refused the commit.
+        "ROADMAP-ARCHIVE.md",
+        "ids.default",
+        "ops.ops",
         # A git CONFIG KEY, quoted by `LL-0169` and `OPS-49`. `core.filemode`
         # is not a host and not a file; `.filemode` simply parses as a TLD-
         # shaped tail. Looked at before adding, per the regenerating note.
@@ -774,12 +803,50 @@ def _present_in_register(host: str, section: str) -> bool:
     return False
 
 
+#: Documents under ``docs/`` that this scan does NOT read, with the reason.
+#:
+#: **`OPS-57`, 2026-09-08.** `ROADMAP.md` lives at the repository ROOT, and this
+#: guard has always read ``docs/**/*.md`` only - its own module docstring says
+#: so, and names `README.md` as an example of a file it does not cover. Then
+#: the `OPS-57` split moved 65 closed roadmap sections, 475,473 bytes of them,
+#: into ``docs/ROADMAP_ARCHIVE.md`` - and 57 tokens that had sat unread for
+#: weeks were suddenly in scope.
+#:
+#: **Archiving a document must not silently change what guards apply to it.**
+#: The words did not change; only their path did. Excluding the archive keeps
+#: this guard measuring exactly what it measured the day before the split.
+#:
+#: All 57 were checked by hand, and every one is a false positive - Python
+#: attributes (`subprocess.run`, `watch.armed`), our own filenames
+#: (`trace.jsonl`, `utf16.bin`) and toy names from worked examples (`foo.py`).
+#: **Including the two that are host-shaped.** `x.com` and `t.co` appear inside
+#: a passage about a SUBSTRING-matching defect, quoted as the fragments hiding
+#: inside `gamingpromax.com` and `grindnstrat.com`. They are not citations, and
+#: nothing real is being hidden by this exclusion.
+#:
+#: The alternative was 57 entries in :data:`KNOWN_NON_HOSTS`, which this
+#: module's own docstring calls the one place a real source can hide. Adding
+#: 57 lines of noise there to absorb a path change is the worse trade.
+#:
+#: **What this exclusion does NOT fix, and it is filed rather than absorbed:**
+#: `ROADMAP.md` itself is still unread by this guard, so a real source cited
+#: there is invisible today exactly as it was yesterday. That gap is older than
+#: the split and is `OPS-63`.
+UNSCANNED_DOCS = frozenset({"docs/ROADMAP_ARCHIVE.md"})
+
+
 def cited_hosts(root: Path = DOCS) -> dict[str, set[str]]:
-    """Map every host-shaped token under ``root`` to the files citing it."""
+    """Map every host-shaped token under ``root`` to the files citing it.
+
+    Skips :data:`UNSCANNED_DOCS`; read that constant for why one document is
+    excluded and what the exclusion costs.
+    """
     hits: dict[str, set[str]] = {}
     for path in sorted(root.rglob("*.md")):
-        text = path.read_text(encoding="utf-8")
         rel = path.relative_to(REPO_ROOT).as_posix()
+        if rel in UNSCANNED_DOCS:
+            continue
+        text = path.read_text(encoding="utf-8")
         for match in HOST_SHAPED.finditer(text):
             hits.setdefault(match.group(0), set()).add(rel)
     return hits

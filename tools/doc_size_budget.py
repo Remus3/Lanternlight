@@ -46,6 +46,27 @@ anything, does not move a ref, and does not modify any tracked file or the
 working tree. Ordinary ``git gc``/repacking reclaims any object this leaves
 unreferenced.
 
+HEADROOM IS STATED IN SESSIONS, NOT IN BYTES OR PERCENTAGES. ROADMAP
+``OPS-57`` criterion 5, added 2026-09-08 after the ROADMAP budget fired. The
+budget that fired had "175,981 bytes of headroom (~41% above the measured
+size)" recorded beside it, and it was consumed in about a day. Neither figure
+was false; both were simply unreadable as a planning number, because a reader
+cannot convert bytes into remaining time without carrying the growth rate in
+their head. So this module measures a PER-SESSION GROWTH RATE for every
+budgeted document (:data:`SESSION_GROWTH_RATES`) and
+:func:`headroom_sessions` divides the remaining bytes by it, which produces a
+figure nobody can misread as generous: below 1.0 means the budget fires NEXT
+session. A document under :data:`LOW_HEADROOM_SESSIONS` sessions is flagged in
+the report even while it is still comfortably under budget in bytes.
+
+That warning is deliberately NOT a failure. ``.githooks/pre-commit`` selects
+this module's test file whenever a budgeted document is staged, so making low
+headroom fail would start refusing ordinary commits for a condition that is
+information rather than a defect - and a guard that refuses routine work is a
+guard someone disables. :attr:`Report.ok` therefore still depends only on
+:attr:`Report.findings`, exactly as before; :attr:`Report.low_headroom` is a
+separate, additive channel.
+
 WHAT COUNTS AS FAILURE. A watched path that does not exist on disk is a
 Finding, not a silent pass - a missing file trivially satisfies "under
 budget" for reasons that have nothing to do with the document being small,
@@ -59,16 +80,20 @@ the first bad path would hide every problem after it.
 from __future__ import annotations
 
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 __all__ = [
     "BUDGETS",
+    "LOW_HEADROOM_SESSIONS",
     "REPO_ROOT",
+    "SESSION_GROWTH_RATES",
     "Finding",
+    "GrowthRate",
     "Report",
     "check_budgets",
     "git_blob_size",
+    "headroom_sessions",
     "main",
 ]
 
@@ -116,13 +141,99 @@ BUDGETS: dict[str, int] = {
     # ~99,000 bytes of headroom, or about three sessions at the rate measured
     # above. It is deliberately NOT a large raise: a budget that buys a year
     # stops being a tripwire and starts being a rubber stamp.
-    "ROADMAP.md": 700_000,
+    # RE-DERIVED 2026-09-08 AFTER THE OPS-57 SPLIT, and LOWERED, not raised.
+    # Measured 175,390 blob bytes immediately after the split moved 65 closed
+    # and refuted sections to docs/ROADMAP_ARCHIVE.md. Against the old 700,000
+    # that was 16.2 sessions of headroom, which is exactly the rubber stamp
+    # OPS-57 warned about, so the budget comes DOWN to 340,000: 164,610 bytes,
+    # or 5.1 sessions at the median rate below.
+    #
+    # WHEN THIS FIRES, RE-RUN THE SPLIT - do not raise the number again. The
+    # split is re-runnable (tools/doc_archive.py) and it is the thing that
+    # buys headroom; a raise only defers, which is what the 700,000 above did
+    # and was labelled as at the time.
+    "ROADMAP.md": 340_000,
     # Measured 678,833 bytes (git blob) on 2026-09-07, still climbing during
     # that session. Measured again 2026-09-08 at 842,387, which leaves 57,613
     # bytes of headroom - under two sessions at the observed rate. NOT raised:
     # it has not fired, and moving a budget before it fires is how a guard
     # stops meaning anything.
-    "docs/LEDGER.md": 900_000,
+    # RE-DERIVED 2026-09-08 AFTER THE OPS-57 SPLIT, and LOWERED. Measured
+    # 281,778 blob bytes after the oldest 135 entries moved to
+    # docs/LEDGER_ARCHIVE.md, keeping the 60 newest. Against the old 900,000
+    # that was 22.4 sessions; the budget comes DOWN to 420,000, which is
+    # 138,222 bytes or 5.0 sessions at the median rate below. Same instruction
+    # as above when it fires: re-run the split, do not move the number.
+    "docs/LEDGER.md": 420_000,
+}
+# THE SPLIT RESET THE LEVEL, NOT THE SLOPE - so the rates below are NOT
+# re-measured, and that is a decision rather than an omission. The merger slot
+# formerly here asked for a post-split re-measurement; there is exactly ONE
+# post-split session, and a slope through one point is not a measurement. The
+# rates below are rates of APPENDING - new sections and new entries land on the
+# live documents at the same pace whatever their current size - so archiving
+# changes where the line starts and not how steeply it climbs. Re-measure them
+# once several post-split sessions exist, and expect them to be close.
+
+
+@dataclass(frozen=True)
+class GrowthRate:
+    """Measured per-session growth of one document, in git-blob bytes.
+
+    ``median`` is the planning rate :func:`headroom_sessions` divides by,
+    ``mean`` sits beside it so a reader can see the spread rather than one
+    confident number, and ``samples`` keeps the evidence in the module so both
+    summaries stay re-derivable from it - a rate is a hypothesis like any other
+    count in this repository, and a summary detached from its samples is how a
+    hypothesis quietly becomes folklore.
+    """
+
+    median: int
+    mean: int
+    samples: tuple[int, ...]
+
+
+#: A document with fewer than this many sessions of headroom is flagged in the
+#: report. Two, because one is already too late: a document flagged with one
+#: session left fires during the very next session, which gives whoever reads
+#: the flag no session in which to act on it. This is a WARNING threshold and
+#: never a failure threshold - see the module docstring.
+LOW_HEADROOM_SESSIONS = 2.0
+
+# Per-session growth rates, keyed exactly like BUDGETS.
+#
+# MEASURED 2026-09-08, and this is a HYPOTHESIS, not a constant of nature.
+# Method, so it can be repeated rather than trusted: the git blob size of each
+# document was taken at each of the 18 commits whose subject begins "Wrap " or
+# "Hand off" - this repository's session boundaries - and the last six
+# consecutive deltas between those boundaries were kept. Six sessions is a
+# short window on purpose: this repository's writing habits have changed over
+# its life, and a rate averaged over its whole history would describe a project
+# that no longer exists.
+#
+# THE SUMMARY FIGURE IS THE HIGH MEDIAN, NOT THE PLAIN MEDIAN, and the
+# difference is worth naming rather than glossing. With six samples the plain
+# median averages the two middle values (27,984 for ROADMAP.md and 26,138 for
+# docs/LEDGER.md); the figures below take the HIGHER of the two middle samples
+# instead - statistics.median_high - which is the more conservative planning
+# number, since overestimating the rate shortens the reported headroom and
+# underestimating it is exactly the failure this whole criterion exists to
+# stop. The median of either kind is preferred to the mean because a single
+# ~95 KB session drags the mean up by roughly a quarter; the mean is recorded
+# beside it so that spread stays visible instead of being averaged away.
+#
+# These rates are pre-split measurements. See the MERGER SLOT above.
+SESSION_GROWTH_RATES: dict[str, GrowthRate] = {
+    "ROADMAP.md": GrowthRate(
+        median=32_421,
+        mean=40_628,
+        samples=(95_785, 8_129, 19_885, 23_548, 32_421, 64_001),
+    ),
+    "docs/LEDGER.md": GrowthRate(
+        median=27_589,
+        mean=37_290,
+        samples=(81_272, 14_235, 24_688, 27_589, 21_907, 54_053),
+    ),
 }
 
 
@@ -156,11 +267,21 @@ class Report:
     :meth:`format` - can see exactly how much headroom is left on a document
     that is still passing, rather than learning about it only the day it
     fires.
+
+    ``headroom_sessions`` carries the remaining sessions for every measured
+    document a growth rate was known for - a document with no measured rate is
+    ABSENT from it rather than present with a placeholder, because unmeasured
+    and "zero sessions left" are different facts and conflating them is how
+    this check would start lying. ``low_headroom`` names the documents under
+    :data:`LOW_HEADROOM_SESSIONS`; it is a warning channel and deliberately
+    does NOT feed ``ok``.
     """
 
     ok: bool
     findings: tuple[Finding, ...]
     measured: dict[str, int]
+    headroom_sessions: dict[str, float] = field(default_factory=dict)
+    low_headroom: tuple[str, ...] = ()
 
     def format(self) -> str:
         """Render the report for a human, one finding per line.
@@ -169,6 +290,14 @@ class Report:
         failure would hide the shrinking headroom on a report that still says
         OK, which is exactly the information this check exists to surface
         before the day it actually fires.
+
+        Each measured line states its headroom in SESSIONS as well as in
+        bytes, and marks the document ``LOW HEADROOM`` when it is under
+        :data:`LOW_HEADROOM_SESSIONS`. Both figures are printed rather than
+        just the sessions one: the byte count is what a reader re-measures to
+        check the claim, and the sessions count is what tells them whether to
+        act this week. A document with no measured growth rate says so in
+        words instead of showing a number nobody measured.
         """
         if self.ok:
             lines = [f"doc size budget: OK ({len(self.measured)} document(s) measured)"]
@@ -176,7 +305,18 @@ class Report:
             lines = [f"doc size budget: {len(self.findings)} finding(s)"]
             lines.extend(f"  [{f.kind}] {f.detail}" for f in self.findings)
         for path in sorted(self.measured):
-            lines.append(f"  [measured] {path}: {self.measured[path]} bytes")
+            line = f"  [measured] {path}: {self.measured[path]} bytes"
+            left = self.headroom_sessions.get(path)
+            if left is None:
+                line += ", headroom in sessions unknown - no measured growth rate"
+            else:
+                line += f", {left:.1f} sessions of headroom"
+                if path in self.low_headroom:
+                    line += (
+                        f" - LOW HEADROOM (under {LOW_HEADROOM_SESSIONS:.1f} "
+                        "sessions; this is a warning, not a failure)"
+                    )
+            lines.append(line)
         return "\n".join(lines)
 
 
@@ -219,26 +359,75 @@ def git_blob_size(path: Path, git_cwd: Path = REPO_ROOT) -> int:
     return int(sized.stdout.strip())
 
 
+def headroom_sessions(
+    path: str,
+    size: int,
+    budgets: dict[str, int] | None = None,
+    rates: dict[str, GrowthRate] | None = None,
+) -> float | None:
+    """Return how many more sessions ``path`` can grow before it hits budget.
+
+    ``(budget - size) / rate``, where ``rate`` is the measured per-session
+    median growth from :data:`SESSION_GROWTH_RATES`. ``size`` is passed in
+    rather than measured here so this stays pure arithmetic that a test can
+    exercise at an exact boundary without shelling out to ``git`` - the
+    measurement itself already happened in :func:`check_budgets`.
+
+    Returns ``None``, never a number, when ``path`` has no budget, no measured
+    growth rate, or a non-positive one. That is this repository's "omit rather
+    than guess" rule applied where it matters most: a fallback of ``0.0`` would
+    read as "fires next session" and a fallback of ``inf`` would read as
+    "nothing to worry about", and both are claims nobody measured.
+
+    The result is NOT clamped at zero. A document already past its budget
+    reports negative sessions, so "just fired" and "far past" stay
+    distinguishable; exactly ``0.0`` means the document is sitting on its
+    budget right now, and any value under ``1.0`` means the budget fires during
+    the next session.
+    """
+    if budgets is None:
+        budgets = BUDGETS
+    if rates is None:
+        rates = SESSION_GROWTH_RATES
+
+    budget = budgets.get(path)
+    rate = rates.get(path)
+    if budget is None or rate is None or rate.median <= 0:
+        return None
+    return (budget - size) / rate.median
+
+
 def check_budgets(
     budgets: dict[str, int] | None = None,
     repo_root: Path = REPO_ROOT,
+    rates: dict[str, GrowthRate] | None = None,
 ) -> Report:
     """Check every watched document against its byte budget.
 
-    ``budgets`` defaults to the module-level :data:`BUDGETS` and ``repo_root``
-    to :data:`REPO_ROOT`; both are overridable so this can be exercised
-    against throwaway fixtures instead of the real repository.
+    ``budgets`` defaults to the module-level :data:`BUDGETS`, ``repo_root`` to
+    :data:`REPO_ROOT` and ``rates`` to :data:`SESSION_GROWTH_RATES`; all three
+    are overridable so this can be exercised against throwaway fixtures
+    instead of the real repository.
 
     Every path in ``budgets`` is checked, in order, and every problem found is
     collected into the returned :class:`Report` - a missing path never stops
     the scan, so a later over-budget sibling in the same mapping is still
     reported in the same run.
+
+    Remaining headroom in sessions is computed for every document that was
+    actually measured AND has a measured growth rate. It never affects
+    ``Report.ok``: the failure condition is unchanged from before OPS-57,
+    because ``.githooks/pre-commit`` depends on it.
     """
     if budgets is None:
         budgets = BUDGETS
+    if rates is None:
+        rates = SESSION_GROWTH_RATES
 
     findings: list[Finding] = []
     measured: dict[str, int] = {}
+    sessions_left: dict[str, float] = {}
+    low_headroom: list[str] = []
 
     for rel_path, budget in budgets.items():
         full_path = repo_root / rel_path
@@ -266,6 +455,13 @@ def check_budgets(
         # execution directory would break exactly that case.
         size = git_blob_size(full_path)
         measured[rel_path] = size
+
+        left = headroom_sessions(rel_path, size, budgets=budgets, rates=rates)
+        if left is not None:
+            sessions_left[rel_path] = left
+            if left < LOW_HEADROOM_SESSIONS:
+                low_headroom.append(rel_path)
+
         if size >= budget:
             over = size - budget
             findings.append(
@@ -281,7 +477,13 @@ def check_budgets(
                 )
             )
 
-    return Report(ok=not findings, findings=tuple(findings), measured=measured)
+    return Report(
+        ok=not findings,
+        findings=tuple(findings),
+        measured=measured,
+        headroom_sessions=sessions_left,
+        low_headroom=tuple(low_headroom),
+    )
 
 
 def main() -> int:

@@ -50,9 +50,15 @@ Touch these paths and nothing else. Every other path in the repository belongs t
 - `tests/test_handoff.py`
 - `tools/doc_size_budget.py`
 - `tests/test_doc_size_budget.py`
+- `tools/doc_archive.py`
+- `tests/test_doc_archive.py`
+- `tools/archive_link_guard.py`
+- `tests/test_archive_link_guard.py`
 - `tests/conftest.py`
 - `ROADMAP.md`
 - `docs/LEDGER.md`
+- `docs/ROADMAP_ARCHIVE.md`
+- `docs/LEDGER_ARCHIVE.md`
 - `docs/HEADLESS.md`
 - `docs/OPERATIONS.md`
 - `docs/INVENTORY.md`

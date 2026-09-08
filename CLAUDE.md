@@ -42,6 +42,15 @@ criteria are still ours to meet.
 > re-litigating a past choice.
 > **Ledger:** [`docs/LEDGER.md`](docs/LEDGER.md), append-only, newest first.
 > Never put a ledger entry in this file.
+> **Archives, `OPS-57`:** both continuity documents are SPLIT. `ROADMAP.md`
+> holds the open items plus an `## Archive index` with one stub per closed
+> item; the full text lives in
+> [`docs/ROADMAP_ARCHIVE.md`](docs/ROADMAP_ARCHIVE.md). `docs/LEDGER.md` holds
+> the newest entries and the oldest are in
+> [`docs/LEDGER_ARCHIVE.md`](docs/LEDGER_ARCHIVE.md). **Nothing was deleted, so
+> an empty grep of the live file is not a claim about the project** - it is a
+> claim about which half you searched. When a size budget fires, RE-RUN
+> `tools/doc_archive.py`; do not raise the number.
 
 ## THE HARD BOUNDARY - read first, it defines the project
 

@@ -32,6 +32,21 @@ found - :class:`TestMultipleOverBudgetFilesAreAllReported` pins that. And the
 not a rounding accident - :class:`TestExactlyAtBudgetIsFlagged` pins the exact
 byte count rather than leaving the off-by-one to chance.
 
+HEADROOM IS STATED IN SESSIONS, AND THAT IS THE POINT OF OPS-57. The budget
+that fired on 2026-09-08 had been set with "175,981 bytes of headroom (~41%
+above the measured size)" written beside it, and it was exhausted in about a
+day. Neither the byte figure nor the percentage was wrong; both were simply
+unreadable as a planning number, because nobody carries the growth rate in
+their head while reading them. The classes below therefore pin the SESSIONS
+figure - :class:`TestHeadroomInSessions` for the arithmetic and its boundaries
+(exactly one session left, exactly zero left, already over), and
+:class:`TestReportStatesHeadroomInSessions` for the rendered report. A run with
+under :data:`tools.doc_size_budget.LOW_HEADROOM_SESSIONS` sessions of headroom
+must be visibly flagged, and :class:`TestLowHeadroomIsNotAFailureState` pins
+that this flag does NOT change ``ok`` - the pre-commit hook selects this test
+module when either budgeted document is staged, so turning a warning into a
+failure here would start refusing ordinary commits.
+
 Fixture files live under ``tmp_path`` (never under this repo's own tree) and
 are pure ASCII with no line breaks at all, so git's text/eol normalization has
 nothing to rewrite and the byte counts chosen here are exactly the byte counts
@@ -43,6 +58,7 @@ disk" to "a verdict", not just the arithmetic in the middle of it.
 
 from __future__ import annotations
 
+import statistics
 import sys
 from pathlib import Path
 
@@ -298,6 +314,218 @@ class TestFindingAndReportShapes:
         assert set(report.measured) | {f.path for f in report.findings} == set(
             doc_size_budget.BUDGETS
         )
+
+
+class TestMeasuredGrowthRatesAreInternallyConsistent:
+    """The declared rate must be derivable from the samples beside it.
+
+    A rate is a HYPOTHESIS like any count in this repo, and the defence
+    against a hypothesis quietly drifting from its evidence is to keep the
+    evidence in the module and re-derive the summary from it here. If someone
+    edits ``median`` or ``mean`` without touching ``samples`` - or drops a
+    sample without re-deriving - these assertions go red.
+    """
+
+    def test_every_budgeted_document_has_a_measured_rate(self) -> None:
+        for path in doc_size_budget.BUDGETS:
+            assert path in doc_size_budget.SESSION_GROWTH_RATES, (
+                f"{path} has a byte budget but no measured per-session growth "
+                "rate, so its headroom cannot be stated in sessions - which is "
+                "the whole of OPS-57 criterion 5"
+            )
+
+    def test_declared_median_is_the_high_median_of_the_samples(self) -> None:
+        # median_high, not plain median: with an even sample count the plain
+        # median averages the two middle values, and the module deliberately
+        # takes the HIGHER of them as the more conservative planning figure.
+        # See the comment on SESSION_GROWTH_RATES.
+        for path, rate in doc_size_budget.SESSION_GROWTH_RATES.items():
+            assert rate.median == statistics.median_high(rate.samples), (
+                f"{path}: declared median {rate.median} is not the high median "
+                f"of its own samples {rate.samples}"
+            )
+
+    def test_declared_mean_is_the_truncated_mean_of_the_samples(self) -> None:
+        for path, rate in doc_size_budget.SESSION_GROWTH_RATES.items():
+            assert rate.mean == int(statistics.fmean(rate.samples)), (
+                f"{path}: declared mean {rate.mean} is not the mean of its own "
+                f"samples {rate.samples}"
+            )
+
+    def test_samples_are_recorded_so_the_spread_is_visible(self) -> None:
+        """A single confident number hides its own spread. Keep the samples."""
+        for path, rate in doc_size_budget.SESSION_GROWTH_RATES.items():
+            assert len(rate.samples) >= 3, (
+                f"{path}: {len(rate.samples)} sample(s) is not a rate, it is an "
+                "anecdote"
+            )
+            assert all(s > 0 for s in rate.samples), f"{path}: non-positive sample"
+
+
+class TestHeadroomInSessions:
+    """The arithmetic, and both boundaries the acceptance criterion names."""
+
+    def test_headroom_is_reported_in_sessions_not_bytes(self) -> None:
+        rates = {"doc.md": doc_size_budget.GrowthRate(100, 100, (100, 100, 100))}
+        left = doc_size_budget.headroom_sessions(
+            "doc.md", size=700, budgets={"doc.md": 1000}, rates=rates
+        )
+        assert left == pytest.approx(3.0)
+
+    def test_exactly_one_session_of_headroom(self) -> None:
+        """The boundary that matters most: one more session and it fires."""
+        rates = {"doc.md": doc_size_budget.GrowthRate(100, 100, (100, 100, 100))}
+        left = doc_size_budget.headroom_sessions(
+            "doc.md", size=900, budgets={"doc.md": 1000}, rates=rates
+        )
+        assert left == pytest.approx(1.0)
+
+    def test_exactly_zero_sessions_of_headroom(self) -> None:
+        """At the budget, headroom is 0.0 sessions - not 'a bit left'."""
+        rates = {"doc.md": doc_size_budget.GrowthRate(100, 100, (100, 100, 100))}
+        left = doc_size_budget.headroom_sessions(
+            "doc.md", size=1000, budgets={"doc.md": 1000}, rates=rates
+        )
+        assert left == pytest.approx(0.0)
+
+    def test_a_fraction_under_one_means_it_fires_next_session(self) -> None:
+        rates = {"doc.md": doc_size_budget.GrowthRate(100, 100, (100, 100, 100))}
+        left = doc_size_budget.headroom_sessions(
+            "doc.md", size=950, budgets={"doc.md": 1000}, rates=rates
+        )
+        assert 0.0 < left < 1.0
+        assert left == pytest.approx(0.5)
+
+    def test_already_over_budget_is_negative_not_clamped_to_zero(self) -> None:
+        """Clamping would make "just fired" and "far past" look identical."""
+        rates = {"doc.md": doc_size_budget.GrowthRate(100, 100, (100, 100, 100))}
+        left = doc_size_budget.headroom_sessions(
+            "doc.md", size=1200, budgets={"doc.md": 1000}, rates=rates
+        )
+        assert left == pytest.approx(-2.0)
+
+    def test_a_document_with_no_measured_rate_returns_none_not_a_guess(
+        self,
+    ) -> None:
+        """CLAUDE.md: omit rather than guess, and keep unmeasured
+        distinguishable from measured zero. A document nobody has measured a
+        growth rate for has NO sessions figure - it does not have infinite
+        headroom, and it does not have zero.
+        """
+        left = doc_size_budget.headroom_sessions(
+            "unmeasured.md", size=10, budgets={"unmeasured.md": 1000}, rates={}
+        )
+        assert left is None
+
+
+class TestReportStatesHeadroomInSessions:
+    """format() must say sessions for every budgeted document, alongside bytes."""
+
+    def test_format_states_sessions_and_keeps_the_byte_figures(
+        self, tmp_path: Path
+    ) -> None:
+        _write(tmp_path / "doc.md", 700)
+        rates = {"doc.md": doc_size_budget.GrowthRate(100, 100, (100, 100, 100))}
+        report = doc_size_budget.check_budgets(
+            {"doc.md": 1000}, repo_root=tmp_path, rates=rates
+        )
+        rendered = report.format()
+
+        # Bytes are kept - the criterion says alongside, not instead of.
+        assert "700 bytes" in rendered
+        assert "session" in rendered
+        assert "3.0 sessions" in rendered
+        assert report.headroom_sessions["doc.md"] == pytest.approx(3.0)
+
+    def test_low_headroom_is_visibly_flagged_while_still_under_budget(
+        self, tmp_path: Path
+    ) -> None:
+        _write(tmp_path / "doc.md", 950)
+        rates = {"doc.md": doc_size_budget.GrowthRate(100, 100, (100, 100, 100))}
+        report = doc_size_budget.check_budgets(
+            {"doc.md": 1000}, repo_root=tmp_path, rates=rates
+        )
+        rendered = report.format()
+
+        assert report.ok is True, "under budget must still be ok"
+        assert report.low_headroom == ("doc.md",)
+        assert "LOW HEADROOM" in rendered
+
+    def test_comfortable_headroom_is_not_flagged(self, tmp_path: Path) -> None:
+        _write(tmp_path / "doc.md", 100)
+        rates = {"doc.md": doc_size_budget.GrowthRate(100, 100, (100, 100, 100))}
+        report = doc_size_budget.check_budgets(
+            {"doc.md": 1000}, repo_root=tmp_path, rates=rates
+        )
+        assert report.low_headroom == ()
+        assert "LOW HEADROOM" not in report.format()
+
+    def test_a_document_with_no_rate_says_so_rather_than_inventing_a_figure(
+        self, tmp_path: Path
+    ) -> None:
+        _write(tmp_path / "doc.md", 100)
+        report = doc_size_budget.check_budgets(
+            {"doc.md": 1000}, repo_root=tmp_path, rates={}
+        )
+        rendered = report.format()
+
+        assert "doc.md" not in report.headroom_sessions
+        assert "no measured growth rate" in rendered
+        assert report.ok is True
+
+
+class TestLowHeadroomIsNotAFailureState:
+    """The warning must stay distinct from the failure the hook depends on."""
+
+    def test_low_headroom_alone_does_not_make_the_report_fail(
+        self, tmp_path: Path
+    ) -> None:
+        _write(tmp_path / "doc.md", 999)  # one byte under, ~0.01 sessions left
+        rates = {"doc.md": doc_size_budget.GrowthRate(100, 100, (100, 100, 100))}
+        report = doc_size_budget.check_budgets(
+            {"doc.md": 1000}, repo_root=tmp_path, rates=rates
+        )
+
+        assert report.low_headroom == ("doc.md",)
+        assert report.ok is True
+        assert report.findings == ()
+
+    def test_over_budget_still_fails_exactly_as_before(self, tmp_path: Path) -> None:
+        """The failure condition is unchanged by anything added for OPS-57."""
+        _write(tmp_path / "doc.md", 1000)
+        rates = {"doc.md": doc_size_budget.GrowthRate(100, 100, (100, 100, 100))}
+        report = doc_size_budget.check_budgets(
+            {"doc.md": 1000}, repo_root=tmp_path, rates=rates
+        )
+
+        assert report.ok is False
+        assert len(report.findings) == 1
+        assert report.findings[0].kind == "over_budget"
+
+
+class TestRealDeclaredHeadroomInSessionsIsReported:
+    """Measure the real documents now and print their sessions figure.
+
+    Deliberately asserts only that a figure EXISTS for every budgeted
+    document. It does not assert the figure is above any threshold: the
+    pre-commit hook selects this module when either budgeted document is
+    staged, so an assertion on remaining sessions would refuse ordinary
+    commits the moment a document got close - which is the warning state's
+    job, not a guard's.
+    """
+
+    def test_every_real_budgeted_document_reports_sessions_of_headroom(
+        self,
+    ) -> None:
+        report = doc_size_budget.check_budgets()
+
+        for path in doc_size_budget.BUDGETS:
+            left = report.headroom_sessions.get(path)
+            assert left is not None, (
+                f"{path} has no sessions-of-headroom figure - findings: "
+                f"{report.findings}"
+            )
+            print(f"doc_size_budget: {path} has {left:.2f} session(s) of headroom")
 
 
 if __name__ == "__main__":
