@@ -639,3 +639,313 @@ def test_credit_writes_atomically_like_every_other_writer(state_path: Path) -> N
     debris = list(state_path.parent.glob(state_mod.TEMP_PREFIX + "*"))
     assert debris == []
     assert json.loads(state_path.read_text(encoding="utf-8"))["completed"] == ["OPS-22"]
+
+
+# ---------------------------------------------------------------------------
+# in-flight dispatch records - ROADMAP OPS-27
+# ---------------------------------------------------------------------------
+#
+# The measurement that closed OPS-27's criterion 1 found the loss is not a
+# FACT, it is the INTERLOCK: at the instant three agents were mid-flight on
+# three items, loop state read `item = None`, no lane state carried an
+# in-flight field, and `git status` was empty. Every one of those readings was
+# individually true and the conclusion they composed - "nothing is running" -
+# was false, so a recovering session's correct-looking next action was to
+# dispatch the same three items on top of the ones already writing.
+#
+# `LoopState.item` is singular, which cannot express this project's own default
+# working shape of several parallel slices. That is the one-to-many defect
+# `OPS-25` fixed for COMPLETION and nobody had filed for DISPATCH.
+#
+# The records are deliberately SHAPE-CONSTRAINED - item ids, a lane id and
+# repo-relative paths, and no free-text field at all. Criterion 3 forbids
+# writing conversation content, and the strongest way to honour that is a
+# record that structurally cannot carry any.
+
+
+def test_a_fresh_state_has_no_in_flight_records(state_path: Path) -> None:
+    assert state_mod.load(state_path).in_flight == []
+
+
+def test_dispatch_records_what_is_running_and_survives_a_reload(state_path: Path) -> None:
+    state_mod.save(LoopState(cycle=7, directive="d"), state_path)
+
+    state_mod.dispatch("OPS-28", "OPS-29", path=state_path)
+
+    reloaded = state_mod.load(state_path)
+    assert [row["item"] for row in reloaded.in_flight] == ["OPS-28", "OPS-29"]
+    assert all(row["at"] for row in reloaded.in_flight)
+
+
+def test_dispatch_carries_the_lane_and_the_files_the_slice_owns(state_path: Path) -> None:
+    state_mod.dispatch(
+        "OPS-28", lane="ingest", paths=["lanternlight/logparse.py"], path=state_path
+    )
+
+    row = state_mod.load(state_path).in_flight[0]
+    assert row["lane"] == "ingest"
+    assert row["paths"] == ["lanternlight/logparse.py"]
+
+
+def test_dispatch_is_additive_rather_than_replacing(state_path: Path) -> None:
+    state_mod.dispatch("OPS-28", path=state_path)
+    state_mod.dispatch("OPS-29", path=state_path)
+
+    assert [row["item"] for row in state_mod.load(state_path).in_flight] == [
+        "OPS-28",
+        "OPS-29",
+    ]
+
+
+def test_dispatching_the_same_item_twice_records_it_once(state_path: Path) -> None:
+    state_mod.dispatch("OPS-28", path=state_path)
+    state_mod.dispatch("OPS-28", path=state_path)
+
+    assert len(state_mod.load(state_path).in_flight) == 1
+
+
+def test_retire_removes_only_the_item_named(state_path: Path) -> None:
+    state_mod.dispatch("OPS-28", "OPS-29", path=state_path)
+
+    state_mod.retire("OPS-28", path=state_path)
+
+    assert [row["item"] for row in state_mod.load(state_path).in_flight] == ["OPS-29"]
+
+
+def test_advancing_off_an_item_retires_its_dispatch_record(state_path: Path) -> None:
+    """A credited item is finished, so leaving it in flight would be a lie.
+
+    This is the interlock's other half: a record that is never cleared decays
+    into noise, and a recovering session that cannot trust the list will stop
+    reading it.
+    """
+    state_mod.save(LoopState(cycle=3, directive="d", item="OPS-28"), state_path)
+    state_mod.dispatch("OPS-28", "OPS-29", path=state_path)
+
+    state_mod.advance_cycle("next", item="OPS-30", path=state_path)
+
+    reloaded = state_mod.load(state_path)
+    assert [row["item"] for row in reloaded.in_flight] == ["OPS-29"]
+    assert "OPS-28" in reloaded.completed
+
+
+def test_dispatch_refuses_free_text_and_writes_nothing(state_path: Path) -> None:
+    """Criterion 3, enforced by the SHAPE of the record rather than by a scan.
+
+    A record that cannot hold a sentence cannot leak a conversation. The ids
+    and paths this accepts are drawn from a character set that has no spaces
+    and no newlines, so there is nowhere for prose to go.
+    """
+    state_mod.save(LoopState(cycle=1, directive="d"), state_path)
+    before = state_path.read_bytes()
+
+    with pytest.raises(ValueError):
+        state_mod.dispatch("the operator said to do OPS-28 next", path=state_path)
+
+    assert state_path.read_bytes() == before
+
+
+def test_dispatch_refuses_a_path_that_escapes_the_repository(state_path: Path) -> None:
+    with pytest.raises(ValueError):
+        state_mod.dispatch("OPS-28", paths=["../../secrets.txt"], path=state_path)
+    with pytest.raises(ValueError):
+        state_mod.dispatch("OPS-28", paths=["C:/Windows/system32/config"], path=state_path)
+
+
+def test_dispatch_refuses_an_empty_item_and_a_call_with_no_items(state_path: Path) -> None:
+    with pytest.raises(ValueError):
+        state_mod.dispatch("", path=state_path)
+    with pytest.raises(ValueError):
+        state_mod.dispatch(path=state_path)
+
+
+def test_a_state_file_written_before_this_field_existed_still_loads(
+    state_path: Path,
+) -> None:
+    """No schema bump: the field is optional and its absence means empty.
+
+    Bumping the schema would make every existing runtime file unreadable and
+    send a live loop through recovery for a field it does not use, which is a
+    worse failure than the one being fixed.
+    """
+    state_path.write_text(
+        json.dumps(
+            {
+                "schema": state_mod.SCHEMA,
+                "cycle": 4,
+                "directive": "d",
+                "item": "OPS-1",
+                "updated": "2026-09-08T00:00:00+00:00",
+                "completed": ["OPS-0"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    loaded = state_mod.load(state_path)
+
+    assert loaded.cycle == 4
+    assert loaded.in_flight == []
+    assert loaded.recovered is False
+
+
+def test_a_malformed_in_flight_list_recovers_rather_than_raising(state_path: Path) -> None:
+    state_path.write_text(
+        json.dumps(
+            {
+                "schema": state_mod.SCHEMA,
+                "cycle": 4,
+                "directive": "d",
+                "item": None,
+                "updated": "",
+                "completed": [],
+                "in_flight": ["not a record"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    loaded = state_mod.load(state_path)
+
+    assert loaded.recovered is True
+    assert loaded.in_flight == []
+    assert loaded.recovery_note
+
+
+def test_the_summary_names_every_slice_so_a_cold_session_can_act(state_path: Path) -> None:
+    state_mod.dispatch(
+        "OPS-28", lane="ingest", paths=["lanternlight/logparse.py"], path=state_path
+    )
+    state_mod.dispatch("OPS-29", lane="surface", path=state_path)
+
+    summary = state_mod.in_flight_summary(state_mod.load(state_path))
+
+    assert "OPS-28" in summary and "OPS-29" in summary
+    assert "ingest" in summary and "lanternlight/logparse.py" in summary
+    assert "2 slice(s)" in summary
+
+
+def test_the_summary_says_plainly_when_nothing_is_in_flight(state_path: Path) -> None:
+    summary = state_mod.in_flight_summary(state_mod.load(state_path))
+    assert "nothing" in summary.lower()
+
+
+def test_dispatch_writes_atomically_like_every_other_writer(state_path: Path) -> None:
+    state_mod.save(LoopState(cycle=1), state_path)
+    state_mod.dispatch("OPS-28", path=state_path)
+
+    debris = list(state_path.parent.glob(state_mod.TEMP_PREFIX + "*"))
+    assert debris == []
+
+
+def test_the_saved_payload_carries_the_records(state_path: Path) -> None:
+    state_mod.dispatch("OPS-28", path=state_path)
+    payload = json.loads(state_path.read_text(encoding="utf-8"))
+    assert payload["in_flight"][0]["item"] == "OPS-28"
+
+
+def test_a_dispatch_timestamp_must_be_a_timestamp_and_not_a_sentence(
+    state_path: Path,
+) -> None:
+    """The `at` field was typed `str` and checked no further.
+
+    Found by this item's adversarial pass: a hand-built record carrying a
+    newline and a log-shaped line round-tripped verbatim, so the shape argument
+    that criterion 3 rests on had a hole in exactly the field nobody looked at.
+    The other fields are id-shaped and path-shaped; this one is now
+    timestamp-shaped.
+    """
+    with pytest.raises(ValueError):
+        state_mod.save(
+            LoopState(in_flight=[{"item": "OPS-99", "at": "SOMEONE said\nLogFile: x"}]),
+            state_path,
+        )
+    assert not state_path.exists()
+
+
+def test_an_unknown_key_in_a_record_is_refused_rather_than_persisted(
+    state_path: Path,
+) -> None:
+    """`to_dict` copied whatever was in the row, so extra keys reached disk.
+
+    A record shape is only a guarantee if the writer enforces it. Copying the
+    caller's dict means the shape describes what `dispatch()` produces, not
+    what the file can contain - and the file is what a recovering session
+    reads.
+    """
+    with pytest.raises(ValueError):
+        state_mod.save(
+            LoopState(
+                in_flight=[
+                    {
+                        "item": "OPS-99",
+                        "at": "2026-09-08T00:00:00+00:00",
+                        "smuggled": "anything at all",
+                    }
+                ]
+            ),
+            state_path,
+        )
+
+
+def test_the_persisted_payload_is_a_copy_and_not_an_alias(state_path: Path) -> None:
+    state_mod.dispatch("OPS-28", path=state_path)
+    loaded = state_mod.load(state_path)
+    payload = loaded.to_dict()
+    payload["in_flight"][0]["item"] = "OPS-MUTATED"
+    assert loaded.in_flight[0]["item"] == "OPS-28"
+
+
+def test_crediting_an_item_also_retires_its_dispatch_record(state_path: Path) -> None:
+    """`credit()` is how a SECOND closure in one cycle is recorded - `OPS-25`.
+
+    Found by the adversarial pass: an item credited that way and then advanced
+    past was never retired, so it stayed RUNNING forever in the interlock. That
+    is the composition this module's own docstring prescribes, so the hole was
+    on the prescribed path rather than an unusual one.
+    """
+    state_mod.dispatch("OPS-28", "OPS-29", path=state_path)
+
+    state_mod.credit("OPS-28", path=state_path)
+
+    reloaded = state_mod.load(state_path)
+    assert [row["item"] for row in reloaded.in_flight] == ["OPS-29"]
+    assert reloaded.completed == ["OPS-28"]
+
+
+def test_two_lanes_on_one_item_are_two_records(state_path: Path) -> None:
+    """De-duplicating on the item id alone collapsed a parallel dispatch.
+
+    Two lanes working one item on disjoint files is this project's stated
+    default shape, and recording it as one slice loses exactly the interlock
+    this field exists to hold.
+    """
+    state_mod.dispatch("OPS-28", lane="ingest", path=state_path)
+    state_mod.dispatch("OPS-28", lane="surface", path=state_path)
+
+    rows = state_mod.load(state_path).in_flight
+    assert [row["lane"] for row in rows] == ["ingest", "surface"]
+
+
+def test_retiring_an_item_clears_every_lane_working_it(state_path: Path) -> None:
+    """Documented behaviour, pinned: retire is item-scoped, not lane-scoped."""
+    state_mod.dispatch("OPS-28", lane="ingest", path=state_path)
+    state_mod.dispatch("OPS-28", lane="surface", path=state_path)
+    state_mod.dispatch("OPS-29", lane="ops", path=state_path)
+
+    state_mod.retire("OPS-28", path=state_path)
+
+    assert [row["item"] for row in state_mod.load(state_path).in_flight] == ["OPS-29"]
+
+
+def test_the_summary_warns_that_a_record_is_not_proof_of_life(state_path: Path) -> None:
+    """The caveat is the load-bearing sentence, so it is asserted.
+
+    Deleting the whole caveat block left every test green until this existed.
+    A recovering session that reads the list as "these are alive" will wait for
+    work that died, which is the opposite of the failure this item fixes.
+    """
+    state_mod.dispatch("OPS-28", path=state_path)
+    summary = state_mod.in_flight_summary(state_mod.load(state_path))
+    assert "not proof the work is still alive" in summary
+    assert "Reconcile" in summary

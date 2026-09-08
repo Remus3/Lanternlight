@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import tempfile
 from dataclasses import dataclass, field, replace as dc_replace
 from datetime import UTC, datetime
@@ -37,7 +38,10 @@ __all__ = [
     "advance_cycle",
     "credit",
     "default_state_path",
+    "dispatch",
+    "in_flight_summary",
     "load",
+    "retire",
     "runtime_dir",
     "save",
     "temp_prefix_for",
@@ -92,6 +96,18 @@ class LoopState:
             directive chain's live link - a cold session reads it to learn what
             it was told to do, because nothing else remembers.
         item: The roadmap item currently in flight, or ``None`` between items.
+            SINGULAR, and that is the defect ``in_flight`` exists beside rather
+            than a field to widen: this project's stated default is several
+            parallel slices, so one name can only ever describe one of them.
+            Kept as-is because every existing reader and every existing state
+            file uses it, and because the retry rule in :func:`advance_cycle`
+            is defined in terms of it.
+        in_flight: Dispatch records for work that is RUNNING - ``OPS-27``. Each
+            is a mapping with ``item``, ``at``, and optionally ``lane`` and
+            ``paths``. Written when work is dispatched rather than when a
+            session is about to compact, because a crash, an interrupt, a
+            reboot and running out of context lose exactly the same fact and a
+            compaction hook covers none of them.
         updated: ISO 8601 UTC timestamp of the last save.
         completed: Item ids finished so far, oldest first.
         recovered: True when :func:`load` found a file it could not use and
@@ -106,6 +122,7 @@ class LoopState:
     item: str | None = None
     updated: str = ""
     completed: list[str] = field(default_factory=list)
+    in_flight: list[dict] = field(default_factory=list)
     recovered: bool = False
     recovery_note: str = ""
 
@@ -123,6 +140,11 @@ class LoopState:
             "item": self.item,
             "updated": self.updated,
             "completed": list(self.completed),
+            # VALIDATED COPIES. Copying the caller's dict made the record
+            # shape a description of what dispatch() produces rather than a
+            # property of the file, and aliased the rows so a caller could
+            # mutate persisted state through the payload it was handed.
+            "in_flight": [_checked_record(row) for row in self.in_flight],
         }
 
     @classmethod
@@ -161,13 +183,105 @@ class LoopState:
         if not isinstance(completed, list) or not all(isinstance(x, str) for x in completed):
             raise ValueError("completed must be a list of strings")
 
+        # ABSENT MEANS EMPTY, and the schema is deliberately NOT bumped for
+        # this field. A bump would make every state file written before it
+        # unreadable, sending a live loop through recovery over a field it does
+        # not use - a worse failure than the one this field fixes.
+        in_flight = payload.get("in_flight", [])
+        if not isinstance(in_flight, list):
+            raise ValueError("in_flight must be a list")
+        rows = []
+        for row in in_flight:
+            if not isinstance(row, dict):
+                raise ValueError("each in_flight entry must be an object")
+            rows.append(_checked_record(row))
+
         return cls(
             cycle=cycle,
             directive=directive,
             item=item,
             updated=updated,
             completed=list(completed),
+            in_flight=rows,
         )
+
+
+#: What an id may contain. No space, no newline, nowhere for prose to go -
+#: which is how ``OPS-27`` criterion 3 is met, by the SHAPE of the record
+#: rather than by scanning it. A record that cannot hold a sentence cannot
+#: leak a conversation, a log line or an identifier.
+_ID_SHAPE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
+
+#: A repo-relative path. Forward slashes only, no drive letter, no leading
+#: slash and no "..", so a record can never name anything outside this tree.
+_PATH_SHAPE = re.compile(r"^[A-Za-z0-9_./-]{1,255}$")
+
+#: An ISO 8601 second-resolution stamp, which is what :func:`_now` emits. Shape
+#: -checked like everything else in a record: this was the one field typed only
+#: as "a string", and a string is exactly where a sentence fits.
+_AT_SHAPE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:[+-]\d{2}:\d{2}|Z)?$")
+
+#: The complete set of keys a record may carry. Anything else is refused rather
+#: than copied through.
+_RECORD_KEYS = frozenset({"item", "at", "lane", "paths"})
+
+
+def _checked_id(value: object, what: str) -> str:
+    if not isinstance(value, str) or not _ID_SHAPE.match(value):
+        raise ValueError(
+            f"{what} must match {_ID_SHAPE.pattern} - got {value!r}. "
+            "These records carry ids and paths only: there is deliberately no "
+            "free-text field, because a record that cannot hold a sentence "
+            "cannot leak one."
+        )
+    return value
+
+
+def _checked_path(value: object) -> str:
+    if not isinstance(value, str) or not _PATH_SHAPE.match(value) or ".." in value:
+        raise ValueError(
+            f"a dispatch path must be repo-relative and match "
+            f"{_PATH_SHAPE.pattern} with no '..' - got {value!r}"
+        )
+    return value
+
+
+def _checked_record(row: dict) -> dict:
+    """Validate one dispatch record, raising rather than dropping a bad field.
+
+    Raising, not skipping: a record silently shorn of its paths still looks
+    like a record, and a caller would believe an interlock that is no longer
+    describing the same work.
+
+    EVERY field is shape-checked and every UNKNOWN field is refused. The first
+    version checked ``at`` only for being a string and copied unknown keys
+    through, which meant the shape described what :func:`dispatch` produces
+    rather than what the FILE can hold - and the file is what a recovering
+    session reads. This item's adversarial pass got a newline and a log-shaped
+    line onto disk through ``at``, and an arbitrary extra key through the copy.
+    """
+    unknown = set(row) - _RECORD_KEYS
+    if unknown:
+        raise ValueError(
+            f"a dispatch record may only carry {sorted(_RECORD_KEYS)}; "
+            f"refusing unknown key(s) {sorted(unknown)}. There is no free-text "
+            "field here on purpose - see OPS-27 criterion 3."
+        )
+    checked: dict = {"item": _checked_id(row.get("item"), "a dispatch item")}
+    at = row.get("at", "")
+    if not isinstance(at, str) or (at and not _AT_SHAPE.match(at)):
+        raise ValueError(
+            f"a dispatch record's 'at' must match {_AT_SHAPE.pattern} - got {at!r}"
+        )
+    checked["at"] = at
+    if row.get("lane") is not None:
+        checked["lane"] = _checked_id(row.get("lane"), "a dispatch lane")
+    paths = row.get("paths")
+    if paths is not None:
+        if not isinstance(paths, list):
+            raise ValueError("a dispatch record's 'paths' must be a list")
+        checked["paths"] = [_checked_path(one) for one in paths]
+    return checked
 
 
 def load(path: Path | None = None) -> LoopState:
@@ -344,7 +458,12 @@ def credit(
         if candidate not in completed:
             completed.append(candidate)
 
-    credited = dc_replace(current, completed=completed)
+    # CREDITING IS FINISHING, so the dispatch record goes with it. Found by
+    # this item's adversarial pass: an item credited here and then advanced
+    # past was never retired and stayed RUNNING forever - on the very path
+    # OPS-25 prescribes for a cycle that closes two items.
+    remaining = [row for row in current.in_flight if row["item"] not in set(items)]
+    credited = dc_replace(current, completed=completed, in_flight=remaining)
     save(credited, path)
     return credited
 
@@ -417,14 +536,133 @@ def advance_cycle(
     if credit_the_previous_item:
         completed.append(current.item)
 
+    # A CREDITED ITEM IS FINISHED, so leaving its dispatch record standing
+    # would make the interlock lie in the one direction that costs most: a
+    # recovering session that cannot trust the list stops reading it, and an
+    # interlock nobody reads is worse than none, because it looks like cover.
+    # Only the credited item is retired - a carried-forward item is a retry and
+    # is still running, and a sibling slice's record is not this call's to
+    # touch. ``OPS-27``.
+    remaining = [
+        row
+        for row in current.in_flight
+        if not (credit_the_previous_item and row["item"] == current.item)
+    ]
+
     advanced = dc_replace(
         current,
         cycle=current.cycle + 1,
         directive=directive,
         item=item,
         completed=completed,
+        in_flight=remaining,
         recovered=False,
         recovery_note="",
     )
     save(advanced, path)
     return advanced
+
+
+def dispatch(
+    *items: str,
+    lane: str | None = None,
+    paths: list[str] | None = None,
+    path: Path | None = None,
+    state: LoopState | None = None,
+) -> LoopState:
+    """Record that work is RUNNING, at the moment it is dispatched - ``OPS-27``.
+
+    **Why this exists, and why it is not a compaction hook.** The measurement
+    that closed ``OPS-27``'s criterion 1 caught the live tree at an instant when
+    three agents were mid-flight: loop state said no item was in flight, no lane
+    state carried one, and ``git status`` was empty. Each of those readings was
+    true and the conclusion they composed was false, so a session recovering
+    from disk would have dispatched the same three items on top of the ones
+    already writing. **The thing lost is not a fact, it is an interlock**, and
+    its failure mode is a write collision rather than an absence.
+
+    Compaction is only one way to lose it. A crash, an interrupt, a reboot and
+    simply running out of context lose exactly the same thing, and a
+    ``PreCompact`` hook covers none of them. A write at dispatch covers all of
+    them, needs no hook and no new event registration, and goes through the
+    atomic writer that is already here.
+
+    **The record's shape is the privacy control.** Ids, a lane and
+    repo-relative paths. There is no free-text field, so there is nowhere for
+    conversation content, a log line or an identifier to sit. That is
+    ``OPS-27`` criterion 3 met structurally rather than by a scan that has to
+    be kept current.
+
+    Additive and de-duplicating: dispatching an item already recorded leaves
+    one record, so a lane re-dispatched after a retry does not accumulate.
+    """
+    if not items:
+        raise ValueError("dispatch() needs at least one item id")
+    target = default_state_path() if path is None else path
+    current = load(target) if state is None else state
+    existing = {(row["item"], row.get("lane")) for row in current.in_flight}
+    now = _now()
+    rows = list(current.in_flight)
+    for item in items:
+        record = {"item": _checked_id(item, "a dispatch item"), "at": now}
+        if lane is not None:
+            record["lane"] = _checked_id(lane, "a dispatch lane")
+        if paths is not None:
+            record["paths"] = [_checked_path(one) for one in paths]
+        # KEYED ON (item, lane). Two lanes working one item on disjoint files
+        # is this project's stated default shape, and de-duplicating on the id
+        # alone collapsed that into a single slice - losing exactly the
+        # interlock this field exists to hold.
+        key = (record["item"], record.get("lane"))
+        if key in existing:
+            continue
+        existing.add(key)
+        rows.append(_checked_record(record))
+    current.in_flight = rows
+    save(current, target)
+    return current
+
+
+def retire(
+    *items: str,
+    path: Path | None = None,
+    state: LoopState | None = None,
+) -> LoopState:
+    """Drop the dispatch records for ``items``. Unknown ids are ignored.
+
+    ITEM-SCOPED, not lane-scoped: retiring an item clears every lane recorded
+    against it. That is the right default for the wrap, where an item is
+    finished as a whole, and it is stated here because :func:`dispatch` keys on
+    the pair and a reader could reasonably expect the symmetry.
+
+    Ignoring an unknown id rather than raising: retiring is what a caller does
+    on the way out of a slice, including one that died, and a wrap that raises
+    because a record was already gone would leave the rest of the list stale.
+    """
+    target = default_state_path() if path is None else path
+    current = load(target) if state is None else state
+    wanted = set(items)
+    current.in_flight = [row for row in current.in_flight if row["item"] not in wanted]
+    save(current, target)
+    return current
+
+
+def in_flight_summary(state: LoopState) -> str:
+    """One block naming every running slice, for a cold session to act on.
+
+    Written for the reader who has just resumed and needs to know whether
+    dispatching an item would collide with work already under way.
+    """
+    if not state.in_flight:
+        return "in flight: nothing recorded as running"
+    lines = [f"in flight: {len(state.in_flight)} slice(s) recorded as RUNNING"]
+    for row in state.in_flight:
+        lane = f" lane={row['lane']}" if row.get("lane") else ""
+        files = f" paths={','.join(row['paths'])}" if row.get("paths") else ""
+        lines.append(f"  {row['item']} dispatched {row.get('at', 'UNKNOWN')}{lane}{files}")
+    lines.append(
+        "  A record here is not proof the work is still alive - it is proof it "
+        "was STARTED and never retired. Reconcile against git and the roadmap "
+        "before dispatching any of these again."
+    )
+    return "\n".join(lines)

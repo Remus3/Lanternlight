@@ -70,7 +70,12 @@ with guard.released() as lock, watch.session_armed("C:/ll-captures") as armed:
 2. **Pick** the next `ROADMAP.md` item that has an acceptance criterion.
 3. **Plan**, and verify every claim in the plan against ground truth before
    writing code.
-4. **Execute in parallel slices** on disjoint files, one merger.
+4. **Execute in parallel slices** on disjoint files, one merger. **Record the
+   dispatch before the agents start** - `state.dispatch(*items, lane=...,
+   paths=[...])` - and `state.retire(...)` each slice as it lands. Nothing else
+   in this tree records that work is running: `item` is singular, lane state
+   carries no in-flight field, and a clean `git status` says nothing about
+   agents that have not written yet. `OPS-27`.
 5. **Verify** with an independent refutation pass. Re-run the suite fresh and
    quote the counts you observed this run.
 6. **Ledger** it via `ops.loop.ledger.append_entry(...)` - item id, date,

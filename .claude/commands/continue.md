@@ -73,6 +73,17 @@ exception is genuinely trivial work - a doc typo, a single string.
 3. **Reconcile.** If `loop_state.json` names an in-flight item, look for its
    work: a branch, a worktree, uncommitted changes, a partial test. Finish it
    before starting anything new. If it landed but was never ledgered, ledger it.
+   - **Read the DISPATCH records too, and read them before dispatching
+     anything** - `OPS-27`. `state.in_flight_summary(state.load())` names every
+     slice that was started and never retired. `item` is singular and cannot
+     describe this project's own default of several parallel slices, so a
+     `None` there is not evidence that nothing is running. That exact reading
+     was measured on 2026-09-06 while three agents were mid-flight: loop state
+     said no item, no lane state carried one, and `git status` was empty - all
+     three true, and the conclusion they composed was false.
+   - A record is proof the work was STARTED and never retired, not proof it is
+     still alive. Reconcile it against git and the roadmap, then
+     `state.retire(<item>)` for anything that is finished or dead.
 4. **Pick the next item.** Take it from `ROADMAP.md`, in priority order. Skip
    any item with no acceptance criterion and any item blocked on a named
    question - do not answer the question on the operator's behalf.

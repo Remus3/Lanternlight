@@ -3522,7 +3522,7 @@ correct here - a save file really does vanish mid-copy, which is the transience
 this module was built for. The defect is that the failure is INVISIBLE, not that
 it is tolerated.
 
-## OPS-27. Nothing is written when the context is about to COMPACT - OPEN, criterion 1 MET 2026-09-06, headline REFRAMED
+## OPS-27. Nothing is written when the context is about to COMPACT - CLOSED 2026-09-08 on a write at DISPATCH, headline REFUTED, hook DECLINED
 
 Filed 2026-09-05 while assessing `github.com/affaan-m/ECC` for reuse. **Idea only
 - no code, prose or configuration was taken from it.** That project is
@@ -3689,6 +3689,173 @@ cannot know it has gone stale. A baseline stamped `e806747` plus a timestamp
 can only ever be RECOGNISED as stale, never silently believed - so if it is
 stored, the commit is stored with it and it is read only while that commit still
 matches.
+
+### CLOSED 2026-09-08 - the fix is a write at DISPATCH, and the compaction hook is declined
+
+The section above confirmed the claim and refuted the headline: what is lost is
+an INTERLOCK, not a fact, and compaction is only one of the ways to lose it. A
+crash, an interrupt, a reboot and simply running out of context lose exactly the
+same thing, and a `PreCompact` hook covers none of them. This closes it on the
+no-hook fix the measurement pointed at.
+
+**What landed.** `LoopState` gained an `in_flight` list, and
+`ops/loop/state.py` gained `dispatch()`, `retire()` and `in_flight_summary()`.
+A dispatch record is `{item, at}` plus optional `lane` and `paths`. Both rituals
+now use it: `.claude/commands/loop.md` step 4 records the dispatch BEFORE the
+agents start and retires each slice as it lands, and `.claude/commands/continue.md`
+step 3 reads the records before dispatching anything.
+
+**Criterion 3 is met by the DISPATCH RECORD's shape, not by a scan - and that
+scoping is deliberate, because a first draft of this paragraph overclaimed and
+the adversarial pass proved it false.** Ids match
+`^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$`, paths must be repo-relative with no `..`,
+`at` must match an ISO 8601 stamp, and any key outside `{item, at, lane, paths}`
+is REFUSED rather than copied through. So a record has no space, no newline and
+nowhere for prose to sit, and one that cannot hold a sentence cannot leak a
+conversation, a log line or an identifier. **This says nothing about the rest of
+the file:** `directive` is free text, is persisted, and has to be - it is the
+loop's instruction chain. `ops/runtime/` is gitignored, so none of this is a
+publication path; the record's shape is defence in depth on a local file. The item's own criterion
+anticipated this outcome ("if the only safe snapshot is the loop state as it
+already stands, say so and write only that"), and this is a small step past it:
+ids and paths, and nothing else.
+
+**Criterion 4 is met by construction.** Everything goes through the existing
+`save()`, so it inherits temp-then-replace, and a test asserts no temporary
+debris after a dispatch.
+
+**THE SCHEMA IS DELIBERATELY NOT BUMPED.** `from_dict` treats an absent
+`in_flight` as empty. Bumping would make every state file written before today
+unreadable and send a live loop through recovery over a field it does not use -
+a worse failure than the one being fixed. A test pins the old payload shape
+loading clean with `recovered is False`.
+
+**A malformed `in_flight` RECOVERS rather than being silently pruned.** A list
+of junk sets `recovered` and empties the field, which is the module's existing
+contract: loading never raises, and a recovery is visible. Dropping bad rows
+quietly would leave a record that still looks like an interlock while describing
+different work.
+
+**Criterion 6, met - TWELVE mutations, each anchor asserted to match exactly
+once, each restored and verified byte-identical by SHA-256, all RED against a
+67-test baseline.** The first tally written here was eight, and the adversarial
+pass then found three separate guards whose deletion changed nothing; the count
+below is the re-run after those were given tests. `in_flight` never persisted
+(15 red); dispatch not de-duplicating (1); `advance_cycle` leaving the credited
+item in flight (1); any string accepted as an id (2); a path allowed to escape
+the repository (1); a malformed record dropped instead of recovering (1);
+`retire` removing everything rather than the item named (2); an unknown record
+key copied through instead of refused (1); the `at` field unchecked again (1);
+the persisted rows aliasing the caller's dicts (3); `credit` not retiring what
+it credits (1); and the summary reporting nothing running while something is
+(2).
+
+**CRITERION 7, DECIDED: `SessionStart` with matcher `compact` is OUT OF SCOPE,
+and this is the record of the decision rather than a silence.** It would tell a
+resuming session HOW it started, which changes nothing about what it must then
+do: read `loop_state.json`, read the dispatch records, reconcile against git and
+the roadmap. The recovery path is identical whether the session resumed from a
+compaction, a `/clear`, a crash or a fresh start, and a hook that fires on only
+one of those four teaches a reader that the other three are covered too. If a
+future session wants the distinction for TELEMETRY - how often compaction
+actually happens here - that is a different and much weaker justification, and
+it should be filed as its own item rather than smuggled in under this one.
+
+**CRITERIA 2 AND 5 ARE RETIRED BY THAT CHOICE, and this sentence is what retires
+them** - the item required that they not be quietly dropped. Criterion 2 (a hook
+that fires during compaction must not be able to break the session) and
+criterion 5 (assert `.claude/settings.json` parses after the edit) both bind
+only if a hook is adopted. No hook was adopted, `.claude/settings.json` is not
+touched by this change, and both criteria are therefore inapplicable rather than
+met. Note that a `Stop` hook WAS registered today under `OPS-45`, so the
+settings file did change this session - just not for this item, and
+`tests/test_stop_audit.py` asserts that file parses.
+
+**THE THIRD CANDIDATE IS STILL NOT PROMOTED.** The merge-gate baseline remains
+re-derivable and remains unstored, for the reason already written above. Nothing
+here changes that, and the design note about a cycle-scoped baseline carrying
+its commit stands as a note rather than a plan.
+
+**WHAT THIS DOES NOT DO, stated so the closure is not read as wider than it is.**
+The records are written by a session that remembers to call `dispatch()`. That
+is a ritual, and a ritual is exactly what `OPS-32` just observed is a guarantee
+about the document rather than the file. Nothing structurally forces a dispatch
+to be recorded, and an agent spawned without one is invisible to the interlock
+precisely as before. What changed is that there is now somewhere to write it,
+both rituals say to, and a recovering session has something to read. Making the
+record unavoidable would mean routing every agent dispatch through one function
+in this repository, which is a larger change and a different item.
+
+### What the adversarial pass found, and what changed because of it
+
+Dispatched to REFUTE, defaulting to refuted when uncertain, and told explicitly
+not to touch `ops/runtime/`. It refuted three of seven claims, confirmed three,
+and narrowed a fourth. **This dispatch was itself recorded through the machinery
+being tested** - `state.dispatch("OPS-27", lane="verify", paths=[...])` - which
+is the first live use of it.
+
+**REFUTED 1, and this one was a FALSE GUARANTEE IN THIS ITEM'S OWN CLOSURE
+PROSE.** The paragraph above said the record shape leaves "no space, no newline
+and nowhere for prose to sit", so it "cannot leak a conversation, a log line or
+an identifier". Two holes made that false as written. The `at` field was checked
+only for being a string, and a string is exactly where a sentence fits - a
+hand-built record carrying a newline and a log-shaped line round-tripped
+verbatim with `recovered` False. And `to_dict` copied the caller's dict, so
+UNKNOWN keys reached disk unvalidated: the shape described what `dispatch()`
+produces rather than what the FILE can hold, and the file is what a recovering
+session reads. Fixed: `at` is now matched against an ISO 8601 shape, every
+record key outside `{item, at, lane, paths}` is refused, and `to_dict` emits
+validated copies. The claim is now true of the field it is made about.
+
+**The one part of that criticism NOT fixed, because it is not this item's:**
+`directive` is free text, is persisted, and always has been. It is the loop's
+instruction chain and it has to hold a sentence. The corrected guarantee is
+therefore scoped to the DISPATCH RECORD and says so, rather than being a claim
+about the whole file. `ops/runtime/` is gitignored, so nothing here is a
+publication path - the record's shape is defence in depth on a local file.
+
+**REFUTED 2 - `credit()` never retired what it credited.** An item credited that
+way and then advanced past stayed RUNNING in the interlock forever. That is the
+path `OPS-25` PRESCRIBES for a cycle closing two items, so the hole was on the
+recommended route rather than an exotic one. `credit()` now retires.
+
+**REFUTED 3 - three mutations survived.** The pass ran ten of its own and killed
+seven. The survivors were the `at` type check (untested, and per the finding
+above it constrained nothing anyway), the `dict(row)` copy in `to_dict` (an
+alias, so a caller could mutate persisted state through the payload it was
+handed), and the entire caveat block in `in_flight_summary`. All three now have
+tests. The re-run count is TWELVE mutations, all red, each anchor asserted to
+match exactly once and each restored byte-identical by SHA-256.
+
+**NARROWED - `dispatch()` de-duplicated on the item id alone**, so two lanes
+working one item on disjoint files collapsed into a single record. That is this
+project's stated default working shape, so the collapse lost exactly the
+interlock the field exists to hold. It now keys on `(item, lane)`. `retire()`
+stays item-scoped and its docstring says so, because a wrap finishes an item as
+a whole.
+
+**A HOLE THE PASS FOUND THAT IS RECORDED RATHER THAN FIXED.** An OLDER build of
+`ops/loop/state.py` reads a file containing `in_flight` without error, silently
+drops the field, and erases it from disk on its next write. So a rollback loses
+the interlock quietly. The alternative is a schema bump, which breaks every
+existing state file forward instead - a certain cost today against a conditional
+one on a rollback nobody has needed. The choice stands and the cost is written
+down here rather than discovered later.
+
+**CONFIRMED - atomicity.** A failed `replace()` left zero temporary files, a
+dispatch raising part-way left the file byte-identical, and 2000 records
+round-tripped.
+
+**CONFIRMED - the old payload loads clean**, with `recovered` False.
+
+**CONFIRMED, AND IT IS THE HONEST HEADLINE FOR THIS CLOSURE: this is a RITUAL,
+not a mechanism.** `dispatch`, `retire` and `in_flight_summary` are called from
+`tests/` and named in two `.claude/commands/*.md` files and this roadmap. No
+code in `ops/loop/` calls them. A session that forgets is invisible to the
+interlock exactly as before. What changed is that there is now somewhere to
+write it, both rituals say to, the record cannot hold prose, and a recovering
+session has something to read. Making it unavoidable means routing every agent
+dispatch through one function, which is a larger change and a different item.
 
 ## OPS-28. Provenance is DOCUMENT-scoped, so an extracted number arrives naked - CLOSED 2026-09-06
 
