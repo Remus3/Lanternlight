@@ -65,6 +65,32 @@ A note is an authored artifact, so :func:`deliver` refuses anything outside
 silent transcoding: a note that reaches a sibling with a smart quote in it has
 already left this machine, and the repository's own hygiene guards never see
 it.
+
+AND IT REFUSES AN OPERATOR IDENTIFIER, FOR THE SAME REASON - ``OPS-50``
+-----------------------------------------------------------------------
+On 2026-09-07 this project put the operator's own email address into a note
+and delivered it to four sibling directories. Every commit-time guard in this
+tree stayed silent, and silent BY CONSTRUCTION rather than by accident:
+``moon_sync_inbox/`` is gitignored, so nothing under it is ever staged and no
+pre-commit hook, no tracked-file scan and no ASCII guard ever sees a byte of
+it. This function is the only place an outgoing note passes through, so it is
+the only place a gate can stand. Ledger entry ``LL-0170`` has the incident.
+
+IT RAISES; IT DOES NOT QUIETLY REDACT. A note altered on the way out is a note
+whose author does not know what they sent, and the author is the only party who
+can judge whether the sentence still says what it meant. Refusing hands that
+decision back. Rewriting takes it away and hides that it was taken.
+
+WHAT IT CHECKS, AND WHAT IT DELIBERATELY DOES NOT. The gate runs
+:data:`lanternlight.redact.OPERATOR_IDENTIFIER_LABELS` - the operator-identifier
+class - over the note's TEXT and its NAME, plus the git identity derived at
+runtime. It does NOT run the full game-log rule set, and the reason is
+measured: over the 27 notes already in this project's outbox on 2026-09-07,
+every file-scan label together produces 2 findings in 1 note, and both are
+regex SOURCE quoted in prose. That note reports a git pickaxe sweep and quotes
+the patterns it swept with, and the patterns match themselves. A gate that
+refuses a correct note is a gate somebody routes around, which is how a guard
+stops existing. Widening it is a one-line edit to that constant.
 """
 
 from __future__ import annotations
@@ -72,10 +98,22 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import sys
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+
+# The repository root has to be on ``sys.path`` before the import below. This
+# module is imported as ``ops.outbox`` under pytest, where it already is - but
+# ``ops/inbox_watch.py`` records that a module in this directory can also be run
+# as a script, and a script's ``sys.path`` carries ``ops/`` rather than the root.
+# The redaction gate is the last thing that may fail on an import technicality,
+# so the path is asserted here rather than assumed.
+if str(Path(__file__).resolve().parents[1]) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from lanternlight import redact
 
 __all__ = [
     "INBOX_DIRNAME",
@@ -230,6 +268,29 @@ def _timestamps(now: str | None) -> tuple[str, str]:
     return utc, local
 
 
+def _refuse_operator_identifier(name: str, text: str) -> None:
+    """Refuse a note carrying an operator identifier. ``OPS-50`` criterion 2.
+
+    BOTH HALVES ARE CHECKED, and the name is not an afterthought. Every note
+    this project sends is named after its own subject line, so a note ABOUT an
+    address is exactly the note whose FILENAME carries one - and a filename is
+    the half that is read by a directory listing rather than by a reader.
+
+    The raised message names which half was refused and never quotes what it
+    found; the underlying :class:`~lanternlight.redact.RedactionError` is
+    already described rather than quoted for the same reason.
+    """
+    for half, value in (("name", name), ("text", text)):
+        try:
+            redact.assert_no_operator_identifier(value)
+        except redact.RedactionError as exc:
+            raise redact.RedactionError(
+                f"refusing to send {name!r}: its {half} carries an operator "
+                f"identifier, and nothing was written. Replace it with a "
+                f"placeholder - see ROADMAP OPS-50 and ledger LL-0170. ({exc})"
+            ) from exc
+
+
 def deliver(
     name: str,
     text: str,
@@ -258,12 +319,21 @@ def deliver(
 
     Raises:
         ValueError: The name is not a bare filename, or the text is not ASCII.
+        RedactionError: The name or the text carries an operator identifier.
+            A subclass of ``ValueError``. Raised BEFORE any write, local or
+            remote, so a refused note leaves nothing behind anywhere - see
+            :func:`_refuse_operator_identifier` and the module docstring.
         KeyError: A recipient is not in the map.
         OSError: The LOCAL write failed. A sibling write failing is recorded,
             not raised - one unreachable neighbour must not lose the others.
     """
     name = _check_name(name)
     data = _encode(text)
+    # BEFORE the local copy, not merely before the sibling write. The outbox
+    # copy is written first by design (OPS-43), and it lives inside the watched
+    # channel - so a gate placed one line later would leave the identifier in
+    # the exact directory the next session reads back out.
+    _refuse_operator_identifier(name, text)
     table = dict(SIBLING_INBOXES if inboxes is None else inboxes)
     codes = tuple(recipients)
     unknown = [code for code in codes if code not in table]

@@ -267,6 +267,46 @@ Limits, stated rather than hidden:
 - City/state/country are not pattern-detectable. Redact geolocation lines by
   dropping the line, not by trusting a regex.
 
+An OPERATOR IDENTIFIER - a fifth mechanism, and the one scoped to a CLASS
+------------------------------------------------------------------------
+
+Everything above is scoped to the GAME LOG. On 2026-09-07 this project quoted
+the raw output of a ``git log`` format string - the operator's own email
+address - into a note delivered to four sibling directories, and nothing in
+this module was consulted, because the string did not come from a log parser.
+``tests/test_no_pii.py`` passed throughout. A rule scoped to a SOURCE is a rule
+with a hole in it; the data it protects is a CLASS. Filed as ``OPS-50``, with
+the incident in ledger entry ``LL-0170``.
+
+Two halves, and neither subsumes the other:
+
+- **Shape.** The ``EMAIL`` rule in :data:`RULES`, so an address is masked by
+  :func:`redact`, refused by :func:`assert_clean`, scanned over every tracked
+  file, and seen through base64, hex and UTF-16 by
+  :func:`iter_encoded_sensitive` - all of that for free, because it is an
+  ordinary rule. It reaches an address this machine has never seen, including
+  a third party's.
+- **Value.** :func:`operator_git_identities` derives the operator's git
+  identity by RUNNING git, never from a stored literal, because a literal in a
+  tracked file is the leak one level down and git history keeps it forever.
+  :func:`iter_operator_identifiers` then finds that value wherever it sits,
+  including in a shape the rule declines.
+
+The ``EMAIL`` rule DECLINES the domains RFC 2606 and RFC 6761 reserve for
+documentation - ``.invalid``, ``.test``, ``.example``, ``.localhost`` and
+``example.com``/``.net``/``.org``. Those identify nobody by construction, this
+tree uses them in fixtures and in the hook probe's own git config, and a guard
+that reddened on them would be switched off inside a day. The value half is
+what covers the case where the operator's real address sits at such a domain.
+
+The NAME half of a git identity is deliberately NOT treated as an identifier
+here, and this is a measured decision rather than an omission. This repository
+is public and Apache-2.0, and the git author name is its stated copyright
+holder: measured 2026-09-07, it appears 9 times across 7 tracked files
+including ``LICENSE``, ``NOTICE`` and ``CITATION.cff``, where it is published
+on purpose. Treating it as a leak would redden the tree scan permanently on
+files that are correct. The address is the private half and is what leaked.
+
 Typical use::
 
     clean = redact(raw_text)
@@ -276,8 +316,11 @@ Typical use::
 import base64
 import binascii
 import re
+import subprocess
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
+from functools import lru_cache
+from pathlib import Path
 
 __all__ = [
     "ALL_LABELS",
@@ -287,14 +330,18 @@ __all__ = [
     "LOG_TEXT_RULES",
     "NAME_BEARING_PROPERTIES",
     "NAME_BEARING_TYPES",
+    "OPERATOR_IDENTIFIER_LABELS",
     "PERSONA_PLACEHOLDER",
     "RedactionError",
     "Rule",
     "RULES",
     "assert_clean",
+    "assert_no_operator_identifier",
     "discover_personas",
     "iter_encoded_sensitive",
+    "iter_operator_identifiers",
     "iter_sensitive",
+    "operator_git_identities",
     "redact",
 ]
 
@@ -761,10 +808,79 @@ _WELDED_NAME = re.compile(
 )
 
 
+# --------------------------------------------------------------------------
+# an email address - OPS-50
+# --------------------------------------------------------------------------
+#
+# See the module docstring for why this exists at all. What follows is why it
+# is shaped the way it is.
+#
+# THE DOMAIN CARVE-OUT IS THE WHOLE DIFFICULTY. This rule runs over every
+# tracked file, and the addresses that are ALREADY in this tree are all
+# deliberate: test fixtures, and the git config of the throwaway repository
+# ``tests/test_no_pii.py`` builds to prove the pre-commit hook fires. Measured
+# 2026-09-07 over all 169 tracked files, whole-file rather than line by line:
+# four distinct addresses, in 8 occurrences, every one of them at a domain RFC
+# 2606 or RFC 6761 reserves for documentation. A rule with no carve-out would
+# redden the tree scan on all of them, and a guard that fires on correct files
+# is a guard somebody switches off - which is a worse outcome than the one it
+# was added to prevent.
+#
+# So reserved domains are declined, and the VALUE half of this mechanism -
+# :func:`operator_git_identities` - is what covers the case the carve-out
+# creates, namely the operator's own address sitting at such a domain.
+#
+# WHY THE TERMINATOR IS ``(?!\.?[A-Za-z0-9-])`` AND NOT ``(?![A-Za-z0-9-])``.
+# Prose ends a sentence with a full stop, so ``probe@example.invalid.`` has a
+# dot after the reserved label. A terminator that refused to look past that dot
+# read the domain as unreserved and fired on the documentation address - the
+# exact false positive this carve-out exists to avoid. Looking past ONE optional
+# dot and then requiring no further label distinguishes ``example.invalid.`` at
+# the end of a sentence from ``foo.test.com``, which is a real domain and must
+# still be caught.
+_RESERVED_TLDS: tuple[str, ...] = ("invalid", "test", "example", "localhost")
+
+#: The second-level names RFC 2606 reserves. ``example`` alone is already a
+#: reserved TLD above; these are the ``example.com`` family.
+_RESERVED_SLDS: tuple[str, ...] = ("example\\.com", "example\\.net", "example\\.org")
+
+_NOT_RESERVED = (
+    rf"(?!(?:[A-Za-z0-9-]+\.)*(?:{'|'.join(_RESERVED_TLDS)})(?!\.?[A-Za-z0-9-]))"
+    rf"(?!(?:{'|'.join(_RESERVED_SLDS)})(?!\.?[A-Za-z0-9-]))"
+)
+
+#: An address that could name a person. The local part is the conservative
+#: subset rather than the full RFC 5322 grammar: the exotic characters that
+#: grammar allows - quotes, backticks, braces - occur constantly in source code
+#: and admitting them would weld ordinary punctuation onto whatever followed an
+#: ``@``. A quoted local part is therefore a stated blind spot, and one nothing
+#: in this project has ever emitted.
+#:
+#: The trailing guard allows a following dot so a sentence-final address still
+#: matches, and refuses a following letter, digit or hyphen so the rule cannot
+#: stop half way through a longer host name.
+_EMAIL = re.compile(
+    r"(?<![A-Za-z0-9._%+@-])"
+    r"[A-Za-z0-9._%+-]+@"
+    + _NOT_RESERVED
+    + r"(?:[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\.)+[A-Za-z]{2,}"
+    r"(?![A-Za-z0-9-])"
+)
+
+
 #: Ordered detection rules. Order is significant: the most specific shapes run
 #: first so that a keyed value keeps its key label instead of collapsing into
 #: the generic long-digit-run rule.
 RULES: tuple[Rule, ...] = (
+    # An email address, FIRST and deliberately so. Every other rule in this
+    # tuple can bite a piece out of one - a 32-hex local part is a
+    # PRODUCTUSERID, a 15-digit local part is a LONG_ID, and an address written
+    # under a display-name key is a PERSONA - and each of those masks part of
+    # the address while leaving the rest readable. The DOMAIN is what survives
+    # every one of them, and the domain is precisely what a source-provenance
+    # guard objected to on 2026-09-07 while every privacy guard stayed quiet.
+    # An identifier that is only partly masked is not masked.
+    Rule(label="EMAIL", pattern=_EMAIL, replacement="<EMAIL>"),
     # 17 digits beginning 7656119. Must precede the generic digit-run rule.
     Rule(
         label="STEAMID64",
@@ -1348,6 +1464,186 @@ def iter_sensitive(
 
 
 # --------------------------------------------------------------------------
+# the operator's own identity, derived rather than stored - OPS-50
+# --------------------------------------------------------------------------
+
+#: Labels that name an OPERATOR IDENTIFIER - a person, not a game entity.
+#:
+#: Named as a set rather than written inline at the one call site because
+#: ``ops.outbox.deliver`` gates every outgoing note on exactly this set, and
+#: widening the gate should be an edit to a documented constant rather than an
+#: edit to a delivery function. It is a SUBSET of :data:`FILE_SCAN_LABELS`, not
+#: a replacement for it: the tree scan still runs every label.
+OPERATOR_IDENTIFIER_LABELS: frozenset[str] = frozenset({"EMAIL"})
+
+#: This repository, for deriving the identity from its own history.
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+
+#: An address shape with NO documentation carve-out. A derived identity is the
+#: operator's whatever domain it sits at - the carve-out in :data:`_EMAIL` is
+#: about what a document may legitimately contain, which is a different
+#: question from whose address this is.
+_IDENTITY_SHAPE = re.compile(r"[A-Za-z0-9._%+-]+@(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}")
+
+#: A derived value shorter than this is discarded. The filter is what stands
+#: between a misconfigured or empty ``user.email`` and a pattern that matches
+#: a two-character substring of every file in the tree.
+_IDENTITY_MIN_CHARS = 6
+
+#: How long git may take. Measured 2026-09-07 on this repository: the two
+#: commands together return in about 0.04 seconds and yield exactly ONE
+#: address across all refs in both the author and committer roles.
+_GIT_TIMEOUT_SECONDS = 60
+
+
+@lru_cache(maxsize=8)
+def _derive_git_identities(root: str) -> tuple[str, ...]:
+    """Run git and return every address-shaped identity in ``root``.
+
+    Cached because the repository scan calls this once per file and the answer
+    cannot change inside one process. A cache is also what keeps this off the
+    import path: nothing here runs until somebody asks.
+
+    Every failure mode returns what was found so far rather than raising. git
+    missing, ``root`` not a repository, a repository with no commits - each is
+    a real state a fresh clone can be in, and a redaction helper that raises in
+    them would take the whole guard down instead of narrowing it. The caller's
+    protection against a silently empty answer is not an exception here; it is
+    ``tests/test_no_pii.py`` asserting the derivation is non-empty, because an
+    inert guard passes forever and has to be caught by something that says so.
+    """
+    found: set[str] = set()
+    for args in (
+        ("config", "user.email"),
+        # Both roles, over every ref - a rebase, a cherry-pick or a squash can
+        # leave an address in the committer half that appears in no author
+        # half, and a branch nobody has merged is still in this history.
+        ("log", "--all", "--format=%ae%n%ce"),
+    ):
+        try:
+            result = subprocess.run(
+                ["git", *args],
+                cwd=root,
+                capture_output=True,
+                text=True,
+                errors="replace",
+                timeout=_GIT_TIMEOUT_SECONDS,
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError):
+            continue
+        if result.returncode != 0:
+            continue
+        for line in result.stdout.splitlines():
+            value = line.strip()
+            if len(value) >= _IDENTITY_MIN_CHARS and _IDENTITY_SHAPE.fullmatch(value):
+                found.add(value)
+    return tuple(sorted(found))
+
+
+def operator_git_identities(root: Path | str | None = None) -> tuple[str, ...]:
+    """Return the git identities in ``root``, derived by running git.
+
+    DERIVED, NEVER STORED. Writing the operator's address into a tracked file
+    so a guard could compare against it would be the leak this guard exists to
+    prevent, one level down, and git history keeps a deleted literal forever.
+
+    The answer is every address-shaped value under ``user.email`` and in the
+    author and committer fields of every commit on every ref. That includes a
+    contributor's address as well as the operator's, which is intended: a
+    contributor is a person too, and this repository is public.
+
+    Returns an empty tuple when git cannot answer - see
+    :func:`_derive_git_identities` for why that is not an exception.
+    """
+    return _derive_git_identities(str(Path(root) if root is not None else _REPO_ROOT))
+
+
+def _supplied_identities(identities: Iterable[str]) -> tuple[str, ...]:
+    """Validate caller-supplied identities. Raises on one that is not an address.
+
+    Raising rather than skipping. A caller who passes a bare word is asking for
+    every occurrence of that word in the document to be treated as a leak,
+    which would either shred the text or - far likelier - be silently dropped
+    and leave the caller believing a check ran that did not. "I could not tell"
+    and "it is clean" are different facts; this module refuses to conflate them.
+    """
+    checked = []
+    for value in identities:
+        cleaned = value.strip()
+        if not cleaned:
+            continue
+        if not _IDENTITY_SHAPE.fullmatch(cleaned):
+            raise ValueError(
+                f"an operator identity must be an email address, got a "
+                f"{len(cleaned)}-character value that is not one"
+            )
+        checked.append(cleaned)
+    return tuple(sorted(set(checked)))
+
+
+def iter_operator_identifiers(
+    text: str, identities: Iterable[str] | None = None
+) -> Iterator[tuple[str, str, int]]:
+    """Yield ``(label, matched, offset)`` for every operator identifier in ``text``.
+
+    Two mechanisms, in order. First the SHAPE half - the ``EMAIL`` rule, which
+    reaches an address nobody on this machine has ever seen. Then the VALUE
+    half - each derived git identity, matched literally and case-insensitively,
+    which reaches the operator's own address even in a shape the rule declines,
+    such as one at a domain reserved for documentation.
+
+    A value-half hit INSIDE a shape-half match is suppressed, so an ordinary
+    address is reported once. A count that double-reports is a count nobody can
+    act on, and a sweep reports counts.
+
+    ``identities`` supplies the values instead of deriving them, which is what
+    a test uses so that no real address has to be written anywhere. Pass an
+    empty sequence to run the shape half alone.
+
+    ``GIT_IDENTITY`` is deliberately NOT a member of :data:`ALL_LABELS`. That
+    set is derived from the rule tuples, and this half is not a rule: it is a
+    value discovered by running a subprocess, and putting it in the tuple would
+    mean shelling out to git at import time. The label is documented here
+    instead, and this function is the only thing that emits it.
+    """
+    if not text:
+        return
+    covered: list[tuple[int, int]] = []
+    for label, matched, offset in iter_sensitive(
+        text, labels=OPERATOR_IDENTIFIER_LABELS
+    ):
+        covered.append((offset, offset + len(matched)))
+        yield label, matched, offset
+
+    values = (
+        operator_git_identities()
+        if identities is None
+        else _supplied_identities(identities)
+    )
+    for value in values:
+        for match in re.finditer(re.escape(value), text, re.IGNORECASE):
+            start = match.start()
+            if any(begin <= start < end for begin, end in covered):
+                continue
+            yield "GIT_IDENTITY", match.group(0), start
+
+
+def assert_no_operator_identifier(
+    text: str, identities: Iterable[str] | None = None
+) -> None:
+    """Raise :class:`RedactionError` if ``text`` carries an operator identifier.
+
+    The refusal describes the match and never quotes it - see
+    :func:`_raise_leak`. This exception travels: into a traceback, into a
+    session summary, into the very note channel the leak went out on, and a
+    guard that prints the identifier at the moment it fires has published it.
+    """
+    for label, matched, offset in iter_operator_identifiers(text, identities):
+        _raise_leak(text, label, matched, offset)
+
+
+# --------------------------------------------------------------------------
 # encoded content
 # --------------------------------------------------------------------------
 #
@@ -1662,7 +1958,16 @@ def _raise_leak(text: str, label: str, matched: str, offset: int) -> None:
     protect would hand it over at the moment the guard fires.
     """
     line_no = text.count("\n", 0, offset) + 1
-    if label == "PERSONA":
+    if label in ("EMAIL", "GIT_IDENTITY"):
+        # Neither half is quoted, and the domain least of all. On 2026-09-07 it
+        # was the DOMAIN that a source-provenance guard objected to, which is
+        # the half that survives every other rule in this module - so a message
+        # that quoted "just the domain" would be quoting the part that leaked.
+        detail = (
+            f"a {len(matched)}-character email address, not quoted here "
+            "because this message travels"
+        )
+    elif label == "PERSONA":
         detail = (
             f"a {len(matched)}-character display name, not quoted here because "
             "this message travels"

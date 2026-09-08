@@ -51,6 +51,7 @@ from pathlib import Path
 
 import pytest
 
+from lanternlight import redact
 from ops import inbox_watch, outbox
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -556,3 +557,165 @@ class TestTheReplyPathMapIsRecordedWhereAColdSessionFindsIt:
         """A map a cold session cannot find is a map it will re-derive."""
         text = (REPO_ROOT / "CLAUDE.md").read_text(encoding="utf-8")
         assert "docs/REPLY_PATHS.md" in text
+
+
+class TestAnOutgoingNoteCarryingAnOperatorIdentifierIsRefused:
+    """``OPS-50`` criterion 2. The gate is on what LEAVES, not on what commits.
+
+    WHY THIS IS HERE AND NOT IN A COMMIT HOOK. On 2026-09-07 this project put
+    the operator's own email address into a note and delivered it to four
+    sibling directories. Every commit-time guard in this tree was silent, and
+    silent BY CONSTRUCTION rather than by accident: ``moon_sync_inbox/`` is
+    gitignored, so nothing under it is ever staged and no pre-commit hook, no
+    tracked-file scan and no ASCII guard ever sees a byte of it. The only place
+    an outgoing note passes through is :func:`ops.outbox.deliver`, so that is
+    the only place a gate can stand.
+
+    IT RAISES; IT DOES NOT QUIETLY REDACT. A note altered on the way out is a
+    note whose author does not know what they sent, and the author is the only
+    party who can judge whether the sentence still means what it said. Refusing
+    hands the decision back; rewriting takes it away and hides that it was
+    taken.
+
+    WHAT THE GATE DOES NOT DO, stated rather than hidden. It checks the
+    OPERATOR IDENTIFIER class and not the full game-log rule set. Measured
+    2026-09-07 over the 27 notes already in this project's outbox: running
+    every file-scan label over them produces 2 findings in 1 note, and both are
+    regex SOURCE quoted in prose - a note reporting a git pickaxe sweep quotes
+    the patterns it swept with, and the patterns match themselves. A gate that
+    refuses a correct note is a gate somebody routes around, which is how a
+    guard stops existing. Widening it is a one-line change to
+    :data:`lanternlight.redact.OPERATOR_IDENTIFIER_LABELS`.
+    """
+
+    def _address(self) -> str:
+        # Invented, assembled at runtime, and at a domain that is not reserved
+        # for documentation - so the SHAPE half of the guard is what catches it.
+        return "someone" + "@" + "a-real-looking-host" + ".com"
+
+    def test_a_note_carrying_an_address_is_refused(self, tmp_path: Path) -> None:
+        root, inboxes = _tree(tmp_path)
+        with pytest.raises(redact.RedactionError):
+            outbox.deliver(
+                "2026-09-07-1930-from-LL-with-an-address.md",
+                "# to RC\n\nmail " + self._address() + "\n",
+                ["RC"],
+                root=root,
+                inboxes=inboxes,
+            )
+
+    def test_the_refusal_happens_before_a_single_byte_is_written(
+        self, tmp_path: Path
+    ) -> None:
+        """Nothing local, nothing remote. The gate is in front of both writes.
+
+        The outbox copy is written FIRST by design (``OPS-43``), so a gate
+        placed even one line late would leave the address sitting in this
+        tree's own outbox - which is inside the watched channel and therefore
+        exactly where the next session would read it back out.
+        """
+        root, inboxes = _tree(tmp_path)
+        name = "2026-09-07-1931-from-LL-nothing-written.md"
+        with pytest.raises(redact.RedactionError):
+            outbox.deliver(
+                name,
+                "# to RC\n\nmail " + self._address() + "\n",
+                ["RC", "CS"],
+                root=root,
+                inboxes=inboxes,
+            )
+        assert not (outbox.default_outbox(root) / name).exists()
+        assert not outbox.default_manifest(root).exists()
+        assert outbox.load_manifest(root=root) == []
+        for code in ("RC", "CS"):
+            assert not (Path(inboxes[code]) / name).exists()
+
+    def test_the_note_name_is_checked_as_well_as_its_body(
+        self, tmp_path: Path
+    ) -> None:
+        """A filename leaves the machine too, and it is the half nobody reads.
+
+        Every note this project sends is named after its own subject line, so a
+        note ABOUT an address is exactly the note whose name carries one - which
+        is the shape the 2026-09-07 correction note came within one edit of.
+        """
+        root, inboxes = _tree(tmp_path)
+        with pytest.raises(redact.RedactionError):
+            outbox.deliver(
+                "2026-09-07-1932-from-LL-" + self._address() + ".md",
+                "# to RC\n\nAn ordinary note.\n",
+                ["RC"],
+                root=root,
+                inboxes=inboxes,
+            )
+
+    def test_the_refusal_does_not_quote_the_address(self, tmp_path: Path) -> None:
+        """The exception travels - into a traceback, a log, a session summary.
+
+        A guard that prints the identifier at the moment it fires has published
+        it, and it has done so in the one place everybody copies verbatim.
+        """
+        root, inboxes = _tree(tmp_path)
+        address = self._address()
+        with pytest.raises(redact.RedactionError) as excinfo:
+            outbox.deliver(
+                "2026-09-07-1933-from-LL-quiet-refusal.md",
+                "# to RC\n\nmail " + address + "\n",
+                ["RC"],
+                root=root,
+                inboxes=inboxes,
+            )
+        message = str(excinfo.value)
+        assert address not in message
+        assert "a-real-looking-host" not in message
+
+    def test_the_operators_own_derived_identity_is_refused(
+        self, tmp_path: Path
+    ) -> None:
+        """The incident itself, replayed. No literal address in this file.
+
+        The identity is read from git at runtime, which is the whole point of
+        criterion 1: the value is redactable because of WHAT IT IS, not because
+        of which command printed it.
+        """
+        identities = redact.operator_git_identities()
+        assert identities, "no git identity derived - this test would be inert"
+        root, inboxes = _tree(tmp_path)
+        with pytest.raises(redact.RedactionError):
+            outbox.deliver(
+                "2026-09-07-1934-from-LL-git-identity-sweep.md",
+                "# to LW\n\ngit log --format said " + identities[0] + "\n",
+                ["RC"],
+                root=root,
+                inboxes=inboxes,
+            )
+
+    def test_an_ordinary_note_still_goes_out(self, tmp_path: Path) -> None:
+        """The other half of the claim. A gate that refuses everything is an
+        outage, not a guard - and this project's whole note channel runs through
+        this one function."""
+        root, inboxes = _tree(tmp_path)
+        record = outbox.deliver(
+            "2026-09-07-1935-from-LL-ordinary.md",
+            NOTE_TEXT,
+            ["RC"],
+            root=root,
+            inboxes=inboxes,
+        )
+        assert record.delivered == ("RC",)
+
+    def test_a_documentation_address_is_still_deliverable(
+        self, tmp_path: Path
+    ) -> None:
+        """RFC 2606 reserves these so a document can carry an address that
+        identifies nobody. This project's own notes discuss addresses; refusing
+        the reserved ones would make the incident report unsendable."""
+        root, inboxes = _tree(tmp_path)
+        record = outbox.deliver(
+            "2026-09-07-1936-from-LL-documentation-address.md",
+            "# to RC\n\nUse " + "probe" + "@" + "example" + ".invalid" + " here.\n",
+            ["RC"],
+            root=root,
+            inboxes=inboxes,
+        )
+        assert record.delivered == ("RC",)

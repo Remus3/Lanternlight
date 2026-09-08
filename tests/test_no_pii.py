@@ -55,8 +55,13 @@ import _tracked  # noqa: E402  (sits beside this file in tests/)
 from lanternlight.redact import (  # noqa: E402  (path bootstrap must run first)
     ALL_LABELS,
     FILE_SCAN_LABELS,
+    OPERATOR_IDENTIFIER_LABELS,
+    RedactionError,
+    assert_no_operator_identifier,
     iter_encoded_sensitive,
+    iter_operator_identifiers,
     iter_sensitive,
+    operator_git_identities,
 )
 
 MIN_EXPECTED_FILES = _tracked.MIN_EXPECTED_FILES
@@ -321,6 +326,170 @@ def test_the_pii_scan_is_wider_than_the_ascii_scan():
 
 def test_ipv4_is_the_only_label_excluded_from_the_file_scan():
     assert sorted(ALL_LABELS - FILE_SCAN_LABELS) == ["IPV4"]
+
+
+# --------------------------------------------------------------------------
+# OPS-50 - an OPERATOR IDENTIFIER, whatever command produced it
+# --------------------------------------------------------------------------
+#
+# Everything above this line guards identifiers the GAME LOG carries. On
+# 2026-09-07 this project quoted the raw output of a git log format string -
+# the operator's own email address - into a note delivered to four sibling
+# directories, and every test in this file passed throughout, because the
+# string did not come out of a log parser. A rule scoped to a SOURCE is a rule
+# with a hole in it; the data it protects is a CLASS.
+#
+# Two mechanisms, and neither one subsumes the other:
+#
+#   - the EMAIL rule, which is a SHAPE and therefore reaches an address this
+#     machine has never seen, including one belonging to somebody else;
+#   - the runtime git identity, which is a VALUE and therefore reaches the
+#     operator's own address even in a shape the rule declines.
+#
+# No test in this file contains the operator's address as a literal. That would
+# be the same leak one level down, and a tracked literal is exactly what git
+# history keeps forever. The value half is derived at runtime; the shape half
+# is exercised with addresses invented here.
+
+
+def _scan_operator(path: Path, identities=None):
+    """Return operator-identifier findings for one file.
+
+    The finding never quotes the match. This message can reach CI output, and
+    echoing the address at the moment the guard fires publishes the thing the
+    guard exists to protect.
+    """
+    text = _read(path)
+    if text is None:
+        return [f"{_relative(path)}: unreadable"]
+
+    rel = _relative(path)
+    findings = []
+    for label, matched, offset in iter_operator_identifiers(text, identities=identities):
+        line_no = text.count("\n", 0, offset) + 1
+        findings.append(
+            f"{rel}:{line_no} {label} -> a {len(matched)}-character operator "
+            "identifier, not quoted here because this message travels"
+        )
+    return findings
+
+
+def test_the_email_label_is_scanned_over_the_tree_like_every_other():
+    # EMAIL must not become a second IPV4. The exclusion test above already
+    # pins that IPV4 is the only label held back; this states the intent
+    # positively, so a future edit has to argue with both.
+    assert "EMAIL" in ALL_LABELS
+    assert "EMAIL" in FILE_SCAN_LABELS
+    assert OPERATOR_IDENTIFIER_LABELS <= FILE_SCAN_LABELS
+
+
+def test_the_email_rule_fires_on_an_ordinary_address():
+    # Assembled at runtime, like every other planted identifier in this file.
+    leak = "reply to " + "a.person" + "@" + "somecompany" + ".com" + " today"
+    labels = {label for label, _, _ in iter_sensitive(leak, labels=FILE_SCAN_LABELS)}
+    assert "EMAIL" in labels
+
+
+def test_the_email_rule_declines_a_reserved_documentation_domain():
+    # RFC 2606 and RFC 6761 reserve these precisely so a document can carry an
+    # address that identifies nobody. This tree uses them in test fixtures and
+    # in the hook probe's git config; a guard that reddened on those would be
+    # switched off within a day, which is the failure that costs the most.
+    for domain in (
+        "example.invalid",
+        "example.com",
+        "example.net",
+        "example.org",
+        "somewhere.test",
+        "anything.example",
+        "box.localhost",
+    ):
+        text = "probe" + "@" + domain
+        labels = {label for label, _, _ in iter_sensitive(text, labels=FILE_SCAN_LABELS)}
+        assert "EMAIL" not in labels, f"{domain} must be treated as documentation"
+
+
+def test_the_operator_git_identity_is_derived_at_runtime_and_is_address_shaped():
+    # The identity is DERIVED, never stored. A literal here would be the leak.
+    identities = operator_git_identities()
+    assert identities, (
+        "no git identity could be derived, so the value half of this guard is "
+        "inert - and an inert guard passes forever"
+    )
+    for value in identities:
+        local, _, domain = value.partition("@")
+        assert local and "." in domain, "a derived identity must be address-shaped"
+
+
+def test_the_value_half_reaches_what_the_shape_half_declines():
+    # This is the whole reason both mechanisms exist. A reserved-domain address
+    # is invisible to the EMAIL rule by design - and if it were the operator's
+    # own, the value half must still catch it.
+    disguised = "someone" + "@" + "example" + ".invalid"
+    assert "EMAIL" not in {
+        label for label, _, _ in iter_sensitive(disguised, labels=FILE_SCAN_LABELS)
+    }
+    hits = list(
+        iter_operator_identifiers(
+            "git log --format said " + disguised, identities=(disguised,)
+        )
+    )
+    assert [label for label, _, _ in hits] == ["GIT_IDENTITY"]
+
+
+def test_one_address_is_reported_once_and_not_twice():
+    # Both mechanisms match an ordinary address. A finding reported twice makes
+    # a count meaningless, and a count is what a sweep reports.
+    address = "dup" + "@" + "somecompany" + ".com"
+    labels = [
+        label
+        for label, _, _ in iter_operator_identifiers(
+            "see " + address, identities=(address,)
+        )
+    ]
+    assert labels == ["EMAIL"]
+
+
+def test_the_refusal_never_quotes_the_address_it_found():
+    # The message travels - into CI output, a bug report, a sibling's inbox.
+    address = "quoted" + "@" + "somecompany" + ".com"
+    with pytest.raises(RedactionError) as excinfo:
+        assert_no_operator_identifier("mail " + address, identities=(address,))
+    assert address not in str(excinfo.value)
+    assert "somecompany" not in str(excinfo.value)
+
+
+def test_the_repository_carries_no_operator_identifier():
+    findings, scanned = _scan_tree(_scan_operator)
+    _assert_scanned_enough(scanned)
+
+    assert not findings, (
+        f"{len(findings)} operator identifier(s) found in the tree. An email "
+        "address is redactable whatever command produced it - see ROADMAP "
+        "OPS-50 and ledger LL-0170.\n" + "\n".join(findings)
+    )
+
+
+def test_the_operator_identifier_scan_flags_a_planted_file():
+    """End-to-end proof through the real walker, with an invented address.
+
+    A clean tree and a broken pipeline return the same empty list. This plants
+    an address at the repository root, runs the SAME walk the guard above runs,
+    and requires it to be flagged. The address is invented and assembled at
+    runtime; the operator's own is never written to disk by this suite.
+    """
+    planted = "maintainer" + "@" + "lanternlight-probe" + ".com"
+    probe = _tracked.probe_path("operator_identifier.md")
+    try:
+        probe.write_text("contact " + planted + "\n", encoding="ascii")
+        findings, scanned = _scan_tree(_scan_operator)
+        _assert_scanned_enough(scanned)
+        assert any(probe.name in f for f in findings), (
+            "the operator-identifier pipeline missed a planted address. "
+            f"findings: {findings}"
+        )
+    finally:
+        probe.unlink(missing_ok=True)
 
 
 # --------------------------------------------------------------------------

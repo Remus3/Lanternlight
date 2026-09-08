@@ -225,11 +225,38 @@ session can act on it. A recap is read by nobody and dies with the context.
   Note that `tools/precommit_gate.py` blocks any shell command merely QUOTING
   the forbidden cmdlet name, an accepted false positive recorded in `OPS-24`.
   Write such prose with an editor tool, not a heredoc.
-- **Redact before anything leaves the machine.** The game log carries the
-  operator's SteamID64, Steam persona, GSDK openID and userId, an EOS
-  ProductUserId, and IP-resolved geolocation. `lanternlight/redact.py` is the only
-  sanctioned path, `tests/test_no_pii.py` is the backstop, and no raw log excerpt
-  is ever committed. [ADR-004](docs/adr/ADR-004-redaction-is-mandatory.md).
+- **Redact before anything leaves the machine.** The scope is a CLASS OF DATA
+  and a DIRECTION - any **operator identifier**, however it was produced,
+  crossing off this machine or into git history. It is deliberately NOT scoped
+  to the game log and NOT scoped to a commit; both narrower readings failed on
+  2026-09-07 within an hour of each other. `lanternlight/redact.py` is the only
+  sanctioned path, `tests/test_no_pii.py` is the backstop, `ops.outbox.deliver`
+  is the choke point for anything going out on the note channel, and no raw log
+  excerpt is ever committed.
+  [ADR-004](docs/adr/ADR-004-redaction-is-mandatory.md), amended by operator
+  ruling 2026-09-07.
+
+  The known identifiers are a FLOOR, not the definition: SteamID64, Steam
+  persona, GSDK openID and userId, EOS ProductUserId, IP-resolved geolocation,
+  `AccountName`, and the operator's **git identity**. An identifier not on that
+  list is still an operator identifier.
+
+  **Two ways this has actually failed here, both worth reading before you
+  answer a question with evidence.** A session quoted the raw output of
+  `git log --format='%ae %ce'` into a note delivered to four sibling
+  directories: the redactor was never consulted because the string came from
+  `git` rather than from a log parser, and no commit-time guard fired because
+  `moon_sync_inbox/` is gitignored and nothing was being committed. It was
+  caught by the source-register guard objecting that a domain was unregistered -
+  a privacy failure found by a test that was not looking for one. See `LL-0170`
+  and `OPS-50`.
+
+  **Answering a question by quoting a command's raw output is publishing that
+  output.** State the finding instead: "exactly one identity across all refs, in
+  both roles" carries the whole result and none of the exposure. And never write
+  the operator's git identity into a tracked file as a literal, not even in a
+  guard that exists to protect it - a rule enforced by hardcoding the value it
+  protects is scoped to one VALUE, which is the same defect one level down.
 
 ## Cross-project mail - `moon_sync_inbox/`
 

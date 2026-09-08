@@ -84,6 +84,39 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0172 - 2026-09-07 - OPS-41's acknowledge trigger is BUILT and registered, and its first criterion is NOT met and is not claimed met
+
+**Evidence:**
+- ops/inbox_watch.py gained on_prompt_submit() and an --on-prompt flag. .claude/settings.json now registers a UserPromptSubmit hook beside the PostToolUse, PreToolUse and SessionStart events it already carried.
+- VERIFIED BY THE MERGER rather than accepted: the settings file parses with json.loads, carries forward slashes only, and contains no single backslash - the defect that makes the file invalid JSON so no hook registers and nothing warns you.
+- The handler reads the harness payload from stdin, acknowledges at most once per session, fails closed on a payload that is not JSON, a wrong event name or a missing session id, prints NOTHING because UserPromptSubmit stdout is injected into context, and always exits 0 because exit 2 would block the operator's own prompt.
+- It is not a detector: it reads nothing from the environment and infers nothing about the runtime. The event comes from the payload.
+- Eighteen mutations, each anchor asserted UNIQUE before it was applied, all red and all restored green - among them: accept any event; drop the once-per-session guard; an empty payload defaulting to valid; the acknowledge branch made a no-op; prompt text allowed to leak into the trace; the trace left unbounded; the bound dropping the newest row rather than the oldest; the hook made to print; the hook unregistered; a backslash in the registered command; the interpreter path hardcoded.
+- Full suite by the merger, bare: 2289 passed, 1 skipped. ruff clean.
+
+CRITERION 1 IS NOT MET AND THE LANE REFUSED TO GUESS IT GREEN, which is the right call and is not being overridden. The criterion asks for proof that the hook fires on the operator's own first message AND does not also fire for a subagent. Neither half is observable from inside the session that added the hook, because this harness snapshots its hooks at session start.
+THE SUBAGENT PROBE IS EXPLICITLY NOT EVIDENCE. It ran, and the real trace file was still absent afterwards. That is equally consistent with 'the hook does not fire for subagents' and with 'the hook is not loaded in this session at all', so it distinguishes nothing. A negative that cannot separate the two hypotheses is not a measurement, and writing it down as one is exactly the failure this project's ref-pattern and empty-grep rules are about.
+WHAT SETTLES IT IS ON DISK, NOT IN THIS ENTRY. A bounded trace at ops/runtime/inbox_prompt_trigger.json records every invocation including refusals, and never the prompt text. At the next FRESH session an operator-first-message row proves the firing half, and subagent runs adding no row while operator rows exist proves the not-firing half. Read that file before touching the item.
+CRITERION 2 WAS NOT TRIGGERED. Nothing here concluded the harness cannot make the distinction - only that this session could not observe it. Those are different claims and collapsing them would retire a real question by accident.
+
+### LL-0171 - 2026-09-07 - OPS-50 closed by operator ruling: the redaction rule is rescoped from the game log and the commit to any operator identifier crossing off this machine, and ops.outbox.deliver now refuses
+
+**Evidence:**
+- Operator ruled 'fix it' in chat 2026-09-07 evening. That ruling is what authorised criterion 3, which edits ADR-004, a pinned decision.
+- lanternlight/redact.py: an EMAIL rule placed FIRST in RULES so no other rule can bite a piece out of an address and leave the domain readable, plus operator_git_identities() deriving the address at call time from git config and git log rather than from any literal. There is NO literal of the address in any tracked file.
+- VERIFIED BY THE MERGER, not accepted from the lane: git ls-files over all 169 tracked files, zero contain the address, against a positive control that found OPS-50 in 9 files by the identical method.
+- ops/outbox.py: the refusal runs after encoding and BEFORE either write, checks the note's NAME as well as its body, and RAISES rather than rewriting - a note quietly altered on the way out is a note whose author does not know what they sent.
+- RE-PROBED LIVE BY THE MERGER: a note carrying the real address raised RedactionError, wrote nothing to the sibling directory and nothing to the outbox, and the refusal message quoted neither the address nor its domain. An ordinary note in the same run still delivered.
+- ADR-004 amended and CLAUDE.md rescoped: the scope is now a CLASS OF DATA and a DIRECTION, and the known-identifier list is explicitly a FLOOR rather than the definition.
+- Sweep re-run by the merger: 169 tracked files, ZERO operator identifiers; moon_sync_inbox 125 files, ONE hit which is the inbound LW note already recorded in LL-0170 and is not ours; the outbox's own 28 files, ZERO. Positive control: an invented address is flagged.
+- Eight mutations by the lane, each anchor asserted to occur exactly once: EMAIL rule deleted 8 red; reserved-domain guard deleted 5 red; derivation returning empty 2 red; the git-identity yield short circuited 1 red; the gate call deleted 5 red; the gate checking text only 1 red; the refusal quoting the match 2 red; the gate moved to AFTER the local write 1 red.
+- Full suite run by the merger, bare: 2289 passed, 1 skipped in 143.79s. 2290 collected, up from the 2255 baseline. ruff: all checks passed.
+
+THE MERGER AND THE LANE DISAGREED AND THE LANE WAS RIGHT. The merger's first re-run of the criterion-4 sweep reported 18 tracked files with hits against the lane's zero. The difference was the whitespace collapse: the merger removed ALL whitespace, the lane collapsed it to a single space. Removing all of it glues a comment rule line onto the following pytest mark decorator and manufactures an address-shaped token that exists nowhere in the file. Every one of the 18 was that.
+AND THE TRAP IS THAT BOTH VARIANTS ARE CORRECT SOMEWHERE. The all-removed collapse is the RIGHT defence for the OPS-43 filename sweep, where a name longer than the wrap can be split across lines, and the WRONG one here. The same technique is right or wrong depending on the token being searched for. Nothing but running both and looking at the difference distinguishes them, and a session that had run only one would have written down a confident number either way.
+ONE MEASURED FINDING KEPT DELIBERATELY: the git AUTHOR NAME is not treated as an identifier. It appears 9 times across LICENSE, NOTICE and CITATION.cff as the published copyright holder, so redacting it would be redacting a deliberate publication. Recorded in the module docstring rather than left for someone to rediscover as a bug.
+THE LANE REPORTED ITS OWN INCIDENT AND IT IS KEPT HERE. Two of its mutation runs briefly overlapped and left one mutation resident in redact.py; its own anchor assertion caught it, and it repaired and re-ran the three affected mutations serially. That is the mutation discipline working rather than failing - a mutation that fails to apply looks exactly like a passing test, which is why the anchor is asserted before the survivor is believed.
+
 ### LL-0170 - 2026-09-07 - A redaction rule scoped to a SOURCE rather than to a class of data let the operator's email address leave this machine in a note to four siblings; corrected in place and reported to them
 
 **Evidence:**

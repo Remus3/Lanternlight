@@ -215,6 +215,40 @@ have seen what we could not read. Independently, :func:`render` refuses the
 required ``not result.groups``, which is False the moment any note exists, even
 a previously seen one.
 
+THE ONE AUTOMATIC TRIGGER, AND WHY IT IS NOT A DETECTOR - ``OPS-41``
+--------------------------------------------------------------------
+Leaving acknowledgement entirely manual was correct for safety and wrong for
+use: after the split above, NOTHING here acknowledged anything automatically,
+so the same backlog re-reported as unread at every session start until somebody
+typed the flag. ``OPS-41`` adds exactly one automatic trigger,
+:func:`on_prompt_submit`, run from a ``UserPromptSubmit`` hook.
+
+The event matters. ``SessionStart`` fires for subagents too and a hook on it
+cannot tell them from the operator; a prompt submission is the operator's own
+turn by construction. That is why the trigger is tied to this event and not to
+the one this module's report already runs on.
+
+This is still not a detector, and the difference is the whole point. Nothing is
+inferred: the harness NAMES the event in the JSON payload it writes to stdin,
+and this module refuses anything that is not the named event. Every unclear
+case fails CLOSED - a payload that is not JSON, a payload for a different
+event, a payload with no session id, all acknowledge nothing. Failing open here
+means eating mail, which is the defect the split above exists to prevent.
+
+It acknowledges ONCE per session, because ``UserPromptSubmit`` fires on every
+message and a note that lands mid-session must survive to be REPORTED at the
+next session start rather than be consumed by the operator's next keystroke.
+The ordering this depends on is the ordinary one: the ``SessionStart`` hook has
+already printed the report by the time the operator's first message arrives.
+
+Every invocation - accepted or refused - appends one bounded row to a trace
+file beside the two records. That file is the EVIDENCE half of ``OPS-41``: a
+trigger whose only effect is an acknowledgement leaves nothing on disk that
+separates "the hook never fired" from "the hook fired and refused", and those
+are the two facts that have to be told apart to prove a hook does not also fire
+for a subagent. The trace never records the prompt text: the operator's own
+words have no bearing on the decision and this repository is public.
+
 State is written atomically - temp file in the target's own directory, then
 :meth:`pathlib.Path.replace` - the same pattern as ``ops/loop/state.py``, and
 for the same reason: a reader must never see a splice of two writes. No new
@@ -243,6 +277,14 @@ __all__ = [
     "outbox_summary",
     "STATE_FILENAME",
     "REPORTED_FILENAME",
+    "TRACE_FILENAME",
+    "TRACE_LIMIT",
+    "PROMPT_EVENT",
+    "TRIGGER_ACKNOWLEDGED",
+    "TRIGGER_ALREADY",
+    "TRIGGER_WRONG_EVENT",
+    "TRIGGER_UNREADABLE",
+    "TRIGGER_NO_SESSION",
     "SCHEMA",
     "REPO_ROOT",
     "NAME_DISPLAY_LIMIT",
@@ -255,14 +297,18 @@ __all__ = [
     "default_inbox",
     "default_reported_path",
     "default_state_path",
+    "default_trace_path",
     "digest_of",
     "drop_key_name",
     "load_reported",
     "load_seen",
+    "load_trace",
     "main",
+    "on_prompt_submit",
     "render",
     "save_reported",
     "save_seen",
+    "save_trace",
     "temp_prefix_for",
 ]
 
@@ -298,6 +344,34 @@ STATE_FILENAME = "inbox_seen.json"
 #: printed, and it is the half of the withdrawal baseline that survives an item
 #: being pulled before anybody acknowledged it. It never decides newness.
 REPORTED_FILENAME = "inbox_reported.json"
+
+#: Trigger-trace file name, beside the two records above - ``OPS-41``.
+#:
+#: One bounded row per invocation of :func:`on_prompt_submit`, accepted or
+#: refused. It is EVIDENCE and never an input to newness: nothing in this module
+#: reads it to decide whether an item is unread. It exists because "the hook
+#: never fired" and "the hook fired and refused" leave the same absence of an
+#: acknowledgement behind, and telling those two apart is exactly what proving a
+#: hook fires for the operator and NOT for a subagent requires.
+TRACE_FILENAME = "inbox_prompt_trigger.json"
+
+#: How many trace rows are kept. A hook that runs on every message must not
+#: write a file that grows without bound; the oldest rows are dropped first.
+TRACE_LIMIT = 200
+
+#: The ONE hook event :func:`on_prompt_submit` will act on. Anything else is
+#: refused rather than interpreted - see the module docstring for why a
+#: mis-registration must fail closed rather than acknowledge on some other
+#: event.
+PROMPT_EVENT = "UserPromptSubmit"
+
+#: Decisions :func:`on_prompt_submit` can reach. Exactly one is an
+#: acknowledgement; every other is a refusal that touches neither record.
+TRIGGER_ACKNOWLEDGED = "acknowledged"
+TRIGGER_ALREADY = "already-acknowledged-this-session"
+TRIGGER_WRONG_EVENT = "refused-wrong-event"
+TRIGGER_UNREADABLE = "refused-unreadable-payload"
+TRIGGER_NO_SESSION = "refused-no-session-id"
 
 #: Schema marker. An unrecognised value is treated as unreadable, not guessed.
 SCHEMA = 1
@@ -385,6 +459,11 @@ def default_state_path(root: Path | None = None) -> Path:
 def default_reported_path(root: Path | None = None) -> Path:
     """Return the reported-set file path, beside the seen set."""
     return (root or REPO_ROOT) / "ops" / "runtime" / REPORTED_FILENAME
+
+
+def default_trace_path(root: Path | None = None) -> Path:
+    """Return the trigger-trace file path, beside the two records - ``OPS-41``."""
+    return (root or REPO_ROOT) / "ops" / "runtime" / TRACE_FILENAME
 
 
 def drop_key_name(name: str) -> str:
@@ -668,6 +747,74 @@ def save_seen(pairs, path: Path) -> str:
         Path(path),
         "could not persist the seen set",
         "these notes will surface again",
+    )
+
+
+_TRACE_FIELDS = ("at", "event", "session", "decision")
+
+
+def load_trace(path: Path) -> tuple[list[dict], str]:
+    """Read the trigger trace, returning ``(rows, note)`` and never raising.
+
+    Same recovery contract as :func:`load_seen` and :func:`load_reported`, and
+    the same reason: this runs inside a hook. A lost trace costs evidence, never
+    correctness - newness is decided from the seen set alone and nothing here is
+    consulted for it. The ``note`` says the evidence is short rather than
+    letting an empty trace read as "the hook never fired", which is precisely
+    the confusion this file exists to remove.
+    """
+    try:
+        raw = Path(path).read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return [], ""
+    except OSError as exc:
+        return [], (
+            f"trigger trace at {path} could not be read ({exc.__class__.__name__}); "
+            "earlier invocations are no longer evidence of anything"
+        )
+
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        return [], (
+            f"trigger trace at {path} is not valid JSON (line {exc.lineno}); "
+            "earlier invocations are no longer evidence of anything"
+        )
+
+    if not isinstance(payload, dict) or payload.get("schema") != SCHEMA:
+        return [], (
+            f"trigger trace at {path} is not a schema {SCHEMA} document; "
+            "earlier invocations are no longer evidence of anything"
+        )
+
+    rows = payload.get("trace")
+    if not isinstance(rows, list):
+        return [], (
+            f"trigger trace at {path} has no usable 'trace' list; "
+            "earlier invocations are no longer evidence of anything"
+        )
+
+    kept = [
+        {key: row[key] for key in _TRACE_FIELDS}
+        for row in rows
+        if isinstance(row, dict) and all(isinstance(row.get(key), str) for key in _TRACE_FIELDS)
+    ]
+    return kept, ""
+
+
+def save_trace(rows, path: Path) -> str:
+    """Write the trigger trace atomically, newest last. Returns "" or the error.
+
+    Only the last :data:`TRACE_LIMIT` rows are kept. Writing this file is not an
+    acknowledgement and never has been: :func:`on_prompt_submit` decides first
+    and records afterwards.
+    """
+    trimmed = [{key: str(row.get(key, "")) for key in _TRACE_FIELDS} for row in rows]
+    return _write_json_atomic(
+        {"schema": SCHEMA, "updated": _now(), "trace": trimmed[-TRACE_LIMIT:]},
+        Path(path),
+        "could not persist the trigger trace",
+        "this invocation leaves no evidence that the hook ran",
     )
 
 
@@ -1184,6 +1331,86 @@ def acknowledge_inbox(
     return scan(inbox=inbox, state=state, reported=reported, acknowledge=True)
 
 
+def _trace_field(value: object) -> str:
+    """Reduce one payload field to a bounded, restricted string for the trace.
+
+    The payload is written by the harness rather than by a sibling project, so
+    this is not the untrusted-name problem :func:`safe_label` was written for.
+    It is reused anyway: a trace row is read by a human deciding whether a hook
+    fired, and a field that can carry a newline can forge a second row.
+    """
+    if not isinstance(value, str) or not value:
+        return ""
+    return safe_label(value)
+
+
+def on_prompt_submit(
+    raw: str,
+    *,
+    inbox: Path | None = None,
+    state: Path | None = None,
+    reported: Path | None = None,
+    trace: Path | None = None,
+) -> str:
+    """Acknowledge the inbox on the operator's own turn - ``OPS-41``.
+
+    Args:
+        raw: The hook payload exactly as the harness wrote it to stdin.
+        inbox: Inbox directory, defaulting to :func:`default_inbox`.
+        state: Acknowledged-set path, defaulting to :func:`default_state_path`.
+        reported: Reported-set path, defaulting to :func:`default_reported_path`.
+        trace: Trigger-trace path, defaulting to :func:`default_trace_path`.
+
+    Returns:
+        One of the ``TRIGGER_*`` decisions. Exactly one of them,
+        :data:`TRIGGER_ACKNOWLEDGED`, moved the watermark; every other left both
+        records untouched.
+
+    Nothing about the runtime is inspected. The harness NAMES its event in the
+    payload and anything that is not :data:`PROMPT_EVENT` is refused, so a hook
+    accidentally registered on ``SessionStart`` - the event that also fires for
+    subagents - acknowledges nothing rather than quietly working. Every unclear
+    case fails closed for the same reason: failing open means eating mail.
+
+    The once-per-session rule is decided from the trace, which is why a session
+    id is required and its absence is a refusal rather than a licence to
+    acknowledge on every message.
+    """
+    trace_path = Path(trace) if trace is not None else default_trace_path()
+    rows, _note = load_trace(trace_path)
+
+    payload = None
+    if isinstance(raw, str) and raw.strip():
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            payload = None
+
+    event = ""
+    session = ""
+    if isinstance(payload, dict):
+        event = _trace_field(payload.get("hook_event_name"))
+        session = _trace_field(payload.get("session_id"))
+
+        if event != PROMPT_EVENT:
+            decision = TRIGGER_WRONG_EVENT
+        elif not session:
+            decision = TRIGGER_NO_SESSION
+        elif any(
+            row["decision"] == TRIGGER_ACKNOWLEDGED and row["session"] == session for row in rows
+        ):
+            decision = TRIGGER_ALREADY
+        else:
+            acknowledge_inbox(inbox=inbox, state=state, reported=reported)
+            decision = TRIGGER_ACKNOWLEDGED
+    else:
+        decision = TRIGGER_UNREADABLE
+
+    rows.append({"at": _now(), "event": event, "session": session, "decision": decision})
+    save_trace(rows, trace_path)
+    return decision
+
+
 # ---------------------------------------------------------------------------
 # rendering
 # ---------------------------------------------------------------------------
@@ -1392,12 +1619,49 @@ def render(result: Scan) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _run_on_prompt(args) -> None:
+    """Drive :func:`on_prompt_submit` from the command line, silently.
+
+    Silence is the contract, not a style choice: a ``UserPromptSubmit`` hook's
+    stdout is injected into the session's context, so anything printed here
+    arrives wearing the operator's voice. Every failure is swallowed for the
+    matching reason - a non-zero exit on this event blocks the prompt, and a
+    watcher must never be able to stop the operator from typing.
+    """
+    try:
+        raw = sys.stdin.read()
+    except Exception:  # a hook must never break the turn it runs in
+        return
+    try:
+        on_prompt_submit(
+            raw,
+            inbox=Path(args.inbox) if args.inbox else None,
+            state=Path(args.state) if args.state else None,
+            reported=Path(args.reported) if args.reported else None,
+            trace=Path(args.trace) if args.trace else None,
+        )
+    except Exception:  # a hook must never break the turn it runs in
+        return
+
+
 def main(argv: list[str] | None = None) -> int:
     """Print the report. Always returns 0 - a hook must not break a session."""
     parser = argparse.ArgumentParser(description="Surface unread cross-project notes.")
     parser.add_argument("--inbox", default=None, help="inbox directory to read")
     parser.add_argument("--state", default=None, help="acknowledged-set state file to use")
     parser.add_argument("--reported", default=None, help="reported-set state file to use")
+    parser.add_argument("--trace", default=None, help="trigger-trace file to use")
+    parser.add_argument(
+        "--on-prompt",
+        action="store_true",
+        help=(
+            "run as a UserPromptSubmit hook: read the hook payload from stdin and "
+            "acknowledge ONCE per session on the operator's own turn. Prints "
+            "nothing - a UserPromptSubmit hook's stdout is injected into the "
+            "session context - and always exits 0, because exit code 2 on this "
+            "event BLOCKS the operator's prompt."
+        ),
+    )
     parser.add_argument(
         "--acknowledge",
         action="store_true",
@@ -1409,6 +1673,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     try:
         args = parser.parse_args(argv)
+        if args.on_prompt:
+            _run_on_prompt(args)
+            return 0
         result = scan(
             inbox=Path(args.inbox) if args.inbox else None,
             state=Path(args.state) if args.state else None,

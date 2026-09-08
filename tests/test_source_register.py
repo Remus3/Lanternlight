@@ -182,6 +182,15 @@ KNOWN_NON_HOSTS = frozenset(
         # `LL-0170` and `OPS-50`. Adding a real host to this denylist to make a
         # red run green is how a guard stops working.
         "core.filemode",
+        # The EIGHTH trip, on `LL-0171` and `LL-0172`. `json.loads` is a
+        # PYTHON STDLIB CALL, not a host; `.loads` merely parses as a TLD-shaped
+        # tail. `trigger.json` is the tail of
+        # `ops/runtime/inbox_prompt_trigger.json`, the bounded invocation trace
+        # `OPS-41` writes - gitignored runtime state, never committed, and
+        # `git ls-files` matches zero paths for it by design. Both looked at
+        # before adding, per the regenerating note above.
+        "json.loads",
+        "trigger.json",
         "contract.write",
         "ops.outbox.SIBLING",
         "ops.outbox.backfill",

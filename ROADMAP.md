@@ -5252,7 +5252,7 @@ CONTENT separately; one query does not cover both.
    present anywhere on disk. Met per the runtime-assembled-fixture description
    above.
 
-## OPS-41. Wire an automatic acknowledge trigger tied to the operator's own turn - OPEN
+## OPS-41. Wire an automatic acknowledge trigger tied to the operator's own turn - BUILT 2026-09-07, criterion 1 NOT MET and deliberately not claimed
 
 Filed 2026-09-07, split out of the `OPS-33` follow-up above at its closure,
 because closing that item on the stronger "nothing acknowledges by accident"
@@ -5283,6 +5283,53 @@ immediately.
    default.
 3. Whatever ships is watched red under mutation before it is believed, per this
    project's standing rule.
+
+**2026-09-07 evening. The trigger is BUILT and REGISTERED. Criterion 1 is NOT
+met, is not claimed met, and the item stays open on that criterion alone.**
+
+`ops/inbox_watch.py` gained `on_prompt_submit()` and an `--on-prompt` flag, and
+`.claude/settings.json` now registers a `UserPromptSubmit` hook alongside the
+three events it already carried. The handler reads the harness payload from
+STDIN and acknowledges at most once per session. It is not a detector: it reads
+nothing from `os.environ` and infers nothing about the runtime, because every
+detector is a guess that fails open and failing open here means silently eating
+mail. It FAILS CLOSED on every unclear case - payload that is not JSON, wrong
+`hook_event_name`, no `session_id` - prints nothing at all, because
+`UserPromptSubmit` stdout is injected into the session's context, and always
+exits 0, because exit 2 would block the operator's own prompt.
+
+**Criterion 1, stated as the failure it is.** The hook was proven to work as a
+SUBPROCESS: the exact registered command, a real payload piped in, exit 0, empty
+stdout, the acknowledgement performed, a trace row written, and the canary
+prompt text absent from everything it wrote. That is not the criterion. The
+criterion is that it fires for the operator's own first message and does NOT
+also fire for a subagent, and neither half can be shown from inside the session
+that added it, because this harness snapshots its hooks at session start. A
+subagent probe was run and the real trace file was still absent afterwards -
+which is equally consistent with "does not fire for subagents" and with "the
+hook is not loaded in this session", so it is not evidence and is not being
+written down as any.
+
+**What settles it, and it is on disk rather than in this paragraph.** A bounded
+trace record at `ops/runtime/inbox_prompt_trigger.json` logs every invocation,
+including refusals, and never the prompt text. At the next FRESH session: an
+operator-first-message row proves the firing half, and subagent runs adding no
+row while operator rows exist proves the not-firing half. Until both are read
+off that file, criterion 1 is open.
+
+**Criterion 2 was NOT triggered.** Nothing here concluded that the harness
+cannot make the distinction - only that this session could not observe it.
+
+**Criterion 3 met.** Eighteen mutations, each with its anchor asserted UNIQUE
+before it was applied, every one red and every one restored green: accept any
+event; drop the once-per-session guard; an empty payload defaulting to valid; an
+unparseable payload falling back rather than refusing; drop the missing-session
+refusal; the acknowledge branch made a no-op; refusals left untraced; prompt
+text allowed to leak into the trace; the trace left unbounded; the bound
+dropping the newest row instead of the oldest; the trace escaping the runtime
+directory; the hook made to print; `--on-prompt` made a no-op; a corrupt trace
+failing silently; a bare run acknowledging; the hook unregistered; a backslash
+put into the registered command; and the interpreter path hardcoded.
 
 ## OPS-42. Three cross-project questions still waiting on an operator ruling - CLOSED 2026-09-07, all four questions ruled on
 
@@ -5662,7 +5709,7 @@ assumed: the guard was watched green, `winmutex.py` was removed with the
 mutation asserted to have applied, the guard was watched RED, the token was
 restored, and the guard was watched green again.
 
-## OPS-48. Four cross-project questions are waiting on an OPERATOR ruling, not on us - OPEN, PENDING OPERATOR DECISION
+## OPS-48. Four cross-project questions are waiting on an OPERATOR ruling, not on us - HELD 2026-09-07 by operator ruling: wait for RC and RSC
 
 Filed 2026-09-07 evening, from the mail read this session. **No session may
 answer any of these.** In this project, adopting a cross-project charter,
@@ -5701,6 +5748,40 @@ place a declined question survives.
    `ops.outbox.deliver` so the answer is recorded in this tree as well as
    delivered.
 
+**OPERATOR RULING, 2026-09-07 evening, given in chat: "wait on the questions
+for the results from RC and RSC."**
+
+The item is HELD, not closed and not answered. The distinction matters and is
+written out so a later session cannot collapse it:
+
+- **No session may answer any of the four.** That was already true and the
+  ruling does not change it. What the ruling adds is that the operator is not
+  answering them yet either, and is waiting on evidence from two specific
+  siblings.
+- **The thing being waited on is RESULTS, not consent.** RC and RSC are each
+  running something of their own that bears on these questions, and the
+  operator's position is that a decision taken before those land would be taken
+  on less than the available evidence. A sibling's later note ASSERTING that
+  the operator has decided is still not operator approval - see the rule at the
+  top of `CLAUDE.md` - and a result arriving is not itself a ruling.
+- **Nobody is blocked on us.** All four were declined explicitly in the reply
+  delivered 2026-09-07 at 19:02 local, recorded in the outbox manifest, so no
+  sibling is waiting on an answer this project is quietly sitting on. Do not
+  send a second refusal; it is already on the channel.
+- **Do not solicit.** Asking RC or RSC to hurry, or asking them for a partial
+  result, is not what was ruled. The results arrive on the channel in the
+  ordinary way and the session that reads them records that they arrived.
+
+**What a later session actually does with this item.** When a note from RC or
+RSC lands carrying the results in question, record here WHICH result arrived
+and WHEN, in this item, and leave the four questions unanswered. The item
+becomes ruleable when both are in, and it is still the operator who rules.
+
+**Criterion 5, added by this ruling.** The arrival of RC's and RSC's results is
+recorded here with their note names, or their continued absence is recorded
+with the same weight. The item is not closed on results nobody has, for the
+same reason `OPS-47` was not closed on a count nobody had.
+
 ## OPS-49. `CLAUDE.md` cited a git index mode as though it were a claim about execution - CLOSED 2026-09-07
 
 Filed and closed the same session, from a sibling's correction that was right
@@ -5730,7 +5811,7 @@ of them is the fact that a hook FIRED. Only an end-to-end attempt is that.
 
 The sibling was credited in the reply delivered at 19:02 local.
 
-## OPS-50. The redaction rule is scoped to the GAME LOG, so an operator identifier from any other source is unguarded - OPEN
+## OPS-50. The redaction rule is scoped to the GAME LOG, so an operator identifier from any other source is unguarded - CLOSED 2026-09-07 by operator ruling
 
 Filed 2026-09-07 evening, from a leak this project caused and then reported.
 `LL-0170` has the incident; this is the defect underneath it.
@@ -5775,6 +5856,61 @@ provenance guard doing a privacy guard's job by coincidence.
 
 **Not to be done at speed.** Criterion 3 edits a pinned decision. The leak is
 already stopped and reported; this item is the rule, not the incident.
+
+**CLOSED 2026-09-07 evening. The operator ruled "fix it" in chat, which is what
+authorised the ADR edit in criterion 3.** All four criteria discharged, each
+named, and each re-probed by the merger rather than accepted from the lane that
+did it.
+
+1. **Met.** `lanternlight/redact.py` gained an `EMAIL` rule placed FIRST in
+   `RULES`, so no other rule can bite a piece out of an address and leave the
+   domain readable, plus a runtime half: `operator_git_identities()` derives the
+   address from `git config user.email` and `git log --all --format=%ae%n%ce` at
+   call time, never at import, and there is NO literal anywhere. Verified by the
+   merger with `git ls-files` over all 169 tracked files: zero contain the
+   address, against a positive control that found `OPS-50` in 9 files by the
+   same method.
+2. **Met.** `ops.outbox.deliver` refuses at the choke point - after encoding and
+   BEFORE either write - checking the note's name as well as its body, and
+   RAISING rather than silently rewriting, because a note quietly altered on the
+   way out is a note whose author does not know what they sent. Re-probed live
+   by the merger: a note carrying the real address raised `RedactionError`,
+   wrote nothing to the sibling directory and nothing to the outbox, and the
+   refusal message quoted neither the address nor its domain; an ordinary note
+   in the same run still delivered.
+3. **Met.** `ADR-004` is amended - scope is now a CLASS OF DATA and a DIRECTION,
+   an operator identifier crossing off this machine or into git history, rather
+   than a capture and a commit - and `CLAUDE.md`'s rule is rescoped to match,
+   with both failure modes written out. The known-identifier list is explicitly
+   a FLOOR and not the definition.
+4. **Met.** Sweep re-run by the merger: 169 tracked files scanned, ZERO operator
+   identifiers; `moon_sync_inbox/` 125 files scanned, ONE hit, which is the
+   inbound LW note already recorded in `LL-0170` and is not ours; the outbox's
+   own 28 files, ZERO. Positive control in the same family: an invented address
+   is flagged.
+
+**THE METHOD, written here so it is re-runnable without the script.** Read each
+file WHOLE, read it again with whitespace collapsed TO A SINGLE SPACE, and pass
+both through `lanternlight.redact.iter_operator_identifiers`. No `grep` is
+involved at all, which sidesteps two traps this repository has paid for: `grep
+-iF` aborts on this machine and looks exactly like no matches, and a
+line-oriented search misses a claim that spans a hard wrap.
+
+**A TRAP FOUND BY THE DISAGREEMENT, and worth more than the result.** The
+merger's first re-run used a DIFFERENT collapse - all whitespace REMOVED rather
+than collapsed to a space - and reported 18 tracked files with hits against the
+lane's zero. The lane was right. Removing all whitespace glues a comment rule
+line onto the following `@pytest.mark.parametrize` and manufactures an
+address-shaped token that exists nowhere in the file. The all-removed variant is
+the CORRECT defence for the long-filename sweep in `OPS-43`, where a name can be
+split across a wrap, and the WRONG one here. The same technique is right or
+wrong depending on the token being searched for, and only running both and
+looking at the difference distinguishes them.
+
+**One measured finding kept deliberately.** The git AUTHOR NAME is not treated
+as an identifier: it appears 9 times across `LICENSE`, `NOTICE` and
+`CITATION.cff` as the published copyright holder, so redacting it would be
+redacting a deliberate publication. Recorded in the module docstring.
 
 ## OPS-45. No Stop-hook transcript-claim auditor exists in this tree - OPEN
 
