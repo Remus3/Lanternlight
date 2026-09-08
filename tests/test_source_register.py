@@ -23,18 +23,62 @@ ask separately what it is blind to, which is why this module says so out loud
 below rather than leaving the caveat in a chat log.
 
 HOW IT WORKS. Extract every host-shaped token from every ``*.md`` under
-``docs/`` with a TLD-AGNOSTIC pattern, subtract an enumerated denylist of
-tokens a human has vetted as not-an-external-source, and require every survivor
-to appear in the register section. A leading ``www.`` is normalised away,
-because ``www.twitch.tv`` and ``twitch.tv`` are one source and a guard that
-reported the first as missing would be crying wolf.
+``docs/`` with a TLD-AGNOSTIC pattern, subtract the tokens that are this
+repository's own FILENAMES, subtract an enumerated denylist of further tokens a
+human has vetted as not-an-external-source, and require every survivor to
+appear in the register section. A leading ``www.`` is normalised away, because
+``www.twitch.tv`` and ``twitch.tv`` are one source and a guard that reported
+the first as missing would be crying wolf.
+
+THE FILENAME SUBTRACTION - ``OPS-44``, option 2, landed 2026-09-07. Before it,
+every one of this project's own filenames quoted in ``docs/`` had to be added
+to :data:`KNOWN_NON_HOSTS` by hand, because ``.py`` is Paraguay's TLD and
+``.md``, ``.gz``, ``.js`` and friends all parse as host-shaped tails. Six
+successive waves of that had put 109 of our own filenames in the denylist and
+the count was still climbing, because this project has begun writing documents
+whose whole job is to list its own files. :func:`is_repo_filename` now asks
+``git ls-files`` AT TEST TIME whether a token is one of them.
+
+The check is deliberately narrow, because auto-exemption is the exact failure
+``LL-0079`` is about - a heuristic that quietly excused a live external source:
+
+* It is asked ONLY about filenames. Dotted module and API paths -
+  ``ops.outbox.deliver``, ``json.loads``, ``Path.iterdir`` - are not resolved
+  and stay in the denylist where a human vetted them.
+* It compares against the BASENAME of a tracked path, never the whole path.
+* The extractor TRUNCATES - ``tests/test_inbox_watch_subdirs.py`` is emitted as
+  ``subdirs.py`` - so a basename that merely ENDS with the token counts, but
+  only when the character immediately before the token is ``_``, ``-`` or
+  ``.``. A bare tail match would let a token be excused by any file whose name
+  happens to end in those letters. See
+  :func:`test_the_boundary_rule_is_what_does_the_work` for what that buys and
+  what it deliberately does not.
+* The listing is asked of ``git`` on every run and is never stored in this
+  file. A committed list of filenames goes stale the moment a file is renamed
+  and then reads as a confident lie.
+* If ``git`` fails, is absent, or returns nothing, the check exempts NOTHING.
+  The guard gets NOISIER when its input is missing, never quieter - a check
+  that silently excuses everything when its data source breaks is worse than no
+  check at all. Pinned by
+  :func:`test_an_empty_tracked_listing_exempts_nothing`.
 
 WHAT THIS GUARD IS BLIND TO. Stated here, in the artifact, because a caveat
 that lives only in conversation is a lie in the artifact:
 
-* **The denylist is the trusted part.** A real source wrongly added to
-  :data:`KNOWN_NON_HOSTS` is hidden from this check exactly the way ``.gl`` was
-  hidden by the old allowlist. Review additions to that set, not this logic.
+* **The denylist is A trusted part, and since ``OPS-44`` it is no longer the
+  only one.** A real source wrongly added to :data:`KNOWN_NON_HOSTS` is hidden
+  from this check exactly the way ``.gl`` was hidden by the old allowlist.
+  Review additions to that set.
+* **The tracked-file listing is now trusted too, and that is the price of
+  ``OPS-44``.** Anything ``git ls-files`` reports is believed, so committing a
+  file whose name collides with a real external source - a file literally named
+  ``th.gl``, or any name ending ``_th.gl`` - would excuse that source from the
+  register silently. Nothing in this guard would say so. The trade accepted in
+  ``OPS-44`` is that this failure needs a deliberate, committed, reviewed file
+  addition, where the old failure needed only a distracted denylist edit during
+  a wave that was already red; and the boundary rule keeps the collision from
+  being accidental. It is a smaller surface, not a closed one, and it is
+  written down here rather than left in a chat log.
 * It checks that a host STRING is present in the register section. It does not
   check that the row next to it says anything true, or that the tier is right.
 * It reads ``docs/**/*.md`` only. A source cited from ``README.md``,
@@ -56,13 +100,29 @@ that lives only in conversation is a lie in the artifact:
   because the label pattern excludes ``_`` and stops at the first hyphenated
   suffix. The truncated form is what any failure message will name.
 
-REGENERATING THE DENYLIST after a legitimate new non-host token appears - a new
-module path quoted in a ledger entry, say - run :func:`cited_hosts` over
-``docs/``, subtract the register, and add the genuinely-not-a-source leftovers
-here. Do NOT add a token you have not looked at.
+REGENERATING THE DENYLIST, rewritten for ``OPS-44``. A new token that reddens
+this guard now falls into one of three cases, and only the third ends here:
+
+1. It is one of THIS repository's own tracked filenames. Do nothing. The
+   filename subtraction already covers it, and adding it to the denylist would
+   be dead weight that outlives the file.
+2. It is one of our own files that is not tracked yet - created in the same
+   uncommitted wave as the document citing it. Stage the file and re-run; the
+   subtraction picks it up. Do not add it here to get green sooner, because the
+   entry will still be here long after anyone remembers why.
+3. It is anything else - a dotted module or API path, a gameplay tag, a config
+   key, a gitignored runtime artefact, a SIBLING project's filename, or a
+   version string. Look at it, then add it to :data:`KNOWN_NON_HOSTS` with a
+   comment saying what it actually is.
+
+Do NOT add a token you have not looked at, and never add a real host to make a
+red run green - that is how a guard stops working.
 """
 
+import functools
 import re
+import subprocess
+from collections.abc import Iterable
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -79,10 +139,100 @@ REGISTER_END = "## 1. Item / loot databases"
 #: stop recurring.
 HOST_SHAPED = re.compile(r"(?:[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\.)+[A-Za-z]{2,24}")
 
+#: Characters that may sit immediately before a token inside a longer basename
+#: and still leave the token a whole NAME PART rather than a coincidental tail.
+#: The extractor truncates at ``_``, so ``tests/test_inbox_watch_subdirs.py``
+#: reaches this file as ``subdirs.py`` and a suffix match is unavoidable - but
+#: an UNBOUNDED suffix match is the auto-exemption `LL-0079` is about.
+_NAME_PART_BOUNDARY = frozenset("_-.")
+
+
+@functools.lru_cache(maxsize=8)
+def _tracked_paths_for(root: str) -> tuple[str, ...]:
+    """Ask ``git ls-files`` about one root, cached PER ROOT.
+
+    THE CACHE KEY IS THE ROOT, and that is not a micro-optimisation. A cache
+    with no key was the first version of this and the full suite caught it
+    within the hour: ``tests/test_docguards.py`` monkeypatches
+    :data:`REPO_ROOT` to a temporary tree to plant a token, which made the
+    FIRST call of the run answer for a directory that is not a repository. The
+    empty answer was then cached for the process, every subsequent call in the
+    real tree got it, and the guard reported 104 of this project's own files as
+    unregistered sources. Passing alone and failing in the suite is exactly the
+    shape of an unkeyed process-wide cache.
+    """
+    try:
+        done = subprocess.run(
+            ["git", "ls-files"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return ()
+    if done.returncode != 0:
+        return ()
+    return tuple(line.strip() for line in done.stdout.splitlines() if line.strip())
+
+
+def tracked_paths(root: Path | str | None = None) -> tuple[str, ...]:
+    """Every path ``git ls-files`` reports for ``root``, asked LIVE.
+
+    ``root`` defaults to :data:`REPO_ROOT` read AT CALL TIME rather than bound
+    at definition time, so a test that repoints the module sees its own tree.
+
+    Cached per root because the suite calls it repeatedly, and never written
+    down anywhere: a committed list of filenames goes stale on the first rename
+    and then reads as a confident lie about the tree.
+
+    Returns an EMPTY tuple on any failure - git missing, a non-zero exit, a
+    timeout, no output, or a root that is not a repository. Every caller treats
+    empty as "exempt nothing", so a broken listing makes this guard noisier
+    rather than quieter.
+    """
+    return _tracked_paths_for(str(REPO_ROOT if root is None else root))
+
+
+def is_repo_filename(token: str, paths: Iterable[str] | None = None) -> bool:
+    """True when ``token`` is the name, or a bounded name-part tail, of a
+    tracked file.
+
+    ``paths`` exists so tests can drive this with an injected listing instead
+    of creating files. Passing an EMPTY listing must exempt nothing; that is
+    the fail-closed direction and it is pinned by a test.
+
+    The rule, and nothing looser: the BASENAME of some tracked path either
+    equals the token, or ends with it with ``_``, ``-`` or ``.`` immediately
+    before. Matching is case-sensitive, which is the noisier direction.
+    """
+    if not token:
+        return False
+    if paths is None:
+        paths = tracked_paths()
+    cut = len(token)
+    for path in paths:
+        base = path.rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
+        if base == token:
+            return True
+        if len(base) > cut and base.endswith(token) and base[-cut - 1] in _NAME_PART_BOUNDARY:
+            return True
+    return False
+
+
 #: Tokens that are host-SHAPED and are not external sources: dotted code
-#: identifiers, module paths, filenames, Unreal gameplay tags, version strings,
-#: the GSDK package name and the Windows-MCP extension id. Every member was
-#: read before it was added. See the module docstring before extending it.
+#: identifiers, module paths, Unreal gameplay tags, version strings, gitignored
+#: runtime artefacts, SIBLING projects' filenames, the GSDK package name and the
+#: Windows-MCP extension id. Every member was read before it was added. See the
+#: module docstring before extending it.
+#:
+#: `OPS-44` REMOVED 109 ENTRIES FROM THIS SET on 2026-09-07 - every token that
+#: :func:`is_repo_filename` now covers, which is to say every one of THIS
+#: repository's own tracked filenames. Nothing else was touched. Some comment
+#: blocks below therefore describe tokens that are no longer listed under them,
+#: and one or two now head no entries at all. That prose is kept deliberately:
+#: it is the six-wave record `OPS-44` was filed against, and deleting it would
+#: erase the evidence for the change while keeping the change.
 KNOWN_NON_HOSTS = frozenset(
     {
         # MODULE FILENAMES and dotted PYTHON PATHS quoted by `LL-0148` and
@@ -93,8 +243,6 @@ KNOWN_NON_HOSTS = frozenset(
         # after the push. `slots.py` is a SIBLING project's module named in
         # an entry about misdirected inbox mail - Lanternlight has no such
         # file, and `git ls-files` matches zero paths for it.
-        "conftest.py",
-        "docguards.py",
         "slots.py",
         "sys.addaudithook",
         "GateReport.notes",
@@ -106,10 +254,6 @@ KNOWN_NON_HOSTS = frozenset(
         # per the regenerating note above: these are our own test modules,
         # not sources. The tokens are the tails the extractor emits, not the
         # full paths, which is what any failure message would name.
-        "acknowledge.py",
-        "entirety.py",
-        "keys.py",
-        "withdrawals.py",
         # OUR OWN FILENAMES quoted by `docs/INVENTORY.md` and `ADR-007`,
         # registered while closing `OPS-42` questions 1 and 2. Every one was
         # checked against `git ls-files` before being added here, per the
@@ -156,7 +300,6 @@ KNOWN_NON_HOSTS = frozenset(
         # host-shaped pattern reads the dotted token anyway.
         "DELIVERIES.json",
         "ops.outbox.deliver",
-        "outbox.py",
         "outbox.replies",
         # The SIXTH trip, on `LL-0168` itself - the entry recording the fifth.
         # Same shape as the `OPS-31` sequence noted above: the entry that
@@ -170,18 +313,34 @@ KNOWN_NON_HOSTS = frozenset(
         # `ops.outbox.SIBLING_INBOXES`, and `ops.outbox.backfill` of the
         # function of that name - all three are truncations the host-shaped
         # pattern makes, not names anything in this project actually uses.
-        "PATHS.md",
         # A git CONFIG KEY, quoted by `LL-0169` and `OPS-49`. `core.filemode`
         # is not a host and not a file; `.filemode` simply parses as a TLD-
         # shaped tail. Looked at before adding, per the regenerating note.
         #
-        # The other two tokens this same run refused - `gmail.com` and
-        # `close.benham` - were NOT added here and must never be. They were the
-        # operator's own email address, quoted into a ledger entry by mistake,
-        # and this guard is the only thing in the tree that noticed. See
-        # `LL-0170` and `OPS-50`. Adding a real host to this denylist to make a
-        # red run green is how a guard stops working.
+        # THE OTHER TWO TOKENS THIS SAME RUN REFUSED ARE NOT NAMED HERE, ARE
+        # NOT IN THIS DENYLIST, AND MUST NEVER BE EITHER. They were the two
+        # halves of the operator's own email address, quoted into a ledger
+        # entry by mistake, and this guard is the only thing in the tree that
+        # noticed. Naming them in order to say they must not be named is the
+        # same defect one level down, and it was live in this file from
+        # 2026-09-07 until `LL-0173` removed it: the two halves sat 26
+        # characters apart on adjacent lines, in the reverse order, so every
+        # whole-address sweep in this repository went on reporting the tree
+        # clean. See `LL-0170`, `LL-0173` and `OPS-50`. Adding a real host to
+        # this denylist to make a red run green is how a guard stops working.
         "core.filemode",
+        # The NINTH trip, on the ledger entries a concurrent lane wrote while
+        # `OPS-44` was being landed. Both are case 3 of the regenerating note
+        # above and were read in context before being added.
+        #
+        # `lanternlight.redact.iter` is the truncation of
+        # `lanternlight.redact.iter_operator_identifiers`, our own function -
+        # the shorter `redact.iter` was already listed, and the extractor emits
+        # the longer chain when the module prefix is written out.
+        # `user.email` is the GIT CONFIG KEY, the same class of token as
+        # `core.filemode` above. It is the key's NAME, never a value.
+        "lanternlight.redact.iter",
+        "user.email",
         # The EIGHTH trip, on `LL-0171` and `LL-0172`. `json.loads` is a
         # PYTHON STDLIB CALL, not a host; `.loads` merely parses as a TLD-shaped
         # tail. `trigger.json` is the tail of
@@ -194,26 +353,13 @@ KNOWN_NON_HOSTS = frozenset(
         "contract.write",
         "ops.outbox.SIBLING",
         "ops.outbox.backfill",
-        "continue.md",
-        "inventory.py",
-        "lane-capture.md",
-        "lane-emberforge.md",
-        "lane-ingest.md",
-        "lane-research.md",
-        "lane-surface.md",
-        "lane-verify.md",
         "log.gz",
-        "mode.py",
-        "slot.py",
-        "uiux.md",
-        "verifier.md",
         # CAPTURE FILENAMES quoted by `LL-0149`. A frame is stamped
         # `f0566_00.43.29.png` and a fixture `panel_total_1443_hits_28.png`,
         # and the host-shaped pattern reads the dotted tails as domains. An
         # entry that records which frame a committed fixture came from - which
         # is the whole provenance claim - cannot avoid naming it.
         "00.43.29.png",
-        "28.png",
         # `ops/runtime/inbox_seen.json`, quoted by `LL-0153`. Truncated to
         # `seen.json` by the host-shaped pattern.
         "seen.json",
@@ -232,7 +378,6 @@ KNOWN_NON_HOSTS = frozenset(
         # post-edit run. That is `OPS-31` working, not `OPS-31` recurring.
         "Path.iterdir",
         "Path.write",
-        "subdirs.py",
         "MANIFEST.sha",
         # MODULE AND TEST FILENAMES quoted by `LL-0156`, every one arriving
         # TRUNCATED at the last label pair: `tools/doc_size_budget.py` as
@@ -240,13 +385,9 @@ KNOWN_NON_HOSTS = frozenset(
         # `tests/test_precommit_gate_lint.py` as `lint.py`. `m.py` is the
         # throwaway fixture module from the lint gate's own probe transcript,
         # quoted because the probe's exact output is the evidence.
-        "budget.py",
-        "hook.py",
-        "lint.py",
         "m.py",
         # `tests/test_no_hardcoded_home_path.py`, quoted by `LL-0157`,
         # truncated to `path.py` by the host-shaped pattern.
-        "path.py",
         # A standard-library API name quoted by `LL-0157`. The
         # host-shaped pattern reads the dotted call as a domain, the
         # same way it reads `Path.iterdir` above.
@@ -265,7 +406,6 @@ KNOWN_NON_HOSTS = frozenset(
         # host-shaped pattern cannot tell `attribution.commit` from a
         # domain, and a ledger entry that names the file it added should
         # not have to avoid saying its name.
-        "CITATION.cff",
         # Dotted PYTHON PATHS quoted by `LL-0141`. The host-shaped pattern
         # truncates at the first label pair, so `guard.pid_is_alive` is seen
         # as `guard.pid` and `watch.ensure_armed` as `watch.ensure` - the
@@ -276,9 +416,7 @@ KNOWN_NON_HOSTS = frozenset(
         "watch.ensure",
         # Module paths, filenames and an API name quoted by `LL-0140`.
         "pytest.importorskip",
-        "surfaces.py",
         "sys.meta",
-        "tests.yml",
         # Dotted PYTHON ATTRIBUTES quoted by `LL-0147`, truncated by the
         # host-shaped pattern the same way the `LL-0141` block above records:
         # `lanes.REPO_ROOT` is seen as `lanes.REPO`. Both name attributes of
@@ -290,8 +428,6 @@ KNOWN_NON_HOSTS = frozenset(
         "summary.passed",
         "attribution.commit",
         "attribution.pr",
-        "config.yml",
-        "observation.yml",
         # Filenames and a JS LIBRARY quoted by the `OPS-29` re-survey, none a
         # source. Every one was read in context before being added here.
         #
@@ -328,11 +464,8 @@ KNOWN_NON_HOSTS = frozenset(
         "LoopState.item",
         "build.buildid",
         "proc.returncode",
-        "provenance.json",
-        "provenance.py",
         "pytest.cacheprovider.json.dumps",
         "00.42.52.png",
-        "10.png",
         "19.02.51.472.png",
         "19.02.52.028.png",
         "19.18.28.701.png",
@@ -340,26 +473,12 @@ KNOWN_NON_HOSTS = frozenset(
         "32.34.jpg",
         "3282300.acf",
         "937566.ini",
-        "ADR-001-no-game-process-interaction.md",
-        "ADR-002-no-asset-extraction.md",
-        "ADR-003-log-is-primary-surface.md",
-        "ADR-004-redaction-is-mandatory.md",
-        "ADR-005-omit-rather-than-guess.md",
-        "ADR-006-apache-2-and-public.md",
-        "ADR-007-lane-slot-root-is-ours.md",
-        "AFFIXES.md",
-        "ARCHITECTURE.md",
         "AvgPrice.ini",
-        "BACKLOG.md",
         "BotData.TreasurableItems",
-        "CLASSES.md",
-        "CLAUDE.md",
         "Deck.sav",
-        "ECOSYSTEM.md",
         "Engine.ini",
         "EnhancedInput.EnhancedPlayerMappableKe",
         "EnhancedInputUserSettings.sav",
-        "FINDINGS.md",
         "FTE.Event.ChangeWeapon",
         "Game.EscapeType.GroveSprite",
         "Game.Net.Online",
@@ -376,15 +495,12 @@ KNOWN_NON_HOSTS = frozenset(
         "GvasSave.properties",
         "GvasSave.trailing",
         "GvasSave.undecoded",
-        "HEADLESS.md",
         "HH.MM.SS.png",
-        "IDS.md",
         "IdGeneratorData.NumIdToUUID",
         "IdGeneratorData.UUIDToNumId",
         "Inventory.equipments",
         "ItemCell.cfgId",
         "KillPlayerHistoryDatas.PlayerName",
-        "LEDGER.md",
         "LeaderRankScoreData.KillPlayerCount",
         "LeaderRankScoreData.KillPlayerHistoryDatas",
         "LogLine.raw",
@@ -396,11 +512,8 @@ KNOWN_NON_HOSTS = frozenset(
         "MistfallHunter.exe",
         "MistfallHunter.ini",
         "MistfallHunter.log",
-        "NOTES.md",
         "Next.js",
         "Notice.sav",
-        "OPERATIONS.md",
-        "OVERLAY.md",
         "OverlayWindow.apply",
         "OverlayWindow.current",
         "PROMPT.md",
@@ -411,13 +524,9 @@ KNOWN_NON_HOSTS = frozenset(
         "PlayerData.Transform",
         "Process.OtherOperationCount",
         "RE.finditer",
-        "README.md",
-        "RESEARCH.md",
-        "ROADMAP.md",
         "SECURITY.md",
         "SEscapePortalSpawner.initialize",
         "SOUL.md",
-        "STATE.json",
         "Scav.sav",
         "SaveWatcher.consecutive",
         "Status.Talent",
@@ -445,37 +554,26 @@ KNOWN_NON_HOSTS = frozenset(
         "accountList.json",
         "alias.TerminateProcess",
         "anchors.place",
-        "anchors.py",
         "ant.dir.cursortouch.windows",
         "armwatch.err",
         "armwatch.json",
         "armwatch.main",
         "armwatch.log",
-        "armwatch.py",
         "ast.Attribute",
-        "avgprice.py",
         "bottle-0.13.4.data",
         "bytes.splitlines",
-        "capability.py",
         "channel.steam",
         "child.pid",
-        "check.py",
         "com.hermes.pstgame",
         "config.json",
-        "contract.py",
-        "contracts.py",
         "core.hooksPath",
         "ctypes.windll",
         "current.item",
         "cycle34.csv",
-        "damage.py",
         "dir.mkdir",
         "dataclasses.replace",
-        "done.md",
         "filecmp.cmp",
-        "fixtures.py",
         "gate.check",
-        "gate.py",
         "gate.verify",
         "global.ucas",
         "global.utoc",
@@ -485,30 +583,21 @@ KNOWN_NON_HOSTS = frozenset(
         "gpm.dll",
         "gpmperf.dll",
         "gsdk.dll",
-        "guard.py",
         "guard.released",
         "gvas.parse",
-        "gvas.py",
         "heartbeat.json",
         "hb.record",
         "heartbeat.record",
-        "hooks.py",
         "hydra.dll",
-        "hygiene.py",
         "icd.json",
         "ids.next",
-        "ids.py",
         "infos.json",
-        "ingest.LEDGER.md",
         "kernel32.TerminateProcess",
-        "lane-ops.md",
-        "lane-safety.md",
         "lane.worktree",
         "lanes.git",
         "lanes.owner",
         "lanes.path",
         "lanes.primary",
-        "lanes.py",
         "lanternlight.armwatch",
         "lanternlight.damage",
         "lanternlight.gvas",
@@ -518,24 +607,17 @@ KNOWN_NON_HOSTS = frozenset(
         "lanternlight.redact.RedactionError",
         "lanternlight.savewatch",
         "lanternlight.tail",
-        "launcher.py",
-        "ledger.py",
         "libcef.dll",
         "log.db",
-        "logparse.py",
         "loop.lock",
-        "loop.md",
         "mcp.json",
         "mcp.json.bak",
-        "mdscan.py",
         "message.lower",
-        "meter.py",
         "meter.read",
         "newthing.py",
         "non-MistfallHunter.log",
         "nope.md",
         "notes.md",
-        "ops.LEDGER.md",
         "ops.lane",
         "ops.lanes.REPO",
         "ops.lanes.owner",
@@ -558,39 +640,22 @@ KNOWN_NON_HOSTS = frozenset(
         "pakchunk6-Windows.utoc",
         "pakchunk8-Windows.utoc",
         "pakchunk9-Windows.utoc",
-        "paks.py",
         "parfait.dll",
         "path.replace",
-        "paths.py",
         "payload.rows",
-        "pii.py",
-        "poller.py",
-        "ports.py",
         "probe.sav",
-        "pyproject.toml",
-        "pytest.ini",
         "python.exe",
         "pythonw.exe",
         "re.IGNORECASE",
         "redact.AUTHORED",
         "redact.assert",
         "redact.iter",
-        "redact.py",
-        "register.py",
         "render.Payload",
-        "render.py",
         "render.render",
         "render.waiting",
         "rolling.record",
-        "research.STATE.json",
-        "ruff.toml",
-        "safety.LEDGER.md",
-        "safety.STATE.json",
-        "sample.ini",
-        "savewatch.py",
         "seen.add",
         "serena.exe",
-        "settings.json",
         "shutil.copy",
         "slot.gvas",
         "sscronet.dll",
@@ -600,7 +665,6 @@ KNOWN_NON_HOSTS = frozenset(
         "state.duplicate",
         "state.integrate",
         "state.json",
-        "state.py",
         "state.save",
         "state.stale",
         "str.splitlines",
@@ -610,12 +674,10 @@ KNOWN_NON_HOSTS = frozenset(
         "sys.stderr",
         "sys.stderr.write",
         "sys.stdin",
-        "tail.py",
         "textwrap.dedent",
         "tgrpdownloader.dll",
         "target.replace",
         "tracked.iter",
-        "tracked.py",
         "unowned.txt",
         "user.json",
         "uv.exe",
@@ -623,10 +685,7 @@ KNOWN_NON_HOSTS = frozenset(
         "v1.sav",
         "version.txt",
         "victimPlayerState.name",
-        "walker.py",
-        "watch.py",
         "watch.session",
-        "window.py",
         # A FIFTH wave of our own and a sibling's filenames, quoted by
         # `LL-0164`, the entry recording the 2026-09-07 inbox review. Both
         # arrive as the tail the extractor emits, and both were probed with
@@ -648,7 +707,6 @@ KNOWN_NON_HOSTS = frozenset(
         # it has absorbed a sibling's. The count is still the warning and the
         # decision is still deferred: additions are reviewed here, the LOGIC is
         # left alone, and `OPS-44` holds the choice.
-        "LL-NEXT-SESSION.txt",
         "winmutex.py",
         }
 )
@@ -718,11 +776,18 @@ def cited_hosts(root: Path = DOCS) -> dict[str, set[str]]:
 
 
 def external_sources(root: Path = DOCS) -> dict[str, set[str]]:
-    """:func:`cited_hosts` minus the vetted non-hosts."""
+    """:func:`cited_hosts` minus this repo's own filenames and the vetted
+    non-hosts.
+
+    The filename subtraction runs FIRST, which is the whole of `OPS-44` option
+    2: a host-shaped token is treated as a repo-internal filename candidate
+    before it is treated as an external source, and only falls through to the
+    denylist and then to the register requirement when it is not one.
+    """
     return {
         token: files
         for token, files in cited_hosts(root).items()
-        if token not in KNOWN_NON_HOSTS
+        if not is_repo_filename(token) and token not in KNOWN_NON_HOSTS
     }
 
 
@@ -756,6 +821,196 @@ def test_the_denylist_actually_subtracts_something():
         "longer matching the dotted code identifiers docs/ is full of. A "
         "checker that reports zero non-host noise is misconfigured rather "
         "than clean"
+    )
+
+
+def test_a_real_external_source_is_still_caught_when_a_same_named_file_exists():
+    """`OPS-44` criterion 2, and the exact `LL-0079` regression.
+
+    The risk `OPS-44` names is that a filename heuristic auto-exempts a real
+    two-letter TLD being used as a live external source. ``th.gl`` is the host
+    that was actually invisible in 2026-08, so it is the host used here.
+
+    The injected listing is built so the exemption WOULD fire if the boundary
+    rule were wrong: ``fourth.gl`` ends with ``th.gl``, and a bare
+    ``str.endswith`` would excuse the source on the strength of it. The
+    character before the token is ``r``, which is not a name-part boundary, so
+    the correct rule refuses. Driven with an injected listing rather than by
+    creating files, because a guard that needs a file on disk to prove itself
+    is a guard nobody re-runs.
+    """
+    listing = ("docs/fourth.gl", "tools/fifth.gl", "notes/nth.gl")
+    assert not is_repo_filename("th.gl", listing), (
+        "th.gl - the LL-0079 host - was auto-exempted by a tracked file that "
+        "merely ENDS with it. The boundary rule is not holding, and OPS-44 has "
+        "reintroduced the exact failure it promised not to"
+    )
+    # And the positive control, so this is not passing because nothing matches:
+    # the same rule DOES exempt th.gl when a real name part says so.
+    assert is_repo_filename("th.gl", ("docs/some_th.gl",))
+
+
+def test_a_real_external_source_is_still_caught_when_no_such_file_exists():
+    """`OPS-44` criterion 2, the other half - no same-named tracked file.
+
+    Against the LIVE listing, not an injected one: these are hosts this
+    repository genuinely cites, and if any of them were ever excused the
+    register would stop being the single entry point it exists to be.
+    """
+    for host in ("th.gl", "twitch.tv", "gyldforge.com", "steamcommunity.com"):
+        assert not is_repo_filename(host), (
+            f"{host!r} was treated as one of this repository's own filenames. "
+            "It is an external source and must stay subject to the register "
+            "requirement"
+        )
+
+
+def test_an_empty_tracked_listing_exempts_nothing():
+    """Fail-CLOSED. A broken listing must make this guard noisier, not quieter.
+
+    If ``git`` is missing, exits non-zero, or prints nothing,
+    :func:`tracked_paths` returns an empty tuple. Every token then falls
+    through to the denylist and the register requirement, which is the loud
+    direction. The opposite - exempting everything when the data source breaks
+    - would turn a broken subprocess into a silently green guard, which is the
+    failure mode this whole module was written against.
+
+    Driven by passing the empty listing directly, because that is the value the
+    failure path produces and the value the caller has to survive.
+    """
+    for token in ("README.md", "redact.py", "subdirs.py", "th.gl", "CLAUDE.md"):
+        assert not is_repo_filename(token, ()), (
+            f"{token!r} was exempted against an EMPTY tracked listing. The "
+            "check has a default-allow path and a failed git call would "
+            "silence this guard"
+        )
+
+
+def test_the_listing_cache_is_keyed_on_the_root_it_asked_about():
+    """A process-wide cache with no key made this guard lie for a whole run.
+
+    `OPS-44`, found by the full suite and not by this file alone.
+    ``tests/test_docguards.py`` monkeypatches :data:`REPO_ROOT` to a temporary
+    tree in order to plant a token, and it runs BEFORE this module. With an
+    unkeyed cache the first answer of the run was the empty one that temporary
+    tree deserves, and every later call in the real repository inherited it -
+    104 of this project's own files were reported as unregistered sources
+    while `python -m pytest tests/test_source_register.py` stayed green.
+
+    So the two roots must not share an answer, and the real one must be
+    non-empty.
+    """
+    empty_root = REPO_ROOT / "no" / "such" / "directory"
+    assert tracked_paths(empty_root) == (), (
+        "a directory that is not a repository answered with paths"
+    )
+    assert tracked_paths(REPO_ROOT), (
+        "the real repository answered with NOTHING right after a non-repository "
+        "was asked - the listing cache is shared across roots, and this guard "
+        "will report our own filenames as unregistered sources for the rest of "
+        "the run"
+    )
+    # Order reversed, because a cache poisoned in one direction is still poison.
+    assert tracked_paths(empty_root) == ()
+    assert tracked_paths(REPO_ROOT)
+
+
+def test_the_boundary_rule_is_what_does_the_work():
+    """What the boundary buys, and the case it DELIBERATELY does not block.
+
+    THE DECISION, made explicitly rather than by accident. ``example.py`` IS
+    exempted by a tracked ``test_example.py``, because ``_`` is a name-part
+    boundary. That is not an oversight and it is not a leak: :data:`HOST_SHAPED`
+    excludes ``_`` from a label, so a tracked file named ``test_example.py``
+    is emitted BY THIS MODULE'S OWN EXTRACTOR as the token ``example.py``.
+    Refusing the exemption would mean the check could never cover the
+    truncation case that `OPS-44` exists to solve - ``subdirs.py`` from
+    ``tests/test_inbox_watch_subdirs.py`` is the same shape and is the largest
+    single family in the denylist this change removed. A rule that cannot
+    excuse our own file under the only name the guard ever sees it by is not a
+    narrower rule, it is a broken one.
+
+    What the boundary DOES block is the coincidental tail: a token that starts
+    part-way through a name part. ``ple.py`` is not excused by
+    ``test_example.py``, and ``th.gl`` is not excused by ``fourth.gl``. The
+    cost of the decision is bounded and stated in the module docstring: to
+    excuse a real source someone must commit a file whose name part IS that
+    source's name.
+    """
+    listing = ("tests/test_example.py", "docs/REPLY_PATHS.md", "README.md")
+    # Exact basename equality.
+    assert is_repo_filename("README.md", listing)
+    # Bounded tail: `_` and the truncation case OPS-44 is about.
+    assert is_repo_filename("example.py", listing)
+    assert is_repo_filename("PATHS.md", listing)
+    # Coincidental tails, starting part-way through a name part, are refused.
+    assert not is_repo_filename("ple.py", listing)
+    assert not is_repo_filename("THS.md", listing)
+    # A token LONGER than any basename is refused rather than crashing.
+    assert not is_repo_filename("very_long_test_example.py", listing)
+
+
+def test_neither_half_of_an_email_address_is_treated_as_a_filename():
+    """`LL-0170`, `LL-0173`, `OPS-50`. An address is not two filenames.
+
+    This guard is the only thing in the tree that has ever noticed an operator
+    email address reaching a committed document, and it noticed by refusing
+    both halves as unregistered hosts. `OPS-44` adds an exemption path, so the
+    exemption must be proven not to swallow them.
+
+    No real address appears here or anywhere in this file, and the FIRST
+    version of this test broke that rule while asserting it. It built the two
+    halves of the operator's real address out of four string literals joined by
+    ``+``, and described them as synthetic. They were not: Python joins them
+    back together at import time, and a reader joins them by eye. That form is
+    invisible to every sweep in this repository INCLUDING the split check
+    `LL-0173` had just added, because no half is contiguous in the bytes. It is
+    the `LL-0170` defect for the third time in as many days, each time one
+    level further down, and each time inside the guard that exists to prevent
+    it. The probes below are genuinely unrelated to any real identity.
+
+    The injected listing carries the near-misses a looser rule would fall for:
+    a basename ending in the domain half, and one ending in the local half,
+    neither preceded by a name-part boundary.
+    """
+    local = "zaphodbee"
+    domain = "somecompany.example"
+    near_misses = ("docs/not" + domain, "tools/en" + local + ".py")
+    for probe in (local, domain):
+        assert not is_repo_filename(probe, near_misses), (
+            "half of an email address was treated as one of this repository's "
+            "own filenames on the strength of a coincidental tail - the "
+            "address would be exempted from the register check and nothing "
+            "else in this tree would notice"
+        )
+        assert not is_repo_filename(probe), (
+            "half of an email address matched a REAL tracked filename in this "
+            "repository. Rename that file; an address must never be excusable"
+        )
+        assert probe not in KNOWN_NON_HOSTS, (
+            "half of an email address is in the denylist. See LL-0173 - "
+            "naming them in order to exclude them is the same defect one "
+            "level down"
+        )
+
+
+def test_the_filename_check_covers_our_own_files_and_the_denylist_does_not():
+    """`OPS-44` landed: our filenames are checked LIVE, not enumerated.
+
+    The denylist must no longer carry a token that :func:`is_repo_filename`
+    already covers. A stale duplicate is dead weight that outlives the file it
+    names, and the six waves of exactly that are why this item was filed.
+    """
+    absorbed = sorted(t for t in KNOWN_NON_HOSTS if is_repo_filename(t))
+    assert not absorbed, (
+        f"{len(absorbed)} denylist entries are now covered by the live "
+        "tracked-file check and should be deleted from KNOWN_NON_HOSTS: "
+        + ", ".join(absorbed)
+    )
+    # Positive control - the check is not answering False to everything.
+    assert is_repo_filename("register.py"), (
+        "this very file's own tail is not recognised as a tracked filename, "
+        "so the live listing is empty or the rule is broken"
     )
 
 

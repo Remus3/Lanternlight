@@ -59,8 +59,10 @@ from lanternlight.redact import (  # noqa: E402  (path bootstrap must run first)
     RedactionError,
     assert_no_operator_identifier,
     iter_encoded_sensitive,
+    iter_literal_joined_operator_identifiers,
     iter_operator_identifiers,
     iter_sensitive,
+    join_adjacent_literals,
     operator_git_identities,
 )
 
@@ -437,6 +439,92 @@ def test_the_value_half_reaches_what_the_shape_half_declines():
     assert [label for label, _, _ in hits] == ["GIT_IDENTITY"]
 
 
+def test_the_split_half_reaches_an_address_that_is_never_contiguous():
+    # LL-0173. The shape half needs a whole address and the value half matches
+    # a literal, so an address whose two halves are written separately defeats
+    # both at once. It was not hypothetical: the halves of the operator's own
+    # address sat 26 characters apart on adjacent lines of a tracked file in
+    # this repository, in the reverse order, and every sweep called the tree
+    # clean.
+    local, domain = "zaphodbee", "somecompany.example"
+    address = local + "@" + domain
+    text = "refused `" + domain + "` and" + chr(10) + "# `" + local + "` - not added here"
+    assert address not in text
+    labels = [
+        label
+        for label, _, _ in iter_operator_identifiers(text, identities=(address,))
+    ]
+    assert labels == ["GIT_IDENTITY_SPLIT"], (
+        "an address split into its two halves must still be a finding - a "
+        "reader reconstructs it, and a guard that cannot is decoration"
+    )
+
+
+def test_the_split_half_is_order_free_and_distance_free():
+    # A distance threshold would only tell an author how far apart to put the
+    # halves, and an order requirement only which one to write first.
+    local, domain = "zaphodbee", "somecompany.example"
+    address = local + "@" + domain
+    for text in (
+        local + (" filler" * 400) + " " + domain,
+        domain + (" filler" * 400) + " " + local,
+    ):
+        labels = [
+            label
+            for label, _, _ in iter_operator_identifiers(text, identities=(address,))
+        ]
+        assert labels == ["GIT_IDENTITY_SPLIT"], (
+            "the split half must not depend on the order of the halves or on "
+            "the distance between them"
+        )
+
+
+def test_one_half_alone_is_never_a_finding():
+    # A domain on its own is an ordinary citation, and a local part on its own
+    # identifies nobody. Requiring BOTH is what keeps this guard's false
+    # positive rate near zero, which is what keeps it switched on.
+    local, domain = "zaphodbee", "somecompany.example"
+    address = local + "@" + domain
+    for text in ("see " + domain + " for details", "a user called " + local):
+        assert not list(iter_operator_identifiers(text, identities=(address,)))
+
+
+def test_a_whole_address_is_not_also_reported_as_split():
+    # Both halves are present inside every whole address. Reporting it twice
+    # would make a sweep's count meaningless, and a count is what a sweep
+    # reports.
+    address = "zaphodbee" + "@" + "somecompany" + ".com"
+    labels = [
+        label
+        for label, _, _ in iter_operator_identifiers("see " + address, identities=(address,))
+    ]
+    assert labels == ["EMAIL"]
+
+
+def test_a_half_below_the_minimum_length_is_not_used_for_split_detection():
+    # A two- or three-character half matches inside ordinary prose, and a
+    # repository guard with false positives is a denial of service on the work.
+    address = "abc" + "@" + "somecompany.example"
+    text = "abc appears here and somecompany.example over there"
+    assert not list(iter_operator_identifiers(text, identities=(address,))), (
+        "a half shorter than the minimum must not drive the split half"
+    )
+
+
+def test_the_split_refusal_never_quotes_either_half():
+    # The refusal travels, exactly as the whole-address one does.
+    local, domain = "zaphodbee", "somecompany.example"
+    address = local + "@" + domain
+    with pytest.raises(RedactionError) as excinfo:
+        assert_no_operator_identifier(
+            domain + " ... " + local, identities=(address,)
+        )
+    message = str(excinfo.value)
+    assert local not in message
+    assert domain not in message
+    assert "somecompany" not in message
+
+
 def test_one_address_is_reported_once_and_not_twice():
     # Both mechanisms match an ordinary address. A finding reported twice makes
     # a count meaningless, and a count is what a sweep reports.
@@ -457,6 +545,84 @@ def test_the_refusal_never_quotes_the_address_it_found():
         assert_no_operator_identifier("mail " + address, identities=(address,))
     assert address not in str(excinfo.value)
     assert "somecompany" not in str(excinfo.value)
+
+
+def _scan_operator_joined(path: Path, identities=None):
+    """Operator-identifier findings after adjacent string literals are joined.
+
+    A THIRD pass, for the same reason the encoded pass exists: a value that is
+    never contiguous in the bytes defeats every rule at once. Here the encoding
+    is Python's own, ``"clo" + "se"``, which the interpreter and the reader both
+    undo and which no grep over this tree ever will.
+
+    The line number is deliberately NOT reported. Joining shifts every offset
+    after the first join, so a line number taken from the joined text names a
+    line that does not exist in the file, and a finding that sends the reader to
+    the wrong line is worse than one that sends them to the file.
+    """
+    text = _read(path)
+    if text is None:
+        return [f"{_relative(path)}: unreadable"]
+
+    rel = _relative(path)
+    findings = []
+    for label, matched, _ in iter_literal_joined_operator_identifiers(
+        text, identities=identities
+    ):
+        findings.append(
+            f"{rel} {label} -> a {len(matched)}-character operator identifier "
+            "appears once adjacent string literals are joined, not quoted here "
+            "because this message travels. No line number: joining moves every "
+            "offset after the first join"
+        )
+    return findings
+
+
+def test_joining_adjacent_literals_undoes_the_split_a_reader_undoes():
+    # LL-0175. Python joins these at import time and a reader joins them by
+    # eye; only a byte-oriented sweep is fooled.
+    assert join_adjacent_literals('x = "ab" + "cd"') == 'x = "abcd"'
+    # A CHAIN needs more than one pass.
+    assert join_adjacent_literals("""x = 'a' + 'b' + 'c' + 'd'""") == "x = 'abcd'"
+    # Across a line break, because a formatter wraps a long concatenation.
+    assert join_adjacent_literals('x = ("ab"\n     + "cd")') == 'x = ("abcd")'
+    # Mismatched quote styles are NOT joined - that is not one literal.
+    assert join_adjacent_literals("""x = "ab" + 'cd'""") == """x = "ab" + 'cd'"""
+    # Text with no concatenation is returned unchanged.
+    assert join_adjacent_literals("nothing to do here") == "nothing to do here"
+
+
+def test_an_address_built_by_concatenation_is_found_by_the_joined_pass():
+    # The exact defect of LL-0175, with a synthetic address. The whole point is
+    # that the ordinary passes are blind to it, so both halves are asserted.
+    source = 'local = "zaph" + "odbee"\ndomain = "somecom" + "pany.example"\n'
+    address = "zaphodbee" + "@" + "somecompany.example"
+    assert address not in source
+    assert not list(iter_operator_identifiers(source, identities=(address,))), (
+        "the ordinary pass must be blind to this - if it is not, the fixture "
+        "no longer reproduces the defect and this test proves nothing"
+    )
+    labels = [
+        label
+        for label, _, _ in iter_literal_joined_operator_identifiers(
+            source, identities=(address,)
+        )
+    ]
+    assert labels == ["GIT_IDENTITY_SPLIT"]
+
+
+def test_the_repository_carries_no_operator_identifier_once_literals_are_joined():
+    findings, scanned = _scan_tree(_scan_operator_joined)
+    _assert_scanned_enough(scanned)
+
+    assert not findings, (
+        f"{len(findings)} operator identifier(s) appear in the tree once "
+        "adjacent string literals are joined. Splitting a value across "
+        "literals hides it from every other pass in this module and from any "
+        "grep anyone will run - see ledger LL-0175 and ROADMAP OPS-51."
+        + chr(10)
+        + chr(10).join(findings)
+    )
 
 
 def test_the_repository_carries_no_operator_identifier():

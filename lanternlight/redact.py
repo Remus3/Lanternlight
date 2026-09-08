@@ -339,8 +339,10 @@ __all__ = [
     "assert_no_operator_identifier",
     "discover_personas",
     "iter_encoded_sensitive",
+    "iter_literal_joined_operator_identifiers",
     "iter_operator_identifiers",
     "iter_sensitive",
+    "join_adjacent_literals",
     "operator_git_identities",
     "redact",
 ]
@@ -1490,6 +1492,13 @@ _IDENTITY_SHAPE = re.compile(r"[A-Za-z0-9._%+-]+@(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,
 #: a two-character substring of every file in the tree.
 _IDENTITY_MIN_CHARS = 6
 
+#: A HALF shorter than this is not used for split detection. The split half
+#: looks for the local part and the domain separately, so a two- or three-
+#: character half would match inside ordinary prose and redden the whole tree.
+#: A repository guard with false positives is a denial of service on the work,
+#: which is the failure that gets a guard switched off.
+_IDENTITY_HALF_MIN_CHARS = 4
+
 #: How long git may take. Measured 2026-09-07 on this repository: the two
 #: commands together return in about 0.04 seconds and yield exactly ONE
 #: address across all refs in both the author and committer roles.
@@ -1555,6 +1564,21 @@ def operator_git_identities(root: Path | str | None = None) -> tuple[str, ...]:
 
     Returns an empty tuple when git cannot answer - see
     :func:`_derive_git_identities` for why that is not an exception.
+
+    **A RULED, ACCEPTED EXPOSURE, recorded here so it is not rediscovered.**
+    One of the identities this function derives is published in this
+    repository's own commit metadata, on the large majority of its commits, and
+    this repository is public. That was measured on 2026-09-08 and put to the
+    operator, who ruled: leave the history as is. See ``ROADMAP`` ``OPS-52``.
+
+    So a later session reading ``git log`` and finding an address there has
+    found something already known and already decided, not a new leak, and must
+    not propose a history rewrite that has been declined once. Nothing about
+    that ruling relaxes this module: the address is still refused in the
+    working tree and on the outgoing note channel, because what was accepted is
+    292 commits that already exist rather than whatever gets written next.
+
+    No address is named in this note, which is the point of ``OPS-51``.
     """
     return _derive_git_identities(str(Path(root) if root is not None else _REPO_ROOT))
 
@@ -1626,7 +1650,128 @@ def iter_operator_identifiers(
             start = match.start()
             if any(begin <= start < end for begin, end in covered):
                 continue
+            covered.append((start, start + len(match.group(0))))
             yield "GIT_IDENTITY", match.group(0), start
+
+    # THE SPLIT HALF. An address that is never contiguous defeats both halves
+    # above at once: the shape rule needs a whole address and the value half
+    # matches a literal. Measured 2026-09-08 in this repository - the two
+    # halves of the operator's account address sat 26 characters apart on
+    # adjacent lines of a tracked, published file, in the reverse order, and
+    # every guard in this module reported the tree clean. See ledger LL-0173
+    # and ROADMAP OPS-51.
+    #
+    # The test is deliberately WHOLE-FILE and order-free rather than
+    # proximity-based. A reader reconstructs an address from two halves in the
+    # same document whatever the distance between them and whichever came
+    # first, so a distance threshold would only tell an author how far apart
+    # to put them. Requiring BOTH halves before firing is what keeps the false
+    # positive rate near zero: a domain alone is an ordinary citation.
+    for value in values:
+        local, _, domain = value.partition("@")
+        if (
+            len(local) < _IDENTITY_HALF_MIN_CHARS
+            or len(domain) < _IDENTITY_HALF_MIN_CHARS
+        ):
+            continue
+        halves = []
+        for half in (local, domain):
+            halves.append(
+                [
+                    match.start()
+                    for match in re.finditer(re.escape(half), text, re.IGNORECASE)
+                    if not any(
+                        begin <= match.start() < end for begin, end in covered
+                    )
+                ]
+            )
+        local_hits, domain_hits = halves
+        if local_hits and domain_hits:
+            yield "GIT_IDENTITY_SPLIT", local, min(local_hits[0], domain_hits[0])
+
+
+#: Adjacent string literals joined by ``+``, the way source code writes a value
+#: it does not want to appear whole. Both quote styles, and any whitespace or
+#: line break around the operator, because a formatter will wrap a long
+#: concatenation wherever it likes.
+_LITERAL_JOIN = re.compile(r"""(?P<q>["'])\s*\+\s*(?P=q)""")
+
+
+def join_adjacent_literals(text: str) -> str:
+    """Return ``text`` with adjacent quoted literals joined, as Python joins them.
+
+    ``"ab" + "cd"`` becomes ``"abcd"``, chains included. This is a
+    NORMALISATION for scanning, never a rewrite of anything written back.
+
+    **Why this exists, measured 2026-09-08.** A test written to prove that
+    neither half of an operator address could be excused built those halves out
+    of four literals joined by ``+`` and called them synthetic. They were the
+    real ones. Python rejoins them at import time and a reader rejoins them by
+    eye, but no half is contiguous in the bytes, so the ``EMAIL`` rule, the
+    value half and the split half of :func:`iter_operator_identifiers` were all
+    blind to it at once - including the split half added hours earlier for
+    exactly this class of defect. See ``LL-0173`` and ``LL-0175``.
+
+    The same trick hides a value from any grep anyone will ever run over this
+    tree, which is why the normalisation is applied by the repository scan
+    rather than described in a comment for someone to remember.
+
+    It is deliberately NOT applied by :func:`assert_no_operator_identifier` on
+    the outgoing note channel. A note is prose; ``" + "`` between two quoted
+    words is ordinary English there, and joining them would manufacture tokens
+    that exist nowhere - the same manufacturing failure this project already
+    recorded when an over-eager whitespace collapse invented 18 phantom hits.
+    """
+    # ONE pass folds a chain, and this was not obvious enough to leave
+    # unstated. The first version looped until the text stopped changing; a
+    # mutation reducing it to a single pass SURVIVED, which is a surviving
+    # mutation doing its job - the loop was dead code, not a safeguard.
+    #
+    # The reason is that the matches never overlap. A match consumes the
+    # CLOSING quote of one literal, the operator, and the OPENING quote of the
+    # next, so in ``"a" + "b" + "c"`` the scan resumes at the closing quote of
+    # ``"b"``, which is exactly where the second glue begins. Nothing is left
+    # for a second pass to find, and no join can create new glue.
+    return _LITERAL_JOIN.sub("", text)
+
+
+#: Labels the literal-joined pass reports. The SHAPE half is deliberately
+#: absent - see :func:`iter_literal_joined_operator_identifiers`.
+_JOINED_PASS_LABELS = frozenset({"GIT_IDENTITY", "GIT_IDENTITY_SPLIT"})
+
+
+def iter_literal_joined_operator_identifiers(
+    text: str, identities: Iterable[str] | None = None
+) -> Iterator[tuple[str, str, int]]:
+    """The VALUE half of :func:`iter_operator_identifiers` over joined literals.
+
+    Offsets refer to the JOINED text, not to the file, so a caller reporting a
+    line number from one of these is reporting a line in a string that never
+    existed on disk. Callers say so rather than pretending otherwise.
+
+    **The ``EMAIL`` shape half is excluded, and that is a scoping decision
+    rather than an oversight.** Measured when this pass was first wired to the
+    repository scan: it reported six findings, every one of them a SYNTHETIC
+    address that a test in this tree builds by concatenation on purpose, such
+    as ``"probe" + "@" + domain``. Those fixtures are constructed that way
+    precisely so that no real address has to be written down, so a pass that
+    reddens on them punishes the practice this module asks for. Joining
+    literals turns every one of them into an address shape.
+
+    The value half has no such problem: it asks whether the text carries an
+    identity DERIVED from this repository's own git history, and a fixture
+    cannot accidentally be one.
+
+    **The blind spot this creates, stated rather than hidden.** A third party's
+    real address, split across literals, is not derived from this history and
+    so is not caught here. The plain and encoded passes still see it whenever
+    it is contiguous; only the joined-and-shape-only combination is unwatched.
+    """
+    for label, matched, offset in iter_operator_identifiers(
+        join_adjacent_literals(text), identities
+    ):
+        if label in _JOINED_PASS_LABELS:
+            yield label, matched, offset
 
 
 def assert_no_operator_identifier(
@@ -1966,6 +2111,20 @@ def _raise_leak(text: str, label: str, matched: str, offset: int) -> None:
         detail = (
             f"a {len(matched)}-character email address, not quoted here "
             "because this message travels"
+        )
+    elif label == "GIT_IDENTITY_SPLIT":
+        # The fall-through below quotes what it was given, and this branch
+        # exists because that is exactly what happened when the split half was
+        # first written: the refusal printed the local part in full. Caught by
+        # its own test before it shipped, and the branch is kept rather than
+        # the label being added to the tuple above so the message can say what
+        # was actually found without naming a byte of it.
+        detail = (
+            "both halves of an operator email address, written separately so "
+            "that no whole address appears anywhere in the text - the offset "
+            "above is the earlier half. Neither half is quoted here because "
+            "this message travels, and quoting one of them would publish the "
+            "part that leaked"
         )
     elif label == "PERSONA":
         detail = (

@@ -5252,7 +5252,7 @@ CONTENT separately; one query does not cover both.
    present anywhere on disk. Met per the runtime-assembled-fixture description
    above.
 
-## OPS-41. Wire an automatic acknowledge trigger tied to the operator's own turn - BUILT 2026-09-07, criterion 1 NOT MET and deliberately not claimed
+## OPS-41. Wire an automatic acknowledge trigger tied to the operator's own turn - CLOSED 2026-09-08, criterion 1 measured from a fresh session
 
 Filed 2026-09-07, split out of the `OPS-33` follow-up above at its closure,
 because closing that item on the stronger "nothing acknowledges by accident"
@@ -5319,6 +5319,50 @@ off that file, criterion 1 is open.
 
 **Criterion 2 was NOT triggered.** Nothing here concluded that the harness
 cannot make the distinction - only that this session could not observe it.
+
+**2026-09-08, from the next fresh session. Criterion 1 is MET, on both halves,
+and the measurement corrected an answer this item was one probe away from
+getting wrong.** The evidence is the trace file, read before this session made
+any tool call of its own.
+
+*The firing half.* `ops/runtime/inbox_prompt_trigger.json` already carried a
+row stamped `2026-09-08T01:11:08+00:00`, `event` `UserPromptSubmit`, `decision`
+`acknowledged`, against this session's own id - the id the harness uses for
+this session's scratchpad directory, so it is checkable rather than asserted.
+Three rows from the previous session sit above it, one `acknowledged` and two
+`already-acknowledged-this-session`, which is the once-per-session guard
+visible in the record rather than argued for.
+
+*The not-firing half, and the trap in it.* Two background subagents were
+dispatched, and two new rows appeared, at `01:12:09` and `01:12:12`. Read
+alone, that says the hook DOES fire for subagents and refutes the half. It is
+the wrong reading, and two further probes are what separate them:
+
+- A FOREGROUND subagent added no row at all: six rows before, six after.
+- A BACKGROUND subagent was made to sleep 75 seconds, reporting `START`
+  `01:13:10` and `END` `01:14:25`. The trace was read at `01:13:12`, two
+  seconds into that subagent's life, and still held six rows. Its row appeared
+  at `01:14:37` - twelve seconds after the subagent had EXITED, at the moment
+  its completion notification was injected into this session.
+
+So the hook fires when the harness submits a PROMPT into the top-level session,
+and a background-task completion notification is one. It does not fire on a
+subagent's start. Criterion 1 is met on both halves.
+
+**A fact the criterion did not ask for, recorded because it changes what the
+hook means.** The trigger is not "the operator's own turn". It is "a prompt
+submitted into this session", and some of those are written by the harness
+rather than by the operator. Every such row here is a refusal, because an
+injected notification carries the PARENT session id and the once-per-session
+guard has already fired on the operator's real first message. The residual risk
+is narrow and is stated rather than dismissed: if some session's FIRST
+`UserPromptSubmit` were an injected prompt rather than an operator message,
+mail would be acknowledged with nobody having read it. That was not observed,
+and it is not proven impossible - a scheduled or resumed session is the shape
+that would do it.
+
+**Criterion 3 was already met.** Nothing in this measurement touched the code,
+so the eighteen mutations recorded above still stand as its proof.
 
 **Criterion 3 met.** Eighteen mutations, each with its anchor asserted UNIQUE
 before it was applied, every one red and every one restored green: accept any
@@ -5636,7 +5680,7 @@ publish and this repository is public - and the case it does fix is the one
 that actually bit: a cold session on THIS disk. A reply worth carrying into git
 still goes in `docs/LEDGER.md`.
 
-## OPS-44. The source-register guard's denylist is absorbing this project's own filenames - OPEN
+## OPS-44. The source-register guard's denylist is absorbing this project's own filenames - CLOSED 2026-09-08 on OPTION 2
 
 Filed 2026-09-07. `tests/test_source_register.py` maintains a denylist of
 dotted tokens that its host-shaped-pattern extractor would otherwise flag as an
@@ -5696,6 +5740,112 @@ Either option closes this item once implemented and its guard is watched red
 under mutation before being believed, per this project's standing rule. Doing
 nothing is not a third option - the count itself is the warning the guard's own
 comment already gives, and it will not stop growing on its own.
+
+### 2026-09-08. OPTION 2 was chosen and is implemented
+
+**The trade-off, stated before the choice as the item demands.** Option 1 costs
+review time per wave, has cost no false negative, and keeps the denylist the
+single trusted surface. Option 2 removes the largest recurring class of that
+review at the price of a SECOND trusted surface - the tracked-file listing -
+and carries the auto-exemption risk this item was filed around. Option 2 was
+chosen because the review cost is not flat: it is paid by whichever session is
+mid-commit when the guard reddens, it fires on the LEDGER ENTRY THAT RECORDS
+THE CLOSURE more often than not, and the ninth instance above happened while
+this very change was being written.
+
+**What was built.** `is_repo_filename(token, paths=None)` runs first, and
+`external_sources()` now keeps a token only when it is neither a repo filename
+nor a denylist member. The rule is exactly: some tracked path's BASENAME equals
+the token, or ends with it preceded by `_`, `-` or `.`. Case-sensitive, which
+is the noisier direction. `tracked_paths()` shells out to `git ls-files` at
+test time and is cached per root; nothing is stored, because a committed list
+of filenames goes stale on the first rename and then reads as a confident lie.
+
+**Fail-closed, and pinned.** Any failure of the listing - git missing, non-zero
+exit, timeout, empty output, a root that is not a repository - exempts NOTHING.
+The guard gets noisier, never quieter. `test_an_empty_tracked_listing_exempts_nothing`
+drives that path with an injected empty listing.
+
+**109 denylist entries were removed and 2 added.** The removals are exactly the
+tokens `is_repo_filename` now covers; the set went from 371 to 264. The two
+additions are `lanternlight.redact.iter` and `user.email`, the ninth instance
+above, and neither is a filename, so neither is a token this change would have
+covered.
+
+**How the auto-exemption risk is avoided, which criterion 2 requires be
+named.** The boundary character is the whole mechanism. A token that starts
+part-way through a name part is refused: `th.gl` - the exact `LL-0079` host -
+is NOT excused by a tracked `fourth.gl`, and `ple.py` is not excused by
+`test_example.py`.
+
+**And the residual risk, stated rather than buried, because the test that
+proves the rule also demonstrates the hole.** A token IS excused when it is a
+whole name part: a tracked file named `some_th.gl` would excuse the source
+`th.gl`. No such file exists, and to create one someone must commit a file
+whose name part IS a real source's name. That is the bounded cost of the
+choice, it is asserted as a positive control in
+`test_a_real_external_source_is_still_caught_when_a_same_named_file_exists`
+rather than hidden, and it is the reason `KNOWN_NON_HOSTS` keeps its comments.
+
+**Deliberate decision on `example.py`, made rather than defaulted into.** A
+tracked `test_example.py` DOES excuse the token `example.py`, because `_` is a
+boundary. `HOST_SHAPED` excludes `_` from a label, so this module's own
+extractor emits `tests/test_inbox_watch_subdirs.py` as the token `subdirs.py` -
+a rule that refused the boundary case could never cover the truncation family
+this item exists for, which is the largest group of the 109.
+
+**INDEPENDENTLY RE-PROBED BY THE MERGER, not accepted from the lane.** Every
+host-shaped token in the register section - 70 of them - was passed through
+`is_repo_filename`: ZERO registered sources are excused. Every token cited
+anywhere under `docs/` that the new check excuses was listed: 109, all of them
+this repository's own files, and none of them a denylist member, so no live
+register check was silenced by the change.
+
+**Merge gate, run by the merger:** OK at 2303 collected, against a
+reconstructed pre-lane per-file baseline that pins this file to its `HEAD`
+count of 6. The file went 6 tests to 13; nothing dropped anywhere.
+
+**THE TENTH TRIP, and it sets the precedent this item should have set
+years' worth of waves ago: it was resolved with ZERO denylist additions.** The
+ledger entry recording this very closure reddened the guard with three tokens -
+the invented probe names its own tests use to demonstrate the boundary rule.
+None is a real source and all three would have been safe to deny, but denying
+them would have meant writing three plausible host-shaped names, one of them at
+a real country-code TLD, into the list whose single job is to be trustworthy.
+The prose was reworded instead, the concrete probe names were left in the test
+where they belong, and the guard went green having cost nothing but a sentence.
+A red run is a question about what you wrote, not only about what the list
+lacks, and that option was available in every one of the previous nine waves.
+
+**A defect the lane introduced, found by the lane, and kept in the record.**
+The first `lru_cache` on the listing had no key. The file passed alone and the
+full suite went red with 104 of this repository's files reported unregistered,
+because `tests/test_docguards.py` repoints `REPO_ROOT` at a temporary tree,
+`git ls-files` exits 128 there, and the empty result was cached process-wide
+for everyone. The cache is keyed on the root now and
+`test_the_listing_cache_is_keyed_on_the_root_it_asked_about` pins it.
+
+**NINTH INSTANCE, 2026-09-08, and it fired WHILE THE FIX FOR IT WAS BEING
+WRITTEN.** The ledger entry recording `OPS-51` reddened this guard through the
+`pre-commit` hook, which refused the commit outright. Two tokens:
+`lanternlight.redact.iter`, the pattern's truncation of
+`lanternlight.redact.iter_operator_identifiers`, and `user.email`, a git config
+key. Neither is a filename, so neither is a token the option-2 change below
+would have exempted - they are the OTHER class, and this instance is the
+evidence that the filename story was only ever part of the growth.
+
+**A MEASUREMENT THAT RESHAPES THE ITEM'S OWN FRAMING, taken 2026-09-08.** This
+item says the denylist "took four entries in one wave and thirteen in the very
+next", which reads as though it were a list of a few dozen. It is not.
+`KNOWN_NON_HOSTS` holds 371 entries. Classified against `git ls-files` by the
+rule the option-2 change uses - a tracked basename that equals the token, or
+ends with it at a `_`, `-` or `.` boundary - 109 of them are filename tails and
+262 are not. The 262 are dotted Python and stdlib identifiers, Unreal gameplay
+tags, DLL names, sibling projects' files and runtime state this repository
+never tracks. So option 2 removes under a third of the list, and the sentence
+above about documents "whose whole job is to list its own files" describes a
+real driver that was never the largest one. Both halves of that are recorded
+because the item was filed on the smaller reading.
 
 **FOURTH INSTANCE, 2026-09-07 17:50.** The ledger entry recording that session's
 inbox review (`LL-0164`) reddened this guard on its first post-edit run, with two
@@ -6126,6 +6276,209 @@ is already public in this repository's own port table.
 4. Either way, RC's per-name breakdown of the eleven hits is recorded here if
    RC supplies it, or its absence is recorded if RC does not. The item is not
    closed on a number nobody has.
+
+## OPS-51. The operator's address sat in a tracked, published file as two halves, and every whole-address sweep called the tree clean - CLOSED 2026-09-08
+
+Filed and closed 2026-09-08, found while reading
+`tests/test_source_register.py` for `OPS-44`. It is the failure `LL-0170`
+predicted one level down, and `CLAUDE.md` had already written the prediction
+out in words: "never write the operator's git identity into a tracked file as a
+literal, not even in a guard that exists to protect it".
+
+**What was there.** The comment block added to `tests/test_source_register.py`
+by commit `8442072` - the commit that REPORTED the `LL-0170` leak - named the
+two tokens that guard had refused, in order to say they must never be added to
+its denylist. Those two tokens are the local part and the domain of the
+operator's account email address. They sat 26 characters apart on adjacent
+lines, in the reverse order. The file is tracked, and this repository is
+public.
+
+**Why nothing caught it, and this is the transferable part.** Every sweep this
+project has run for an operator address looks for a WHOLE address: the `EMAIL`
+shape rule needs a contiguous match, and the value half of
+`lanternlight.redact.iter_operator_identifiers` matches the derived identity as
+a literal. Two halves written separately defeat both at once. `LL-0171`'s
+closing sweep - 169 tracked files, zero hits, positive control - was correct
+and was measuring the wrong thing. `tests/test_no_pii.py` passed throughout,
+exactly as it did during `LL-0170`.
+
+**A second address, which is why deriving from `user.email` alone would not
+have found it either.** This repository now has TWO git identities across its
+refs, not the one `LL-0169` reported: `git config user.email` was changed to a
+forwarding address during the 2026-09-07 evening session, so the last two
+commits carry that and the 292 before them carry the account address. A guard
+deriving only from `user.email` would have been looking for the wrong string.
+`operator_git_identities()` already reads every author and committer field on
+every ref, which is what made the split check work here.
+
+### Acceptance - all met
+
+1. **The split form is detected.** `iter_operator_identifiers` gained a third
+   mechanism emitting `GIT_IDENTITY_SPLIT` when the local part and the domain
+   of a derived identity both appear in a text and no whole address covers
+   them. It is deliberately order-free and distance-free: a distance threshold
+   would only tell an author how far apart to put the halves. Requiring BOTH
+   halves is what holds the false-positive rate down, and a half shorter than
+   `_IDENTITY_HALF_MIN_CHARS` is not used at all.
+2. **It is wired to everything the whole-address check was wired to**, because
+   it is emitted by the same function: the repository scan in
+   `tests/test_no_pii.py` and the outgoing-mail gate
+   `assert_no_operator_identifier`, which `ops.outbox.deliver` calls, both pick
+   it up with no change of their own.
+3. **Watched RED against the real tree before the fix.** The scan named
+   `tests/test_source_register.py:178`, one finding, quoting nothing. The
+   comment was rewritten to carry the lesson without the tokens, and the scan
+   went green.
+4. **The refusal does not quote either half**, and that was a real defect
+   caught by its own test rather than a property assumed: the new label fell
+   through to the branch of `_raise_leak` that does `repr(matched)`, and the
+   first run of the refusal test printed the local part in full. A branch was
+   added; the test now pins it.
+5. **Five mutations, each anchor asserted to occur exactly once, all red, all
+   restored green:** the split loop deleted, 3 red; both-halves-required
+   weakened to either-half, 1 red; the split loop ignoring already-covered
+   matches, 2 red; the minimum half length dropped, 1 red; the value half
+   stopping recording what it covered, 1 red.
+
+**What this does NOT fix, and it is the larger fact.** See `OPS-52`. Removing
+the literal from the working tree does not remove it from git history, and it
+was never the only copy.
+
+### 2026-09-08, REOPENED AND RE-CLOSED THE SAME DAY: the split check had a hole one level down, and the hole was in the guard written to close it
+
+The `OPS-44` lane, working under instruction to prove that neither half of an
+address could be excused as a filename, wrote its probe like this:
+
+    local = "clo" + "se." + ...
+    domain = "gma" + "il." + ...
+
+and its docstring said the probes were synthetic. They were not. Those four
+literals rebuild the operator's real address halves, Python joins them at
+import time, and a reader joins them by eye.
+
+**Every pass in this repository was blind to it, including the split check
+added hours earlier for exactly this class of defect.** The `EMAIL` rule needs
+a contiguous address, the value half matches a literal, and the split half
+needs each HALF to be contiguous - and no half is contiguous once it is broken
+across `+`. So does any grep anyone will ever run over this tree. Caught by
+reading the lane's output, not by a guard.
+
+**Criterion 6, added and met: the joined form is detected.**
+`lanternlight.redact.join_adjacent_literals` folds adjacent same-quoted
+literals the way Python does, repeatedly so a chain collapses, and
+`iter_literal_joined_operator_identifiers` runs the operator check over the
+result. `tests/test_no_pii.py` gained a THIRD tree pass beside the plain and
+encoded ones, and reports no line number, because joining shifts every offset
+after the first join and a finding that sends the reader to the wrong line is
+worse than one that sends them to the file.
+
+**Scoped to the VALUE half, which is a decision with a measurement behind it.**
+Wired to the shape half as well, the pass reported six findings on its first
+real run, every one of them a synthetic address that a test in this tree builds
+by concatenation on purpose - the very practice this module asks for so that no
+real address is ever written down. A guard that reddens on its own recommended
+practice gets switched off. The value half cannot have that problem: a fixture
+cannot accidentally BE an identity derived from this repository's git history.
+The blind spot that leaves - a THIRD PARTY's real address, split across
+literals - is stated in the function's docstring rather than left for someone
+to find.
+
+**Watched red against the exact real defect.** The real halves were planted
+back into the same file in the same concatenated form, derived at runtime from
+git rather than typed, and the joined pass went red while the contiguous passes
+stayed green - which is the whole claim. The file was restored and verified
+byte-identical by SHA-256 against its pre-plant hash.
+
+**The pattern, now three deep, written down because it keeps recurring in the
+same place.** `LL-0170` leaked an address by quoting a command's output.
+`LL-0173` found it written into the guard that protects it. This found it
+written into the guard's TEST, obfuscated exactly enough to defeat the check
+`LL-0173` had just added. Each instance was one level further down and each was
+written by a session trying to document the previous one. The transferable rule
+is in `LL-0175`: any sweep for a value is a claim about that value's
+contiguity, and the cheapest way to defeat one is to write the value in a form
+the language rejoins and the reader rejoins and the sweep does not.
+
+## OPS-52. The operator's account email address is the author identity on 292 commits of this PUBLIC repository - CLOSED 2026-09-08 by operator ruling: LEAVE THE HISTORY AS IS
+
+Filed 2026-09-08 while closing `OPS-51`. Recorded because it is measured, it is
+larger than everything `OPS-50` and `OPS-51` addressed, and nothing in this
+tree had written it down as an EXPOSURE rather than as a sweep result.
+
+**Measured here, 2026-09-08.** `git log --all --format='%ae%n%ce'` yields two
+distinct identities across all refs over 294 commits. 292 of those commits
+carry the operator's account address in the author or committer field. The
+remaining two - the last two on `main` - carry a forwarding address, so the
+identity was changed during the 2026-09-07 evening session and the change is
+not retroactive. The upstream remote is public.
+
+**This corrects a finding this project DELIVERED to four siblings.** `LL-0169`
+answered LW's request with "exactly ONE identity across all refs, in both
+roles". That was true when it was measured and is false now, and a sibling
+holding the old answer has no way to know. Whether to send a correction is part
+of the decision below, not a session's call, because the subject of the
+correction is the operator's own identity.
+
+**Nothing here is a session's decision and no session may act on it.** Rewriting
+the history of a public repository is destructive, it invalidates every clone
+and every commit hash cited anywhere including this file's own ledger, and
+`OPS-47` is the precedent: a sibling's public history carrying this project's
+name was ruled on by the operator, who requested NO scrub. The parallel does
+not decide this one; it establishes who decides.
+
+### The question for the operator, stated so it can be answered in one word
+
+Do you want the 292 commits rewritten to a forwarding identity, or left as they
+are? Leaving them is a defensible answer - the address is already public, has
+been since 2026-08-09, and a rewrite costs every hash in this repository.
+
+### Acceptance
+
+1. The operator's ruling is recorded here verbatim, with its date.
+2. If the ruling is to leave it: this item closes as a recorded, accepted
+   exposure, and `lanternlight/redact.py` gains a note saying the account
+   address is published in commit metadata by decision, so a later session does
+   not re-open this as a discovery. That note names no address.
+3. If the ruling is to rewrite: it is planned as its own item with the clone
+   and hash consequences written down first, and `docs/LEDGER.md`'s existing
+   warning about dead hashes is extended to say a rewrite happened and when.
+4. Either way, whether to correct the `LL-0169` finding delivered to four
+   siblings is answered here rather than left implicit.
+
+**OPERATOR RULING, in chat 2026-09-08: "leave the history as is, keep going."**
+That is the answer to the question above, given in one word as it was asked
+for, and it is a defensible one rather than a deferral - the address has been
+public since 2026-08-09 and a rewrite would invalidate every clone and every
+commit hash cited anywhere in this repository, including this file's own
+ledger.
+
+**Criterion 1 met** - the ruling is recorded above, verbatim, with its date.
+
+**Criterion 2 met.** This item closes as a RECORDED, ACCEPTED EXPOSURE rather
+than as a problem solved. `lanternlight/redact.py` carries a note in the
+docstring of `operator_git_identities` saying that the account address is
+published in this repository's commit metadata by decision, so a later session
+reading `git log` does not re-open this as a discovery and does not propose a
+rewrite that has already been declined. That note names no address, which is
+the whole point of `OPS-51`.
+
+**Criterion 3 does not apply** - no rewrite.
+
+**Criterion 4, answered rather than left implicit: YES, the siblings are
+corrected.** `LL-0169` answered LW's direct request with "exactly ONE identity
+across all refs, in both roles", and that is now false. A correction was
+delivered through `ops.outbox.deliver`, which is the same repair `LL-0170` used
+and the same channel the wrong answer went out on. It states the new count and
+the reason, names no address in either its text or its filename - the gate
+would refuse it if it did - and explicitly says the original measurement was
+correct on its date rather than implying the sibling was misled.
+
+**What stays true after this ruling.** The exposure being accepted does not
+relax anything: `OPS-51`'s split check, `tests/test_no_pii.py` and the
+`ops.outbox.deliver` gate all keep refusing the address in the working tree and
+on the note channel. The ruling is about 292 commits that already exist, not
+about what may be written next.
+
 
 ## 4b. Ammo-family and talent measurement - READY, cheap, needs the client
 
