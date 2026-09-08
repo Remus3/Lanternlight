@@ -872,3 +872,165 @@ def test_a_real_pure_rename_still_commits(tmp_path):
         f"the gate refused a pure rename.\n{result.stdout}\n{result.stderr}"
     )
     assert _head(repo) != before, "the pure rename did not land"
+
+
+# ---------------------------------------------------------------------------
+# Filenames carrying git pathspec metacharacters.
+# ---------------------------------------------------------------------------
+
+
+def _bracket_repo(root: Path) -> tuple[Path, str]:
+    """A repo holding BOTH ``a[b].py`` and the name its glob expands to.
+
+    ``a[b].py`` read as a wildmatch pattern is a bracket expression matching
+    the single character ``b``, so it also names ``ab.py``. Seeding both is
+    the whole point: one file alone cannot tell a literal match from a glob
+    match, because either reading finds it.
+    """
+    repo = _make_repo(root, hooked=False)
+    seed = "import os\nVALUE = 1\n"
+    _seed(repo, "ab.py", seed)
+    _seed(repo, BRACKET_NAME, seed)
+    return repo, seed
+
+
+BRACKET_NAME = "a[b].py"
+
+
+class TestAFilenameCarryingPathspecMetacharacters:
+    """``staged_diff`` must name its path LITERALLY, not as a glob.
+
+    git treats a pathspec as a wildmatch pattern unless told otherwise, and
+    ``git diff --cached -- <path>`` therefore answers about every path the
+    pattern happens to reach. FOR THE BRACKET CASE it is not an under-match:
+    git compares the pathspec to the name literally FIRST and only falls back
+    to wildmatch, so a real file named ``a[b].py`` IS found. The damage is the
+    other direction - the reply carries a SECOND file's hunks as well, and
+    :func:`parse_added_ranges` reads every hunk header it is given because
+    ``staged_diff`` promises one change per call. The added ranges for
+    ``a[b].py`` then include line numbers that belong to ``ab.py``, and the
+    gate attributes another file's edits to this one.
+
+    DO NOT READ THAT AS "THERE IS NO UNDER-MATCH". It is a statement about
+    bracket expressions, and a refutation pass measured a case where it is
+    false: a leading ``:`` is pathspec MAGIC and is parsed before matching
+    runs at all, so a bare ``:colon.py`` misses the real file entirely. That
+    is the silent direction, and it is why the fix is a magic prefix rather
+    than an escape.
+
+    WHICH CASES ARE REAL ON THIS MACHINE. ``*``, ``?`` and ``:`` are illegal
+    in NTFS filenames, so ``[`` and ``]`` are the only metacharacters a real
+    Windows file can carry - those get a real repository below. The colon case
+    above was measured only with ``core.protectNTFS`` forced off, because Git
+    for Windows will not put such a name in the index otherwise. The rename
+    branch and the argument shape are pinned at ARGUMENT level instead, by
+    capturing what is handed to git: a bare origin cannot be made to misfire
+    with real files here, because the origin is already named alongside the
+    destination.
+    """
+
+    def test_the_diff_for_a_bracketed_name_carries_only_that_file(self, tmp_path):
+        repo, seed = _bracket_repo(tmp_path / "brackets")
+        _stage(repo, "ab.py", seed + "import sys\n")
+        _stage(repo, BRACKET_NAME, seed + "import json\n")
+
+        diff = precommit_gate.staged_diff(repo, BRACKET_NAME)
+
+        assert diff, f"no staged diff at all for {BRACKET_NAME!r}"
+        assert "import json" in diff, (
+            f"the diff does not carry {BRACKET_NAME!r}'s own added line:\n{diff}"
+        )
+        assert "b/ab.py" not in diff, (
+            "the bare pathspec was glob-expanded and dragged in ab.py, whose "
+            f"hunks are not this change's:\n{diff}"
+        )
+
+    def test_the_glob_neighbour_does_not_inflate_the_added_ranges(self, tmp_path):
+        # ab.py adds at line 3 and so does a[b].py, so a union is invisible
+        # here unless the neighbour's added line sits somewhere else. Push
+        # ab.py's addition to line 5 and the pollution becomes a range that
+        # cannot come from the bracketed file at all.
+        repo, seed = _bracket_repo(tmp_path / "ranges")
+        _stage(repo, "ab.py", seed + "A = 1\nB = 2\nimport sys\n")
+        _stage(repo, BRACKET_NAME, seed + "import json\n")
+
+        ranges = precommit_gate.parse_added_ranges(
+            precommit_gate.staged_diff(repo, BRACKET_NAME)
+        )
+
+        assert ranges == [(3, 3)], (
+            "the added ranges are not this file's alone - a foreign hunk "
+            f"header was parsed as if it belonged here: {ranges}"
+        )
+
+    def test_the_gate_does_not_blame_a_bracketed_file_for_a_neighbours_line(
+        self, tmp_path
+    ):
+        """The consumer's answer, not just the helper's.
+
+        ``a[b].py`` carries a PRE-EXISTING unused ``os`` on line 1 that this
+        commit does not touch, and ``ab.py`` adds a line at that same number.
+        Union the two range sets and the gate blocks ``a[b].py`` for a finding
+        it did not add.
+
+        THE ASSERTION IS ON THE MESSAGE, NOT THE PATH, and deliberately so.
+        ruff glob-expands its own ``--stdin-filename`` when a matching file
+        exists on disk, so it reports this file's findings under the name
+        ``ab.py``; a path assertion here would be satisfied by that mangling
+        rather than by the fix, which is exactly a test passing for the wrong
+        reason. ``os`` and ``sys`` are unique to one file each, so the message
+        says which file a finding really came from.
+        """
+        repo = _make_repo(tmp_path / "consumer", hooked=False)
+        _seed(repo, "ab.py", "VALUE = 1\n")
+        _seed(repo, BRACKET_NAME, "import os\nVALUE = 1\n")
+        _stage(repo, "ab.py", "import sys\nVALUE = 1\n")
+        _stage(repo, BRACKET_NAME, "import os\nVALUE = 1\nOTHER = 2\n")
+
+        findings = precommit_gate.lint_staged(repo)
+
+        assert any("sys" in f.message for f in findings), (
+            "the control is gone - ab.py really does add an unused `sys` on "
+            f"an added line and the gate must still catch it: {findings}"
+        )
+        assert not any("os" in f.message for f in findings), (
+            "a[b].py was blamed for its pre-existing line 1, which only ab.py "
+            f"added: {findings}"
+        )
+
+    def test_both_pathspecs_of_a_rename_are_passed_literally(self, monkeypatch):
+        """Argument level, because the origin cannot misfire with real files.
+
+        Covers the metacharacters NTFS forbids as well - the pathspec is a
+        string handed to git, so a name this filesystem cannot hold is still
+        worth pinning at the boundary where the string is built.
+        """
+        seen: list[tuple[str, ...]] = []
+
+        def _capture(repo, *args: str) -> str:
+            seen.append(args)
+            return ""
+
+        monkeypatch.setattr(precommit_gate, "_git_stdout", _capture)
+        precommit_gate.staged_diff(Path(), "new[1].py", "old*.py")
+
+        assert len(seen) == 1, seen
+        args = seen[0]
+        assert "--" in args, args
+        pathspecs = list(args[args.index("--") + 1 :])
+        assert pathspecs == [":(literal)old*.py", ":(literal)new[1].py"], pathspecs
+
+    def test_the_single_path_branch_is_passed_literally(self, monkeypatch):
+        seen: list[tuple[str, ...]] = []
+
+        def _capture(repo, *args: str) -> str:
+            seen.append(args)
+            return ""
+
+        monkeypatch.setattr(precommit_gate, "_git_stdout", _capture)
+        precommit_gate.staged_diff(Path(), "solo[0-9].py")
+
+        assert len(seen) == 1, seen
+        args = seen[0]
+        pathspecs = list(args[args.index("--") + 1 :])
+        assert pathspecs == [":(literal)solo[0-9].py"], pathspecs

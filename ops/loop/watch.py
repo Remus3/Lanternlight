@@ -476,7 +476,10 @@ class ArmResult:
             one is already running is not an arming, and conflating the two is
             how a caller ends up believing it owns a process it did not start.
         pid: The watcher's pid - the one just started, or the incumbent's.
-        dest_root: Where that watcher archives to.
+        dest_root: The dated destination as resolved at arming time - the same
+            arming-time fact :attr:`WatchRecord.dest_root` carries, not an
+            answer to where the watcher is archiving now. See
+            :func:`_destination_phrase`.
         reason: Why the call did what it did, in words. This is what a later
             session or an operator reads when the archive looks wrong, so it
             names the pid and the destination rather than a status code.
@@ -611,6 +614,92 @@ def _default_dest_root_fn(dest_base: Path, when: datetime) -> Path:
     return Path(dated_dest_root(dest_base, now=when.astimezone()))
 
 
+#: Rendered where a current dated destination cannot be derived at all. It is a
+#: THIRD answer and never a fallback to the arming-time value: presenting a
+#: stale value unqualified is the whole of ``OPS-53``, and reaching it through
+#: a helper would only put a function call in front of the same lie.
+DEST_UNKNOWN_NOTE = "UNKNOWN AS OF NOW"
+
+#: The label that keeps a recorded ``dest_root`` honest wherever it is
+#: rendered. The value STAYS - it is the only evidence of where the watcher was
+#: pointed when it was started, and deleting it would lose the audit trail -
+#: and this says what it is, so a reader stops taking it for an answer to
+#: "where is it archiving right now".
+DEST_ARMING_TIME_NOTE = "where it was pointed at arming time"
+
+
+def _current_dest_root(record: WatchRecord, when: datetime) -> str | None:
+    """Return where ``record``'s watcher archives AS OF ``when``, or ``None``.
+
+    ``ROADMAP OPS-53``. The live watcher is handed ``--dest-base`` and
+    ``armwatch.run_rolling`` calls ``retarget`` at the top of every pass, so it
+    re-derives its own dated root whenever the local day turns. The recorded
+    ``dest_root`` is therefore an arming-time fact and not an answer to this
+    question, and on 2026-09-08 a reporter that conflated the two told a cold
+    session a watcher was archiving into a directory it had already rolled off.
+
+    Derived through :func:`_default_dest_root_fn`, which goes through
+    ``lanternlight.armwatch.dated_dest_root`` and carries the UTC-to-local
+    conversion that function's docstring explains. Two tempting shortcuts are
+    both wrong and both deliberately not taken: re-deriving the date format
+    here would be a second copy free to drift, and ``Path(dest_root).parent``
+    is the base only by accident - a watcher handed a literal ``--dest-root``
+    has no base under it at all, which is the case the rolling form exists to
+    replace.
+
+    ``None`` is cannot-tell, and the reporter must say so rather than fall back
+    to the recorded value. It is reached when ``dest_base`` is absent, empty or
+    not a string - a payload may carry the key with nothing usable in it - and
+    when the resolver cannot be reached or refuses the base. The exception list
+    is NAMED, never a bare ``except Exception``: ``AssertionError`` is an
+    ``Exception``, so a blanket catch here would swallow a spying test's own
+    assertion and the spy would go vacuous.
+    """
+    base = getattr(record, "dest_base", None)
+    if not isinstance(base, str) or not base.strip():
+        return None
+    try:
+        return str(_default_dest_root_fn(Path(base), when))
+    except (ImportError, AttributeError, OSError, ValueError, TypeError):
+        return None
+
+
+def _destination_phrase(record: WatchRecord, when: datetime) -> str:
+    """Render ``record``'s destination for a human, in three honest shapes.
+
+    One function so the arming reason, the check's evidence line and the
+    check's reason cannot drift apart - they drifted into the present tense
+    together and a fix applied to one of them would leave the others lying.
+
+    The three shapes answer three different states of the world, and none of
+    them is allowed to look like another:
+
+    * the local day has turned, so the current root and the recorded one
+      differ and BOTH are named, each labelled;
+    * the day has not turned, so they are the same value - still labelled,
+      because a label that appears on only one branch is a label a test can
+      pass without;
+    * no current root can be derived, so the destination is
+      :data:`DEST_UNKNOWN_NOTE` and the recorded value is offered as history
+      rather than as an answer.
+
+    No branch renders the recorded value as a bare present-tense destination.
+    """
+    arming = getattr(record, "dest_root", None)
+    current = _current_dest_root(record, when)
+    if current is None:
+        return (
+            f"{DEST_UNKNOWN_NOTE} ({arming} was {DEST_ARMING_TIME_NOTE}, and the record "
+            "carries no usable dest_base to re-derive a current one from)"
+        )
+    if current == arming:
+        return f"{current} as of now (also {DEST_ARMING_TIME_NOTE})"
+    return (
+        f"{current} as of now ({arming} was {DEST_ARMING_TIME_NOTE}, and the local day "
+        "has turned since)"
+    )
+
+
 def default_spawn(dest_base: Path, dest_root: Path) -> int:
     """Start the real watcher, detached, and return its pid.
 
@@ -735,8 +824,9 @@ def ensure_armed(
             pid=existing.pid,
             dest_root=existing.dest_root,
             reason=(
-                f"pid {existing.pid}, recorded at {target} since {existing.started} as "
-                f"archiving into {existing.dest_root}, is ALIVE. Whether it is still the "
+                f"pid {existing.pid}, recorded at {target} since {existing.started} "
+                f"with destination: {_destination_phrase(existing, when)}, is ALIVE. "
+                "Whether it is still the "
                 "watcher was NOT checked here - this call reads liveness only, and an "
                 "access-denied reading is alive - so refusing to arm on the strength of "
                 "it is a refusal to risk a second poller, not a report that a watcher is "
@@ -777,7 +867,11 @@ def ensure_armed(
         armed=True,
         pid=record.pid,
         dest_root=record.dest_root,
-        reason=f"{why}; armed a watcher as pid {record.pid} archiving into {record.dest_root}",
+        reason=(
+            f"{why}; armed a watcher as pid {record.pid} pointed at {record.dest_root}, "
+            f"which is {DEST_ARMING_TIME_NOTE} - it re-derives its dated root from "
+            f"{record.dest_base} on every pass"
+        ),
     )
 
 
@@ -1704,7 +1798,11 @@ class WatcherStatus:
     Attributes:
         state: One of the seven ``STATE_*`` constants.
         pid: The recorded pid, or ``None`` when there was no usable record.
-        dest_root: Where that watcher archives to, as recorded.
+        dest_root: The dated destination AS RECORDED AT ARMING TIME. Kept
+            unchanged because it is the durable audit fact, and deliberately
+            not an answer to where the watcher is archiving now - the rolling
+            watcher re-derives that every pass. The prose says which is which;
+            see :func:`_destination_phrase` and ``ROADMAP OPS-53``.
         evidence: The observations the verdict rests on, in the order they
             were made. Item ``4e`` asks the check to NAME its evidence, and a
             verdict whose grounds are not written down is a status code with
@@ -1959,7 +2057,8 @@ def check_watcher(
         )
 
     evidence.append(
-        f"record: pid {record.pid}, armed {record.started}, archiving into {record.dest_root}"
+        f"record: pid {record.pid}, armed {record.started}, "
+        f"destination: {_destination_phrase(record, when)}"
     )
 
     if not guard.pid_is_alive(record.pid):
@@ -1972,8 +2071,9 @@ def check_watcher(
             heartbeat_age_s=None,
             identity=IDENTITY_NOT_REACHED,
             reason=(
-                f"the watcher recorded at {target} as pid {record.pid}, archiving into "
-                f"{record.dest_root} since {record.started}, is NOT running. This is the "
+                f"the watcher recorded at {target} as pid {record.pid} since "
+                f"{record.started}, with {record.dest_root} {DEST_ARMING_TIME_NOTE}, "
+                "is NOT running. This is the "
                 "LL-0117 failure exactly: armed, then trusted by every later re-arm "
                 "attempt, then dead before the wrap with nothing archiving. Re-arm."
             ),
@@ -2060,13 +2160,14 @@ def check_watcher(
     # liveness said the same words as one resting on a matched creation time.
     if identity == IDENTITY_VERIFIED:
         confirmed = (
-            f"pid {record.pid} is the watcher recorded at {target}, archiving into "
-            f"{record.dest_root} since {record.started}"
+            f"pid {record.pid} is the watcher recorded at {target} since "
+            f"{record.started}, destination: {_destination_phrase(record, when)}"
         )
     else:
         confirmed = (
             f"pid {record.pid} is alive and is BELIEVED to be the watcher recorded at "
-            f"{target}, archiving into {record.dest_root} since {record.started} - its "
+            f"{target} since {record.started}, destination: "
+            f"{_destination_phrase(record, when)} - its "
             "identity could not be checked, only its liveness"
         )
 

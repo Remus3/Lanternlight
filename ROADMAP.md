@@ -5169,7 +5169,7 @@ project root rather than machine-identifying, and changing both at once doubles
 the chance of a silent hook break for no gain. `tests/test_lane_contract.py`
 already covers rendered lane contracts against ANY absolute path.
 
-## OPS-39. Six defects the wrap's refutation found in the SAME session that shipped them - defects 1-5 CLOSED 2026-09-07, defect 7 CLOSED 2026-09-08
+## OPS-39. Six defects the wrap's refutation found in the SAME session that shipped them - defects 1-5 CLOSED 2026-09-07, defect 7 and the pathspec defect CLOSED 2026-09-08
 
 Filed 2026-09-07 by the wrap refutation pass against commits `f04d394`,
 `b98cf91` and `2e56714`. Every one was reproduced with a command and its output,
@@ -5558,6 +5558,70 @@ baseline, OK, 2152 tests collected, no file's count dropped. New test modules:
 `tests/test_inbox_acknowledge.py`, `tests/test_inbox_entirety.py`,
 `tests/test_inbox_keys.py`, `tests/test_inbox_live_state.py`,
 `tests/test_inbox_withdrawals.py`.
+
+
+### Outcome, 2026-09-08 - the pathspec defect is CLOSED, and the REASON given for it was wrong
+
+Ledger `LL-0185`. `staged_diff` now prefixes every pathspec with `:(literal)`,
+on both sides of a rename. That part was never in doubt. The interesting half
+is that the story attached to it was refuted twice, by two different passes,
+and both times the code was fine and the PROSE was not.
+
+**The dispatching brief asserted an UNDER-match and was wrong.** It reasoned
+that a bare pathspec `a[b].py` is a bracket expression matching `ab.py`, so the
+real file would not be found, `staged_diff` would return empty, and the gate
+would silently pass a file it should have blocked. The implementing slice
+measured it instead and refuted it: git compares a pathspec to the name
+LITERALLY first and only then falls back to wildmatch, so the real file IS
+found. Re-measured independently by the merger in a throwaway repository - bare
+returns both `a[b].py` and `ab.py`, literal returns only `a[b].py` - because
+one agent's refutation of another's premise is still one measurement.
+
+**The real defect is an OVER-match, and it is a false-block rather than a
+silent pass.** `parse_added_ranges` reads every hunk header it is handed and
+`staged_diff` promises one change per call, so the added ranges for `a[b].py`
+silently absorb line numbers belonging to `ab.py`. The gate then refuses a
+commit over a line that path never wrote, and a finding that belongs to the
+neighbour is attributed here.
+
+**Then the adversarial pass refuted the CORRECTED story as a general claim.**
+"Literal first, therefore no under-match" holds for `[`, `]`, `*` and `?`. It
+is false for a leading `:`, which is pathspec MAGIC and is parsed BEFORE any
+matching happens, so the literal-first rule never runs at all: with
+`core.protectNTFS` forced off, a bare `:colon.py` misses the real file and
+answers about `colon.py` instead. That is exactly the silent shape the first
+correction had just declared impossible. It is unreachable on this machine -
+Git for Windows refuses such a name into the index - and reachable on a
+repository built elsewhere. `:(literal)` fixes it; a bracket escape would not
+have.
+
+**And one case the prefix does NOT fix:** a name containing a backslash
+under-matches with the prefix and without it alike. Recorded in the docstring
+so it is not read as a guarantee.
+
+**Both docstrings were corrected before the merge, not after.** The pass's
+verdict was that the code was safe to merge and the prose was not - "the damage
+runs the other way" was measured only for brackets while governing a paragraph
+that enumerates the leading colon, and "turns the whole class off" is false for
+backslash. That is the third and fourth time in two sessions that the defect
+was in the closure prose rather than the code.
+
+**Mutation tally re-derived rather than relayed: five anchors, each matched
+exactly once, four killed and one survivor.** The survivor is the
+metacharacter-free filename, and it is honestly labelled - it demonstrates that
+the three real-repository tests go vacuous without a bracket in the name, which
+is a property worth pinning rather than a hole. The kill matrix was checked
+per-test: the two rename mutants are each killed by exactly one test, so that
+test is uniquely load-bearing.
+
+**A pre-existing gap the pass found while re-deriving the tally, and did NOT
+introduce:** deleting the `or origin == path` short-circuit from `staged_diff`
+survives the whole gate-lint file. Not this fix's defect, and not fixed here -
+recorded so it is not rediscovered as a new one.
+
+**What is not closed by this.** The unbounded-count half of `OPS-39` defect 7 is
+untouched, as it was when defect 7 closed. And a second tool was caught doing
+the same thing to filenames while this was being fixed - see `OPS-55`.
 
 ## OPS-40. This public repo's git history and tracked prose carried the operator's Windows account name - CLOSED 2026-09-07
 
@@ -6359,6 +6423,275 @@ underneath: presence, mode and registration are three different facts, and none
 of them is the fact that a hook FIRED. Only an end-to-end attempt is that.
 
 The sibling was credited in the reply delivered at 19:02 local.
+
+## OPS-55. ruff GLOB-EXPANDS `--stdin-filename`, so a finding can be attributed to a DIFFERENT REAL FILE - and the docstring says that cannot happen - OPEN
+
+Found 2026-09-08 by the slice fixing `OPS-39`'s pathspec defect, and re-measured
+independently by the merger before it was filed, because it is a claim about a
+third-party tool and those are the claims this project gets wrong.
+
+**The measurement, run twice from two directories in a throwaway repository.**
+The same clean stdin payload (`import os`, one unused import) was handed to
+`ruff check --no-cache --stdin-filename 'a[b].py' --output-format json -`:
+
+- with a file `ab.py` present in the working directory, ruff reported the F401
+  against **`ab.py`**;
+- in a subdirectory where no `ab.py` exists, ruff reported the same F401 against
+  **`a[b].py`**.
+
+Nothing about the input changed. The reported filename is a function of what
+else is on disk, which means ruff is treating the argument as a GLOB rather than
+as a name.
+
+**Why that is worse here than it looks.** `ruff_findings` in
+`tools/precommit_gate.py` normalises ruff's absolute filename back to a
+repo-relative path and falls back to the path it asked about. Its docstring
+states that this fallback "cannot mis-attribute anything, because ruff is
+invoked once per staged path". That reasoning holds only while the name ruff
+returns is either the asked path or unusable. Here it is neither: it is a
+DIFFERENT, REAL, repo-relative path, so normalisation succeeds, the fallback
+never engages, and the finding lands on an innocent file.
+
+The two directions are both bad and the quiet one is worse. Loudly, the gate
+blocks a commit citing a file that has no such problem. Quietly, the file that
+DOES have the problem is never named, so a real finding is attributed away and
+the guard reports on the wrong thing while looking like it worked.
+
+**This is the same root cause as `OPS-39`, in a second tool.** `OPS-39` is git
+treating a filename argument as a pathspec glob; this is ruff treating a
+filename argument as a glob. A guard that scopes itself per-file is only as
+sound as every tool it asks "what about this file", and TWO of them have now
+been measured answering about a different file. Assume the next one does too
+until measured.
+
+**On Windows this is reachable and only reachable through brackets.** `*`, `?`
+and `:` are illegal in NTFS filenames, so `[` and `]` are the whole attack
+surface here - which is also why the `OPS-39` fixture uses them. Nothing in the
+tracked tree carries a bracket today, so this is latent, exactly like `OPS-39`.
+
+**A test asserting on the reported PATH is vacuous for this defect** - the
+slice's own first consumer test passed for this reason and was rewritten to
+assert on the finding MESSAGE instead. Any test written against this item has to
+be shown red before it is believed.
+
+**INDEPENDENTLY CONFIRMED the same day, by a pass whose brief was to break the
+story.** Measured against ruff 0.15.12. The mangling does NOT depend on
+`--no-cache`, on the output format, or on `--force-exclude`; absolute names are
+mangled too; and it happens even when the bracket-named file really exists on
+disk alongside its neighbour, which rules out "ruff fell back because the name
+did not resolve". The pass's one correction to this item: it is LABEL-ONLY
+corruption of the reported name rather than a change to what ruff actually
+scoped and linted. That makes the mis-attribution real and the missed-finding
+story unproven - which is the narrower and better-supported claim.
+
+### Acceptance
+
+1. A failing test written FIRST that stages a bracket-named file WITH its
+   glob-neighbour also present, and asserts the finding is attributed to the
+   bracket-named file. Watched red. It must not assert only on a path that the
+   defect itself rewrites - see the vacuity note above.
+2. The measurement above is re-derived inside the test rather than trusted from
+   this item, and the ruff version it was measured against is recorded, because
+   this is third-party behaviour that can change under us in either direction. A
+   fix that silently stops being needed is as much a problem as one that stops
+   working.
+3. The `ruff_findings` docstring's claim that the fallback "cannot
+   mis-attribute anything" is corrected to say what is actually true. It is
+   currently false, and a false reassurance in a docstring is what stopped
+   anyone looking.
+4. The chosen fix is stated as a decision with its cost, not just applied.
+   Candidates seen so far: refuse a finding whose reported path is not the asked
+   path rather than accepting it; or stop trusting the reported name at all,
+   since ruff is invoked once per path and the asked path is already known. Say
+   which and why, and say what the refusing branch does when it fires.
+5. Every other place this gate hands a FILENAME to an external tool is
+   enumerated and each one is decided about in writing - matched literally,
+   confirmed glob-safe, or fixed. `OPS-39` and this item are two instances of
+   one pattern and finding the third by accident is not a plan.
+6. Watched red under mutation with each anchor asserted to occur exactly once,
+   and the mutants vary the INPUT - neighbour present, neighbour absent - not
+   only the implementation, since the neighbour's presence is the whole trigger.
+
+## OPS-54. Parallel slices share ONE worktree, and a slice that runs `git stash` stashes every other slice's uncommitted work - OPEN
+
+Found 2026-09-08, live, while three slices were in flight. Not a hypothesis: it
+had already happened twice in this session and twice in the previous one.
+
+**How it was found, which matters, because nobody was looking for it.** An
+independent re-derivation of a completed audit's object counts disagreed with
+the audit by +4 blobs, +2 commits and +4 trees. The audit was not wrong and the
+re-derivation was not wrong: the OBJECT STORE HAD MOVED between them, because a
+concurrently running slice was writing objects into the shared repository. The
+drift was the finding. An audit of a repository taken while other agents work in
+it is an audit of a moving target, and nothing in the merge gate notices.
+
+**What is actually happening.** `git reflog` shows `HEAD@{0}: reset: moving to
+HEAD`, and `git fsck --unreachable` shows six unreachable commits whose subjects
+are `WIP on main:` and `index on main:` - the signature pair `git stash` writes.
+Four of them are stamped 2026-09-08T14:06:47-05:00 and
+2026-09-08T14:10:18-05:00, inside this session's dispatch window; the other two
+are stamped 2026-09-07T20:30:06-05:00 and belong to the previous session. So a
+slice stashes, does something, and pops or drops - and it is not a one-off.
+
+**Why the disjoint-file-set rule does not cover this.** Slices are given
+non-overlapping file lists and told to touch nothing else, and that rule holds
+for EDITS. `git stash` is not an edit. It is repo-wide by construction: it takes
+the whole working tree and the whole index, including files the stashing slice
+was told not to touch. Three slices sharing one worktree means one slice's
+`git stash` captures the other two slices' half-finished work, and a `pop` that
+races an intervening write conflicts or clobbers. The same is true of
+`git reset`, `git checkout -- .`, `git clean`, and `git stash pop` itself.
+
+Nothing was lost this time. That was checked rather than assumed: `git stash
+list` is empty, and the merger's own two files still carry their full diffs. A
+near miss measured after the fact is not a safeguard.
+
+**This is the file-list rule's blind spot, one level down.** The instruction
+names FILES; the hazard is a COMMAND whose scope is the repository. An agent can
+obey its file list perfectly and still do this.
+
+`CLAUDE.md` section 1b already describes the intended shape - each lane in its
+own git worktree on its own branch - and the lane machinery exists. Ad-hoc
+parallel dispatch through the Agent tool does not use it, and that is the gap.
+
+### Acceptance
+
+1. A written, enumerated list of the repo-wide git commands a slice must never
+   run in the shared worktree, each with the specific way it destroys a sibling
+   slice's work. `git stash` and `git reset` are the two OBSERVED here; the list
+   is derived from what git can do, not from what has already bitten us, so
+   `git checkout -- .`, `git clean` and `git stash pop` are reasoned about too.
+2. A detector that can be run at merge time and answers whether the object store
+   moved underneath a slice: it records `git fsck --unreachable` and the
+   `--batch-all-objects` type histogram at dispatch, re-reads them at merge, and
+   NAMES any stash-shaped commit (`WIP on main:` / `index on main:`) that
+   appeared in between. It reports; it does not block. A count that only rises
+   is not enough - the check must name the commits, because the whole failure
+   mode here is a count moving for an unexplained reason.
+3. The detector is proven non-vacuous by actually creating a stash in a
+   throwaway repository, watching the check name it, dropping it, and watching
+   the check go quiet. A test that never sees a real stash has not been tested.
+4. A decision, recorded either way, on whether ad-hoc parallel dispatch should
+   move to per-slice worktrees as section 1b describes, or whether the ban plus
+   the detector is the accepted answer. Recording "we chose the cheaper one and
+   why" is a valid outcome; leaving it undecided is not.
+5. The dispatch ritual in `ops.loop.state` carries the ban where a dispatching
+   session will actually read it. A rule that lives only in this roadmap item is
+   a rule the next cold session dispatches straight past.
+
+## OPS-53. The watcher status reporter says "archiving into <a date that has passed>" in the PRESENT TENSE - CLOSED 2026-09-08
+
+Found 2026-09-08 while answering a question the previous session's hand-off
+recorded as unmeasured: the live watcher's archive root still read
+`C:\ll-captures\2026-09-07` on 2026-09-08, and nobody had checked whether that
+directory is meant to roll over.
+
+**It rolls over. The ARCHIVE is fine; the REPORT is wrong.** Measured, in this
+order, and none of it from a stored constant:
+
+1. The live process (pid 21680) was started with `--dest-base C:\ll-captures`,
+   not with a literal `--dest-root`. That is the ROLLING form. Read off the
+   process's own command line through `Win32_Process`, not off a record in this
+   tree.
+2. `lanternlight.armwatch.run_rolling` calls `surface.retarget(now)` at the top
+   of every pass in BOTH the bounded (`max_passes`) and the live
+   (`poll_forever`) paths, and `_RollingSurface.retarget` recomputes
+   `dated_dest_root(dest_base, now)` and moves the watcher's destination when
+   the local day has changed. So the live watcher has already retargeted at
+   local midnight.
+3. `C:\ll-captures\2026-09-08` does not exist yet, and that is consistent
+   rather than contradictory: a dated directory is created by a COPY, and no
+   surface has had a changed file to archive since the rollover. Under the
+   2026-09-07 root there are 13 files and ZERO of them are newer than
+   2026-09-08, which is the same statement from the other side.
+
+**The defect is the rendered prose in `ops/loop/watch.py`.** `armwatch.json`
+records `dest_root` as resolved AT ARMING TIME, and the dataclass docstring
+says so honestly. Every string a human actually reads then drops that
+qualifier and asserts the present tense: `check_watcher` renders
+`archiving into {record.dest_root}` in its evidence tuple and again in its
+`reason`, and the arming paths render it twice more. A cold session reading
+`ARMED ... archiving into C:\ll-captures\2026-09-07` on 2026-09-08 is being
+told something that is FALSE, by a reporter whose whole job is to be believed.
+
+This is the defect ROADMAP item 4d exists to prevent - a directory that claims
+to cover a day it does not - reappearing one level up, in the READER instead of
+the writer. A mislabelled archive is worse than an absent one because it gets
+believed, and a mislabelled REPORT of an archive is the same failure with an
+extra layer of confidence on top.
+
+It is also the shape the 2026-09-08 session hit three times out of three: the
+code was right and the PROSE ABOUT THE CODE was wrong. Nothing here is a bug in
+the archiving.
+
+### Acceptance
+
+1. A failing test written FIRST that constructs a watcher record armed on one
+   local day, asks `check_watcher` on the NEXT local day, and asserts the
+   rendered `reason` and evidence do not assert a present-tense destination
+   that the record cannot support. Watched red before the fix.
+2. The reporter derives the CURRENT dated root from the recorded `dest_base`
+   through `lanternlight.armwatch.dated_dest_root`, rather than re-deriving the
+   date format or taking the parent of `dest_root` by string surgery. If
+   `dest_base` is absent from the record, the reporter says the destination is
+   UNKNOWN AS OF NOW rather than reporting the arming-time value as current -
+   an unqualified stale answer is what this item is about.
+3. The arming-time value is still shown, and still labelled as arming-time. It
+   is the durable fact and deleting it would lose the audit trail; the fix is
+   the LABEL, not the field.
+4. Every rendered site is covered, not only the one that was noticed: the
+   `check_watcher` evidence line, the `check_watcher` reason, and the two
+   arming reasons. A grep for the phrase is a claim about the phrase, so the
+   sites are enumerated from the module and each one is decided about in
+   writing - fixed, or deliberately left with the reason recorded.
+5. The fix is watched red under mutation, with each patch anchor asserted to
+   occur exactly once before it is applied, and the mutants vary the INPUT
+   (the recorded day, a missing `dest_base`) and not only the implementation.
+6. No test asserts on a literal that duplicates a module constant. Import the
+   constant.
+
+
+### Outcome, 2026-09-08 - CLOSED
+
+Ledger `LL-0184`. Eight tests written first and watched red, two of them
+failing on the real rendered prose rather than on a helper.
+
+**The site enumeration went wider than the phrase that was noticed**, which
+criterion 4 asked for and which is the part most likely to have been skipped.
+Sweeping `dest_root`, `dest_base`, `dated_dest_root` and `archiving` found
+eight rendered sites: six changed - four now derive the current root, two are
+label-only - and two were deliberately left. The two left sites were re-read
+independently rather than accepted on the slice's word, and the call holds:
+both are impostor-pid branches whose sentence is a NEGATIVE claim, that nothing
+is archiving into that directory, which stays true on any day.
+
+**Twelve mutants, twelve killed, no survivors**, each anchor asserted unique and
+the control asserted green first. Three of the twelve varied the INPUT rather
+than the implementation, as criterion 5 requires.
+
+**One of those three only kills because a precondition assert was added after
+the first draft.** Without it, both day-crossing tests passed against a
+same-day record - which is to say they asserted nothing about the day crossing
+at all. That is the vacuity trap this project keeps meeting, caught here by the
+mutation rather than by review.
+
+**THE ONE RESIDUAL THE SLICE NAMED HAS NOW BEEN MEASURED, and it came out
+clean.** The slice reported it could not show the UTC-to-local conversion was
+exercised, because this machine sits at UTC-5 so 05:00 UTC and 00:00 local name
+the same date, and deleting the conversion would leave its new tests green. The
+merger applied that mutation directly: it is killed, by exactly one pre-existing
+test, `test_the_default_dated_destination_uses_the_local_day_not_the_utc_one`,
+with 155 of 156 still passing. The module was restored and proved byte-identical
+by SHA-256 rather than assumed. So the conversion is covered - by one
+load-bearing test, which is worth knowing before anyone edits it.
+
+**What is still NOT proven, and is not claimed:** that anything is being
+WRITTEN to the current dated directory. It does not exist yet, because a dated
+directory is created by a copy and no surface has had a changed file since the
+rollover. The reporter's "as of now" is a derivation from the clock and the
+base, not an observation of the filesystem. Also unproven: the behaviour for a
+whitespace-only rather than absent `dest_base`, and that nothing outside the
+swept identifiers renders the value.
 
 ## OPS-50. The redaction rule is scoped to the GAME LOG, so an operator identifier from any other source is unguarded - CLOSED 2026-09-07 by operator ruling
 

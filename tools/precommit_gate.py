@@ -495,8 +495,38 @@ def staged_diff(repo: Path, path: str, origin: str | None = None) -> str:
     deletion back in the diff, git re-pairs them, and the added ranges shrink
     to the lines the rewrite actually wrote - none at all for a pure rename,
     exactly like a pure deletion.
+
+    **EVERY PATHSPEC IS PREFIXED ``:(literal)``, on BOTH sides of a rename.**
+    A bare pathspec is a wildmatch GLOB, and these are filenames rather than
+    patterns. For the metacharacters NTFS actually permits - ``[`` and ``]`` -
+    git compares the pathspec to the name literally before it falls back to
+    wildmatch, so a real file named ``a[b].py`` IS still found and the damage
+    is an OVER-match rather than a miss: read as a pattern it is a bracket
+    expression matching the single character ``b``, so it ALSO names
+    ``ab.py``, and the reply then carries a second file's hunks. This function
+    promises one change per call and :func:`parse_added_ranges` believes it,
+    reading every hunk header it is handed; the added ranges for ``a[b].py``
+    would silently include line numbers belonging to ``ab.py``, and the gate
+    would refuse a commit over a line this path never wrote.
+
+    **THAT OVER-MATCH STORY DOES NOT GENERALISE**, which is why this is a
+    magic prefix rather than an escape of the bracket characters. A leading
+    ``:`` is pathspec MAGIC, parsed BEFORE any matching happens, so the
+    literal-first rule never runs: a bare ``:colon.py`` misses the real file
+    and answers about ``colon.py`` instead. That is an UNDER-match, and it is
+    the silent direction - the gate would scope its findings to added lines it
+    believes do not exist. Measured only with ``core.protectNTFS`` forced off,
+    because Git for Windows refuses such a name into the index at all, so it
+    is unreachable here and reachable on a repository built elsewhere.
+
+    **ONE CASE THE PREFIX DOES NOT FIX**, recorded so this is not read as a
+    guarantee: a name containing a backslash under-matches with the prefix and
+    without it alike. ``:(literal)`` closes brackets, ``*``, ``?`` and the
+    leading ``:``. It is not a general escape.
     """
+    literal = ":(literal)"
     pathspecs = [path] if origin is None or origin == path else [origin, path]
+    pathspecs = [literal + spec for spec in pathspecs]
     return (
         _git_stdout(
             repo,

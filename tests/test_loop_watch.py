@@ -3709,3 +3709,268 @@ def test_the_refusal_to_arm_no_longer_claims_a_watcher_is_running(
     assert "a watcher is already running" not in result.reason, result.reason
     assert "is ALIVE" in result.reason, result.reason
     assert "NOT checked here" in result.reason, result.reason
+
+
+# ---------------------------------------------------------------------------
+# ROADMAP OPS-53 - the reporter must not assert a stale destination
+# ---------------------------------------------------------------------------
+#
+# ``armwatch.json`` records ``dest_root`` as it was resolved AT ARMING TIME,
+# and the live watcher re-derives its own destination from ``dest_base`` on
+# every pass. So the recorded value is a durable audit fact and NOT an answer
+# to "where is it archiving right now". Every string a human reads used to
+# render it in the present tense, which told a cold session on 2026-09-08 that
+# a watcher armed on 2026-09-07 was archiving into a directory it had already
+# rolled off.
+#
+# Nothing here re-derives the date format and nothing here re-types a module
+# constant: the expected current root comes from
+# ``lanternlight.armwatch.dated_dest_root``, which is the same function the
+# reporter must go through, and the marker strings are imported off the module.
+
+
+def _current_root_for(dest_base: Path, when: datetime) -> str:
+    """The dated root ``armwatch`` itself resolves for ``when``.
+
+    Computed through the real resolver rather than by formatting a date here,
+    so this test cannot pass by agreeing with a second copy of the format.
+    ``when`` is converted to LOCAL first for the reason
+    :func:`ops.loop.watch._default_dest_root_fn` documents: the directory is
+    named in local dates while the record's stamp is UTC.
+    """
+    from lanternlight.armwatch import dated_dest_root
+
+    return str(dated_dest_root(dest_base, now=when.astimezone()))
+
+
+def _stale_dest_record(pid: int, tmp_path: Path, *, dest_base: str | None = None):
+    """A record armed on 2026-09-01 whose local day has turned before ``NOW``.
+
+    ``dest_base`` is overridable so the missing-base case can be built without
+    a second helper. An empty string is what a payload carrying the key with
+    no usable value deserialises to - ``read_record`` accepts any ``str`` - and
+    it is the reachable shape of "absent" for this reporter.
+    """
+    base = str(tmp_path / "captures") if dest_base is None else dest_base
+    return watch_mod.WatchRecord(
+        pid=pid,
+        dest_base=base,
+        dest_root=str(tmp_path / "captures" / "2026-09-01"),
+        started=ARMED_AT,
+    )
+
+
+def test_the_current_destination_is_derived_through_armwatchs_own_resolver(
+    tmp_path: Path,
+) -> None:
+    """OPS-53 criterion 2, at the seam rather than through the prose.
+
+    The reporter must reach the current dated root through
+    ``lanternlight.armwatch.dated_dest_root``, not by re-deriving the date
+    format and not by taking ``Path(dest_root).parent`` - the parent of a
+    recorded literal dated path is only the base by accident, and a watcher
+    handed a literal ``--dest-root`` has no base under it at all.
+    """
+    record = _stale_dest_record(os.getpid(), tmp_path)
+
+    resolved = watch_mod._current_dest_root(record, NOW)
+
+    assert resolved == _current_root_for(tmp_path / "captures", NOW)
+    assert resolved != record.dest_root, "the local day has turned; these must differ"
+
+
+def test_the_current_destination_is_unknown_when_the_record_has_no_dest_base(
+    tmp_path: Path,
+) -> None:
+    """OPS-53 criterion 2's fallback, at the seam.
+
+    Cannot-tell is a third answer. Returning the arming-time value here would
+    be the defect with an extra function call in front of it.
+    """
+    record = _stale_dest_record(os.getpid(), tmp_path, dest_base="")
+
+    assert watch_mod._current_dest_root(record, NOW) is None
+
+
+def test_check_watcher_does_not_assert_the_arming_day_root_after_midnight(
+    tmp_path: Path, record_file: Path
+) -> None:
+    """OPS-53 criterion 1. Armed on one local day, asked on the next.
+
+    The record says 2026-09-01 and ``NOW`` is 2026-09-03, so a reporter that
+    renders the recorded value in the present tense is telling a cold session
+    something false. Both the ``reason`` and the evidence tuple are checked,
+    because the evidence line is the one item 4e added precisely so a verdict
+    could be audited rather than believed.
+    """
+    record = _stale_dest_record(os.getpid(), tmp_path)
+    watch_mod.write_record(record, record_file)
+    current = _current_root_for(tmp_path / "captures", NOW)
+    # The PRECONDITION, asserted rather than assumed. Without it this test
+    # passes just as happily on a record armed today, where there is no stale
+    # value to render and nothing being pinned.
+    assert current != record.dest_root, "the local day must have turned for this to test anything"
+
+    status = watch_mod.check_watcher(
+        path=record_file,
+        heartbeat=tmp_path / "absent.json",
+        now=NOW,
+        creation_time_fn=_fixed_creation(MEASURED_CREATION),
+    )
+
+    stale_claim = f"archiving into {record.dest_root}"
+    assert stale_claim not in status.reason, status.reason
+    for item in status.evidence:
+        assert stale_claim not in item, item
+
+    assert current in status.reason, status.reason
+    assert any(current in item for item in status.evidence), status.evidence
+
+
+def test_check_watcher_still_shows_the_arming_time_root_and_labels_it(
+    tmp_path: Path, record_file: Path
+) -> None:
+    """OPS-53 criterion 3. The durable fact stays, and stops being ambiguous.
+
+    Deleting the recorded value would lose the audit trail - it is the only
+    evidence of where the watcher was pointed when it was started. The fix is
+    the LABEL, so the value must still appear AND must appear beside the words
+    that say what it is.
+    """
+    record = _stale_dest_record(os.getpid(), tmp_path)
+    watch_mod.write_record(record, record_file)
+
+    status = watch_mod.check_watcher(
+        path=record_file,
+        heartbeat=tmp_path / "absent.json",
+        now=NOW,
+        creation_time_fn=_fixed_creation(MEASURED_CREATION),
+    )
+
+    assert record.dest_root in status.reason, status.reason
+    assert watch_mod.DEST_ARMING_TIME_NOTE in status.reason, status.reason
+    assert status.dest_root == record.dest_root
+
+
+def test_check_watcher_says_unknown_rather_than_stale_when_dest_base_is_absent(
+    tmp_path: Path, record_file: Path
+) -> None:
+    """OPS-53 criterion 2. An unqualified stale answer is the whole defect.
+
+    With no usable ``dest_base`` there is nothing to re-derive from, so the
+    honest report is that the current destination cannot be told. Presenting
+    the arming-time value as current would be the same lie the item was opened
+    about, reached by a different route.
+    """
+    record = _stale_dest_record(os.getpid(), tmp_path, dest_base="")
+    watch_mod.write_record(record, record_file)
+
+    status = watch_mod.check_watcher(
+        path=record_file,
+        heartbeat=tmp_path / "absent.json",
+        now=NOW,
+        creation_time_fn=_fixed_creation(MEASURED_CREATION),
+    )
+
+    assert watch_mod.DEST_UNKNOWN_NOTE in status.reason, status.reason
+    assert any(watch_mod.DEST_UNKNOWN_NOTE in item for item in status.evidence), status.evidence
+    stale_claim = f"archiving into {record.dest_root}"
+    assert stale_claim not in status.reason, status.reason
+    # The durable fact survives even here - it is all there is.
+    assert record.dest_root in status.reason, status.reason
+    assert watch_mod.DEST_ARMING_TIME_NOTE in status.reason, status.reason
+
+
+def test_the_destination_phrase_is_still_honest_when_the_day_has_not_turned(
+    tmp_path: Path, record_file: Path
+) -> None:
+    """The same-day case, which must not become a false negative.
+
+    A guard that only ever sees a rolled-over record pins the crossing and not
+    the phrase. When the recorded root IS the current one the report should say
+    so plainly, and must still carry the arming-time label - otherwise a test
+    for the label would pass on one branch and fail on the other.
+    """
+    base = tmp_path / "captures"
+    current = _current_root_for(base, NOW)
+    record = watch_mod.WatchRecord(
+        pid=os.getpid(), dest_base=str(base), dest_root=current, started=ARMED_AT
+    )
+    watch_mod.write_record(record, record_file)
+
+    status = watch_mod.check_watcher(
+        path=record_file,
+        heartbeat=tmp_path / "absent.json",
+        now=NOW,
+        creation_time_fn=_fixed_creation(MEASURED_CREATION),
+    )
+
+    assert current in status.reason, status.reason
+    assert watch_mod.DEST_ARMING_TIME_NOTE in status.reason, status.reason
+    assert watch_mod.DEST_UNKNOWN_NOTE not in status.reason, status.reason
+
+
+def test_the_identity_believed_sentence_also_names_the_current_destination(
+    tmp_path: Path, record_file: Path
+) -> None:
+    """OPS-53 criterion 4, on the OTHER identity sentence.
+
+    ``check_watcher`` builds two versions of the sentence every live verdict
+    rests on - one for a confirmed identity and one for a merely believed one -
+    and they carry the destination separately. A fix applied to the confirmed
+    branch alone would leave every ``OPS-19`` machine, where creation times
+    cannot be read, reading the stale sentence.
+    """
+    record = _stale_dest_record(os.getpid(), tmp_path)
+    watch_mod.write_record(record, record_file)
+    current = _current_root_for(tmp_path / "captures", NOW)
+    assert current != record.dest_root, "the local day must have turned to test anything"
+
+    status = watch_mod.check_watcher(
+        path=record_file,
+        heartbeat=tmp_path / "absent.json",
+        now=NOW,
+        creation_time_fn=lambda pid: None,
+        denied_fn=lambda pid: False,
+    )
+
+    assert status.identity == watch_mod.IDENTITY_UNCHECKED, status.reason
+    assert "BELIEVED to be the watcher" in status.reason, status.reason
+    assert f"archiving into {record.dest_root}" not in status.reason, status.reason
+    assert current in status.reason, status.reason
+    assert record.dest_root in status.reason, status.reason
+    assert watch_mod.DEST_ARMING_TIME_NOTE in status.reason, status.reason
+
+
+def test_the_refusal_to_arm_reports_the_current_root_not_the_recorded_one(
+    tmp_path: Path, record_file: Path
+) -> None:
+    """OPS-53 criterion 4, on one of the two arming reasons.
+
+    ``ensure_armed``'s refusal describes an INCUMBENT, which is exactly the
+    watcher that may have been armed days ago. It is the arming-path site with
+    the same defect as ``check_watcher``, and a fix that covered only the
+    reported one would leave a cold session reading the stale sentence from a
+    different function.
+    """
+    incumbent = _stale_dest_record(os.getpid(), tmp_path)
+    watch_mod.write_record(incumbent, record_file)
+    current = _current_root_for(tmp_path / "captures", NOW)
+    # The precondition, asserted rather than assumed - see the check_watcher twin.
+    assert current != incumbent.dest_root, "the local day must have turned to test anything"
+
+    result = watch_mod.ensure_armed(
+        tmp_path / "captures",
+        spawn_fn=lambda base, root: pytest.fail("a second watcher was spawned"),
+        dest_root_fn=_dated,
+        now=NOW,
+        path=record_file,
+    )
+
+    assert result.armed is False
+    assert f"archiving into {incumbent.dest_root}" not in result.reason, result.reason
+    assert current in result.reason, result.reason
+    assert incumbent.dest_root in result.reason, result.reason
+    assert watch_mod.DEST_ARMING_TIME_NOTE in result.reason, result.reason
+    # The refusal itself is untouched - this item changes wording, not verdicts.
+    assert "is ALIVE" in result.reason, result.reason
