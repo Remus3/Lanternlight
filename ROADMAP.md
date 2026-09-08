@@ -5364,6 +5364,39 @@ that would do it.
 **Criterion 3 was already met.** Nothing in this measurement touched the code,
 so the eighteen mutations recorded above still stand as its proof.
 
+**AN ADVERSARIAL PASS AT THE WRAP REFUTED THE CLAIM AS STATED, and the
+objection is recorded here in full rather than argued away, because it is a
+good one.** The pass attacked the ARTIFACT rather than the observations:
+
+- `ops/runtime/inbox_prompt_trigger.json` has no field for WHO submitted the
+  prompt, no prompt ordinal and no causal attribution. A row cannot say "this
+  was the operator" or "this was the first message". A hook that MISSED the
+  true first prompt and fired on a later one writes a byte-identical file.
+- The observations that actually distinguish the hypotheses - six rows before
+  a subagent and six after, the trace read two seconds into a live subagent -
+  exist only in prose here and in `LL-0174`. They are not in the artifact.
+- **The trace file is gitignored**, so no future session can re-derive any of
+  it. The evidence is session-local and expires with the disk.
+
+**What is kept and what is conceded.** The observations were made directly and
+are not withdrawn: the row carrying `acknowledged` for this session predates
+every tool call the session made, and a foreground subagent and a 75-second
+timed subagent each added no row while alive. On that evidence the criterion is
+met and the item stays closed. What is CONCEDED is that a reader cannot check
+any of it from the repository, which is a weaker position than this project
+normally accepts and is the reason it is written down instead of smoothed over.
+The `decision` field is the only part that is self-describing: `acknowledged`
+is emitted by the once-per-session guard and therefore marks a session's FIRST
+event, whoever raised it.
+
+**The residual risk above is unchanged and is where this actually bites.**
+Since the trigger is any prompt submitted into the session, and the artifact
+cannot say who submitted one, a session whose first `UserPromptSubmit` was
+harness-injected would acknowledge mail nobody had read AND would leave a trace
+row indistinguishable from the good case. If that risk is ever to be closed
+rather than accepted, the fix is a field the hook can actually populate, not a
+better argument about these rows.
+
 **Criterion 3 met.** Eighteen mutations, each with its anchor asserted UNIQUE
 before it was applied, every one red and every one restored green: accept any
 event; drop the once-per-session guard; an empty payload defaulting to valid; an

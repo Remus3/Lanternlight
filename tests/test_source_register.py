@@ -226,13 +226,23 @@ def is_repo_filename(token: str, paths: Iterable[str] | None = None) -> bool:
 #: Windows-MCP extension id. Every member was read before it was added. See the
 #: module docstring before extending it.
 #:
-#: `OPS-44` REMOVED 109 ENTRIES FROM THIS SET on 2026-09-07 - every token that
+#: `OPS-44` REMOVED 109 ENTRIES FROM THIS SET on 2026-09-08 - every token that
 #: :func:`is_repo_filename` now covers, which is to say every one of THIS
-#: repository's own tracked filenames. Nothing else was touched. Some comment
-#: blocks below therefore describe tokens that are no longer listed under them,
-#: and one or two now head no entries at all. That prose is kept deliberately:
-#: it is the six-wave record `OPS-44` was filed against, and deleting it would
-#: erase the evidence for the change while keeping the change.
+#: repository's own tracked filenames.
+#:
+#: TWO WERE ADDED IN THE SAME WAVE, and this sentence exists because the first
+#: version of this comment said "nothing else was touched" while the same
+#: commit added them. An adversarial pass caught the discrepancy between this
+#: comment and `LL-0176`, which recorded both numbers correctly. The two are
+#: `lanternlight.redact.iter` and `user.email`, the NINTH trip of this guard;
+#: neither is a filename, so neither is a token the new check covers. Net
+#: 371 to 264.
+#:
+#: Some comment blocks below therefore describe tokens that are no longer
+#: listed under them, and one or two now head no entries at all. That prose is
+#: kept deliberately: it is the six-wave record `OPS-44` was filed against, and
+#: deleting it would erase the evidence for the change while keeping the
+#: change.
 KNOWN_NON_HOSTS = frozenset(
     {
         # MODULE FILENAMES and dotted PYTHON PATHS quoted by `LL-0148` and
