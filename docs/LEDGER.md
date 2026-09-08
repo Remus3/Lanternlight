@@ -84,6 +84,22 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0195 - 2026-09-08 - The wrap's refutation pass refuted two of this session's own closing claims - a criterion reported met that was not, and a CLOSED item with no closure block anywhere but a commit message
+
+**Evidence:**
+- An independent pass was handed nine numbered closing claims and told to break them, defaulting to refuted when uncertain. It re-derived HEAD, the suite and ruff itself rather than accepting them, and it built its own fixtures for the two third-party measurements.
+- SIX CLAIMS UPHELD, each with the pass naming what it tried: the pathspec literal prefix on both rename sides and the single-path branch, with the backslash claim MEASURED rather than accepted; the removal of ruff's reported filename, with the config fixture rebuilt from scratch and the current relative-literal form shown to defeat the glob where the absolute bracketed form does not; the hook's globbing state at the split, driven through a real shell rather than read; the gate's verdict sealed before drift is read; the stash form table re-derived across all eight forms; and the watcher's three archive states against the live process.
+- REFUTATION ONE - OPS-53 criterion 3. Its outcome claimed the arming-time value is still shown and still LABELLED wherever it survives. At the two impostor branches it is rendered bare. Their sentences are genuinely negative, so the reason those sites were LEFT survives - but that is not a reason to leave the value unlabelled, and a reader meets a dated path with nothing saying the date is the day the watcher was ARMED.
+- Fixed with the failing tests written first and watched RED at both branches, then the label added at both. Both branches are pinned rather than one standing for the pair, because fixing one and leaving the other is how a guard acquires a hole shaped like coverage.
+- REFUTATION TWO - OPS-60 carried a CLOSED heading and NO outcome block. Its closure existed only in a commit message, which is exactly the place a cold session does not look. Every other item closed this session has one. The id guard cannot see this: it counts headings and ledger closures and has nothing to say about a section's body.
+- DEFECT THREE, prose - a correction paragraph whose bold heading said the wrong arithmetic was ABOVE while its first sentence said the paragraph BELOW. Self-contradictory in three words, inside a paragraph whose whole job is to correct a claim.
+- All three fixed before the wrap commit. Suite and ruff re-run afterwards rather than assumed.
+
+WHY THIS ENTRY EXISTS SEPARATELY. Both refutations landed on CLOSURE PROSE, not on code - the fifth and sixth times in two sessions. The pattern is now specific enough to act on: the defect is not in what was built, it is in the sentence claiming what was built. A closure that reports a criterion met is itself a claim and needs the same adversarial read as the code.
+THE ID GUARD'S BLIND SPOT IS WORTH KNOWING. It scores headings and ledger closures, so an item with a CLOSED heading and one closure looks correct no matter what the section body contains - or does not contain. An empty closure passes it. Anyone relying on a green run there should know that is the shape of the check.
+The pass also confirmed the anti-cheat sweep over this session's commits is clean, with its pattern proven on a positive control first rather than trusted on an empty result.
+One thing it could NOT clear, and reported rather than glossed: the structural guard added under OPS-59 for the threaded production loop IS satisfiable by code that is still wrong - it reproduced that. The caveat is written in the test's own docstring, so the artifact carries it, but it is a shape check and not a behaviour check.
+
 ### LL-0194 - 2026-09-08 - OPS-59 closed: the watcher now reports whether it has ARCHIVED anything as a third state distinct from polling freshness, and a mutation exposed that the production loop had no behavioural coverage at all
 
 **Evidence:**

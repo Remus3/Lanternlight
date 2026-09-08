@@ -1,145 +1,225 @@
 LANTERNLIGHT - NEXT SESSION PROMPT
-Written at the wrap of the 2026-09-08 session. Overwritten every session; this
-file is tracked, and its git history is the record of what each session handed
-forward. THIS FILE IS NOW WRITTEN BY ops/handoff.py, never by an editor tool -
-see OPS-32 below.
+Written at the wrap of the 2026-09-08 evening session. Overwritten every
+session; this file is tracked, and its git history is the record of what each
+session handed forward. It is written by ops/handoff.py, never by an editor
+tool - see the HOW TO WRITE THE NEXT HAND-OFF section at the bottom.
 
 Resume Lanternlight from disk. Read CLAUDE.md, then this file, then ROADMAP.md
 and docs/LEDGER.md newest-first. Ask nothing; start work.
 
 READ FIRST, IN THIS ORDER
   CLAUDE.md           - unchanged this session.
-  docs/LEDGER.md      - newest first. LL-0178 through LL-0181 are this session.
-  ROADMAP.md          - four items closed today. See NEXT ITEM below.
-  WAKEUP_NOTES.md     - top entry.
+  docs/LEDGER.md      - newest first. LL-0182 through LL-0195 are this session.
+                        LL-0195 is the wrap's own refutation and is the one to
+                        read if you read only one.
+  ROADMAP.md          - EIGHT items closed this session and eight filed; the
+                        only one filed and left open is OPS-57. See NEXT ITEM
+                        below.
 
 FIRST ACTION, BEFORE ANY WORK
 Run `python ops/inbox_watch.py` and READ the output. A plain run REPORTS ONLY.
 Acknowledge with an explicit `python ops/inbox_watch.py --acknowledge`, and only
-for notes you have actually read. At this wrap it said: nothing new, 97 notes
-all previously seen, and 28 of our own outgoing notes in the outbox, which are
-not mail.
+for notes you have actually read.
 
-SECOND ACTION, NEW THIS SESSION
-Run `python ops/stop_audit.py --show-last`. A Stop hook now audits the claims
-the PREVIOUS turn made - a numeric suite result whose outcomes do not sum to
-what pytest collects, or a file the session said it wrote that is missing or
-empty. It never blocks and it never speaks, so a refutation sits unread unless
-something asks. Treat a FAIL line as a question about what was written, not as
-a verdict: it cannot tell a claim from a QUOTATION of one.
+  MEASURED THIS SESSION, so you do not re-derive it: the report says 97 notes
+  while the directory holds 98 files, and that is CORRECT rather than a bug.
+  One group holds two byte-identical notes delivered under different names, so
+  97 is the count of distinct NOTES. The sum of names across groups is 98 and
+  reconciles against total_notes exactly. The single non-Markdown file - a
+  sibling's poller source dropped with a text extension - is keyed, grouped and
+  flagged with a reason saying its content is not read for the report. It is
+  already acknowledged. See LL-0186 before filing anything about that number.
 
-STATE AT THE WRAP
-  origin/main           four commits this session. Confirm with
-                        `git rev-parse HEAD origin/main` and `git log --oneline -5`
-                        rather than trusting this line.
-  python -m pytest      bare: the count observed at the wrap is in the wrap
-                        commit's message. RE-RUN rather than quoting it.
-  python -m ruff check  All checks passed at the wrap.
-  loop                  cycle 60, no item in flight. OPS-45, OPS-32, OPS-27 and
-                        OPS-39-defect-7 are credited.
-  capture watcher       ARMED, pid 21680, identity VERIFIED, all four surfaces
-                        fresh. Re-check with ops.loop.watch.check_watcher()
-                        rather than believing this line. NOTE, unmeasured: its
-                        archive root still reads C:\ll-captures\2026-09-07 on
-                        2026-09-08. check_watcher did not flag it and nobody has
-                        checked whether that directory is meant to roll over.
+SECOND ACTION
+Run `python ops/stop_audit.py --show-last`. A Stop hook audits the PREVIOUS
+turn's claims. It never blocks and never speaks, so a refutation sits unread
+unless asked for. A FAIL line is a QUESTION about what was written, not a
+verdict: it cannot tell a claim from a QUOTATION of one. At this wrap it
+reported one refuted claim, and the refutation is correct about the arithmetic
+and wrong about the intent - the turn QUOTED a subagent's suite line (2534
+passed, 1 skipped) while the tree had already grown to 2547 collected because a
+sibling slice was adding tests at the same moment. That is the quotation case
+the auditor cannot distinguish, and it is worth knowing that this is what it
+looks like.
 
-CLOSED THIS SESSION
-  OPS-45  The Stop-hook transcript-claim auditor. ops/stop_audit.py.
-  OPS-32  The hand-off writer. ops/handoff.py.
-  OPS-27  The compaction gap, closed on a write at DISPATCH; hook DECLINED.
-  OPS-39 defect 7  Inbox-chosen NOTE filenames are sanitised before rendering.
+CLOSED THIS SESSION, ALL PUSHED
+  OPS-53  The watcher status reporter asserted a present-tense destination off
+          an arming-time record. The archiving was never broken.
+  OPS-39  Its last defect - the staged diff now names pathspecs literally.
+  OPS-54  Parallel slices share one worktree; closed on a ban plus a detector.
+  OPS-55  The gate stops consulting the filename ruff reports.
+  OPS-56  The filename-to-external-tool sweep, and the two hook defects it
+          found.
+  OPS-58  The store-drift detector is wired into the merge gate.
+  OPS-59  The watcher reports whether it has ARCHIVED, not only whether it
+          polled.
+  OPS-60  The stash-subject set, and the removal of an unsound count.
 
-THREE MEASURED FACTS ABOUT THIS HARNESS, so nobody re-derives them
-  1. A Stop hook registered MID-SESSION takes effect in that session.
-  2. Stop fires at the end of an assistant TURN, not only at session end.
-     Three unprompted fires were recorded with ordinals, transcript line counts
-     and the last main-agent uuid, in ops/runtime/stop_audit/trace.jsonl.
-  3. NOT PROVEN, and do not assume it: that Stop also fires at final session
-     teardown. That cannot be observed from inside the session it would end.
-     Check it by reading the LAST row of that trace and comparing its timestamp
-     against the end of the previous session. This is stated rather than
-     glossed, because OPS-41 criterion 1 was refuted at its own wrap for
-     stating a gap like this vaguely.
-  Also observed and NOT proven: turns that were resumed immediately by a
-  background-task notification appear to produce no separate Stop fire. That is
-  consistent with the trace rather than demonstrated by it.
+FILED THIS SESSION, NOT STARTED
+  OPS-57  Both continuity documents will outgrow their budgets within days.
+          THIS IS THE NEXT ITEM. See below.
+  OPS-35, OPS-36 remain open and operator-ruled; do not act on them alone.
 
-THE ADVERSARIAL PASS EARNED ITS KEEP THREE TIMES OUT OF THREE
-Every one of the three items that got an independent refutation pass had real
-defects found in work the merger had already called done, and in two cases the
-defect was in the CLOSURE PROSE rather than the code:
-  OPS-45  A RecursionError escaped a hook that must never raise; a thousands
-          separator was MISREAD rather than missed; a synthetic identifier
-          reached the written report through the claimed PATH while the quoted
-          snippet beside it was correctly masked; and an ABSENT transcript wrote
-          a trace row byte-identical to an EMPTY one.
-  OPS-32  The ASCII refusal - the only check in that module NOT inherited from
-          the redactor, and the only one that was wrong - had a live bypass:
-          str.splitlines() CONSUMES U+0085, U+2028 and U+2029, so those three
-          reached disk while the check reported clean. The gate was LOOSER than
-          the commit-time gate it stands in front of, which is the worst shape a
-          gate can have.
-  OPS-27  The closure claimed the dispatch record's shape leaves "nowhere for
-          prose to sit". False twice over, and the pass proved it before the
-          commit. Both holes fixed and the prose narrowed to what is true.
+THE SINGLE MOST IMPORTANT MEASUREMENT THIS SESSION
+The pre-commit hook - the file that gates every commit in this repository - was
+running the WRONG TEST MODULE and reporting that the guard had run. Reproduced
+with a real commit before it was fixed: the selector chose a bracket-named
+module, the hook printed "running 1 doc-reading test module(s)", pytest ran the
+glob NEIGHBOUR (a module that reads no document), the subset passed, and THE
+COMMIT LANDED. `set -f` was set earlier in the hook and cleared before that
+line, so `$selected` word-split AND globbed.
 
-TRANSFERABLE RULES THIS SESSION PAID FOR
-  A HAND-WRITTEN CHECK PLACED IN FRONT OF AN EXISTING GUARD must be proven at
-  least as strict as that guard, not merely proven to fire on the obvious case.
-  Nobody had compared the two, and the one hand-written check in ops/handoff.py
-  was the only one that was wrong.
+Two lessons that generalise past this bug:
+  - A guard can run, exit 0, and have checked something else entirely. Presence,
+    registration and a green exit are three facts and none of them is the fact
+    that the right thing was checked.
+  - The mutation that moves `set -f` to AFTER the split is killed only by the
+    BEHAVIOURAL test. The text assertion survives it. A test that greps a hook
+    for a string would pass against a hook carrying that string in a comment.
 
-  A LITERAL THAT DUPLICATES A CONSTANT IS A TEST ASSERTING ON A COINCIDENCE. A
-  test typed a verdict as NOT_OURS while the module's constant is NOT OURS with
-  a space, so it asserted the right property about the wrong branch and was
-  green in both directions until a mutation asked.
+NEXT ITEM - OPS-57, and it has a measured basis already
+Both continuity documents are about to outgrow their size budgets, and raising
+the numbers is not the fix. The roadmap budget FIRED during this session and the
+pre-commit hook refused a commit over it.
 
-  A MUTATION TALLY IS A HYPOTHESIS LIKE ANY OTHER COUNT. Two items filed a
-  tally that did not survive re-derivation: nine became twelve for OPS-32 and
-  eight became twelve for OPS-27, because a pass found guards whose deletion
-  changed nothing. Re-run the set after fixing anything.
+  The curve, in git blob bytes:
+    ROADMAP.md      424,019 on 2026-09-07 -> 569,870 at this session's start
+                    -> 600,555 when it fired. Budget raised ONCE to 700,000.
+    docs/LEDGER.md  813,780 at the session's start -> 842,387 later, against a
+                    900,000 budget that has NOT been raised.
 
-  A PYTHON HEREDOC THROUGH THE BASH TOOL MANGLES BACKSLASH ESCAPES in patch
-  strings, turning a backslash-n in an anchor into a real newline: it then
-  matches zero times or raises SyntaxError. Paid for three times in one session.
-  Write the patch to a file with an editor tool and run the file. Every patch
-  here asserts its anchor count, which is the only reason it was caught.
+  The raise is a DEFERRAL and is labelled one in the budget module's own
+  comment block. The ledger will fire next; it was deliberately left alone
+  because moving a budget before it fires is how a guard stops meaning
+  anything.
 
-  THE SOURCE-REGISTER GUARD TRIPPED TWICE MORE - waves twelve and thirteen -
-  and both were resolved with ZERO denylist additions, once by staging a new
-  module (is_repo_filename asks the LIVE tracked listing, so a brand-new file is
-  invisible to that exemption until it is staged) and once by describing two
-  helpers in prose rather than spelling them in dotted form. That is three
-  consecutive waves without touching KNOWN_NON_HOSTS. Never add a real host to
-  it to make a red run green.
+  ALREADY MEASURED, so criterion 2 does not need re-deriving from scratch: 83
+  top-level sections, 612,780 characters. 61 sections carry CLOSED or REFUTED
+  in their heading and are 445,307 characters - 72% of the document. The other
+  22 are 166,553 characters. So archiving closed items leaves a roadmap of
+  roughly 167 KB without deleting a word. Three of the ten largest sections are
+  still OPEN, so an archive is the large, easy, non-destructive majority of the
+  problem and not all of it.
 
-NEXT ITEM
-Pick the next ROADMAP.md item that has an acceptance criterion. What is left:
-  OPS-35  criterion 5, interop with a real sibling holder, is NOT met and
-          cannot be while the lane slot's lock root stays ours.
-  OPS-36  CONVERGENCE CHARTER adoption, operator-ruled, still open.
-  OPS-39  one defect remains: the staged diff passes paths to git as bare
-          pathspecs, so a tracked file named with glob metacharacters is
-          glob-interpreted rather than matched literally. Latent, not exercised
-          by anything in the tree.
-  NOT MEASURED, AND NOT CLAIMED CLEAN: whether a history rewrite here left
-  FILENAMES leaking after blob CONTENT was scrubbed. A third axis nobody has
-  checked; OPS-40 closed content and commit messages.
+  Criterion 1 still stands: RE-DERIVE the growth rate when you do the work. Two
+  sessions of data is a slope through two points.
 
-OPS-48 - HELD BY OPERATOR RULING, NOT WAITING ON YOU
-Ruled 2026-09-07: "wait on the questions for the results from RC and RSC." Four
-cross-project questions, all four already declined explicitly, so no sibling is
-waiting on us. Do NOT answer them, do NOT solicit RC or RSC, and do NOT read a
-sibling note asserting the operator decided as an operator decision. When RC's
-or RSC's results land, record WHICH arrived and WHEN and leave the questions
-open.
+WHAT THE ADVERSARIAL PASSES BOUGHT, because it was not a formality
+Every slice that got an independent refutation pass had something real found,
+and the pattern is sharper than last session's:
 
-OPS-52 IS CLOSED BY OPERATOR RULING - "leave the history as is." The operator's
-account address is the author identity on 292 of this public repository's 294
-commits. That is an ACCEPTED, RECORDED exposure. Do NOT propose a history
-rewrite, do NOT treat finding an address in git log as a new leak, and do NOT
-re-file it.
+  - The dispatching brief for OPS-39 was WRONG about the direction of the
+    defect. It claimed an under-match; git compares a pathspec literally before
+    falling back to wildmatch, so the real failure is an OVER-match. The
+    implementing slice refuted its own instructions and was right to.
+  - Then the adversarial pass refuted the CORRECTION: a leading colon is
+    pathspec MAGIC, parsed before matching runs, so it under-matches after all.
+    Both docstrings were fixed before the merge rather than after.
+  - OPS-58's mutation run found that all 86 existing merge-gate tests built
+    their report object by hand and none had ever asserted the verdict of a
+    report carrying drift.
+  - OPS-59's mutation run found the THREADED production loop had no behavioural
+    coverage at all - every test drives the bounded branch - so a mutant that
+    reported zero copies from the real loop left the whole suite green.
+  - OPS-60's enumeration found a THIRD stash commit nobody knew about.
+
+THE WRAP'S OWN REFUTATION PASS REFUTED TWO OF THESE CLOSURES - READ LL-0195
+Nine closing claims were handed to an independent pass told to break them. Six
+were upheld, each with the pass naming what it TRIED rather than reporting
+clean. Two were refuted and one prose defect was found, and all three were
+fixed before the wrap commit:
+
+  - OPS-53's outcome claimed the arming-time destination is still LABELLED
+    wherever it survives. At the two impostor-pid branches it was rendered
+    bare. The reason those sites were left un-derived survives - their
+    sentences are genuinely negative and true on any day - but that was never a
+    reason to leave the value unlabelled. Fixed with failing tests written
+    first and watched RED at BOTH branches, because fixing one and leaving the
+    other is how a guard acquires a hole shaped like coverage.
+  - OPS-60 carried a CLOSED heading and NO outcome block. Its closure existed
+    only in a commit message, which is exactly where a cold session does not
+    look. An Outcome section was written.
+  - A correction paragraph's bold heading said the wrong arithmetic was ABOVE
+    while its first sentence said the paragraph BELOW.
+
+  THE ID GUARD CANNOT SEE THE SECOND ONE, and you should know the shape of that
+  check before trusting a green run: tests/test_ops_ids.py scores HEADINGS and
+  LEDGER CLOSURES. An item with a CLOSED heading and one closure passes it no
+  matter what the section body contains, including nothing at all.
+
+  BOTH REFUTATIONS LANDED ON CLOSURE PROSE RATHER THAN CODE - the fifth and
+  sixth times in two sessions. A closure that reports a criterion met is itself
+  a claim and needs the same adversarial read as the code does.
+
+FOUR CORRECTIONS THIS SESSION MADE TO ITS OWN EARLIER CLAIMS
+Read these before trusting a number in a closure:
+  1. Six unreachable commits are NOT three stashes. A stash writes two commits,
+     or three when untracked files are included, and a repeat taken from an
+     unchanged index adds only ONE because its index commit hashes to the object
+     the first already wrote. N stashes from an unchanged index give N+1. A
+     count of stash-shaped commits is not a count of stashes in either
+     direction. LL-0191 corrects LL-0188 by ADDING an entry, not editing one.
+  2. A messaged stash writes a subject beginning `On <branch>: <message>`, not
+     `WIP on `. The prefix set could not match it, so it now gets a shape check
+     resting on git refusing a branch name containing a space.
+  3. `git stash drop` does NOT remove the commits. While the stash EXISTS,
+     `git fsck --unreachable` reports nothing, because the ref keeps them
+     reachable; after the drop they appear and stay. Only expiring the reflog
+     and pruning erases them.
+  4. The Stop hook does not fire a second time at the end of a session ended by
+     a clear. Still unproven for a session ended by exit, and it cannot
+     distinguish no fire from a fire that failed to write. LL-0182.
+
+NO NEW GAME DATA SINCE 2026-08-30 - NINE DAYS AT THIS WRAP
+Measured against the game's own tree. Every roadmap item blocked on the operator
+playing - item 1's remainder, items 5 and 6 - has been blocked that whole time.
+Do not schedule a capture session; fold those into whichever session next has
+the game running.
+
+  ASK, do not guess, and do not read a date out of a document:
+    python -c "from ops.loop import watch; print(watch.check_watcher().reason)"
+
+  That distinguishes RECENT, QUIET and UNKNOWN. Read it as an UPPER BOUND on
+  when game data last arrived: the heartbeat lives under gitignored
+  ops/runtime/, and re-arming re-copies unchanged files because the copier's
+  seen-set is per instance. A QUIET answer is trustworthy; a RECENT one means a
+  copy happened, which is not quite the same as new data.
+
+STATE AT THE WRAP - re-derive rather than quoting these
+  origin/main       four commits this session. Confirm with
+                    `git rev-parse HEAD origin/main` and `git log --oneline -5`.
+  python -m pytest  bare. The count observed at the wrap is in the wrap commit's
+                    message. RE-RUN and read the last line yourself; `-q` is
+                    already in pytest.ini, so a second one prints NO summary.
+  python -m ruff check   clean at the wrap.
+  loop              cycle 63. Advance it when you pick the next item.
+  capture watcher   ARMED, identity VERIFIED, all four surfaces fresh, and its
+                    ARCHIVE state reads UNKNOWN - which is correct and expected:
+                    the live process was armed by a build older than OPS-59 and
+                    writes no archive map. Unknown is a THIRD answer, not a
+                    report that nothing was ever copied. Re-check with
+                    ops.loop.watch.check_watcher() rather than believing this.
+
+THE SHARED-WORKTREE BAN IS NOW WRITTEN DOWN - READ IT BEFORE DISPATCHING
+`SHARED_WORKTREE_BAN` in ops/store_drift.py enumerates the repo-wide git
+commands a slice must never run in the shared worktree, with the specific way
+each one destroys a sibling slice's work. It is ADVISORY and nothing enforces
+it. Put it in every slice brief.
+
+  The merge gate now carries a THIRD channel that reports whether the object
+  store moved between dispatch and merge. It never touches the verdict. With no
+  dispatch-time reading it says the check DID NOT RUN and calls the answer
+  unknown - it never says there was no drift. It only fires if you perform the
+  dispatch ritual, and NO CODE CALLS THAT RITUAL FOR YOU.
+
+BEFORE DISPATCHING PARALLEL WORK
+Record it: state.dispatch(*items, lane=..., paths=[...]) and retire each slice
+as it lands. Read state.in_flight_summary(state.load()) BEFORE dispatching
+anything. Capture a per-file baseline at DISPATCH and hand it to the merge gate
+as per_file_baseline - a total-only guard hides a lane that deleted tests from
+its own file behind a lane that added some elsewhere. This session captured
+every baseline at dispatch, and once from a detached worktree at HEAD, rather
+than reconstructing one at merge time.
 
 HOW TO WRITE THE NEXT HAND-OFF
 Draft it into a scratch file, then run:
@@ -147,15 +227,11 @@ Draft it into a scratch file, then run:
 It runs the redactor over the STRING and refuses BEFORE anything is written, so
 a refusal leaves the previous hand-off byte-unchanged and exits 1. There is no
 exemption list and no override flag: if a legitimate hand-off is refused, the
-HAND-OFF is what changes. --check-only reports without writing. This file was
-written that way, which is the only live proof that path works.
+HAND-OFF is what changes. --check-only reports without writing.
 
-BEFORE DISPATCHING PARALLEL WORK
-Record it: state.dispatch(*items, lane=..., paths=[...]) and retire each slice
-as it lands. Read state.in_flight_summary(state.load()) BEFORE dispatching
-anything. `item` is singular and cannot describe several parallel slices, so a
-None there is not evidence that nothing is running - that exact reading was
-measured while three agents were mid-flight. It is a RITUAL, not a mechanism:
-no code calls dispatch for you.
+OPS-48 IS HELD BY OPERATOR RULING - do not answer its four questions, do not
+solicit RC or RSC. OPS-52 IS CLOSED BY OPERATOR RULING - "leave the history as
+is"; do not re-file it, and do not treat finding the operator's address in
+git log as a new leak.
 
 then start the loop

@@ -2374,7 +2374,7 @@ def check_watcher(
                 f"says the watcher was armed {record.started}, {offset:.0f} s apart and "
                 f"outside the {IDENTITY_TOLERANCE_S:.0f} s identity window. The number was "
                 f"recycled by something unrelated, and nothing is archiving into "
-                f"{record.dest_root}. Re-arm."
+                f"{record.dest_root}, {DEST_ARMING_TIME_NOTE}. Re-arm."
             ),
         )
 
@@ -2402,7 +2402,8 @@ def check_watcher(
                     f"{target}: this token is REFUSED access to it, and a watcher armed "
                     "by a session running under this token is a process that session can "
                     "open. The number was recycled onto something foreign, and nothing is "
-                    f"archiving into {record.dest_root}. Re-arm. (Liveness alone says yes "
+                    f"archiving into {record.dest_root}, {DEST_ARMING_TIME_NOTE}. "
+                    "Re-arm. (Liveness alone says yes "
                     "here, because an access-denied reading is ALIVE for the loop lock - "
                     "that is right for the lock and wrong for this question, which is the "
                     "whole of OPS-23.)"

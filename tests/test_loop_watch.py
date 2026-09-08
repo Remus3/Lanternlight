@@ -4288,3 +4288,58 @@ def test_the_quiet_note_claims_nothing_about_thread_health(
     line = _archive_evidence(status).lower()
     assert "healthy" not in line, line
     assert "not a fault" in line
+
+
+def test_the_recycled_pid_reason_labels_its_recorded_destination(
+    tmp_path, record_file
+):
+    """`OPS-53` criterion 3, at a site that item's own outcome said was LEFT.
+
+    That sentence is negative - nothing is archiving into that directory - so
+    it stays true on any day, and that is why the value is not re-derived
+    there. It is NOT why the value was left unlabelled. A reader meeting a
+    dated path in a status line has no way to know the date is the day the
+    watcher was ARMED rather than the day it archives into, and the whole of
+    `OPS-53` is that a reader must not have to guess which.
+
+    Found by the refutation pass at this session's own wrap, against a closure
+    that had already claimed criterion 3 was met wherever the value survives.
+    """
+    record = _stale_dest_record(os.getpid(), tmp_path)
+    watch_mod.write_record(record, record_file)
+
+    status = watch_mod.check_watcher(
+        path=record_file,
+        heartbeat=tmp_path / "absent.json",
+        now=NOW,
+        creation_time_fn=_fixed_creation(datetime(2026, 9, 3, 4, 0, 0, tzinfo=UTC)),
+    )
+
+    assert status.identity == watch_mod.IDENTITY_REFUTED, status.reason
+    assert record.dest_root in status.reason, status.reason
+    assert watch_mod.DEST_ARMING_TIME_NOTE in status.reason, status.reason
+
+
+def test_the_access_denied_reason_labels_its_recorded_destination(
+    tmp_path, record_file
+):
+    """The same criterion at the OTHER impostor branch, `OPS-23`'s one.
+
+    Two branches render the recorded destination inside a negative sentence.
+    Fixing one and leaving the other is how a guard acquires a hole shaped
+    like coverage, so both are pinned rather than one standing for the pair.
+    """
+    record = _stale_dest_record(os.getpid(), tmp_path)
+    watch_mod.write_record(record, record_file)
+
+    status = watch_mod.check_watcher(
+        path=record_file,
+        heartbeat=tmp_path / "absent.json",
+        now=NOW,
+        creation_time_fn=lambda pid: None,
+        denied_fn=lambda pid: True,
+    )
+
+    assert status.identity == watch_mod.IDENTITY_REFUTED, status.reason
+    assert record.dest_root in status.reason, status.reason
+    assert watch_mod.DEST_ARMING_TIME_NOTE in status.reason, status.reason

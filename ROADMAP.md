@@ -6567,6 +6567,61 @@ tree carries a bracket, and this repository's own path carries none either.
 Both holes are latent. The `--config` one is the one that would be invisible if
 it ever were not.
 
+
+### Outcome, 2026-09-08 - CLOSED
+
+Ledger `LL-0193`. Measured against git 2.53.0.windows.3 by building real stashes
+in throwaway repositories and reading the subjects off the commit objects, not
+by typing expected strings into a fixture.
+
+**The form table, which criterion 2 demanded be RUN rather than guessed:**
+
+| form | subjects git writes |
+|---|---|
+| `git stash` | `WIP on <branch>: <sha> <subject>` + `index on <branch>: ...` |
+| `git stash push -m "..."` | `On <branch>: <message>` + `index on ...` |
+| `git stash push --keep-index` | the unmessaged pair, unchanged |
+| `git stash push --staged` | the unmessaged pair, unchanged |
+| `git stash push -u` | the unmessaged pair PLUS `untracked files on <branch>: ...` |
+| `git stash push -u -m "..."` | the messaged pair plus that third commit |
+| detached HEAD, either form | the branch field is the literal `(no branch)` |
+| `git stash create "..."` | the messaged pair, on no ref at all |
+
+**THE THIRD COMMIT WAS NOT KNOWN BEFORE THIS ITEM**, and it was found only
+because the criterion required the forms be enumerated by running git rather
+than extended by one string. Re-measured independently by the merger: including
+untracked files leaves three commits, not two.
+
+**Only ONE prefix was added.** The messaged head cannot be matched by prefix -
+a subject beginning `On ` is an ordinary English opener - so it gets a SHAPE
+check instead, and the discrimination rests on git refusing a branch name
+containing a space. That dependency was verified independently
+(`git branch "has space"` fails with `not a valid branch name`) and is pinned by
+its own test rather than left implicit.
+
+**The count conversion was REMOVED, not repaired.** The report now states the
+number is COMMITS, gives both reasons it cannot be halved, and says a dropped
+stash sits on no ref so the object store cannot answer how many stashes there
+were at all.
+
+**Six mutants, six killed**, every anchor asserted to occur exactly once first.
+One of them encodes the wrong belief itself by capping the named commits at two,
+which is the mutation that would have caught the original defect.
+
+**Four prose sites outside the slice's file list still asserted the refuted
+count.** The slice found three, reported them and correctly did not edit them;
+the merger fixed those three and a fourth the slice had not seen, in the roadmap
+section of the item that shipped the drift wiring. Every surviving mention of
+that number in this tree now quotes it in order to correct it, and none asserts
+it.
+
+**An honest residual:** an ordinary commit whose subject happens to begin `On `,
+a branch name and a colon is still indistinguishable from a messaged stash. The
+shape check narrows the false-positive surface; it does not eliminate it. Also
+not measured: a stash taken during a rebase or a bisect, which was reasoned
+about and labelled as reasoned, and the behaviour of any git other than this
+machine's.
+
 ## OPS-59. The watcher status answers "is it alive and polling" and cannot answer "has it archived anything" - and today those two differ by nine days - CLOSED 2026-09-08
 
 Found 2026-09-08 while confirming that `OPS-53`'s newly derived destination was
@@ -7178,9 +7233,10 @@ throwaway repository, where a single stash produced exactly two. The count was
 right and the inference from it was not, which is this project's "a filed count
 is a hypothesis" rule landing on the item that was filed to catch drift.
 
-**THE STASH ARITHMETIC ABOVE IS ITSELF WRONG, corrected 2026-09-08 by `OPS-60`
-and left here rather than edited away.** The paragraph below says one stash
-writes two commits, so six unreachable commits are three stashes. The first half
+**THE STASH ARITHMETIC IN THE PARAGRAPH ABOVE IS ITSELF WRONG, corrected
+2026-09-08 by `OPS-60` and left standing rather than edited away.** That
+paragraph says one stash writes two commits, so six unreachable commits are
+three stashes. The first half
 is right about OBJECTS; the inference is not. Measured: a second stash taken
 from an UNCHANGED index adds only its `WIP on ` commit, because its `index on `
 commit has the same tree, parent and subject as the first and hashes to the same
