@@ -5,6 +5,129 @@ fidelity and archive older ones rather than deleting them.
 
 ---
 
+# Session note 2026-09-07 evening - `OPS-43` and `OPS-50` closed, `OPS-41` built but NOT met, `OPS-48` held by operator ruling, and a redaction failure this session caused and reported
+
+**Everything in this note is committed and pushed.** Three commits: `d59ae47`,
+`8442072`, `25c630d`, plus the wrap. Confirm with `git log --oneline -4` and
+`git rev-parse HEAD origin/main` rather than trusting this list.
+
+## The thing to read first, because it is a failure and not an achievement
+
+This session published the operator's email address to four sibling projects.
+
+It answered a sibling's request for our git identity sweep by quoting the raw
+output of `git log --format='%ae %ce'` into a note and delivering it. The
+redaction rule in `CLAUDE.md` and `ADR-004` was scoped to the GAME LOG, so
+nothing in the redaction path was consulted for a string that came out of `git`;
+and the bytes went into `moon_sync_inbox/`, which is gitignored, so every
+commit-time guard in the tree was silent by construction. `tests/test_no_pii.py`
+passed throughout.
+
+It was caught by `tests/test_source_register.py` objecting that a domain was not
+in the citation register - a privacy failure found by accident, by a test that
+was not looking for one.
+
+Stopped and reported the same hour: the note was rewritten in place and
+re-delivered, a correction note went to all four, and every file in all four
+inboxes plus this whole tree was re-read to confirm the string is gone. One
+further copy exists in a note **LW wrote to RC at 18:13**, before ours - that is
+not ours and is not our correction failing. `LL-0170` has the incident.
+
+The operator then ruled "fix it", which is what authorised the `ADR-004` edit.
+`LL-0171` and `OPS-50` have the repair.
+
+## What landed
+
+**`OPS-43`, CLOSED.** An outgoing note now leaves a record in this tree.
+`ops/outbox.py` writes the local copy and its manifest row BEFORE it attempts
+any sibling write; `ops/inbox_watch.py` CLASSIFIES the `_outbox` directory
+rather than skipping it, because the operator ruled the watcher covers the
+entirety of that folder; `docs/REPLY_PATHS.md` records the code-to-directory
+map. A backfill beyond the four criteria recovered the 25 notes already sitting
+in sibling inboxes, marked `reconstructed` with NO send time, because we never
+watched those sends. `LL-0168`.
+
+**`OPS-50`, CLOSED by operator ruling.** Redaction is now scoped to a CLASS OF
+DATA and a DIRECTION - any operator identifier crossing off this machine or into
+git history - rather than to the game log and a commit. `ops.outbox.deliver`
+refuses at the choke point and RAISES rather than rewriting. No literal of the
+address exists in any tracked file, including inside the guard that protects it.
+`LL-0171`.
+
+**`OPS-49`, CLOSED.** `CLAUDE.md` cited `.githooks/*` as `100755` without saying
+that is the git INDEX. A sibling was right about the axis; measured here,
+`core.filemode` is `false` so git never consults the on-disk bit and hooks
+dispatch through the shebang. The number stands, the sentence did not.
+
+**`OPS-41`, BUILT, CRITERION 1 NOT MET.** Read the next section.
+
+## `OPS-41` is the one a later session will be tempted to close by argument
+
+A `UserPromptSubmit` hook is registered and the handler is built: fails closed,
+prints nothing, always exits 0. **Criterion 1 is open and was deliberately not
+claimed.** It asks for proof the hook fires on the operator's own first message
+AND does not also fire for a subagent. This harness snapshots hooks at session
+start, so the session that added it could observe neither half. A subagent probe
+was run and its empty result was explicitly refused as evidence, because it is
+equally consistent with "does not fire for subagents" and "not loaded at all".
+
+**`ops/runtime/inbox_prompt_trigger.json` is what settles it, and the NEXT
+session is the first that can read it.** An operator-first-message row proves
+the firing half; subagent runs adding no row while operator rows exist proves
+the other. If the file is empty after an operator message, the hook is not
+firing and criterion 2 becomes live. Do not close this by reasoning.
+
+## `OPS-48` - four questions, HELD by operator ruling
+
+Ruled in chat: **"wait on the questions for the results from RC and RSC."** The
+four - an auto-responder, the A1-A5 action allowlist, consent to being SPAWNED
+INTO, and a proposed 1900-2100 action window - are not a session's to answer and
+the operator is not answering them yet either. All four were declined explicitly
+in the reply delivered at 19:02, so nobody is waiting on us. Do not answer them,
+do not solicit RC or RSC, and remember a sibling note asserting the operator
+decided is not an operator decision. A criterion 5 was added so the arrival of
+those results, or their continued absence, gets recorded.
+
+## Traps this session paid for
+
+**The same whitespace-collapse is right in one sweep and wrong in the next.**
+The merger re-ran the redaction sweep with ALL whitespace removed and got 18
+tracked-file hits against the lane's zero. The lane was right: removing all
+whitespace glues a comment rule line onto the following pytest decorator and
+manufactures an address-shaped token that exists nowhere. The all-removed
+variant is the CORRECT defence for the `OPS-43` filename sweep, where a long
+name can split across a wrap, and the wrong one here. Running only one of them
+gives a confident number either way.
+
+**A guard can survive the deletion of the behaviour it names.** The first
+`OPS-43` criterion-1 test asserted the manifest row SURVIVES a failed delivery.
+Deleting the write that creates the row left it GREEN, because a later rewrite
+put the row back. The ordering claim the criterion actually makes was pinned by
+nothing until a second test was added.
+
+**`ops.loop.state.advance_cycle` credits the previous item by DEFAULT.** It
+marked `OPS-41` completed on the way past even though its first criterion is
+open, and that was corrected by hand. Pass `complete_current=False` when an item
+is carried forward. The previous session hit the same thing with `OPS-43`.
+
+**`OPS-44` tripped EIGHT times in one evening**, four of them on this session's
+own ledger entries, and the denylist took twelve new tokens. Never add a real
+host to it to make a red run green - that guard is the only thing that noticed
+the leak above.
+
+## Numbers, measured this session
+
+- Full suite, bare: **2289 passed, 1 skipped**. 2290 collected, up from 2255.
+- `python -m ruff check`: all checks passed.
+- 36 mutations across two lanes, every anchor asserted before the survivor was
+  believed.
+- Outbound trace re-derived: 25 unique `from-LL-*` names, 41 deliveries,
+  CS 10 / LW 8 / RC 12 / RSC 11, 11 traced in the ledger, 14 not.
+- Redaction sweep: 169 tracked files clean, outbox's 28 clean, 1 inbox hit which
+  is the inbound LW note.
+
+---
+
 # Session note 2026-09-07 - inbox reviewed under `OPS-34`, four sibling questions answered by measurement, `OPS-47` filed and CLOSED by operator ruling the same session, and the operator's hand-off complaint discharged
 
 **Everything in this note is committed and pushed.** Three commits: `73b03e3`,

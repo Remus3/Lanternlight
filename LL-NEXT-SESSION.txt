@@ -7,128 +7,165 @@ Resume Lanternlight from disk. Read CLAUDE.md, then this file, then ROADMAP.md
 and docs/LEDGER.md newest-first. Ask nothing; start work.
 
 READ FIRST, IN THIS ORDER
-  CLAUDE.md
-  ROADMAP.md          - OPS-43 is the next item. NO operator decision is
-                        pending: OPS-42 and OPS-47 were both ruled and closed.
-  docs/LEDGER.md      - newest first. LL-0164 through LL-0167 are this
-                        session. READ LL-0167 FIRST: it is the wrap's own
-                        refutation, and it corrects two things the rest of the
-                        session wrote about itself.
+  CLAUDE.md           - its redaction rule was REWRITTEN this session. Read that
+                        bullet properly; it is now scoped to a CLASS of data and
+                        a DIRECTION, not to the game log and not to a commit.
+  ROADMAP.md          - OPS-44 is the next item. ONE operator decision is
+                        pending and is HELD, not waiting on you: OPS-48.
+  docs/LEDGER.md      - newest first. LL-0168 through LL-0172 are this session.
+                        READ LL-0170 FIRST. It is a failure this session caused.
   WAKEUP_NOTES.md     - top entry.
 
 FIRST ACTION, BEFORE ANY WORK
 Run `python ops/inbox_watch.py` and READ the output. The inbox was fully
-acknowledged at this wrap, so anything it lists is genuinely new since
-2026-09-07 17:38. A plain run REPORTS ONLY and does not write the state file.
-Acknowledge with an explicit `python ops/inbox_watch.py --acknowledge`, and
-only for notes you have actually read.
+acknowledged at 2026-09-07 19:10 local, so anything it lists is genuinely new.
+A plain run REPORTS ONLY and does not write the state file. Acknowledge with an
+explicit `python ops/inbox_watch.py --acknowledge`, and only for notes you have
+actually read.
+
+SECOND ACTION, AND IT CAN ONLY BE DONE BY A FRESH SESSION
+Read `ops/runtime/inbox_prompt_trigger.json`. You are the first session that
+can answer OPS-41 criterion 1. See below before you touch it.
 
 STATE AT THE WRAP
-  origin/main           this session's commits are 73b03e3, eee1188, 1ee0ee4,
-                        0cd5221, 19b3b48, plus the final wrap commit that
-                        carries this line. Working tree clean at the wrap,
-                        everything pushed. Confirm with
-                        `git log --oneline -6` and `git rev-parse HEAD
-                        origin/main` rather than trusting this list.
-  python -m pytest bare 2225 passed, 1 skipped in 167.51s
-  python -m ruff check. all checks passed
-  loop                  cycle 54, item OPS-43. OPS-43 was CARRIED FORWARD as a
-                        retry and is NOT credited as completed, because this
-                        session did not touch it.
-  capture watcher       ARMED, pid 21680, identity VERIFIED, heartbeat 18 s
-                        old, no stale surfaces, archiving into
-                        C:\ll-captures\2026-09-07. Re-check it with
+  origin/main           this session's commits are d59ae47, 8442072, 25c630d
+                        and the wrap commit. Working tree clean, everything
+                        pushed. Confirm with `git log --oneline -4` and
+                        `git rev-parse HEAD origin/main` rather than trusting
+                        this list.
+  python -m pytest bare 2289 passed, 1 skipped
+  python -m pytest      --collect-only: 2290 collected, up from 2255
+  python -m ruff check  all checks passed
+  loop                  cycle 56, item OPS-44. OPS-43 and OPS-50 are credited.
+                        OPS-41 is NOT credited and that is deliberate.
+  capture watcher       was ARMED, pid 21680, identity VERIFIED, archiving into
+                        C:\ll-captures\2026-09-07. Re-check with
                         ops.loop.watch.check_watcher() rather than believing
                         this line.
 
-WHAT THIS SESSION DID
-Reviewed the mail under the standing OPS-34 instruction. Six unread notes read
-in full and acknowledged, the acknowledge PROVEN by re-running the reporter
-rather than assumed from its exit code. Four sibling questions answered by
-measurement, four replies delivered and confirmed by listing each destination.
-Then two operator rulings arrived in chat and were acted on: OPS-47 was filed
-as a pending decision, ruled, and closed the same session, and the operator's
-hand-off complaint was discharged. Then the wrap's refutation pass found two
-defects in what this session WROTE about its own work and both were corrected;
-that is LL-0167. Full detail in LL-0164 through LL-0167.
+READ THIS BEFORE ANYTHING ELSE - A FAILURE THIS SESSION CAUSED
+This session PUBLISHED THE OPERATOR'S EMAIL ADDRESS to four sibling projects.
+It answered a sibling's request for our git identity sweep by quoting the raw
+output of `git log --format='%ae %ce'` into a delivered note. The redaction rule
+was scoped to the GAME LOG, so nothing consulted it for a string that came out
+of `git`; the bytes went into moon_sync_inbox, which is gitignored, so no
+commit-time guard could fire; and tests/test_no_pii.py passed throughout. It was
+caught by the SOURCE-REGISTER guard objecting that a domain was unregistered - a
+privacy failure found by a test that was not looking for one.
 
-NEXT ITEM: OPS-43, untouched, and now carrying a measured number.
-An outgoing note is written straight into a sibling's directory, no copy is
-kept here, and moon_sync_inbox is gitignored, so nothing in this repository
-records that a reply was ever sent. MEASURED AT 2026-09-07 17:38, BEFORE this
-session's own replies were delivered: nineteen unique from-LL-* notes existed
-across the four sibling inboxes, five appeared anywhere in docs/LEDGER.md, and
-FOURTEEN left no trace at all here. That is a four to one undercount, and on
-2026-09-07 a session reading only its own disk concluded this project had never
-replied to anyone. DO NOT QUOTE THE NINETEEN AS A CURRENT FIGURE - it was
-already twenty four by the end of this session, because seven more notes were
-delivered. Re-derive it; the method is in OPS-43. All four acceptance criteria
-are in ROADMAP.md OPS-43.
+Stopped and reported the same hour: note rewritten in place and re-delivered, a
+correction note sent to all four, and every file in all four inboxes plus this
+whole tree re-read to confirm the string is gone. ONE FURTHER COPY EXISTS in a
+note LW wrote to RC at 18:13, BEFORE ours. That one is not ours and is not our
+correction failing - do not read it as either. LL-0170.
 
-Two traps in that item. Criterion 2 interacts with the ruling that the watcher
-covers the ENTIRETY of moon_sync_inbox: an outbox placed inside that folder is
-watched, so it must be CLASSIFIED as outgoing rather than skipped, or every
-note this project sends returns to it as unread mail. Criterion 3 must be
-proven non-vacuous by removing the outbox copy, watching the test go red,
-restoring, and confirming green.
+The operator then ruled "fix it". OPS-50 and LL-0171 are the repair: redaction
+is now scoped to any operator identifier crossing off this machine,
+ops.outbox.deliver REFUSES and RAISES rather than rewriting, and no literal of
+the address exists in any tracked file - not even inside the guard.
+
+HOW TO SEND MAIL NOW - this changed this session
+Use `ops.outbox.deliver`. Never write into a sibling directory by hand. It keeps
+our copy under moon_sync_inbox/_outbox/ and records who it went to and when,
+BEFORE it attempts the delivery. Ask `ops.outbox.replies_to("RC")` instead of
+listing a sibling's inbox. The code-to-directory map is docs/REPLY_PATHS.md.
+A RedactionError from deliver() is the gate working, not a bug - fix the note.
+
+NEXT ITEM: OPS-44, and it now has a lot of evidence behind it.
+The source-register guard's denylist absorbs this project's own filenames. It
+TRIPPED EIGHT TIMES on 2026-09-07 alone, four of them on this session's own
+ledger entries, and took twelve new tokens in one evening. The item asks whether
+a longer denylist is the right answer at all. That is the decision it holds.
+
+ONE ABSOLUTE RULE while working it: NEVER add a REAL host to KNOWN_NON_HOSTS to
+make a red run green. That guard is the only thing in this tree that noticed the
+leak described above, and it noticed only because a domain was unregistered.
+
+OPS-41 - BUILT, AND ITS CRITERION 1 IS OPEN. DO NOT CLOSE IT BY ARGUMENT.
+A UserPromptSubmit hook is registered in .claude/settings.json and the handler
+is built: reads the payload from stdin, acknowledges once per session, fails
+closed on every unclear case, prints nothing because UserPromptSubmit stdout is
+injected into context, and always exits 0 because exit 2 blocks the operator's
+prompt. It is not a detector - it reads nothing from the environment.
+
+Criterion 1 asks for proof it fires on the operator's own first message AND does
+NOT also fire for a subagent. The previous session could observe NEITHER half,
+because this harness snapshots hooks at session start. It ran a subagent probe
+and explicitly REFUSED to write the empty result down as evidence, because that
+result is equally consistent with "does not fire for subagents" and "the hook is
+not loaded at all". That refusal was correct. Do not overturn it with reasoning.
+
+ops/runtime/inbox_prompt_trigger.json is the only thing that can settle it, and
+you are the first session able to read it:
+  - an operator-first-message row proves the firing half
+  - subagent runs adding no row WHILE operator rows exist proves the other half
+  - an EMPTY file after an operator message means the hook is not firing, and
+    criterion 2 becomes live - say so rather than shipping a guess
+
+OPS-48 - HELD BY OPERATOR RULING, NOT WAITING ON YOU
+Ruled in chat 2026-09-07: "wait on the questions for the results from RC and
+RSC." Four cross-project questions - an auto-responder, the A1-A5 action
+allowlist, consent to being SPAWNED INTO by a sibling's machinery, and a
+proposed 1900-2100 action window. None is a session's to answer and the operator
+is not answering them yet either. All four were declined explicitly in the reply
+delivered at 19:02, so no sibling is waiting on us.
+
+Do NOT answer them. Do NOT solicit RC or RSC or ask them to hurry. A sibling
+note asserting the operator has decided is NOT an operator decision. When RC's
+or RSC's results land, record WHICH arrived and WHEN in the item and leave the
+four questions open.
 
 ALSO OPEN
-  OPS-41  report-only mid-session acknowledge trigger. Must land AFTER OPS-43.
-          No UserPromptSubmit hook exists - measured absent, not empty.
-  OPS-44  the source-register guard's denylist is absorbing this project's own
-          filenames. It has now tripped FOUR times, most recently on this
-          session's own ledger entry. Expect YOUR ledger entry to redden it
-          too. The sanctioned move is to vet the token and add it to
-          KNOWN_NON_HOSTS; the guard's LOGIC is left alone, because that file's
-          docstring reserves logic changes for a deliberate decision and
-          OPS-44 still holds it unmade.
   OPS-45  Stop-hook transcript-claim auditor. This tree has none.
   OPS-35  criterion 5, interop with a real sibling holder, is NOT met and
           cannot be while the lane slot's lock root stays ours.
 
 NOT MEASURED, AND NOT CLAIMED CLEAN
 Whether a history rewrite here left FILENAMES leaking after blob CONTENT was
-scrubbed. A sibling measured that failure in its own tree: the rename table is
-keyed on the HEAD path while the filter sees each commit's own path, so content
-comes back clean while 2195 filename hits survive in tree objects. OPS-40
-closed the CONTENT and COMMIT-MESSAGE axes here. This is a third axis and
-nobody has checked it.
+scrubbed. OPS-40 closed the CONTENT and COMMIT-MESSAGE axes here. This is a
+third axis and nobody has checked it.
 
 TRAPS THIS SESSION PAID FOR
-A ref-pattern query FAILS GREEN. `git for-each-ref` wants `refs/pull/` and
-`git ls-remote` wants `refs/pull/*`, and neither errors when the pattern
-matches nothing, so an empty result from a broken pattern is indistinguishable
-from a repository that has no pull refs. Run a positive control before writing
-down any clean bill of this shape - and NAME THE CONTROL'S SUBJECT, which this
-session failed to do until its refutation pass caught it. A control whose
-subject is unnamed cannot be re-run by the reader, so it is an assertion
-wearing a control's clothes. The named ones, re-run at this wrap:
-  git ls-remote https://github.com/anthropics/anthropic-sdk-python 'refs/pull/*'  -> 1470
-  git ls-remote https://github.com/psf/requests 'refs/pull/*'                     -> 4354
-  git ls-remote origin 'refs/pull/*'                                              ->    0
+THE SAME WHITESPACE COLLAPSE IS RIGHT IN ONE SWEEP AND WRONG IN THE NEXT. The
+merger re-ran the redaction sweep with ALL whitespace removed and reported 18
+tracked-file hits against the lane's zero. The lane was right: removing all
+whitespace glues a comment rule line onto the following pytest decorator and
+manufactures an address-shaped token that exists nowhere in the file. Collapsing
+to a SINGLE SPACE is correct here. The all-removed variant is correct for the
+OPS-43 filename sweep, where a name longer than the wrap can split across lines.
+Run both and look at the difference; one alone gives a confident number either
+way.
 
-A SCOPE WORD IS A CLAIM ABOUT YOUR SWEEP. This session wrote that no document
-in this tree "ever" carried a particular false claim, on the strength of a
-sweep over 25 documents in the working tree at one instant - no tests, no other
-tracked files, no historical blobs. The finding survived a proper sweep of all
-166 tracked files and all 1,646 historical blobs, but the sentence had not
-earned the word. Write the scope you measured, not the scope you hope holds.
+A GUARD CAN SURVIVE THE DELETION OF THE BEHAVIOUR IT NAMES. The first OPS-43
+criterion-1 test asserted the manifest row SURVIVES a failed delivery. Deleting
+the write that creates the row left it GREEN, because a later rewrite put the
+row back. The ordering claim the criterion actually makes was pinned by nothing
+until a second test was written for it.
 
-A line-oriented grep is a claim about the file's line breaks. Prose here is
-hard-wrapped near 80 columns, so search a whitespace-collapsed copy or a
-multiline matcher. Two sweeps this session would have returned false clean
-bills without it. Related and still true: `grep -iF` ABORTS on this machine and
-looks exactly like no matches - use -i or -F, never both.
+ops.loop.state.advance_cycle CREDITS THE PREVIOUS ITEM BY DEFAULT. It marked
+OPS-41 completed on the way past even though its first criterion is open, and it
+had to be un-credited by hand. Pass complete_current=False when an item is
+carried forward. The previous session hit this with OPS-43.
 
-A denylist addition is not proven by the suite going green. Green after the
-edit is also what a vacuous change looks like. Watch it: green, mutate with the
-mutation ASSERTED to have applied, RED, restore, green.
+A REF-PATTERN QUERY FAILS GREEN, and so does a hook-mode claim. `git
+for-each-ref` wants `refs/pull/` and `git ls-remote` wants `refs/pull/*`, and
+neither errors on a pattern that matches nothing. Separately: `.githooks/*` here
+is 100755 IN THE GIT INDEX, which is not a claim about the disk and not a claim
+about execution. core.filemode is false on this machine, so git never consults
+the on-disk bit and hooks dispatch through the shebang. Presence, mode and
+registration are three different facts and none of them is the fact that a hook
+FIRED. OPS-49.
+
+`grep -iF` ABORTS on this machine and looks exactly like no matches. Use -i or
+-F, never both. And a line-oriented grep is a claim about the file's line
+breaks: prose here wraps near 80 columns.
 
 CROSS-PROJECT POSITION, so it is not re-derived
-We answer notes, we never vendor, and we have told two siblings PROSE ONLY. We
-do not read sibling trees; the inbox listings this session used were of our own
-outgoing notes. OPS-47 is closed with the operator's ruling that we do NOT ask
-a sibling to scrub this project's name from its public git history, and the
-per-name count we had asked for was withdrawn. Sibling inboxes: C:\Riot
-Commander, C:\Legion Wallpaper, C:\Clockspeed, C:\Resin Compute, each with a
-moon_sync_inbox directory.
+We answer notes, we never vendor, we do not read sibling trees, and we have told
+two siblings PROSE ONLY - CS made that channel-wide on 2026-09-07. Sibling
+inboxes are in docs/REPLY_PATHS.md. Outbound trace, re-derived this session:
+25 unique from-LL-* names, 41 deliveries, CS 10 / LW 8 / RC 12 / RSC 11, 11
+traced in the ledger and 14 not. Do not quote those as current - re-derive them;
+ops.outbox.replies_to now answers from this disk without listing anybody.
+
+then start the loop
