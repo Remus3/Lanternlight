@@ -112,6 +112,16 @@ CROSS_CUTTING: frozenset[str] = frozenset(
         "BACKLOG.md",
         "LICENSE",
         "NOTICE",
+        # The three community-standards documents GitHub surfaces beside the
+        # licence. Each one STATES THE RULES to the public - the hard boundary
+        # against touching the game process, the redaction rule, TDD, and where
+        # to send a vulnerability - so they are the same kind of file as
+        # CLAUDE.md and LICENSE rather than any lane's working surface. A lane
+        # editing the boundary it is bound by is the conflict this set exists
+        # to prevent.
+        "CODE_OF_CONDUCT.md",
+        "CONTRIBUTING.md",
+        "SECURITY.md",
         # Makes a public attribution claim, exactly like LICENSE and NOTICE,
         # and GitHub renders it as a "Cite this repository" button. It names
         # the author and the version a citation should point at, so no single

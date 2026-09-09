@@ -563,7 +563,6 @@ KNOWN_NON_HOSTS = frozenset(
         "PlayerData.Transform",
         "Process.OtherOperationCount",
         "RE.finditer",
-        "SECURITY.md",
         "SEscapePortalSpawner.initialize",
         "SOUL.md",
         "Scav.sav",

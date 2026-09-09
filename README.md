@@ -49,15 +49,28 @@ from "measured zero". See [ADR-005](docs/adr/ADR-005-omit-rather-than-guess.md).
 
 ## Status
 
-Honest as of 2026-09-05, 27 days after the first commit. **The measurement and
+Honest as of 2026-09-08, 30 days after the first commit. **The measurement and
 operations layer is substantial. The product layer is still empty**, and the
 table below says which row is which - the bottom two are the current state, not
 aspirational placeholders.
 
-Measured on 2026-09-05 rather than recited, and measured from a **real fresh
+Measured on 2026-09-08 rather than recited, and measured from a **real fresh
 clone at a foreign path** - which is the standard the paragraph below sets:
-**1772 passed**, 137 ledger entries, 47 wrapped loop cycles, 8 worktree-isolated
-lanes, 6 ADRs.
+**2663 passed, 6 skipped**, 199 ledger entries, 64 wrapped loop cycles, 8
+worktree-isolated lanes, 7 ADRs.
+
+(199, not 200: the two ledger files carry 200 `### LL-` headings and one of them
+is the format TEMPLATE in the preamble. That distinction was measured this
+session after a count was filed wrong, and it is the kind of thing this README
+would otherwise repeat forever.)
+
+**The same tree in place reports 2668 passed, 1 skipped** - 2669 collected
+either way. The five that skip only in a clone are named rather than waved at,
+because an unexplained difference between two counts is where a wrong one
+hides: one needs the observed-document map under the gitignored `ops/runtime/`,
+which no checkout has until a full run writes it, and four need real notes in
+the gitignored `moon_sync_inbox/`. All five are absent-state skips, not
+failures, and a clone is expected to show them.
 
 One caveat for anyone reproducing that: `git archive` is **not** a clone. Without
 a `.git` directory the lane-ownership and worktree tests fail - 19 of them,
@@ -134,9 +147,31 @@ never cloned. See `docs/OPERATIONS.md`.
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Module map, the three data surfaces, and where the redactor sits |
 | [`docs/OPERATIONS.md`](docs/OPERATIONS.md) | How to run things, plus the safety boundary as an operational rule |
 | [`docs/adr/README.md`](docs/adr/README.md) | Architectural decisions, indexed |
-| [`ROADMAP.md`](ROADMAP.md) | What is next, in priority order, each with an acceptance criterion |
+| [`ROADMAP.md`](ROADMAP.md) | What is next, in priority order, each with an acceptance criterion. Open items only since 2026-09-08 - closed ones are one hop away in the archive below, and the roadmap carries a stub linking to each |
+| [`docs/ROADMAP_ARCHIVE.md`](docs/ROADMAP_ARCHIVE.md) | Every closed and refuted roadmap item, verbatim. Kept rather than deleted, because the shape of a bug is the useful part |
+| [`docs/LEDGER_ARCHIVE.md`](docs/LEDGER_ARCHIVE.md) | The older half of the ledger, verbatim and in order |
 | [`BACKLOG.md`](BACKLOG.md) | Aspirational. Nothing here is committed to |
 | [`WAKEUP_NOTES.md`](WAKEUP_NOTES.md) | Session hand-off |
+
+**The two continuity documents are split, and nothing was deleted.** They had
+grown to 634 KB and 868 KB, which is a size nobody reads - so on 2026-09-08 the
+closed material moved into the two archives above and the live files kept the
+open items and the newest entries. **An empty search of one half is therefore
+not a claim about the project**, only about which half you searched. `ROADMAP.md`
+carries an `Archive index` with a one-line stub per archived item, and a test
+proves every one of them still resolves.
+
+## Contributing
+
+Read [`CONTRIBUTING.md`](CONTRIBUTING.md) before writing code - it has four
+rules that are stricter than usual, and each exists because of a measured
+failure rather than a preference. The shortest version: never touch the game
+process, start with a failing test and watch it fail, omit rather than guess,
+and redact before anything leaves the machine.
+
+- [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) - be decent, argue with the work
+- [`SECURITY.md`](SECURITY.md) - how to report a vulnerability privately, and
+  why cheats and anti-cheat bypasses are out of scope here
 
 ## Contributing
 
