@@ -231,9 +231,20 @@ session can act on it. A recap is read by nobody and dies with the context.
   `grep -iF` lesson in a second tool: a claim about the TOOL wearing the costume
   of a claim about the world. `MSYS_NO_PATHCONV=1` also works.
   The loop guard never kills anything; it only refuses to start.
-  Note that `tools/precommit_gate.py` blocks any shell command merely QUOTING
-  the forbidden cmdlet name, an accepted false positive recorded in `OPS-24`.
-  Write such prose with an editor tool, not a heredoc.
+  `tools/precommit_gate.py` USED TO block any shell command merely QUOTING the
+  forbidden cmdlet name, an accepted false positive recorded in `OPS-24`. That
+  is no longer true and this sentence was stale: `OPS-22` narrowed the check
+  from a bare substring test to COMMAND POSITION, plus the name anywhere in a
+  command that also carries a PowerShell-invoking token. Re-measured
+  2026-09-08 by probing the live gate both ways - an `echo` naming the cmdlet
+  inside a sentence RAN, and the name in command position was refused with
+  "Blocked because the name is in COMMAND POSITION. To talk ABOUT it, quote it
+  or pass it as an argument." So prose may be written with a heredoc after all;
+  what still cannot be is an invocation. Read
+  `tools/precommit_gate.py::_forbidden_cmdlet_reason` before trusting either
+  version of this paragraph - it documents what the matcher cannot see. This is
+  the repo's own rule that a decline reason goes stale faster than a count
+  does, found in this file.
 - **Redact before anything leaves the machine.** The scope is a CLASS OF DATA
   and a DIRECTION - any **operator identifier**, however it was produced,
   crossing off this machine or into git history. It is deliberately NOT scoped

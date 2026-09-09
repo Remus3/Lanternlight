@@ -2746,7 +2746,7 @@ is precisely the sourcing error that `LL-0079`, `LL-0081` and `CLASSES.md` C14
 all record - the answer was not hard to get, it was being sought in the wrong
 place.
 
-## OPS-61. Every hook command names an ABSOLUTE repo root, so a worktree's hook reports the WRONG TREE - OPEN
+## OPS-61. Every hook command names an ABSOLUTE repo root, so a worktree's hook reports the WRONG TREE - CLOSED 2026-09-08
 
 Filed 2026-09-08, measured while answering two inbox notes that asked every
 adopter of the inbox-watcher design the same two questions. Our answers are
@@ -2809,6 +2809,132 @@ names a root the tree cannot verify is its own".
    "a fresh clone watches its own inbox" is corrected wherever it is published
    rather than left standing. Correcting the claim is an acceptable outcome;
    leaving a claim the wiring does not deliver is not.
+
+### Outcome - CLOSED 2026-09-08
+
+**Criterion 1, the mechanism, chosen by measurement rather than by reading a
+document.** All six hook commands now reach their script through the harness
+variable, with the path QUOTED:
+
+    "command": "python \"$CLAUDE_PROJECT_DIR/ops/inbox_watch.py\""
+
+Measured on Claude Code 2.1.251, in a real `git clone` at a foreign path and in
+a real `git worktree`, with a probe hook that recorded `argv`, its own resolved
+`__file__`, its `cwd` and the environment variable into a witness file per
+event. Twelve witnesses, each read back independently by the merger rather than
+accepted from the slice that produced them:
+
+- **The harness expands the variable itself.** `argv[0]` arrived already
+  expanded, so the mechanism does not depend on whether the hook is dispatched
+  through `cmd.exe` or a POSIX shell. This is not a shell feature and does not
+  need one.
+- **It resolves to the RUNNING tree for all five events this repository
+  registers** - `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`
+  and `Stop`. Ten of the twelve witnesses are the worktree case, two per event.
+- **The path is quoted because a clone can live under a path with a space.** At
+  a spaced clone path the quoted form ran the clone's own script with the space
+  intact in `argv[0]`; the unquoted form produced no witness at all.
+  `C:/Lanternlight` has no space, so nothing in the primary tree would ever have
+  exposed this.
+
+**One overreach in the measurement slice's own document, corrected here rather
+than carried.** It wrote that the unquoted form is "proven UNSAFE at a spaced
+path (fails silently, all five ...)". One probe fired and the evidence is a
+MISSING witness. Absence of a witness is not a captured failure, and one event
+is not five. What is measured is enough to choose the quoted form and not enough
+to describe how the unquoted form fails.
+
+**The relative form works too, and was not chosen.** `python ops/inbox_watch.py`
+resolved correctly for all five events, because the hook's `cwd` is the project
+root. It is rejected as the primary mechanism for one reason: it makes the
+command depend on a `cwd` this repository does not control, where the variable
+form states the root explicitly. Recorded so nobody re-derives it as a
+discovery.
+
+**Criterion 2, END-TO-END with the real wiring, in both directions.** A probe
+hook proves the mechanism; it does not prove this repository's own hooks. So the
+committed `.claude/settings.json` was run in a real clone at a foreign path and
+in a real worktree, in a real headless session, and the witness is the
+FILESYSTEM rather than any report: `ops/inbox_watch.py` writes its records under
+the tree it reads. Each tree was given a `moon_sync_inbox/` containing exactly
+ONE note, so a report of 99 could only mean the primary tree.
+
+    clone, fixed wiring      the clone's own ops/runtime/inbox_reported.json
+                             lists the one probe note, inbox_seen.json
+                             acknowledges it, and the PRIMARY tree's two records
+                             are byte-identical to the pre-experiment snapshot
+    worktree, fixed wiring   the same result in the worktree's own ops/runtime/
+    worktree, PRE-FIX        the worktree's own records were NEVER WRITTEN, and
+      wiring, the control    the PRIMARY tree's inbox_reported.json was
+                             rewritten - mtime moved, 99 notes, the probe note
+                             absent - as was inbox_seen.json. Both hashes
+                             differed from the snapshot and both were restored
+                             from it afterwards.
+
+**The control is the part that upgrades this item's own description.** The filed
+text said the hook "answers a question about a different repository". Measured,
+it also WRITES that repository's state: a session in a worktree silently mutated
+the primary checkout's acknowledged-mail record, which is the record that
+decides whether a note is ever surfaced again. A wrong answer is recoverable by
+looking again; an acknowledgement written into the wrong tree eats mail in a tree
+nobody was working in.
+
+**Criterion 3, the guard, generalised past one string.**
+`tools/hook_command_guard.py` reports any hook command naming an absolute path in
+three spellings - drive root, UNC and POSIX root - because no string can say
+which absolute path was MEANT as a repository root, and `OPS-38` had to
+generalise twice for exactly that reason. `tests/test_hook_command_roots.py`
+carries a positive control on clean synthetic settings, foreign-root negative
+controls, and the live-tree assertion. Proved non-vacuous by six mutations, each
+with its anchor count asserted before the edit because a mutation that fails to
+apply looks exactly like a passing test: neutering the drive-root pattern turned
+the LIVE test green, which is precisely what the foreign-root controls exist to
+catch. `main()` takes no argv and exits 2 on any argument rather than accepting
+and ignoring one - the `OPS-64` defect, not repeated.
+
+**THREE EXISTING GUARDS WERE GREEN BECAUSE OF THE DEFECT. This is the finding
+worth keeping.** None of them was weakened; each was measuring a proxy that only
+held while the commands named an absolute root.
+
+1. `tests/test_no_hardcoded_home_path.py::test_every_hook_command_names_a_script_that_exists`
+   split each command on whitespace and required every `.py` token to be a file
+   on THIS machine. That can only pass while the token is an absolute literal
+   path. It now resolves the token against the running tree, which is strictly
+   stronger - the old form silently SKIPPED anything that did not look like a
+   path to it, so a typo was clean - and it gained a fabricated-path control.
+2. The same file's no-backslash assertion banned a backslash anywhere in the raw
+   settings text. `CLAUDE.md`'s rule is narrower: a single-backslash WINDOWS PATH
+   makes the file invalid JSON. Shell quoting needs `\"`, which cannot break a
+   parse that is asserted on the line above. Narrowed to the path shape, with the
+   cost of narrowing written into the docstring.
+3. `tests/test_inbox_watch.py` ran the `SessionStart` command through
+   `subprocess` and its own name said end-to-end. It was executing a command line
+   that resolved the PRIMARY checkout no matter which tree the harness was in. It
+   now expands the variable the way the harness does, through a helper whose
+   docstring states plainly that expanding it in-process is a MODEL of the
+   harness rather than the harness, and points at the out-of-process measurement
+   for the real claim.
+
+**The defect had already been OBSERVED, in a real worktree, and was misread.**
+`lanes/safety.LEDGER.md` records that the registered hook points at
+`C:/Lanternlight/tools/precommit_gate.py`, the PRIMARY checkout, not at the lane
+worktree. That session measured this exact behaviour and read it as a
+MERGE-TIMING fact - the fix is not live until the lane merges - rather than as a
+PATH fact that would still be true after any merge. Nothing was filed, and the
+observation sat in a lane fragment for weeks. A correct measurement filed under
+the wrong cause is invisible to the search that would find it.
+
+**Criterion 4 does not apply.** The absolute path was avoidable, so there is no
+DECLINE to write and no published claim to correct. The claim that a fresh clone
+watches its own inbox is now true, and its evidence is the clone experiment above
+rather than a reading of the code.
+
+**Not fixed here, and named rather than absorbed.** `.claude/commands/done.md`
+tells the wrap to write `--target C:/Lanternlight/LL-NEXT-SESSION.txt`. That is
+the same class one layer up - a session wrapping from a worktree would overwrite
+the primary tree's hand-off - but it is a command a session TYPES rather than a
+hook the harness dispatches, so `$CLAUDE_PROJECT_DIR` is not defined for it and
+the fix is a different one. Filed as `OPS-65` rather than guessed at here.
 
 ## OPS-62. The two archives OPS-57 created are UNBUDGETED, and nothing measures their growth - OPEN
 
@@ -2897,6 +3023,17 @@ session will find it rather than living only in a constant's comment.
    A pattern that stopped truncating at underscores would remove a whole class
    of them. Measure how many of the existing entries that would retire; if the
    answer is most of them, the denylist is treating a pattern defect.
+
+   **A sub-case found 2026-09-08 during `OPS-61`, which the count above must
+   include.** `reported.json` is the underscore truncation of
+   `inbox_reported.json`, a RUNTIME record under gitignored `ops/runtime/`.
+   `is_repo_filename` asks `git ls-files`, so a file this project legitimately
+   writes prose about but deliberately does not track can NEVER be
+   auto-excused: it lands in the denylist by construction, not by anyone's
+   oversight, and the "stage it and re-run" escape that retired `ARCHIVE.md`
+   does not apply because the whole point of the file is that it is not
+   committed. Any answer to this item has to say what happens to the names of
+   untracked-by-design files, which this project writes about constantly.
 4. The guard is proved non-vacuous against the widened scope: a fabricated
    unregistered host is placed in a newly-covered file, the guard goes red, and
    it is removed. A scope that widens without a control is a scope that might
@@ -3115,6 +3252,61 @@ mid-session.
   the game - it was that nobody had read the field. Left here struck through
   rather than deleted, because "we checked and there is nothing" was wrong for
   two days and the shape of that error is the useful part.
+
+## OPS-65. The wrap ritual writes the hand-off to an ABSOLUTE target, so a wrap from a worktree overwrites the primary tree's hand-off - OPEN
+
+Filed 2026-09-08 out of `OPS-61`'s merge. `OPS-61` fixed every command the
+HARNESS dispatches; this is the same defect in a command a SESSION types, and it
+is not fixed by the same mechanism.
+
+`.claude/commands/done.md` instructs the wrap to run:
+
+    python ops/handoff.py --from-file <draft> --target C:/Lanternlight/LL-NEXT-SESSION.txt
+
+`LL-NEXT-SESSION.txt` is TRACKED and is the first file a cold session reads, so
+the target matters more than most. A session wrapping from a git worktree - which
+is where lane sessions run - writes the PRIMARY checkout's hand-off, and
+`ops/handoff.py` will do it without complaint because the path exists and is
+writable. The primary tree then carries a hand-off describing work that is not in
+it, and `git status` in the primary shows a modified tracked file that nobody
+working there touched.
+
+**Why `OPS-61`'s answer does not transfer.** `$CLAUDE_PROJECT_DIR` is set by the
+harness for HOOK dispatch. It is not defined for a command a session or the
+operator types into a shell, so pasting the variable into `done.md` would produce
+a literal directory named `$CLAUDE_PROJECT_DIR` on Windows, or an empty path, and
+either way `--target` would land somewhere nobody looks. Measured for hooks, NOT
+measured for typed commands - and the difference is the whole item.
+
+**Why it was not simply fixed during `OPS-61`.** Three candidate answers exist -
+make `--target` default to the repository root `ops/handoff.py` resolves from its
+own location and drop the flag from the ritual; keep the flag but reject a target
+outside the tree the script lives in; or leave it absolute deliberately because
+the hand-off belongs to the primary checkout by design and a lane wrap should
+NOT write one. The third is a real possibility and it is a decision about the
+wrap's contract, not a typo. Guessing between them inside another item's merge is
+how a fix becomes a surprise.
+
+### Acceptance
+
+1. The decision is stated: does a wrap from a non-primary tree write that tree's
+   hand-off, refuse, or write the primary's on purpose? Whichever it is, the
+   reason is written down, because all three are defensible and only one is true
+   of the ritual as it stands.
+2. The demonstration is END-TO-END in a real worktree, the way `OPS-61`'s was:
+   run the wrap's own command from a worktree and read which file changed on
+   disk. `ops/handoff.py --check-only` reports without writing and is the safe
+   half; the writing half is the one that has to be observed.
+3. A guard fails on a tracked instruction naming an absolute repository root in a
+   `--target`-shaped position, or the decision in 1 says absolute is correct and
+   the guard pins THAT instead. `tools/hook_command_guard.py` reads
+   `.claude/settings.json` only, so it does not reach `.claude/commands/*.md`;
+   widening it is one option and a separate check is another.
+4. Whatever is chosen, `python ops/handoff.py --from-file <draft> --target ...`
+   as written in `.claude/commands/done.md`, in `CLAUDE.md`'s wrap guidance and
+   in `LL-NEXT-SESSION.txt`'s own hand-off instructions agree with it. Three
+   copies of an instruction are two stale copies waiting to happen, and this
+   session found the third copy only by grepping for the absolute root.
 
 ## Archive index
 

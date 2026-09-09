@@ -352,6 +352,17 @@ KNOWN_NON_HOSTS = frozenset(
         "ROADMAP-ARCHIVE.md",
         "ids.default",
         "ops.ops",
+        # `reported.json`, the underscore truncation of `inbox_reported.json`,
+        # cited by `LL-0202` as evidence for `OPS-61`. It is a RUNTIME record
+        # under gitignored `ops/runtime/`, and that is a sub-case worth naming
+        # for `OPS-63`: `is_repo_filename` asks `git ls-files`, so a file this
+        # project legitimately writes about but deliberately does not track can
+        # never be auto-excused and lands here by construction rather than by
+        # anyone's oversight. Staging it is not the escape hatch case 2
+        # describes, because the whole point of the file is that it is not
+        # committed. `OPS-63`'s criterion 3 counts entries that a pattern which
+        # stopped truncating at underscores would retire; this is one of them.
+        "reported.json",
         # A git CONFIG KEY, quoted by `LL-0169` and `OPS-49`. `core.filemode`
         # is not a host and not a file; `.filemode` simply parses as a TLD-
         # shaped tail. Looked at before adding, per the regenerating note.
