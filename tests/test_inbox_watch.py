@@ -21,6 +21,7 @@ asserted to PARSE, by a parser, not by eye.
 from __future__ import annotations
 
 import json
+import shlex
 import shutil
 import subprocess
 import sys
@@ -94,6 +95,36 @@ def _hook_commands(settings: dict) -> list[str]:
                 if isinstance(command, str):
                     commands.append(command)
     return commands
+
+
+def _expand_hook_command(command: str) -> list[str]:
+    """Split a hook command the way the HARNESS runs it - ``OPS-61``.
+
+    THE THREE TESTS BELOW WERE GREEN BECAUSE OF THE DEFECT, not in spite of it.
+    Until 2026-09-08 every hook command in ``.claude/settings.json`` named an
+    absolute repository root, and these tests took the string, split it on
+    whitespace, and ran the second token as a file. That works only while the
+    token is an absolute literal path on this machine. So a test whose own name
+    says it runs the command end to end was passing on a command line that
+    resolved the PRIMARY checkout no matter which tree the harness was in - the
+    exact defect ``OPS-61`` exists to remove. That is the third guard in this
+    repository found green for that reason, after two in
+    ``tests/test_no_hardcoded_home_path.py``.
+
+    The commands now reach their script through ``$CLAUDE_PROJECT_DIR``, quoted
+    because a clone can live at a path containing a space. This helper does what
+    the harness does: substitute the project root, then split with shell quoting
+    rules so a quoted path with a space stays one argument.
+
+    **What this helper is NOT, stated because the old docstring overclaimed it.**
+    Expanding the variable here is a MODEL of the harness, not the harness. That
+    the real harness expands it - and to the running tree rather than to the
+    primary checkout - was measured separately and end to end, in a real clone
+    at a foreign path and in a real ``git worktree``, for all five hook events
+    this repository registers. A test in this process cannot prove that; it can
+    only prove that the command this repository wrote is well formed and runs.
+    """
+    return shlex.split(command.replace("$CLAUDE_PROJECT_DIR", REPO_ROOT.as_posix()))
 
 
 def _sessionstart_command(settings: dict) -> str:
@@ -444,7 +475,12 @@ def test_no_hook_command_contains_a_single_backslash() -> None:
 
 def test_settings_json_registers_a_sessionstart_hook_for_the_inbox_watcher() -> None:
     command = _sessionstart_command(_settings())
-    assert command.endswith("ops/inbox_watch.py"), command
+    parts = _expand_hook_command(command)
+    assert parts[-1].endswith("ops/inbox_watch.py"), command
+    assert "$CLAUDE_PROJECT_DIR" in command, (
+        "the hook must reach its script through the harness variable rather than "
+        f"an absolute root, or a worktree's hook reads another tree - OPS-61: {command!r}"
+    )
     assert "pythonw" not in command, "pythonw suppresses the output this hook exists to produce"
 
 
@@ -464,7 +500,7 @@ def test_the_sessionstart_hook_command_paths_exist() -> None:
     name without resolving it would have turned this into a test that a string
     is non-empty.
     """
-    parts = _sessionstart_command(_settings()).split()
+    parts = _expand_hook_command(_sessionstart_command(_settings()))
     assert len(parts) == 2, parts
     interpreter, script = parts
 
@@ -486,11 +522,16 @@ def test_the_existing_hooks_were_not_disturbed() -> None:
 
 @pytest.mark.slow
 def test_the_sessionstart_hook_command_really_runs_and_prints_the_report() -> None:
-    """End to end through the exact string the harness will execute.
+    """End to end through the command string, expanded the way the harness does.
 
     This does not prove Claude Code dispatches the hook - only a fresh session
     can prove that. It does prove every part this repository controls: the
     interpreter, the script path, a zero exit and real output on stdout.
+
+    ``OPS-61`` narrowed what "the exact string the harness will execute" can
+    honestly mean here. The command now carries ``$CLAUDE_PROJECT_DIR`` and the
+    expansion belongs to the harness, so :func:`_expand_hook_command` models it
+    and says so. Read that function's docstring before trusting this one.
 
     The hook command takes no arguments, so it reads and writes the OPERATOR'S
     LIVE RECORDS. This is the one test in the inbox family that is allowed to,
@@ -507,7 +548,7 @@ def test_the_sessionstart_hook_command_really_runs_and_prints_the_report() -> No
     """
     live = [inbox_watch.default_state_path(), inbox_watch.default_reported_path()]
     before = [path.read_bytes() if path.is_file() else None for path in live]
-    parts = _sessionstart_command(_settings()).split()
+    parts = _expand_hook_command(_sessionstart_command(_settings()))
     try:
         proc = subprocess.run(
             parts,

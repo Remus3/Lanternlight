@@ -610,18 +610,59 @@ class TestTheParameterisedFormsActuallyWork:
 
 
 class TestTheHookCommandsAreStillWellFormed:
-    def test_settings_json_parses_and_carries_no_backslashes(self):
+    def test_settings_json_parses_and_carries_no_windows_path_separator(self):
+        r"""The parse is the assertion; the backslash ban is narrowed to PATHS.
+
+        This test used to assert that no backslash appeared ANYWHERE in the raw
+        text. That is a proxy, and ``OPS-61`` is where the proxy broke: the hook
+        commands now quote their script path, so the file legitimately carries
+        JSON-escaped quotes (``\"``). A ``\"`` is a backslash that cannot break
+        the parse, and the parse is asserted on the line above it here.
+
+        What CLAUDE.md actually records is narrower and is what is kept: a
+        single-backslash WINDOWS PATH makes this file invalid JSON, so nothing
+        parses, no hook registers, and nothing warns you. The pattern below
+        matches a backslash followed by a path-ish character - the shape of
+        ``C:\\Lanternlight`` written wrongly - and deliberately does not match
+        the escape sequences JSON defines (``\"``, ``\\\\``, ``\\n`` and the
+        rest), because those are the file being well-formed rather than broken.
+
+        The cost of narrowing, stated rather than implied: a backslash inside a
+        string that happens to be followed by a JSON escape character is no
+        longer flagged. The parse catches the case that matters, which is the
+        only case CLAUDE.md's rule was ever about.
+        """
         import json
+        import re
 
         text = (REPO_ROOT / ".claude" / "settings.json").read_text(encoding="utf-8")
         json.loads(text)
-        assert "\\" not in text, (
+        offenders = re.findall(r"\\[A-Za-z0-9_.-]{2,}", text)
+        assert not offenders, (
             "CLAUDE.md records that a single-backslash Windows path makes this "
-            "file invalid JSON, so nothing parses, no hook registers, and "
-            "nothing warns you"
+            f"file invalid JSON, so nothing parses and nothing warns: {offenders}"
         )
 
     def test_every_hook_command_names_a_script_that_exists(self):
+        """Resolve ``$CLAUDE_PROJECT_DIR`` rather than requiring an absolute path.
+
+        THIS GUARD USED TO REWARD THE DEFECT ``OPS-61`` EXISTS TO REMOVE, and
+        that is worth writing down because it is the second time a guard in this
+        repository has been green BECAUSE of a defect rather than in spite of
+        one. The check splits each command on whitespace and asserts that every
+        token ending in ``.py`` is a real file. Read literally, that passes only
+        while the commands name an absolute root on THIS machine - so the day
+        someone wired the hooks through ``$CLAUDE_PROJECT_DIR``, this test went
+        red and a session that had not read it would have taken the red as
+        evidence the fix was wrong.
+
+        The property is unchanged and is now checked against the tree the test
+        is running in: substitute this repository's root for the harness
+        variable, strip the shell quoting, and require the file to exist. That
+        is strictly stronger than before, because it also fails on a typo inside
+        a ``$CLAUDE_PROJECT_DIR`` path that the old check would have skipped
+        outright - a token that was not a file simply never matched.
+        """
         import json
 
         data = json.loads((REPO_ROOT / ".claude" / "settings.json").read_text(encoding="utf-8"))
@@ -631,9 +672,48 @@ class TestTheHookCommandsAreStillWellFormed:
                 for hook in entry.get("hooks", []):
                     command = hook.get("command", "")
                     for token in command.split():
-                        if token.endswith(".py") and not Path(token).is_file():
+                        candidate = token.strip("\"'")
+                        if not candidate.endswith(".py"):
+                            continue
+                        resolved = candidate.replace(
+                            "$CLAUDE_PROJECT_DIR", REPO_ROOT.as_posix()
+                        )
+                        if not Path(resolved).is_file():
                             missing.append(command)
-        assert not missing, f"hook command names a script that does not exist: {missing}"
+        assert missing == [], (
+            f"hook command names a script that does not exist: {missing}"
+        )
+
+    def test_the_script_existence_check_is_not_vacuous(self):
+        """A token nobody recognises must not pass by being unrecognised.
+
+        The old check's failure mode was silence: anything that did not look
+        like a path to it was skipped, so a broken command could be clean. This
+        pins that the resolver actually resolves - a real command from the live
+        file names a file, and a fabricated one does not.
+        """
+        import json
+
+        data = json.loads((REPO_ROOT / ".claude" / "settings.json").read_text(encoding="utf-8"))
+        tokens = [
+            token.strip("\"'")
+            for entries in data.get("hooks", {}).values()
+            for entry in entries
+            for hook in entry.get("hooks", [])
+            for token in hook.get("command", "").split()
+            if token.strip("\"'").endswith(".py")
+        ]
+        assert tokens, "no hook command names a .py script at all"
+
+        def resolve(candidate: str) -> Path:
+            return Path(candidate.replace("$CLAUDE_PROJECT_DIR", REPO_ROOT.as_posix()))
+
+        assert all(resolve(token).is_file() for token in tokens)
+        fabricated = tokens[0].replace(".py", "_does_not_exist.py")
+        assert not resolve(fabricated).is_file(), (
+            "the fabricated control resolved to a real file, so this test proves "
+            "nothing about the resolver"
+        )
 
 
 def test_this_guard_reads_the_file_it_claims_to(tmp_path):

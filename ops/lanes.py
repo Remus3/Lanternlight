@@ -287,6 +287,16 @@ LANES: tuple[Lane, ...] = (
             # which is repository hygiene applied to what gets PUBLISHED -
             # the same mandate as ascii_check and the PII backstop.
             "tests/test_no_hardcoded_home_path.py",
+            # OPS-61. The sibling of the guard above, one axis over: that one
+            # forbids a tracked path through a user HOME, this one forbids a
+            # hook command naming an absolute repository ROOT. C:/Lanternlight
+            # carries no account name, so the home-path guard passed cleanly
+            # while every hook in the tree named the primary checkout and a
+            # worktree's hook answered about a different repository. Same lane
+            # as the home-path guard because it is the same mandate - what a
+            # public tree may commit about the machine it was written on.
+            "tools/hook_command_guard.py",
+            "tests/test_hook_command_roots.py",
             ".githooks/**",
             # CI runs this repo's own hygiene suite on a machine nobody
             # owns, and the issue form is the redaction gate applied to
