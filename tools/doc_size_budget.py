@@ -146,7 +146,11 @@ BUDGETS: dict[str, int] = {
     # and refuted sections to docs/ROADMAP_ARCHIVE.md. Against the old 700,000
     # that was 16.2 sessions of headroom, which is exactly the rubber stamp
     # OPS-57 warned about, so the budget comes DOWN to 340,000: 164,610 bytes,
-    # or 5.1 sessions at the median rate below.
+    # or 5.1 sessions at the median rate below - AT THE SPLIT. By the commit
+    # that closed OPS-57 this file was 194,174 bytes and 4.5 sessions, because
+    # the session then wrote its own closure, an archive index and three new
+    # items into it. Both are correct for their instant; neither is the live
+    # answer. Run this module rather than reading either number.
     #
     # WHEN THIS FIRES, RE-RUN THE SPLIT - do not raise the number again. The
     # split is re-runnable (tools/doc_archive.py) and it is the thing that
@@ -162,8 +166,10 @@ BUDGETS: dict[str, int] = {
     # 281,778 blob bytes after the oldest 135 entries moved to
     # docs/LEDGER_ARCHIVE.md, keeping the 60 newest. Against the old 900,000
     # that was 22.4 sessions; the budget comes DOWN to 420,000, which is
-    # 138,222 bytes or 5.0 sessions at the median rate below. Same instruction
-    # as above when it fires: re-run the split, do not move the number.
+    # 138,222 bytes or 5.0 sessions at the median rate below - AT THE SPLIT;
+    # 295,174 bytes and 4.5 sessions by the closing commit, for the same
+    # reason as above. Same instruction when it fires: re-run the split, do
+    # not move the number.
     "docs/LEDGER.md": 420_000,
 }
 # THE SPLIT RESET THE LEVEL, NOT THE SLOPE - so the rates below are NOT

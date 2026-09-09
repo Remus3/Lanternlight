@@ -84,6 +84,36 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0201 - 2026-09-08 - The wrap's refutation pass REFUTED two of this session's own closure claims - a size quoted with no instant attached, and a headroom figure derived from it - which is the seventh time the defect has been closure prose rather than code
+
+**Evidence:**
+- REFUTED: the OPS-57 Outcome block stated 'in git blob bytes: ROADMAP.md 633,871 -> 175,390; docs/LEDGER.md 867,833 -> 281,778' as a flat fact. Measured by the refuting agent with git cat-file -s at the closing commit 0eb6217: 193,854 and 295,174. The prose was wrong by 18,464 and 13,396 bytes.
+- The cause is not a mis-measurement. 175,390 and 281,778 were correct AT THE INSTANT THE SPLIT WAS APPLIED. The documents then grew because this session wrote its own closure into them - the Outcome block, the Archive index, three newly filed items and four ledger entries. A size with no instant attached is a filed count that cannot reproduce, which is this item's own lesson repeated inside this item's own closure.
+- REFUTED: criterion 5 claimed 5.1 and 5.0 sessions of headroom while the repo's own guard reported 4.5 and 4.5, because the headroom was computed from the superseded sizes. Propagated into two comment blocks in tools/doc_size_budget.py.
+- Both corrected before the wrap commit. The roadmap now gives both instants and says which is which, and the budget module's comments say to run the module rather than read either number - the guard's own output is the only figure that cannot go stale.
+- CONFIRMED by the same pass, independently: criterion 4's conservation. It chunked git show 4744a19:ROADMAP.md into 84 sections and 4744a19:docs/LEDGER.md into 196 entries and searched each verbatim in the live file plus its archive - 0 ledger chunks missing, 1 roadmap chunk missing, and that one is OPS-57's own heading, legitimately re-titled from OPEN to CLOSED.
+- CONFIRMED: the link guard is non-vacuous under real mutation. Removing stub 11 of 65 from a scratch roadmap produced '1 finding(s) [unreachable]'; corrupting an anchor produced '2 finding(s)' including [dangling]. The 65-stub anchor was asserted before mutating.
+- CONFIRMED: the hard boundary. git diff 4744a19..HEAD over all .py files added zero lines matching OpenProcess|SendInput|ReadProcessMemory|LoadLibrary|SetWindowsHookEx|keybd_event, with the pattern proved against a positive control.
+- Observed at the wrap: python -m pytest 2668 passed, 1 skipped. python -m ruff check . All checks passed. archive link guard OK, 65 archived headings and 65 stub links. Loop in_flight empty.
+
+OPS-64 was filed out of this pass. While trying to break the link guard the agent passed flags naming scratch files; main() takes no argv, so the flags were not rejected but not seen, and it printed an identical green line having read the REAL documents. A true verdict answering a different question than the one asked - the same shape as the pre-commit hook that ran the wrong test module.
+The count that matters here is not the defects but WHERE they were. Both refutations were prose in a CLOSED section, and neither would have been caught by any guard in the tree: the id guard scores headings and ledger closures and says nothing about whether a section's body is true. Seven times now.
+
+### LL-0200 - 2026-09-08 - The four missing GitHub community-standards documents were written for this project rather than templated, the README was re-measured from a fresh clone, and repo topics went 15 to 19
+
+**Evidence:**
+- GitHub's community-standards checklist had four unticked rows: code of conduct, contributing, security policy and pull request template. All four now exist and the API reports health_percentage 100.
+- CODE_OF_CONDUCT.md carries the project-specific clause - do not ask for, or contribute, anything that touches the game process - because a generic template would have stated none of this project's actual rules.
+- SECURITY.md puts cheats, anti-cheat bypasses, extracted assets and vulnerabilities in the game itself explicitly OUT of scope and routes them to Bellring or Skystone. It puts operator-identifier leaks FIRST among in-scope reports and asks reporters not to include the leaked value, because a real SteamID in a public report is a second leak on top of the first.
+- CONTRIBUTING.md leads with scripts/install_hooks.py, since core.hooksPath is local config and a fresh clone runs zero hooks until it is run, and it carries the bare-pytest warning: pytest.ini already has -q, so a second one prints no summary line at all while still exiting 0.
+- .github/PULL_REQUEST_TEMPLATE.md asks for the test the author watched FAIL, which is the one part of a review that cannot be reconstructed afterwards.
+- README.md re-measured from a REAL fresh clone at a foreign path, which is the standard that section already sets: 2663 passed, 6 skipped. In place the same tree reports 2668 passed, 1 skipped - 2669 collected either way. The five that skip only in a clone are NAMED rather than waved at: one needs the observed-doc map under gitignored ops/runtime/, four need real notes in gitignored moon_sync_inbox/. All five are absent-state skips.
+- The README ledger figure is 199, not 200: the two ledger files carry 200 '### LL-' headings and one is the format TEMPLATE in the preamble. The wrong figure was written first and corrected before the commit.
+- Repo topics widened from 15 to 19 - added windows, tdd, provenance, no-dependencies - verified by reading them back from the API.
+
+THE STAGED TREE IS A DIFFERENT TREE, and this is the second and third time it bit in one session. tests/test_source_register.py's denylist-minimality test fired twice, on ARCHIVE.md and archive.py in the first commit and on SECURITY.md in the second, each time at the moment the file became STAGED and git ls-files began reporting it. A green full suite against the working tree could not see any of them, because the fact does not exist until staging. The pre-commit hook, which runs against the staged tree, refused both commits.
+That is exactly case 2 of the module's own regeneration guidance - stage the file and re-run, do not add it to the denylist to go green sooner - and the guidance was written before the case arose. The guard predicted its own failure mode and then caught it.
+
 ### LL-0199 - 2026-09-08 - Recording which OPS- ids the split had made invisible put all five back, so LL-0197's 60-to-55 measurement is no longer reproducible - the act of writing the measurement down destroyed the condition it measured
 
 **Evidence:**

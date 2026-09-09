@@ -1207,6 +1207,11 @@ hunch.** Counting top-level `## ` sections and the characters between them -
 CHARACTERS, not git blob bytes, so it is a shape measurement rather than a
 budget one:
 
+**SUPERSEDED - the three figures below were STALE by the time the work started.
+Re-measured at HEAD: 84 sections, 65 closed or refuted, 633,871 characters. See
+the Outcome block. They are left here unedited because they are what the item
+was FILED on, and because a filed count being wrong is this item's own lesson.**
+
 - 83 sections, 612,780 characters.
 - **61 sections carry CLOSED or REFUTED in their heading, and they are 445,307
   characters - 72% of the document.**
@@ -1285,9 +1290,21 @@ them.
   entries; the oldest 135 moved verbatim to
   [`docs/LEDGER_ARCHIVE.md`](docs/LEDGER_ARCHIVE.md).
 
-Measured result, in git blob bytes: ROADMAP.md 633,871 -> **175,390**;
-docs/LEDGER.md 867,833 -> **281,778**. Nothing was deleted, summarised or
-reflowed.
+Measured result, in git blob bytes: ROADMAP.md 633,871 -> **175,390** and
+docs/LEDGER.md 867,833 -> **281,778**, both measured at the instant the split
+was applied. Nothing was deleted, summarised or reflowed.
+
+**Those two figures are NOT what the tree measures at the commit that closed
+this item, and the difference is not an error.** By then ROADMAP.md was 194,174
+and docs/LEDGER.md 295,174, because this session then wrote its own closure into
+them: this Outcome block, the `## Archive index`, three newly filed items
+(`OPS-61`, `OPS-62`, `OPS-63`) and four ledger entries. The split moved 458,481
+bytes out of the roadmap; recording that it had done so put 18,784 back.
+
+The wrap's refutation pass caught this stated as a flat "633,871 -> 175,390 git
+blob bytes" with no instant attached, which is a filed count that does not
+reproduce against the tree it shipped with - this item's own lesson, repeated
+inside this item's own closure. **Date a size, or do not quote one.**
 
 **What it costs, stated rather than implied:**
 
@@ -1336,8 +1353,14 @@ structurally rather than by an entry-by-entry judgement.
 old numbers the split had bought 16.2 and 22.4 sessions of headroom, which is
 precisely the rubber stamp this item warned about, so:
 
-    ROADMAP.md      700,000 -> 340,000   5.1 sessions
-    docs/LEDGER.md  900,000 -> 420,000   5.0 sessions
+    ROADMAP.md      700,000 -> 340,000   5.1 sessions at the split, 4.5 at the commit
+    docs/LEDGER.md  900,000 -> 420,000   5.0 sessions at the split, 4.5 at the commit
+
+The two figures differ for the reason above: the budgets were set from the sizes
+at the split, and the documents then grew by this session's own closure prose.
+**Do not read the 4.5 as the budget being mis-set.** Ask the guard rather than
+either number - `python tools/doc_size_budget.py` states headroom in sessions
+and is the only figure that cannot go stale.
 
 **The rates were deliberately NOT re-measured, and that is a decision rather
 than an omission.** The merger slot left in `tools/doc_size_budget.py` asked
@@ -2878,6 +2901,42 @@ session will find it rather than living only in a constant's comment.
    unregistered host is placed in a newly-covered file, the guard goes red, and
    it is removed. A scope that widens without a control is a scope that might
    not have widened at all.
+
+## OPS-64. `tools/archive_link_guard.py` accepts any argv and silently ignores it - OPEN
+
+Filed 2026-09-08 by the wrap's own refutation pass, which hit it while trying to
+break the guard: it passed flags naming scratch files, and `main()` printed an
+identical green line having read the REAL documents. The verdict was true and
+was an answer to a different question than the one asked.
+
+`main()` takes no arguments and calls `check_repo()` on the live paths. There is
+no `argparse`, so an unknown flag is not rejected - it is not seen at all.
+
+**Why this is worth an item rather than a shrug.** The whole point of that guard
+is to refuse to say OK about something it did not check, and it already does the
+hard half of that well: a missing archive reports DID NOT RUN rather than
+passing. This is the same failure at the other end - a caller who believes they
+scoped the check somewhere gets a confident verdict about somewhere else. It is
+the shape this repository keeps meeting, most recently in the pre-commit hook
+that ran the wrong test module and reported that the guard had run.
+
+Compare `tools/doc_archive.py`, which does use `argparse` and would reject the
+same flag. The inconsistency is the tell.
+
+### Acceptance
+
+1. `main()` rejects an argument it does not understand, with a non-zero exit and
+   a message naming the argument. Proved by invoking it with a made-up flag.
+2. If it grows real options - pointing the check at a different roadmap or
+   archive - they are REAL, in the sense that passing them changes what is read.
+   A flag that is accepted and ignored is worse than one that is refused.
+3. A test invokes `main()` with a bad argument and asserts the refusal. It is
+   proved non-vacuous by removing the rejection and watching the test go red.
+4. The other entry points in `tools/` are swept for the same defect and the
+   result is reported as a COUNT of modules checked, not as "none found" - an
+   empty sweep is a claim about the sweep. `tools/precommit_gate.py`,
+   `tools/doc_size_budget.py` and `tools/syntax_check_hook.py` are the obvious
+   neighbours.
 
 ## Ordering note
 
