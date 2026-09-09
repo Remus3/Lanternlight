@@ -3052,7 +3052,7 @@ failed the pair channel at -0.5 sessions.
 
 **Re-verified by the merger in-process rather than accepted from the slice.**
 `check_pair_budgets()` on the live tree returns ok with zero findings; tightening
-`ROADMAP` to 700,000 - fifty bytes under the measured 702,038 - returns not-ok
+`ROADMAP` to 700,000 - 2,038 bytes under the measured 702,038 - returns not-ok
 with one `pair_over_budget` finding naming both halves and the total. The guard
 refuses a real over-budget tree, which is the claim, and it was not taken on
 trust.
@@ -3232,7 +3232,9 @@ spot is the wrong trade for 18 tokens, and this project has already been bitten
 by a source hiding in a region a guard had stopped reading.
 
 **What it cost, stated rather than implied.** `KNOWN_NON_HOSTS` grew from 267 to
-315, its largest single addition, and that set is the one place this module's own
+**317** at the commit that closed this item, and to 319 by the end of the session
+as three more closure-prose tokens landed. It is the set's largest single
+addition, and that set is the one place this module's own
 docstring says a real source can hide. Every added token was looked at; the
 merger re-read the additions and they are dotted code identifiers, our own
 filenames, and two Windows program names. The cost is real and it is the price of
@@ -3649,7 +3651,12 @@ reported per-run summary lines that hid swapped identities between the before an
 after runs, so a mutation could appear to kill the wrong test. Rebuilt per-test
 before believing any of the eleven results.
 
-`tests/test_handoff.py` went 28 tests to 36, with 243 lines added and 0 removed.
+`tests/test_handoff.py` went **26 tests to 37**, with 243 lines added and 0
+removed. The 243/0 half was correct as filed; the two test counts were not, and
+neither 28 nor 36 reproduces at any commit this session under either metric -
+collected tests or `def test_` count, which agree with each other. Corrected by
+the wrap's refutation pass, which re-derived them per commit rather than reading
+the slice's report.
 
 ## OPS-66. `tools/precommit_gate.py` read an unknown argument as a PASS, so a typo in `.githooks/pre-commit` would switch the lint gate off silently - CLOSED 2026-09-08
 
@@ -3839,8 +3846,10 @@ killed 2.
 **For what deliberately did NOT change, the pin is non-vacuous too**, which is
 the half criterion 3 asks for and the half that is usually skipped: making
 `ascii_check.py` refuse argv turned 2 tests red, making the syntax hook
-`os._exit(2)` on argv turned 1 red, and deleting the decision sentence from
-either docstring turned 2 red. So the decision is held by tests rather than by
+`os._exit(2)` on argv turned 1 red, and deleting the decision sentence turned 1
+red PER DOCSTRING - two mutations of one test each, not one mutation of two,
+which is how the slice's report read and is corrected here. So the decision is
+held by tests rather than by
 an unexamined default. The premise underneath it - that the wiring passes no
 arguments - is pinned against a SCRATCH copy of `.claude/settings.json`:
 appending an argument to a hook command turns it red, and unwiring the hook
@@ -3940,6 +3949,111 @@ send the ruling alone now and the design once it is built.
 5. `OPS-48` is updated in the same pass, because these two items now describe one
    situation. It is HELD waiting on RC's and RSC's results; this one is HELD
    waiting on a scope decision. Neither should be read as the other.
+
+## OPS-69. `docs/INVENTORY.md` is guarded in ONE direction, so a module missing from it is invisible - OPEN
+
+Filed 2026-09-08 at the wrap, found while syncing the living docs after `OPS-61`
+and `OPS-67` added two test modules and one tool.
+
+`tests/test_inventory.py` holds four properties and every one of them runs the
+same way: it takes something the DOCUMENT names and asks whether it exists. Every
+backtick-quoted path must be a real file; every command in the commands table
+must exist; every agent in the agents table must exist; the declared directories
+must exist. Nothing anywhere asks the opposite question - whether something that
+exists is NAMED.
+
+**So the document cannot be caught being incomplete.** `tools/hook_command_guard.py`,
+`tests/test_hook_command_roots.py` and `tests/test_probe_paks.py` were all
+created this session and the inventory guard stayed green with none of them
+listed. They were added by hand at the wrap because a human noticed, which is
+exactly the mechanism this project does not rely on anywhere else.
+
+**Why it matters more here than it would in an ordinary doc.** This file is
+Lanternlight's OUTBOUND half of the cross-project inventory exchange the operator
+authorised in chat 2026-09-07. A sibling reading it is reading a claim about what
+this project has. An inventory that is silently short does not read as short - it
+reads as complete, which is the failure mode of every one-direction guard this
+repository has met: `OPS-57`'s archive index needed BOTH directions for the same
+reason, and got them.
+
+**The tension that makes this an item rather than a chore.** The document's own
+preamble says NO STALE COUNTS - it deliberately names no test count, because a
+number written there rots the moment a test is added. A completeness check is the
+same rot in a different spelling if it is written as a number, so the answer has
+to be a derived comparison rather than a filed total, and it has to say what is
+deliberately EXCLUDED without that exclusion list becoming the place a module
+hides. `tests/test_source_register.py`'s `KNOWN_NON_HOSTS` is the cautionary
+example: its own docstring calls it the one place a real source can hide, and it
+has grown by four entries in this session alone.
+
+### Acceptance
+
+1. A test fails when a tracked module that the document's own scope covers is
+   absent from it. The scope is stated rather than assumed - "every tracked
+   `tests/test_*.py` and `tools/*.py`" is a scope; "the important ones" is not.
+2. Whatever is excluded is enumerated WITH A REASON PER EXCLUSION, in the module,
+   and the exclusion list is small enough to read. If it grows past a dozen the
+   scope was wrong, not the list.
+3. Proved non-vacuous by mutation: delete a row from `docs/INVENTORY.md` and
+   watch the test go red; restore and watch it go green. Assert the anchor
+   matched before believing a survivor - a mutation that failed to apply printed
+   a green suite twice in this repository on 2026-09-08.
+4. The existing four properties are kept. This item ADDS the reverse direction;
+   it does not trade one direction for the other, which is what `OPS-57`'s link
+   guard would have done had it only checked stubs.
+5. The count is not written into the document. Per its own preamble, a
+   completeness check states a COMMAND or a derived comparison, never a total
+   that rots.
+
+## OPS-70. `.claude/settings.json` still hardcodes an absolute repo root in `permissions.allow` - the OPS-61 defect surviving in the file OPS-61 cleaned - OPEN
+
+Filed 2026-09-08 by the wrap's refutation pass, which found it while checking
+something else. `OPS-61` rewrote all six hook COMMANDS to reach their scripts
+through `$CLAUDE_PROJECT_DIR`. Three entries in the same file were never in that
+item's scope and still read:
+
+    "Read(//C/Lanternlight/**)",
+    "Write(//C/Lanternlight/**)",
+    "Edit(//C/Lanternlight/**)"
+
+**Why no guard catches it, which is the part worth keeping.**
+`tools/hook_command_guard.py` walks `hooks.*` and reads command strings. These
+live under `permissions.allow`, which it never visits, so the guard's green line
+is true and answers a narrower question than a reader of that green line would
+assume. That is this session's own recurring shape - a true verdict about
+something other than what was asked - found for the fourth time, in the file the
+first three were about.
+
+**What it costs, and it is smaller than `OPS-61`'s.** These entries pre-approve
+tool calls; they do not dispatch anything. In a clone or a worktree at another
+path they simply never match, so the session prompts for permission where it
+would otherwise not have. That is a nuisance rather than a wrong answer, and it
+is why this is a separate item rather than a reopening: `OPS-61`'s hooks FIRED
+and reported about the wrong tree, which is a different order of defect.
+
+**Do not assume the fix is the same.** Whether the permission matcher expands
+`$CLAUDE_PROJECT_DIR` is NOT MEASURED. `OPS-61` measured the expansion for hook
+COMMANDS only, and the two are different code paths in the harness - the same
+mistake `OPS-65` had to avoid when `$CLAUDE_PROJECT_DIR` turned out to be
+undefined for a command a session types. Measure before writing.
+
+### Acceptance
+
+1. Whether the permission matcher expands the harness variable is MEASURED, in a
+   real clone at a different path, by observing whether a matching tool call is
+   pre-approved or prompts. Presence in the file is not the fact; a matched
+   permission is.
+2. If it expands, the three entries use it and the demonstration is end-to-end.
+   If it does not, the entries are either removed as dead weight in every tree
+   but this one, or kept with a comment saying they are primary-checkout-only and
+   why - a DECLINE with the measurement behind it, which `OPS-61` criterion 4
+   already establishes as an acceptable outcome.
+3. The guard reaches the rest of the file, or says in its own docstring which
+   parts it does not read. `tools/hook_command_guard.py` reporting `OK` while an
+   absolute root sits twenty lines away in the same document is the defect this
+   item is about, one level up.
+4. Proved non-vacuous by embedding a different absolute root in whatever section
+   the guard newly reads, and watching it go red.
 
 ## Archive index
 

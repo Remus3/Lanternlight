@@ -446,6 +446,16 @@ KNOWN_NON_HOSTS = frozenset(
         # refuted it at 45 retired against 52 introduced, so the answer is not
         # simply "stop truncating at underscores".
         "path.name",
+        # `check.main` (the truncation of `ascii_check.main`) and
+        # `permissions.allow` (a settings.json key), both from the WRAP prose of
+        # 2026-09-08 - `LL-0206` and `OPS-70`. Fifth and sixth this session, and
+        # the last two arrived from the REFUTATION pass rather than from a
+        # closure: describing a defect accurately requires naming the thing that
+        # has it. `OPS-63`'s cost paragraph says this rate is the price of
+        # reading the documents where this project writes about its own code,
+        # and six in one session is the first real datum for that rate.
+        "check.main",
+        "permissions.allow",
         # A git CONFIG KEY, quoted by `LL-0169` and `OPS-49`. `core.filemode`
         # is not a host and not a file; `.filemode` simply parses as a TLD-
         # shaped tail. Looked at before adding, per the regenerating note.

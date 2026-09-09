@@ -56,15 +56,15 @@ aspirational placeholders.
 
 Measured on 2026-09-08 rather than recited, and measured from a **real fresh
 clone at a foreign path** - which is the standard the paragraph below sets:
-**2663 passed, 6 skipped**, 199 ledger entries, 64 wrapped loop cycles, 8
+**2777 passed, 6 skipped**, 205 ledger entries, 68 wrapped loop cycles, 8
 worktree-isolated lanes, 7 ADRs.
 
-(199, not 200: the two ledger files carry 200 `### LL-` headings and one of them
-is the format TEMPLATE in the preamble. That distinction was measured this
-session after a count was filed wrong, and it is the kind of thing this README
-would otherwise repeat forever.)
+(205, not 206: the two ledger files carry 206 `### LL-` headings and one of them
+is the format TEMPLATE in the preamble. That distinction was measured after a
+count was filed wrong, and it is the kind of thing this README would otherwise
+repeat forever.)
 
-**The same tree in place reports 2668 passed, 1 skipped** - 2669 collected
+**The same tree in place reports 2782 passed, 1 skipped** - 2783 collected
 either way. The five that skip only in a clone are named rather than waved at,
 because an unexplained difference between two counts is where a wrong one
 hides: one needs the observed-document map under the gitignored `ops/runtime/`,
