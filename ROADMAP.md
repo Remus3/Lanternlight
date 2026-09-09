@@ -2936,7 +2936,7 @@ the primary tree's hand-off - but it is a command a session TYPES rather than a
 hook the harness dispatches, so `$CLAUDE_PROJECT_DIR` is not defined for it and
 the fix is a different one. Filed as `OPS-65` rather than guessed at here.
 
-## OPS-62. The two archives OPS-57 created are UNBUDGETED, and nothing measures their growth - OPEN
+## OPS-62. The two archives OPS-57 created are UNBUDGETED, and nothing measures their growth - CLOSED 2026-09-08
 
 Filed 2026-09-08 out of `OPS-57`'s own cost list, where it is stated rather
 than implied.
@@ -2975,6 +2975,111 @@ the guard reports OK - the instrument reporting on itself again.
    guard measures the PAIR instead. If so, that is recorded as the decision
    with its cost, and `tools/doc_size_budget.py` says so where a reader looking
    for the missing archive budget will find it.
+
+### Outcome - CLOSED 2026-09-08
+
+**Criterion 1 and criterion 4 are answered together, because criterion 4's option
+is what the measurement chose.** The archives are NOT budgeted individually, by
+decision. The model is a PAIR TOTAL: `PAIR_BUDGETS` bounds each live document and
+its archive together as one sum, `ROADMAP` at 1,180,000 and `LEDGER` at
+1,270,000 blob bytes.
+
+Three reasons, and the first is the hole this item was filed about:
+
+- **A split cannot game a pair total.** Splitting moves bytes from the live half
+  to the archive half and leaves the sum almost untouched. With only live
+  budgets, the documented response to a firing - re-run `tools/doc_archive.py` -
+  moves bytes into a file nothing watches and the guard reports OK forever. The
+  sum measures the thing that actually grows, which is total continuity prose in
+  the repository.
+- **Its rate was already measured over six sessions, not over one split.** Before
+  `OPS-57` the live document WAS the whole pair, because the archive did not
+  exist, so the six per-session append rates in `SESSION_GROWTH_RATES` are pair
+  rates as they stand. The pair model reuses them rather than declaring a second
+  copy that could drift.
+- **Both halves stay visible.** The report prints each half's own byte count
+  beside the total, so a reader can see WHERE the bytes are even though only the
+  sum is bounded.
+
+**Criterion 2, and this is the term that is provisional.** The append half rests
+on six sessions. The `split_overhead_bytes` term rests on ONE split and is
+labelled provisional in three places in the code rather than only in a report: a
+named section of the module docstring, `PairGrowthModel.splits_measured` and
+`.provisional`, and the rendered output itself, which prints
+`[model provisional: its split-overhead term rests on 1 split]` next to every
+pair figure it qualifies. That is the written admission criterion 2 allows in
+place of a second split, and it is in the artifact because a caveat stated only
+in chat is a lie in the artifact.
+
+The overhead is measured from history rather than estimated - across the split
+commit, the ROADMAP pair went 633,871 to 669,327 (+35,456) and the LEDGER pair
+867,833 to 881,945 (+14,112) - and is labelled an UPPER bound, because that
+commit also carried the session's own prose. It is amortized over the derived
+split interval and ADDED to the append rate, which SHORTENS reported headroom.
+The conservative direction, the same reasoning that made `SESSION_GROWTH_RATES`
+use the high median rather than the mean.
+
+**The 12-session horizon is a judgement and says so; the rate under it is
+measured.** That distinction is the whole of criterion 1: "per-session bytes is
+the wrong shape" was the item's complaint, and the answer is a measured rate for
+the half that appends every session plus a labelled-provisional term for the half
+that steps.
+
+**Criterion 3, non-vacuity, eight mutations plus a direct grown-archive tree.**
+Counting the pair as the live half only killed 8 tests; weakening the comparison
+killed 4; dropping the overhead term from the effective rate killed 2; silently
+skipping a missing half killed 2; lowering the pair threshold to the per-document
+one killed 1; deleting the `LEDGER_ARCHIVE` decision note killed 3; never
+rendering the provisional caveat killed 1; and lowering the real ROADMAP pair
+budget below the live total killed 2 while the module exited 1 and the
+PER-DOCUMENT channel still said OK - which is exactly the blindness this item
+described. A synthetic tree with a 1,000,000-byte archive beside a 200,000-byte
+live document, measured against the REAL budget, passed the live channel and
+failed the pair channel at -0.5 sessions.
+
+**Re-verified by the merger in-process rather than accepted from the slice.**
+`check_pair_budgets()` on the live tree returns ok with zero findings; tightening
+`ROADMAP` to 700,000 - fifty bytes under the measured 702,038 - returns not-ok
+with one `pair_over_budget` finding naming both halves and the total. The guard
+refuses a real over-budget tree, which is the claim, and it was not taken on
+trust.
+
+**THE COST, and one part of it needs the operator rather than a session.** Two
+things, both written into the module where a reader will meet them:
+
+1. No individual archive is bounded, so an archive growing on its own - somebody
+   appending to it directly rather than through a split - consumes pair headroom
+   indistinguishably from ordinary growth in the live half. The per-half
+   components in the report are the only mitigation and nothing guards it.
+2. **A pair-budget firing has NO mechanical remedy.** A live-budget firing is
+   answered by re-running the splitter; a pair firing cannot be, because the pair
+   total is precisely what a split does not change. The only answers are a real
+   reduction in content - which this repository's own rules forbid for the
+   ledger, where an entry is written in full for a cold session - or an operator
+   ruling: move the archives out of this repository, or accept a higher bound. So
+   a pair firing is a DECISION GATE FOR THE OPERATOR rather than a chore, which
+   is why `PAIR_LOW_HEADROOM_SESSIONS` warns further out than the per-document
+   threshold does. **Nobody should silently raise a pair budget when it fires.**
+
+**What it reported at TWO instants, and the difference is the point rather than
+an error.** A size with no instant attached is a filed count that cannot
+reproduce - `LL-0201` is that lesson, learned by this item's neighbour `OPS-57`
+one item over - so both readings are here:
+
+    at the merge, before this outcome was written
+      ROADMAP pair   702,038  (ROADMAP.md 226,565 + archive 475,473)   11.9 sessions
+      LEDGER pair    901,698  (docs/LEDGER.md 314,927 + archive 586,771)  12.0 sessions
+
+    after this outcome was written into ROADMAP.md
+      ROADMAP pair   711,879  (ROADMAP.md 236,406 + archive 475,473)   11.6 sessions
+      LEDGER pair    901,698  unchanged, nothing was appended to it yet
+
+Writing the closure moved the number the closure quotes - `LL-0199`'s shape, and
+the third time this session that recording a measurement changed the thing
+measured. **Ask `python tools/doc_size_budget.py` rather than quoting any of
+these six figures.**
+`tests/test_doc_size_budget.py` went 29 tests to 65 and every one of the original
+29 still passes unchanged.
 
 ## OPS-63. The source register never reads `ROADMAP.md`, and the OPS-57 split made that visible rather than new - CLOSED 2026-09-08
 
@@ -3410,7 +3515,7 @@ them are stdin hooks whose wiring passes no argv at all and two are
 manually-invoked tools whose numbers get quoted - a real difference in stakes
 that deserves a decision rather than one uniform change.
 
-## OPS-65. The wrap ritual writes the hand-off to an ABSOLUTE target, so a wrap from a worktree overwrites the primary tree's hand-off - OPEN
+## OPS-65. The wrap ritual writes the hand-off to an ABSOLUTE target, so a wrap from a worktree overwrites the primary tree's hand-off - CLOSED 2026-09-08
 
 Filed 2026-09-08 out of `OPS-61`'s merge. `OPS-61` fixed every command the
 HARNESS dispatches; this is the same defect in a command a SESSION types, and it
@@ -3464,6 +3569,74 @@ how a fix becomes a surprise.
    in `LL-NEXT-SESSION.txt`'s own hand-off instructions agree with it. Three
    copies of an instruction are two stale copies waiting to happen, and this
    session found the third copy only by grepping for the absolute root.
+
+### Outcome - CLOSED 2026-09-08
+
+**Criterion 1, the decision: (a). A wrap writes the hand-off of THE TREE IT IS
+WRAPPING, by OMITTING `--target`.** `ops/handoff.py` resolves `DEFAULT_TARGET`
+from its own file location, so a worktree's wrap writes that worktree's
+hand-off. The flag stays supported for a caller that genuinely means another
+path; the RITUAL no longer passes it.
+
+**Criterion 2, end-to-end in two real detached worktrees, reading which file
+changed on disk rather than reasoning about it.** From `wt_lane`:
+
+    ritual form, --target <wt_primary>/LL-NEXT-SESSION.txt
+        exit 0, SILENT. wt_primary's hand-off CHANGED, wt_lane's did not,
+        and git status in wt_lane stayed CLEAN
+    flagless
+        wt_lane's own hand-off changed, wt_primary untouched,
+        git add LL-NEXT-SESSION.txt exit 0
+    --check-only against the primary's real path
+        reported clean and wrote nothing
+
+**(c) IS REFUTED BY THE RITUAL'S OWN STEP 9, which is why this is a decision
+rather than a preference.** `.claude/commands/done.md` requires the hand-off be
+"rewritten in place, staged, and committed with the session's other work". The
+absolute form cannot do that from a worktree: `git add` of a path belonging to
+another worktree exits 128, `fatal: ... is outside repository`. So the reading
+that the hand-off belongs to the primary checkout on purpose contradicts a
+requirement already written into the ritual - measured, not argued.
+
+**(b) was rejected as a REFUSAL and kept as a REPORT.** Refusing any target
+outside the resolving tree would need an exemption for the test suite's own
+`tmp_path` targets, and an exemption list is exactly what `OPS-32` forbade for
+this writer - "there is no exemption list and no override flag". So an
+out-of-tree target now prints a stderr report naming itself as out-of-tree and
+still writes, which keeps the writer honest without giving it a bypass.
+
+**Criterion 3, the guard.** `tests/test_handoff.py` grew a detector over the
+tracked instruction corpus - the documents that TELL a session what to run - and
+it fails on any absolute root passed to a `--target`-shaped flag. It reuses
+`tools/hook_command_guard.py`'s engine rather than declaring a second pattern,
+which is pinned by its own test: two independent absolute-path detectors would
+drift, and `OPS-38` needed two generalisations because a guard scoped to one
+value stays scoped to one value.
+
+**Criterion 4, the three copies made to agree.** `.claude/commands/done.md`
+line 84 and `LL-NEXT-SESSION.txt` line 200 both carried the absolute form; both
+are corrected, the second by REGENERATING the hand-off through
+`ops/handoff.py`, because that file must never be written with an editor tool -
+`OPS-32`. `CLAUDE.md` carries no `--target` line, so there were three sites and
+not four. The prose mentions of the path at `done.md` lines 77 and 183 are
+deliberately KEPT: they say where the hand-off lives, which is still true, and
+`tests/test_loop_watch.py::TestTheWrapOutputShapeIsPinned` requires them.
+
+**A vacuous test was exposed by mutation and replaced.** Hardcoding the default
+target killed two tests but did NOT kill
+`test_the_default_target_follows_the_tree` - because in the primary checkout the
+hardcoded value and the resolved value are the same string, so the test could
+not tell them apart in the tree it runs in. It now loads the module from a copy
+inside a temporary tree, where the two answers differ, and the same mutation
+kills it. That is the `OPS-61` lesson again in a new place: a guard measured only
+in the primary tree cannot see a defect that only appears elsewhere.
+
+**The slice also refuted its own first driver.** Its initial mutation harness
+reported per-run summary lines that hid swapped identities between the before and
+after runs, so a mutation could appear to kill the wrong test. Rebuilt per-test
+before believing any of the eleven results.
+
+`tests/test_handoff.py` went 28 tests to 36, with 243 lines added and 0 removed.
 
 ## OPS-66. `tools/precommit_gate.py` read an unknown argument as a PASS, so a typo in `.githooks/pre-commit` would switch the lint gate off silently - CLOSED 2026-09-08
 

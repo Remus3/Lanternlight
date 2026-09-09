@@ -31,7 +31,9 @@ three days.
 
 import base64
 import hashlib
+import importlib.util
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -413,3 +415,244 @@ def test_json_payloads_are_not_special_cased(tmp_path):
     with pytest.raises(RedactionError):
         handoff.write_handoff(CLEAN + "\n" + payload + "\n", target)
     assert not target.exists()
+
+
+# ---------------------------------------------------------------------------
+# OPS-65 - WHICH TREE's hand-off a wrap writes
+# ---------------------------------------------------------------------------
+#
+# THE DECISION, measured 2026-09-08 in two real detached worktrees of this
+# repository, recorded here because all three candidate answers were defensible
+# until something was measured.
+#
+# A wrap writes THE HAND-OFF OF THE TREE IT IS WRAPPING, and it gets there by
+# omitting the flag entirely: `ops/handoff.py` resolves its default from its own
+# `__file__`, and in a worktree that is the worktree's own root. Measured: from
+# a lane worktree the flagless form wrote the LANE's `LL-NEXT-SESSION.txt`, and
+# `git add LL-NEXT-SESSION.txt` in that tree staged it, exit 0.
+#
+# What refutes the "absolute on purpose" answer is the ritual's OWN step 9,
+# which says the hand-off is "rewritten in place, staged, and committed with the
+# session's other work". Measured from a lane worktree with an absolute target
+# naming a second worktree: `ops/handoff.py` exited 0 and said nothing, the
+# OTHER tree's tracked file changed, `git status` in the wrapping tree stayed
+# CLEAN - there was nothing to commit - and staging the written file from the
+# wrapping tree failed with `fatal: ... is outside repository`. A wrap using the
+# absolute form therefore cannot complete the step that requires it, which makes
+# that form a defect rather than a design choice. Writing nothing at all is
+# refuted by the same step from the other side: a cold session reads that file
+# first, and a lane that hands nothing forward is the failure this project's
+# continuity design exists to prevent.
+#
+# WHY CONTAINMENT IS A REPORT AND NOT A REFUSAL. Rejecting a target outside the
+# resolving tree was the second candidate. It cannot be a refusal here without
+# an exemption for the tests: every test above writes to a `tmp_path` outside
+# this tree on purpose, and `CLAUDE.md` and this module's criterion 5 both
+# forbid buying a guard with an exemption list. So an out-of-tree target is
+# REPORTED at write time, where a session still has the context to notice it,
+# and the tracked instruction that would produce one is what a red test blocks.
+
+
+def test_the_default_target_follows_the_tree_the_module_lives_in():
+    """The default is DERIVED, so a worktree gets its OWN hand-off.
+
+    Derived from `handoff.__file__` rather than from this test file, because the
+    property under test is what the MODULE resolves. A test that recomputed the
+    root from its own location would pass just as happily against a module
+    carrying a hardcoded literal.
+    """
+    module_root = Path(handoff.__file__).resolve().parents[1]
+    expected = module_root / "LL-NEXT-SESSION.txt"
+    assert expected == handoff.DEFAULT_TARGET
+
+
+def test_the_module_names_no_absolute_root_of_its_own():
+    """A literal root inside the writer would defeat the derivation above."""
+    source = Path(handoff.__file__).read_text(encoding="utf-8")
+    findings = [
+        matched
+        for line in source.splitlines()
+        for _kind, matched in handoff.absolute_paths_in(line)
+    ]
+    assert findings == [], findings
+
+
+def test_the_absolute_target_detector_is_not_scoped_to_one_ROOT():
+    """Non-vacuity: a guard that only knows this machine's root is scoped to it.
+
+    Each case is a target-flag position naming an absolute path in a different
+    spelling. The wrapped case is this repo's own hard-wrap trap: prose here
+    breaks near 80 columns, so a real instruction can put the flag on one line
+    and the path on the next.
+    """
+    cases = {
+        "this-root": "python ops/handoff.py --target C:/Lanternlight/LL-NEXT-SESSION.txt",
+        "other-drive": "--target D:/Elsewhere/LL-NEXT-SESSION.txt",
+        "backslashes": "--target C:\\Lanternlight\\LL-NEXT-SESSION.txt",
+        "equals-form": "--target=C:/Lanternlight/LL-NEXT-SESSION.txt",
+        "unc-share": "--target //host/share/LL-NEXT-SESSION.txt",
+        "posix-root": "--target /srv/lanternlight/LL-NEXT-SESSION.txt",
+        "hard-wrapped": (
+            "     python ops/handoff.py --from-file <draft> --target\n"
+            "     C:/Lanternlight/LL-NEXT-SESSION.txt\n"
+        ),
+    }
+    for name, text in cases.items():
+        assert handoff.absolute_target_findings(text), f"{name} was not reported"
+
+
+def test_the_detector_leaves_the_forms_the_ritual_MAY_use_alone():
+    clean = {
+        "flagless": "python ops/handoff.py --from-file <draft>",
+        "repo-relative": "python ops/handoff.py --target LL-NEXT-SESSION.txt",
+        "placeholder": "python ops/handoff.py --from-file <draft> --target <path>",
+        "a-path-with-no-flag": "the hand-off is C:/Lanternlight/LL-NEXT-SESSION.txt",
+    }
+    for name, text in clean.items():
+        assert handoff.absolute_target_findings(text) == [], name
+
+
+def test_the_detector_uses_the_hook_guards_engine_rather_than_a_second_one():
+    """One engine - the same rule this file already applies to the redactor.
+
+    `tools/hook_command_guard.py` (`OPS-61`) already decides what an absolute
+    root looks like, in three spellings, with its blind spots written down. A
+    private copy of those patterns here would drift behind it.
+    """
+    source = Path(handoff.__file__).read_text(encoding="utf-8")
+    assert "hook_command_guard" in source
+    assert "absolute_paths_in" in source
+    assert "A-Za-z]:" not in source, "no private drive-letter pattern in the writer"
+
+
+def test_the_instruction_corpus_is_not_empty():
+    """A scan of nothing is not a pass - `OPS-61`'s lesson, restated.
+
+    If a site is renamed and this function silently returns fewer files, the
+    guard below goes green by looking at less.
+    """
+    sites = handoff.instruction_sites()
+    names = {site.name for site in sites}
+    assert "done.md" in names, sites
+    assert "CLAUDE.md" in names, sites
+    assert len(sites) >= 3, sites
+    for site in sites:
+        assert site.is_file(), site
+
+
+def test_no_tracked_instruction_tells_a_wrap_to_write_an_ABSOLUTE_target():
+    """Criterion 3, pinning the decision recorded above.
+
+    The scan covers the INSTRUCTION sites - `CLAUDE.md`, the slash commands and
+    the hand-off itself. `ROADMAP.md` and `docs/LEDGER.md` are deliberately out
+    of scope: an item that exists to record this defect has to be able to quote
+    it, and a guard that forbade the quotation would be unfixable without
+    deleting the record.
+    """
+    findings = handoff.scan_instruction_sites()
+    assert findings == [], "\n".join(findings)
+
+
+def test_a_target_outside_the_resolving_tree_is_named_as_such():
+    outside = handoff.DEFAULT_TARGET.parent.parent / "LL-NEXT-SESSION.txt"
+    assert handoff.target_is_outside_tree(outside)
+    assert not handoff.target_is_outside_tree(handoff.DEFAULT_TARGET)
+    assert not handoff.target_is_outside_tree(
+        handoff.DEFAULT_TARGET.parent / "sub" / "LL-NEXT-SESSION.txt"
+    )
+
+
+def test_the_cli_REPORTS_an_out_of_tree_target_and_still_writes_it(tmp_path):
+    """The report is the point; the write is not blocked.
+
+    Blocking would need an exemption for every test in this file. What a session
+    must not be able to do is write another checkout's hand-off SILENTLY, which
+    is exactly what was measured before this existed: exit 0 and one line naming
+    a path, with nothing to say the path was not this tree's.
+    """
+    source = tmp_path / "draft.txt"
+    source.write_text(CLEAN, encoding="utf-8")
+    target = tmp_path / "LL-NEXT-SESSION.txt"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(REPO_ROOT / "ops" / "handoff.py"),
+            "--from-file",
+            str(source),
+            "--target",
+            str(target),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert target.read_text(encoding="utf-8") == CLEAN
+    assert "outside the tree" in completed.stderr, completed.stderr
+
+
+def test_the_cli_says_nothing_about_the_target_when_it_is_THIS_tree(tmp_path):
+    """The report must be about the TREE, not about the flag being present.
+
+    A warning that fired on every target flag would be noise, and noise is how a
+    real one gets skimmed past. The target here is inside the tree the running
+    copy of the writer resolves, reached by giving the writer a scratch tree of
+    its own - which also re-measures the derivation end to end in a second
+    location rather than only asserting it.
+    """
+    tree = tmp_path / "tree"
+    (tree / "ops").mkdir(parents=True)
+    (tree / "ops" / "handoff.py").write_bytes(
+        (REPO_ROOT / "ops" / "handoff.py").read_bytes()
+    )
+    source = tmp_path / "draft.txt"
+    source.write_text(CLEAN, encoding="utf-8")
+    target = tree / "LL-NEXT-SESSION.txt"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(tree / "ops" / "handoff.py"),
+            "--from-file",
+            str(source),
+            "--target",
+            str(target),
+        ],
+        capture_output=True,
+        text=True,
+        env={**os.environ, "PYTHONPATH": str(REPO_ROOT)},
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert target.read_text(encoding="utf-8") == CLEAN
+    assert "outside the tree" not in completed.stderr, completed.stderr
+
+
+def test_a_copy_of_the_writer_in_another_tree_defaults_to_THAT_tree(tmp_path):
+    """The derivation, measured in a SECOND tree rather than asserted in this one.
+
+    `test_the_default_target_follows_the_tree_the_module_lives_in` cannot see
+    this on its own and the mutation pass proved it: replacing the derivation
+    with a literal naming THIS repository root left that test green, because in
+    the primary checkout the derived value and the literal are the same string.
+    A guard that cannot tell the two apart is not guarding the difference.
+
+    Loaded rather than run, deliberately. A subprocess with no `--target` would
+    write wherever the module resolves, so a REGRESSED writer would clobber this
+    repository's own tracked hand-off in the course of being tested - a test that
+    destroys the artifact it protects when the code is wrong. Importing the copy
+    reads the same fact and writes nothing.
+    """
+    tree = tmp_path / "tree"
+    (tree / "ops").mkdir(parents=True)
+    copy = tree / "ops" / "handoff.py"
+    copy.write_bytes((REPO_ROOT / "ops" / "handoff.py").read_bytes())
+    spec = importlib.util.spec_from_file_location("handoff_in_another_tree", copy)
+    module = importlib.util.module_from_spec(spec)
+    saved = list(sys.path)
+    try:
+        spec.loader.exec_module(module)
+        expected = tree / "LL-NEXT-SESSION.txt"
+        assert tree.resolve() == module.REPO_ROOT
+        assert expected == module.DEFAULT_TARGET
+        assert module.DEFAULT_TARGET != handoff.DEFAULT_TARGET
+    finally:
+        sys.path[:] = saved
+    assert not (tree / "LL-NEXT-SESSION.txt").exists(), "importing must write nothing"

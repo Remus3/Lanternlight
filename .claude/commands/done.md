@@ -81,8 +81,15 @@ test rather than the code is not a green suite.
    - **Write it with `ops/handoff.py`, never with an editor tool or a
      redirect** - `OPS-32`. Draft the prompt into a scratch file, then:
      ```
-     python ops/handoff.py --from-file <draft> --target C:/Lanternlight/LL-NEXT-SESSION.txt
+     python ops/handoff.py --from-file <draft>
      ```
+     **OMIT `--target`** - `OPS-65`. The writer resolves its own root from its
+     own file location, so a wrap writes the hand-off of THE TREE IT IS
+     WRAPPING. The flag used to name `C:/Lanternlight` absolutely, and measured
+     from a real worktree that wrote the OTHER tree's tracked hand-off while
+     `git status` in the wrapping tree stayed clean - and step 9's requirement
+     that the file be staged and committed with the session's work is then
+     impossible, because `git add` of a path in another worktree exits 128.
      The writer runs `lanternlight.redact` over the STRING and refuses BEFORE
      anything is written, so a refusal leaves the previous hand-off
      byte-unchanged and exits non-zero. There is no exemption list and no

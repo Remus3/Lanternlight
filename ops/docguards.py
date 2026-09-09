@@ -105,6 +105,17 @@ DOC_READING_IDIOMS = (
     re.compile(r"\biter_authored_files\b"),
     re.compile(r"\biter_scannable_files\b"),
     re.compile(r"\b_tracked\b"),
+    # `OPS-65`, 2026-09-08. `tests/test_handoff.py` reads CLAUDE.md, the slash
+    # commands and the hand-off through `ops.handoff.instruction_sites`, which
+    # globs them one module over - so no idiom above could see it and the
+    # selector missed a module the recorder had observed opening documents.
+    # THE CROSS-CHECK IS WHAT CAUGHT IT, exactly as this module's docstring
+    # predicts: an enumerated set cannot contain the idiom nobody has written
+    # yet, so the observed map is the backstop and it fired on the first new
+    # idiom to appear since it was built. Matching the CALL rather than the glob
+    # is deliberate - the glob lives in a non-test module, and following it would
+    # mean this selector resolving arbitrary call graphs.
+    re.compile(r"\binstruction_sites\b"),
 )
 
 _GIT_TIMEOUT = 60

@@ -1,5 +1,5 @@
 LANTERNLIGHT - NEXT SESSION PROMPT
-Written at the wrap of the 2026-09-08 late session. Overwritten every session;
+Written at the wrap of the 2026-09-08 night session. Overwritten every session;
 this file is tracked, and its git history is the record of what each session
 handed forward. It is written by ops/handoff.py, never by an editor tool.
 
@@ -7,204 +7,183 @@ Resume Lanternlight from disk. Read CLAUDE.md, then this file, then ROADMAP.md
 and docs/LEDGER.md newest-first. Ask nothing; start work.
 
 READ FIRST, IN THIS ORDER
-  CLAUDE.md           - CHANGED this session. It now carries an Archives block
-                        naming the two new archive documents.
-  docs/LEDGER.md      - newest first. LL-0196 through LL-0201 are this session.
-                        Read LL-0201 first if you read only one: the wrap's own
-                        refutation refuted two of this session's closure claims.
-  ROADMAP.md          - MUCH SHORTER than you may expect. See THE SPLIT below
-                        before concluding anything is missing.
+  CLAUDE.md           - CHANGED this session. Its note about the pre-commit gate
+                        blocking any command that merely QUOTES the forbidden
+                        cmdlet was STALE and is corrected in place.
+  docs/LEDGER.md      - newest first. LL-0202 through LL-0204 are this session.
+                        Read LL-0202 first if you read only one.
+  ROADMAP.md          - OPS-61 through OPS-67 are all this session's work.
 
 FIRST ACTION, BEFORE ANY WORK
 Run `python ops/inbox_watch.py` and READ the output. A plain run REPORTS ONLY.
 Acknowledge with `python ops/inbox_watch.py --acknowledge`, and only for notes
-you have actually read.
-
-  Note that the UserPromptSubmit hook acknowledges ONCE per session on the
-  operator's own turn, so notes may already be marked seen by the time you look.
-  That is by design (OPS-41) and is not the same as your having read them.
-  Measured this session: the SessionStart hook reported 2 unread and the manual
-  run right after reported none, because the prompt hook had fired in between.
+you have actually read. The UserPromptSubmit hook acknowledges ONCE per session
+on the operator's own turn, so notes may be marked seen before you look - that
+is OPS-41 by design and is NOT the same as your having read them.
 
 SECOND ACTION
 Run `python ops/stop_audit.py --show-last`. A FAIL line is a QUESTION about what
 the last turn wrote, not a verdict - it cannot tell a claim from a QUOTATION of
 one.
 
-THE SPLIT - READ THIS BEFORE GREPPING FOR ANYTHING
-ROADMAP.md and docs/LEDGER.md were SPLIT this session and are now roughly a
-third of their former size. Nothing was deleted.
+THE SPLIT, STILL TRUE AND STILL THE FIRST THING THAT MISLEADS A COLD SESSION
+ROADMAP.md and docs/LEDGER.md were split on 2026-09-08 and nothing was deleted.
+Closed roadmap items are in docs/ROADMAP_ARCHIVE.md, one hop from the
+`## Archive index` stub list; the oldest ledger entries are in
+docs/LEDGER_ARCHIVE.md. AN EMPTY GREP OF ONE HALF IS NOT A CLAIM ABOUT THE
+PROJECT - only about which half you searched.
 
-  ROADMAP.md         open items, plus a `## Archive index` with a one-line stub
-                     per closed item linking to its full text
-  docs/ROADMAP_ARCHIVE.md    65 closed and refuted sections, verbatim
-  docs/LEDGER.md     the 60 newest entries, and the insertion marker
-  docs/LEDGER_ARCHIVE.md     the oldest 135 entries, verbatim, in order
+CLOSED THIS SESSION, ALL PUSHED
+  OPS-61  Every hook command resolved the PRIMARY checkout. Fixed to
+          $CLAUDE_PROJECT_DIR, quoted.
+  OPS-63  The source register's scope is stated: every tracked .md and .txt,
+          plus the old docs/ walk verbatim, minus one enumerated exclusion.
+  OPS-64  tools/archive_link_guard.py refuses unknown argv and prints its scope.
+  OPS-66  FILED AND CLOSED. tools/precommit_gate.py read an unknown argument as
+          a PASS.
+  OPS-62  The archives are bounded as a PAIR, not individually.
+  OPS-65  A wrap writes the hand-off of the tree it is wrapping.
 
-**AN EMPTY GREP OF ONE HALF IS NOT A CLAIM ABOUT THE PROJECT** - only about
-which half you searched. This repository already had two rules about empty greps
-being claims about the pattern and about line breaks; this is a third axis and
-it is new as of today. Search both files, or search the pair.
+STILL OPEN, AND OPS-67 IS THE ONLY ACTIONABLE OPS ITEM LEFT
+  OPS-67  Four tools/ entry points still read an unknown argument as a pass:
+          ascii_check.py, syntax_check_hook.py, probe_paks.py and
+          doc_size_budget.py, all re-probed at exit 0. Filed as FOUR decisions
+          rather than one batch: the first two are PostToolUse hooks whose only
+          caller passes no argv and which exit 0 on every path by design, while
+          doc_size_budget.py's numbers get QUOTED - including by this very
+          document - which makes a confident verdict about a document nobody
+          asked for the OPS-64 failure exactly.
+  OPS-35, OPS-36 remain open and operator-ruled. OPS-48 is HELD by operator
+  ruling: do not answer its four questions and do not solicit RC or RSC.
+  OPS-52 is CLOSED by operator ruling - "leave the history as is".
 
-  When a size budget FIRES, RE-RUN THE SPLIT - `python tools/doc_archive.py` for
-  a dry run - and do NOT raise the number. Raising is what the previous session
-  did and it was labelled a deferral at the time. main() is a dry run and writes
-  nothing; applying a plan is a separate deliberate act.
+EVERY OTHER ROADMAP ITEM IS BLOCKED ON THE OPERATOR PLAYING. There has been NO
+NEW GAME DATA SINCE 2026-08-30. Do not schedule a capture session; fold those
+items into whichever session next has the game running. Ask, do not guess, and
+do not read a date out of a document:
+    python -c "from ops.loop import watch; print(watch.check_watcher().reason)"
+Read it as an UPPER BOUND: a QUIET answer is trustworthy, a RECENT one means a
+copy happened, which is not the same as new data.
 
-CLOSED THIS SESSION, ALL PUSHED (origin/main is at the wrap commit)
-  OPS-57  Both continuity documents split into archives, budgets LOWERED rather
-          than raised, and three of the item's own filed counts corrected.
+ONE THING WAITING ON THE OPERATOR, NOT ON A SESSION - FROM OPS-62
+A PAIR-BUDGET FIRING HAS NO MECHANICAL REMEDY. A live-budget firing is answered
+by re-running tools/doc_archive.py. A pair firing cannot be, because the pair
+total is precisely what a split does not change. The only answers are a real
+reduction in content - which this repository's own rules forbid for the ledger,
+where an entry is written in full for a cold session - or an operator ruling:
+move the archives out of this repository, or accept a higher bound.
 
-FILED THIS SESSION, NOT STARTED
-  OPS-61  THIS IS THE NEXT ITEM. See below.
-  OPS-62  The two archives are UNBUDGETED and no growth model fits a step-wise
-          document. Filed as a stated cost of OPS-57 rather than absorbed.
-  OPS-63  The source register never reads ROADMAP.md. Predates the split; the
-          split only made it visible.
-  OPS-64  tools/archive_link_guard.py accepts any argv and silently ignores it.
-          Found by the wrap's refutation pass while trying to break the guard.
-  OPS-35, OPS-36 remain open and operator-ruled; do not act on them alone.
-
-NEXT ITEM - OPS-61, and it is already measured
-Every hook command in .claude/settings.json names an ABSOLUTE repository root:
-
-    "command": "python C:/Lanternlight/ops/inbox_watch.py"
-
-ops/inbox_watch.py resolves its repo root from its own file location, not from
-the working directory. Measured this session: invoked from an unrelated
-directory it still reported the ORIGINAL tree's 99 notes without a word about
-which tree it had read. So in a clone at any other path, and in every git
-WORKTREE - which is where lane sessions actually run - the hook does not run
-that tree's script at all.
-
-That is worse than not firing. A hook that does not fire reports nothing; this
-one FIRES, SUCCEEDS, and answers a question about a different repository.
-
-  Two answers that are already measured, so you do not re-derive them:
-    wiring   TRACKED    .claude/settings.json, git index mode 100644
-    inbox    IGNORED    .gitignore line 196, moon_sync_inbox/
-  And the good half: a real clone running its OWN script prints
-    "CANNOT READ - <path> does not exist. This is a FAILURE to look, NOT
-     'nothing new'." and EXITS 0.
-  So the honest-report property is already built. The defect is the path.
-
-  WHY NO EXISTING GUARD CATCHES IT, which is the part worth keeping:
-  tests/test_no_hardcoded_home_path.py exists for this class and does not reach
-  this instance. OPS-38 generalised it once - from this machine's literal
-  account name to the SHAPE of any home directory under any account - and
-  stopped there. C:/Lanternlight carries no account name, so it passes cleanly.
-
-  Acceptance criterion 2 is the one that will bite: the demonstration must be
-  END-TO-END, in a real clone at a different path AND a real git worktree.
-  Presence, registration and a green exit are three facts and none of them is
-  the fact that the hook read the right tree.
+  DO NOT SILENTLY RAISE A PAIR BUDGET WHEN IT FIRES. Headroom at this wrap is
+  roughly 12 sessions on both pairs, so this is not urgent - but it is a
+  DECISION GATE and PAIR_LOW_HEADROOM_SESSIONS deliberately warns further out
+  than the per-document threshold so the warning arrives before the wall.
 
 THE MEASUREMENT THAT MATTERS MOST THIS SESSION
-THE STAGED TREE IS A DIFFERENT TREE, and it bit three times in one session. A
-fully green `python -m pytest` against the working tree was followed twice by
-the pre-commit hook REFUSING the commit, because
-tests/test_source_register.py's denylist-minimality check only sees a file once
-`git ls-files` reports it - which happens at STAGING. ARCHIVE.md and archive.py
-in the first commit, SECURITY.md in the second.
+A HOOK THAT FIRES AND ANSWERS ABOUT A DIFFERENT REPOSITORY DOES NOT MERELY
+REPORT - IT WRITES. OPS-61's filed text said a worktree's hook "answers a
+question about a different repository". The pre-fix control measured more than
+that: with the old wiring restored, a real headless session running IN a
+worktree rewrote the PRIMARY checkout's ops/runtime/inbox_reported.json AND its
+inbox_seen.json, while the worktree's own records were never written. Both
+hashes differed from the pre-experiment snapshot and both were restored from it.
 
-  A green suite is not a green commit. If you are about to claim green, say
-  which tree you measured.
+  An acknowledgement written into the wrong tree EATS MAIL in a tree nobody was
+  working in. A wrong answer is recoverable by looking again; that is not.
 
-THE WRAP'S REFUTATION REFUTED TWO OF THIS SESSION'S OWN CLOSURE CLAIMS, and both
-were PROSE in a CLOSED section - the seventh time in three sessions.
+THREE EXISTING GUARDS WERE GREEN BECAUSE OF THE DEFECT
+None was weakened to fix it. Each was measuring a proxy that only held while the
+hook commands named an absolute root:
 
-  1. The OPS-57 outcome stated "633,871 -> 175,390 git blob bytes" as a flat
-     fact. Measured at the closing commit: 193,854. Not a mis-measurement - the
-     figure was correct AT THE INSTANT OF THE SPLIT, and the document then grew
-     because the session wrote its own closure into it. DATE A SIZE, OR DO NOT
-     QUOTE ONE.
-  2. Criterion 5's headroom (5.1 and 5.0 sessions) was derived from those
-     superseded sizes; the guard said 4.5 and 4.5. Corrected in ROADMAP.md and
-     in two comment blocks in tools/doc_size_budget.py.
+  1. test_every_hook_command_names_a_script_that_exists required every .py token
+     in a hook command to be a file on THIS machine, which can only pass while
+     the token is an absolute literal path. It now resolves against the running
+     tree - strictly stronger, because the old form silently SKIPPED any token
+     it did not recognise as a path.
+  2. The same file's no-backslash assertion banned a backslash ANYWHERE in the
+     raw settings text. CLAUDE.md's rule is narrower - a single-backslash
+     WINDOWS PATH breaks the parse - and shell quoting needs an escaped quote.
+  3. tests/test_inbox_watch.py ran the SessionStart command through subprocess
+     and its own name said end-to-end, while executing a command line that
+     resolved the PRIMARY checkout regardless of tree.
 
-  Note the blind spot, unchanged: the id guard scores headings and ledger
-  closures and says NOTHING about whether a section's body is true.
+  If a fix makes a guard red, read the guard before believing the fix is wrong.
+  Twice this session that red was the guard admitting what it had really been
+  measuring.
 
-FOUR CORRECTIONS THIS SESSION MADE TO ITS OWN CLAIMS
-  1. The first anchor-rule comparison reported 84 of 84 headings disagreeing
-     between the splitter and the guard. That was a claim about the CALL - the
-     "## " prefix was passed into a function expecting stripped text. On
-     stripped text they agree on all 84 and on 8 synthetic probes.
-  2. The reasoning that archiving hides a roadmap id is WRONG. spent_ids matches
-     any mention, and every archived section leaves a stub naming its id. It is
-     the LEDGER half that leaves no stub.
-  3. The first ops_ids repair covered two of five readers and the suite stayed
-     green while over_allocated() returned {} for a repo with two known
-     collisions. Changing WHERE a module reads from is a change to EVERY reader.
-  4. The README ledger figure was written as 200 and corrected to 199: the two
-     ledger files carry 200 `### LL-` headings and one is the format TEMPLATE.
+FOUR WAYS A MEASUREMENT LIED THIS SESSION, ALL CAUGHT, ALL WORTH KNOWING
+  1. A MUTATION THAT FAILED TO APPLY PRINTED A GREEN SUITE. The first OPS-66
+     mutation did not match its anchor; the targeted run then said 67 passed,
+     which reads exactly like a mutation that killed nothing. Only the anchor
+     assertion said otherwise. CRLF was checked and ruled out. ALWAYS ASSERT
+     THE ANCHOR MATCHED BEFORE BELIEVING A SURVIVOR.
+  2. A MUTATION HARNESS HID SWAPPED IDENTITIES. The OPS-65 slice's first driver
+     reported per-run summary lines in which a mutation could appear to kill the
+     wrong test. Rebuilt per-test before any result was believed.
+  3. A TEST WAS VACUOUS ONLY IN THE PRIMARY TREE. Hardcoding ops/handoff.py's
+     default target did not kill test_the_default_target_follows_the_tree,
+     because in the primary checkout the hardcoded and resolved values are the
+     same string. It now loads the module from a copy in a temporary tree.
+  4. MY OWN PROBE OF THE COMMIT GATE WAS INVALID and that is how CLAUDE.md's
+     stale caveat was found. An echo naming the forbidden cmdlet inside a
+     sentence RAN, because OPS-22 narrowed the check to COMMAND POSITION. The
+     valid probe - the name in command position - was refused, and the refusal
+     text also proved the PreToolUse hook was live on the NEW quoted command
+     form mid-session, because the harness quoted the command back.
 
-LL-0199 IS THE ONE TO READ FOR A GENERAL LESSON
-Recording WHICH ids the split had made invisible put all five back into live
-documents, so LL-0197's 60-to-55 measurement no longer reproduces - it is 63/63
-now. The act of writing a measurement down destroyed the condition it measured.
-The archive read is therefore DORMANT in spent_ids and LIVE in over_allocated;
-do not read a green spent_ids as evidence the archive read is unnecessary.
+WRITING A MEASUREMENT DOWN KEEPS CHANGING THE THING MEASURED - THREE TIMES TODAY
+LL-0199 named this shape and it recurred twice more. OPS-62's outcome quoted the
+pair totals measured at the merge; writing that outcome into ROADMAP.md moved the
+ROADMAP pair from 702,038 to 711,879 bytes and its headroom from 11.9 sessions to
+11.6. Both instants are in the item now. Separately, this session's own closure
+prose introduced two new host-shaped tokens - NOPE.md and sys.argv - into a guard
+that had just been widened to read the document doing the writing.
 
-GITHUB SIDE, done this session
-Community standards are at 100 percent. CODE_OF_CONDUCT.md, CONTRIBUTING.md,
-SECURITY.md and .github/PULL_REQUEST_TEMPLATE.md now exist, written for this
-project rather than templated. Repo topics widened 15 -> 19. README re-measured
-from a real fresh clone at a foreign path.
+  DATE A SIZE, OR DO NOT QUOTE ONE. Ask
+  `python tools/doc_size_budget.py` for headroom in SESSIONS; it is the only
+  figure that cannot go stale.
 
-NO NEW GAME DATA SINCE 2026-08-30 - TEN DAYS AT THIS WRAP
-Every roadmap item blocked on the operator playing has been blocked that whole
-time. Do not schedule a capture session; fold those into whichever session next
-has the game running.
+HOW TO WRITE THE NEXT HAND-OFF - CHANGED THIS SESSION
+    python ops/handoff.py --from-file <draft>
+OMIT --target. OPS-65: the writer resolves its own root from its own file
+location, so a wrap writes the hand-off of THE TREE IT IS WRAPPING. The ritual
+used to pass an absolute path, and measured from a real worktree it wrote the
+OTHER tree's tracked hand-off while git status in the wrapping tree stayed clean.
+The writer still runs the redactor over the STRING and refuses BEFORE anything is
+written, so a refusal leaves the previous hand-off byte-unchanged. No exemption
+list, no override flag. --check-only reports without writing.
 
-  ASK, do not guess, and do not read a date out of a document:
-    python -c "from ops.loop import watch; print(watch.check_watcher().reason)"
-  Read it as an UPPER BOUND: a QUIET answer is trustworthy, a RECENT one means a
-  copy happened, which is not quite the same as new data.
-
-STATE AT THE WRAP - re-derive rather than quoting these
+STATE AT THE WRAP - RE-DERIVE RATHER THAN QUOTING
   origin/main       three commits this session. Confirm with
                     `git rev-parse HEAD origin/main` and `git log --oneline -5`.
-  python -m pytest  bare. Read the last line yourself; `-q` is already in
-                    pytest.ini, so a second one prints NO summary at all.
-  python -m ruff check .   clean at the wrap.
-  loop              cycle 65, item OPS-61, in_flight empty.
-  capture watcher   ARMED, identity VERIFIED, all surfaces fresh, heartbeat
-                    inside its threshold. ARCHIVE state reads UNKNOWN, which is
-                    correct and expected: the live process was armed by a build
-                    older than OPS-59 and writes no archive map. UNKNOWN is a
-                    THIRD answer, not a report that nothing was copied.
-  budgets           ROADMAP.md 340,000 and docs/LEDGER.md 420,000, both LOWERED
-                    from 700,000 and 900,000. Ask the guard for headroom:
-                    `python tools/doc_size_budget.py` states it in SESSIONS and
-                    is the only figure that cannot go stale.
+                    NOTE: main has NO UPSTREAM in .git/config, so a bare
+                    `git push` fails with "no upstream branch" and the advice
+                    text is easy to mistake for success when piped to tail.
+                    Use `git push origin main` and then re-derive with
+                    `git rev-parse`.
+  python -m pytest  bare. A second -q prints NO summary line at all, because
+                    pytest.ini already carries one.
+  loop              cycle 67 closed OPS-62 and OPS-65. Advance it yourself.
+  capture watcher   ARMED, identity confirmed, heartbeat inside its threshold.
+                    ARCHIVE state reads UNKNOWN, which is correct: the live
+                    process was armed by a build older than OPS-59 and writes no
+                    archive map. UNKNOWN is a THIRD answer, not a report that
+                    nothing was copied.
+  budgets           Two channels now. Per-document, and the OPS-62 PAIR channel
+                    which is the one that bounds the archives. Ask the module.
 
 BEFORE DISPATCHING PARALLEL WORK
 Read SHARED_WORKTREE_BAN in ops/store_drift.py and put it in every slice brief -
 it is ADVISORY and nothing enforces it. Record dispatches with state.dispatch(),
-read state.in_flight_summary(state.load()) FIRST, and capture a per-file
-baseline AT DISPATCH to hand the merge gate as per_file_baseline.
+read state.in_flight_summary(state.load()) FIRST, and capture a per-file baseline
+AT DISPATCH to hand the merge gate as per_file_baseline.
 
-  RETIRE YOUR SLICES. This session dispatched six and retired none until the
-  wrap, so in_flight read 6 while three were long finished.
+  DO NOT RUN TWO PYTEST PROCESSES AT ONCE. Give every slice a targeted run over
+  its OWN test files only and keep the full suite for the merge. This session
+  ran three pairs of slices that way with no spurious red;
+  tools/doc_size_budget.py calls `git hash-object -w`, which writes loose objects
+  into the real repository, and tests/test_store_drift.py counts them.
 
-  AND DO NOT RUN TWO PYTEST PROCESSES AT ONCE. A subagent's repo-wide run
-  overlapped the merger's and tests/test_store_drift.py went red; it passes
-  alone. tools/doc_size_budget.py calls `git hash-object -w`, which writes loose
-  objects into the real repository, so the object store genuinely moves under a
-  test that counts it. OPS-8, "the suite is not safe to run CONCURRENTLY", is
-  CLOSED - whether that closure needs revisiting is a question recorded in
-  LL-0198 for the operator, not one to answer alone.
-
-HOW TO WRITE THE NEXT HAND-OFF
-  python ops/handoff.py --from-file <draft> --target C:/Lanternlight/LL-NEXT-SESSION.txt
-It runs the redactor over the STRING and refuses BEFORE anything is written, so
-a refusal leaves the previous hand-off byte-unchanged and exits 1. No exemption
-list, no override flag. --check-only reports without writing.
-
-OPS-48 IS HELD BY OPERATOR RULING - do not answer its four questions, do not
-solicit RC or RSC. OPS-52 IS CLOSED BY OPERATOR RULING - "leave the history as
-is"; do not re-file it, and do not treat finding the operator's address in
-git log as a new leak.
-
-then start the loop
+  RETIRE YOUR SLICES. state.retire() is ITEM-scoped, not lane-scoped, so it
+  clears every lane recorded against an item at once - which means you cannot
+  retire one lane of a two-lane item while the other still runs. Retire at the
+  merge, and know that in_flight reads high until you do.

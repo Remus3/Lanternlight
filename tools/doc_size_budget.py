@@ -67,6 +67,66 @@ guard someone disables. :attr:`Report.ok` therefore still depends only on
 :attr:`Report.findings`, exactly as before; :attr:`Report.low_headroom` is a
 separate, additive channel.
 
+THE ARCHIVES ARE NOT BUDGETED INDIVIDUALLY, AND THAT IS A DECISION. ROADMAP
+``OPS-62``, decided 2026-09-08. If you came here looking for a budget on
+``docs/ROADMAP_ARCHIVE.md`` or ``docs/LEDGER_ARCHIVE.md``, there is none by
+choice, the reason is recorded in :data:`UNBUDGETED_BY_DECISION` keyed by those
+exact paths, and the real bound on them is :data:`PAIR_BUDGETS`.
+
+Why not a per-archive budget. ``OPS-57`` split both continuity documents, and a
+budget is only meaningful next to a growth rate. An archive does not grow the
+way a live document does: it gains nothing at all between splits, then takes
+one large step when a split runs. So its rate would have to be measured in
+bytes per SPLIT, and there has been exactly one split - a slope through one
+point is not a measurement, and this repository omits rather than guesses.
+
+What is budgeted instead: THE PAIR. :data:`PAIR_BUDGETS` bounds the live
+document and its archive TOGETHER, as one total. Three things recommend it over
+any per-archive number:
+
+- **A split cannot game it.** Splitting moves bytes from the live half to the
+  archive half and leaves the pair total almost untouched, so the pair budget
+  measures the thing that actually grows - total continuity prose in the
+  repository - rather than the thing a split rearranges. This is the exact hole
+  ``OPS-62`` was filed about: with only live budgets, the documented response
+  to a firing (re-run the split) moves bytes into a file nothing watches, and
+  the guard then reports OK forever.
+- **Its rate is already measured, over six sessions, not one split.** Before
+  the split the live document WAS the whole pair - the archive did not exist -
+  so the six-session per-session append rates in
+  :data:`SESSION_GROWTH_RATES` are pair rates as they stand. The pair model
+  reuses them rather than declaring a second copy.
+- **It keeps both halves visible.** :attr:`Report.components` carries each
+  half's own byte count beside the total, so a reader can still see which half
+  the bytes are in even though only the sum is bounded.
+
+THE ONE PROVISIONAL TERM, STATED HERE AND IN THE REPORT ITSELF. ``OPS-62``
+criterion 2 requires two splits or a written admission of one. There has been
+one, so :class:`PairGrowthModel` carries ``splits_measured`` (1 today), reports
+``provisional`` while that is under two, and :meth:`Report.format` prints the
+caveat next to every sessions figure it qualifies. The provisional term is
+``split_overhead_bytes``: a split is not perfectly byte-conserving, because it
+leaves a stub per archived section in the live document and writes a header
+into the archive, so the pair total steps UP slightly each time one runs. That
+overhead is amortized over the sessions between splits and ADDED to the append
+rate, which shortens the reported headroom - the conservative direction, and the
+same reasoning that made :data:`SESSION_GROWTH_RATES` use the high median.
+
+THE COST OF THIS DECISION, which is real and is not hidden by it. First, no
+individual archive is bounded, so an archive growing on its own - somebody
+appending directly to it rather than through a split - consumes pair headroom
+indistinguishably from ordinary growth in the live half. The components in the
+report are the only mitigation; nothing guards it. Second, and more important:
+a pair budget firing has NO mechanical remedy. A live budget firing is answered
+by re-running ``tools/doc_archive.py``; a pair budget firing cannot be, because
+the split is what the pair total ignores. The only answers are a real reduction
+in content (which this repository's own rules forbid for the ledger, since an
+entry is written in full for a cold session) or an operator ruling - move the
+archives out of this repository, or accept a higher bound. So a pair firing is
+a DECISION GATE for the operator, not a chore, which is why
+:data:`PAIR_LOW_HEADROOM_SESSIONS` warns further out than the per-document
+threshold does.
+
 WHAT COUNTS AS FAILURE. A watched path that does not exist on disk is a
 Finding, not a silent pass - a missing file trivially satisfies "under
 budget" for reasons that have nothing to do with the document being small,
@@ -86,15 +146,24 @@ from pathlib import Path
 __all__ = [
     "BUDGETS",
     "LOW_HEADROOM_SESSIONS",
+    "PAIRS",
+    "PAIR_BUDGETS",
+    "PAIR_GROWTH",
+    "PAIR_LOW_HEADROOM_SESSIONS",
     "REPO_ROOT",
     "SESSION_GROWTH_RATES",
+    "UNBUDGETED_BY_DECISION",
+    "DocumentPair",
     "Finding",
     "GrowthRate",
+    "PairGrowthModel",
     "Report",
     "check_budgets",
+    "check_pair_budgets",
     "git_blob_size",
     "headroom_sessions",
     "main",
+    "pair_headroom_sessions",
 ]
 
 #: Repository root, resolved from this file's location: tools/doc_size_budget.py.
@@ -244,16 +313,235 @@ SESSION_GROWTH_RATES: dict[str, GrowthRate] = {
 
 
 @dataclass(frozen=True)
+class DocumentPair:
+    """A live continuity document and the archive its closed content moves to.
+
+    Both halves are repo-relative paths, keyed exactly like :data:`BUDGETS`.
+    The pair exists because a split moves bytes between the two and the sum is
+    what actually grows - see the module docstring's section on why the archives
+    are not budgeted individually.
+    """
+
+    live: str
+    archive: str
+
+
+@dataclass(frozen=True)
+class PairGrowthModel:
+    """Per-session growth of one live-plus-archive PAIR, in git-blob bytes.
+
+    Two terms, with very different evidence behind them, kept separate on
+    purpose so a reader can see which one is solid:
+
+    ``append_median`` is the live document's measured per-session append rate
+    from :data:`SESSION_GROWTH_RATES` - six sessions, and before the ``OPS-57``
+    split the live document was the entire pair, so that figure is already a
+    pair rate rather than an analogy to one.
+
+    ``split_overhead_bytes`` is how much the pair TOTAL rose across the one
+    split that has happened. A split is not byte-conserving: it leaves an
+    archive-index stub per moved section in the live half and writes a header
+    into the archive. This term rests on a SINGLE split and is therefore
+    provisional - :attr:`provisional` says so, and the report prints it beside
+    the number it qualifies.
+
+    ``split_interval_sessions`` is derived, not declared: the sessions a live
+    document takes to travel from its post-split size to its own budget, which
+    is when the next split runs. :attr:`effective_rate` amortizes the split
+    overhead across that interval and adds it to the append rate, so the
+    reported headroom accounts for the splits that will happen inside it. The
+    direction is deliberate - adding the term shortens reported headroom, and
+    underestimating growth is the failure this whole check exists to stop.
+    """
+
+    append_median: int
+    live_budget: int
+    live_size_at_split: int
+    split_overhead_bytes: int
+    splits_measured: int = 1
+
+    @property
+    def provisional(self) -> bool:
+        """True while the split-overhead term rests on fewer than two splits.
+
+        One point is not a slope. ``OPS-57`` refused a re-measurement on that
+        ground and ``OPS-62`` explicitly declined an exemption from it, so this
+        stays true until a second split has been measured.
+        """
+        return self.splits_measured < 2
+
+    @property
+    def split_interval_sessions(self) -> float:
+        """Sessions from one split to the next, derived from the live budget.
+
+        Returns ``0.0`` when the live document is already at or past its budget
+        at the moment it was measured, which would mean a split is due
+        immediately; callers must not divide by this without checking.
+        """
+        if self.append_median <= 0:
+            return 0.0
+        remaining = self.live_budget - self.live_size_at_split
+        if remaining <= 0:
+            return 0.0
+        return remaining / self.append_median
+
+    @property
+    def per_session_split_overhead(self) -> float:
+        """The one-off split overhead spread across one split interval."""
+        interval = self.split_interval_sessions
+        if interval <= 0 or self.split_overhead_bytes <= 0:
+            return 0.0
+        return self.split_overhead_bytes / interval
+
+    @property
+    def effective_rate(self) -> float:
+        """Bytes a pair gains per session, appending plus amortized overhead."""
+        return self.append_median + self.per_session_split_overhead
+
+
+#: The live-plus-archive pairs this module bounds as totals, keyed by a short
+#: pair name. Created by the ``OPS-57`` split; bounded as pairs by ``OPS-62``.
+PAIRS: dict[str, DocumentPair] = {
+    "ROADMAP": DocumentPair(live="ROADMAP.md", archive="docs/ROADMAP_ARCHIVE.md"),
+    "LEDGER": DocumentPair(live="docs/LEDGER.md", archive="docs/LEDGER_ARCHIVE.md"),
+}
+
+# WHY EACH ARCHIVE HAS NO BUDGET OF ITS OWN, keyed by the archive path itself so
+# that a reader who greps this file for the archive they were looking for lands
+# on the decision instead of on silence. ``OPS-62`` criterion 4 asks for exactly
+# that: the decision recorded WITH ITS COST, where it will be looked for.
+UNBUDGETED_BY_DECISION: dict[str, str] = {
+    "docs/ROADMAP_ARCHIVE.md": (
+        "No individual budget, by decision (ROADMAP OPS-62, 2026-09-08). An "
+        "archive gains nothing between splits and then takes one large step "
+        "when a split runs, so its rate would be bytes per SPLIT and only one "
+        "split has happened - a slope through one point is not a measurement. "
+        "The bound lives in PAIR_BUDGETS['ROADMAP'], on ROADMAP.md and this "
+        "file TOGETHER, which is the figure a split cannot game. COST: this "
+        "file growing on its own is indistinguishable from the live half "
+        "growing, and a pair budget firing has no mechanical remedy - re-"
+        "running the split will not relieve it, so it is an operator decision "
+        "gate. See the module docstring for the full statement."
+    ),
+    "docs/LEDGER_ARCHIVE.md": (
+        "No individual budget, by decision (ROADMAP OPS-62, 2026-09-08). Same "
+        "reasoning as docs/ROADMAP_ARCHIVE.md: step-wise growth measured across "
+        "exactly one split is not a rate, and this repository omits rather than "
+        "guesses. The bound lives in PAIR_BUDGETS['LEDGER'], on docs/LEDGER.md "
+        "and this file TOGETHER. COST: no attribution between the halves, and a "
+        "pair firing is an operator decision gate rather than a chore, because "
+        "the ledger's own rules forbid compressing an entry to save bytes."
+    ),
+}
+
+#: A PAIR with fewer than this many sessions of headroom is flagged. Four, not
+#: the two used per document, and the difference is the remedy rather than the
+#: risk: a live budget firing is answered mechanically by re-running the split,
+#: while a pair budget firing needs an operator ruling (see the module
+#: docstring's cost statement). Four sessions is about one split interval at the
+#: measured rates, so the warning arrives with a full cycle in hand rather than
+#: with one session. Like :data:`LOW_HEADROOM_SESSIONS` this is a WARNING
+#: threshold and never a failure threshold.
+PAIR_LOW_HEADROOM_SESSIONS = 4.0
+
+# Per-pair growth models. MEASURED 2026-09-08 for ``OPS-62``.
+#
+# METHOD, so it is repeatable rather than trusted. Every figure below is a git
+# blob size read straight out of history, which means anybody can reproduce it
+# without re-running a session:
+#
+#   git cat-file -s $(git rev-parse <rev>:<path>)
+#
+# at rev ``0eb6217`` (the commit that closed ``OPS-57`` and performed the split)
+# and at its parent ``0eb6217^`` (the last commit before any archive existed):
+#
+#   ROADMAP.md              0eb6217^  633,871      0eb6217  193,854
+#   docs/ROADMAP_ARCHIVE.md 0eb6217^  ABSENT       0eb6217  475,473
+#   docs/LEDGER.md          0eb6217^  867,833      0eb6217  295,174
+#   docs/LEDGER_ARCHIVE.md  0eb6217^  ABSENT       0eb6217  586,771
+#
+# So the ROADMAP pair went from 633,871 to 669,327 across the split (+35,456)
+# and the LEDGER pair from 867,833 to 881,945 (+14,112). Those deltas are the
+# ``split_overhead_bytes`` below.
+#
+# TWO CAVEATS ON THAT NUMBER, both of which a reader deserves rather than a
+# clean-looking figure. It rests on ONE split, so it is provisional and says so
+# in code (:attr:`PairGrowthModel.provisional`). And the split commit also
+# carried that session's own prose - a closure, an archive index and three new
+# items - which cannot be separated from the split's structural overhead in a
+# commit-level measurement, so each delta is an UPPER BOUND on the overhead
+# rather than the overhead exactly. An upper bound here raises the effective
+# rate and shortens the reported headroom, which is the safe direction and the
+# same choice the high median made in SESSION_GROWTH_RATES above.
+PAIR_GROWTH: dict[str, PairGrowthModel] = {
+    "ROADMAP": PairGrowthModel(
+        append_median=SESSION_GROWTH_RATES["ROADMAP.md"].median,
+        live_budget=340_000,
+        live_size_at_split=193_854,
+        split_overhead_bytes=35_456,
+        splits_measured=1,
+    ),
+    "LEDGER": PairGrowthModel(
+        append_median=SESSION_GROWTH_RATES["docs/LEDGER.md"].median,
+        live_budget=420_000,
+        live_size_at_split=295_174,
+        split_overhead_bytes=14_112,
+        splits_measured=1,
+    ),
+}
+
+# PAIR BUDGETS, and how each number was arrived at - because a budget nobody can
+# re-derive is a number that looks measured.
+#
+# Measured 2026-09-08, working tree, with this module's own git_blob_size:
+#   ROADMAP pair  226,565 + 475,473 = 702,038
+#   LEDGER pair   314,927 + 586,771 = 901,698
+#
+# The effective rates the models above produce are roughly 40,286 bytes per
+# session for the ROADMAP pair (32,421 appending plus 35,456 of split overhead
+# spread over a 4.51-session split interval) and roughly 30,708 for the LEDGER
+# pair (27,589 plus 14,112 over 4.52 sessions). Run the module rather than
+# trusting either figure; both are derived properties, not constants.
+#
+# THE HORIZON IS TWELVE SESSIONS, AND THAT PART IS A JUDGEMENT, not a
+# measurement. The rate under it is measured; the choice of how much headroom to
+# grant is not, and pretending otherwise is how a guessed number starts looking
+# derived. Twelve was chosen because a pair firing is an operator decision gate
+# with no mechanical remedy: at roughly two and a half split intervals it is far
+# enough out that the operator is not asked to rule every fortnight, and at
+# ~40 KB a session it is nowhere near the "buys a year" range that turns a
+# tripwire into a rubber stamp - which is the failure mode the 700,000 raise on
+# 2026-09-08 was labelled with before OPS-57 lowered it again.
+#
+# Twelve sessions of headroom on the measured totals gives 1,185,434 and
+# 1,270,230; both are rounded DOWN to a round number below, since rounding down
+# shortens headroom and is the conservative direction.
+#
+# WHEN ONE OF THESE FIRES, DO NOT RE-RUN THE SPLIT AND DO NOT RAISE THE NUMBER
+# ON YOUR OWN. The split does not move this figure (it nudges it up, by the
+# overhead above) and raising a budget to make a red run green is the antipattern
+# this repository has written down. It is an operator ruling: move the archives
+# out of this repository, accept a higher bound, or reduce content for real.
+PAIR_BUDGETS: dict[str, int] = {
+    "ROADMAP": 1_180_000,
+    "LEDGER": 1_270_000,
+}
+
+
+@dataclass(frozen=True)
 class Finding:
     """One watched document that failed the check.
 
-    ``kind`` is ``"missing"`` when the path does not exist on disk at all, or
+    ``kind`` is ``"missing"`` when the path does not exist on disk at all,
     ``"over_budget"`` when its measured git-blob size is AT OR OVER
     ``budget`` - the ROADMAP acceptance criterion says "at or over", so a size
-    exactly equal to the budget is a Finding, not a pass. ``size`` is
-    ``None`` only for a ``"missing"`` Finding; a document that was actually
-    measured always carries its measured size here, whether or not that size
-    is what tripped the Finding.
+    exactly equal to the budget is a Finding, not a pass - or
+    ``"pair_over_budget"`` when a live-plus-archive PAIR total is at or over its
+    :data:`PAIR_BUDGETS` entry, in which case ``path`` is the PAIR NAME rather
+    than a file path and ``detail`` names both halves and their sizes. ``size``
+    is ``None`` only for a ``"missing"`` Finding; anything actually measured
+    always carries its measured size here, whether or not that size is what
+    tripped the Finding.
     """
 
     kind: str
@@ -279,8 +567,22 @@ class Report:
     ABSENT from it rather than present with a placeholder, because unmeasured
     and "zero sessions left" are different facts and conflating them is how
     this check would start lying. ``low_headroom`` names the documents under
-    :data:`LOW_HEADROOM_SESSIONS`; it is a warning channel and deliberately
-    does NOT feed ``ok``.
+    ``low_headroom_threshold``; it is a warning channel and deliberately does
+    NOT feed ``ok``.
+
+    The remaining fields exist so one report shape can render both channels -
+    per-document budgets and the per-PAIR budgets ``OPS-62`` added - without a
+    second near-identical class drifting away from this one. ``title`` and
+    ``unit`` are wording only. ``low_headroom_threshold`` is carried on the
+    report rather than read from the module at render time, because the pair
+    channel warns at :data:`PAIR_LOW_HEADROOM_SESSIONS` and a rendered report
+    quoting the wrong threshold would be lying about its own rule.
+    ``components`` breaks a measured subject into its parts, which is how a pair
+    total stays attributable to a half even though only the sum is bounded.
+    ``provisional_notes`` carries a caveat to print beside a subject's sessions
+    figure - the pair model's split-overhead term rests on one split, and a
+    caveat that lives only in a report somebody wrote once is a caveat the next
+    reader never sees.
     """
 
     ok: bool
@@ -288,6 +590,11 @@ class Report:
     measured: dict[str, int]
     headroom_sessions: dict[str, float] = field(default_factory=dict)
     low_headroom: tuple[str, ...] = ()
+    title: str = "doc size budget"
+    unit: str = "document"
+    low_headroom_threshold: float = LOW_HEADROOM_SESSIONS
+    components: dict[str, dict[str, int]] = field(default_factory=dict)
+    provisional_notes: dict[str, str] = field(default_factory=dict)
 
     def format(self) -> str:
         """Render the report for a human, one finding per line.
@@ -306,12 +613,18 @@ class Report:
         words instead of showing a number nobody measured.
         """
         if self.ok:
-            lines = [f"doc size budget: OK ({len(self.measured)} document(s) measured)"]
+            lines = [
+                f"{self.title}: OK ({len(self.measured)} {self.unit}(s) measured)"
+            ]
         else:
-            lines = [f"doc size budget: {len(self.findings)} finding(s)"]
+            lines = [f"{self.title}: {len(self.findings)} finding(s)"]
             lines.extend(f"  [{f.kind}] {f.detail}" for f in self.findings)
         for path in sorted(self.measured):
             line = f"  [measured] {path}: {self.measured[path]} bytes"
+            parts = self.components.get(path)
+            if parts:
+                joined = " + ".join(f"{name} {size}" for name, size in parts.items())
+                line += f" ({joined})"
             left = self.headroom_sessions.get(path)
             if left is None:
                 line += ", headroom in sessions unknown - no measured growth rate"
@@ -319,9 +632,13 @@ class Report:
                 line += f", {left:.1f} sessions of headroom"
                 if path in self.low_headroom:
                     line += (
-                        f" - LOW HEADROOM (under {LOW_HEADROOM_SESSIONS:.1f} "
-                        "sessions; this is a warning, not a failure)"
+                        f" - LOW HEADROOM (under "
+                        f"{self.low_headroom_threshold:.1f} sessions; this is a "
+                        "warning, not a failure)"
                     )
+                note = self.provisional_notes.get(path)
+                if note:
+                    line += f" [{note}]"
             lines.append(line)
         return "\n".join(lines)
 
@@ -492,17 +809,183 @@ def check_budgets(
     )
 
 
-def main() -> int:
-    """Run the real check against :data:`BUDGETS` and print a human report.
+def pair_headroom_sessions(
+    name: str,
+    total: int,
+    budgets: dict[str, int] | None = None,
+    models: dict[str, PairGrowthModel] | None = None,
+) -> float | None:
+    """Return how many more sessions a PAIR can grow before it hits budget.
 
-    Exit code reflects the verdict (0 ok, 1 findings) so this can be wired
-    into a hook later by whoever owns that decision - nothing in this repo
-    calls this entry point today, by design; see the module docstring.
-    Never mutates a tracked file or the working tree.
+    ``(budget - total) / model.effective_rate``, the pair counterpart of
+    :func:`headroom_sessions`, and it follows the same three rules for the same
+    reasons: ``total`` is passed in rather than measured so the arithmetic can be
+    exercised at an exact boundary without shelling out to ``git``; the answer is
+    ``None`` rather than a number when the pair has no budget, no model or a
+    non-positive rate, because ``0.0`` would read as "fires next session" and
+    ``inf`` as "nothing to worry about" and nobody measured either; and the
+    result is NOT clamped at zero, so a pair already past its budget reports
+    negative sessions and "just fired" stays distinguishable from "far past".
+
+    The rate used is :attr:`PairGrowthModel.effective_rate`, which includes the
+    amortized split overhead. That term rests on one split and is provisional -
+    see the module docstring.
+    """
+    if budgets is None:
+        budgets = PAIR_BUDGETS
+    if models is None:
+        models = PAIR_GROWTH
+
+    budget = budgets.get(name)
+    model = models.get(name)
+    if budget is None or model is None:
+        return None
+    rate = model.effective_rate
+    if rate <= 0:
+        return None
+    return (budget - total) / rate
+
+
+def check_pair_budgets(
+    pairs: dict[str, DocumentPair] | None = None,
+    budgets: dict[str, int] | None = None,
+    models: dict[str, PairGrowthModel] | None = None,
+    repo_root: Path = REPO_ROOT,
+) -> Report:
+    """Check each live-plus-archive PAIR total against its pair budget.
+
+    This is the ``OPS-62`` channel: the archives created by the ``OPS-57`` split
+    carry no budget of their own (see :data:`UNBUDGETED_BY_DECISION` and the
+    module docstring), and the bound on them is the sum of each archive and its
+    live half. A split moves bytes between the halves without changing that sum,
+    which is precisely why the sum is what gets bounded - it is the one figure
+    the documented response to a firing cannot quietly relieve.
+
+    Every argument is overridable so this can be exercised against throwaway
+    fixtures. Failure semantics match :func:`check_budgets` exactly: a half that
+    does not exist on disk is a ``"missing"`` Finding rather than a cheap pass, a
+    total AT OR OVER budget is a ``"pair_over_budget"`` Finding, the scan never
+    returns early so every problem in one run is reported together, and low
+    headroom is a warning that never touches ``Report.ok``.
+
+    A pair with a missing half is absent from ``Report.measured`` rather than
+    present with a total that silently omits the missing half - "unmeasurable"
+    and "small" are different facts, and conflating them is how this check would
+    start lying.
+    """
+    if pairs is None:
+        pairs = PAIRS
+    if budgets is None:
+        budgets = PAIR_BUDGETS
+    if models is None:
+        models = PAIR_GROWTH
+
+    findings: list[Finding] = []
+    measured: dict[str, int] = {}
+    components: dict[str, dict[str, int]] = {}
+    sessions_left: dict[str, float] = {}
+    low_headroom: list[str] = []
+    provisional_notes: dict[str, str] = {}
+
+    for name, pair in pairs.items():
+        budget = budgets.get(name, 0)
+        halves: dict[str, int] = {}
+        complete = True
+        for rel_path in (pair.live, pair.archive):
+            full_path = repo_root / rel_path
+            if not full_path.is_file():
+                complete = False
+                findings.append(
+                    Finding(
+                        kind="missing",
+                        path=rel_path,
+                        budget=budget,
+                        size=None,
+                        detail=(
+                            f"{rel_path}: WATCHED PATH DOES NOT EXIST, so pair "
+                            f"{name} cannot be measured at all (pair budget "
+                            f"{budget} bytes) - a missing half is a check "
+                            "failure, not a small pair"
+                        ),
+                    )
+                )
+                continue
+            # git_blob_size keeps its own default git_cwd for the reason given
+            # in check_budgets: repo_root is only where watched paths resolve
+            # from and is generally not a git repository in a fixture.
+            halves[rel_path] = git_blob_size(full_path)
+
+        if not complete:
+            continue
+
+        total = sum(halves.values())
+        measured[name] = total
+        components[name] = halves
+
+        model = models.get(name)
+        if model is not None and model.provisional:
+            provisional_notes[name] = (
+                "model provisional: its split-overhead term rests on "
+                f"{model.splits_measured} split"
+            )
+
+        left = pair_headroom_sessions(name, total, budgets=budgets, models=models)
+        if left is not None:
+            sessions_left[name] = left
+            if left < PAIR_LOW_HEADROOM_SESSIONS:
+                low_headroom.append(name)
+
+        if total >= budget:
+            over = total - budget
+            breakdown = " + ".join(f"{p} {n}" for p, n in halves.items())
+            findings.append(
+                Finding(
+                    kind="pair_over_budget",
+                    path=name,
+                    budget=budget,
+                    size=total,
+                    detail=(
+                        f"pair {name}: {total} bytes ({breakdown}), at or over "
+                        f"its {budget}-byte pair budget ({over} bytes over) - "
+                        "re-running the split will NOT relieve this; it is an "
+                        "operator ruling, see PAIR_BUDGETS"
+                    ),
+                )
+            )
+
+    return Report(
+        ok=not findings,
+        findings=tuple(findings),
+        measured=measured,
+        headroom_sessions=sessions_left,
+        low_headroom=tuple(low_headroom),
+        title="doc pair size budget",
+        unit="pair",
+        low_headroom_threshold=PAIR_LOW_HEADROOM_SESSIONS,
+        components=components,
+        provisional_notes=provisional_notes,
+    )
+
+
+def main() -> int:
+    """Run both real checks and print a human report for each.
+
+    Two channels, printed in order: the per-document budgets in :data:`BUDGETS`
+    and the per-pair budgets in :data:`PAIR_BUDGETS`. Both are printed on every
+    run, because the pair channel exists to make the two archives visible and an
+    archive that only appears in the output when it fails is an archive nobody
+    watches shrinking towards a bound.
+
+    Exit code reflects the combined verdict (0 ok, 1 findings) so this can be
+    wired into a hook later by whoever owns that decision - nothing in this repo
+    calls this entry point today, by design; see the module docstring. Never
+    mutates a tracked file or the working tree.
     """
     report = check_budgets()
     print(report.format())
-    return 0 if report.ok else 1
+    pair_report = check_pair_budgets()
+    print(pair_report.format())
+    return 0 if report.ok and pair_report.ok else 1
 
 
 if __name__ == "__main__":

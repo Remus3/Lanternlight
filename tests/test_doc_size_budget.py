@@ -47,6 +47,27 @@ that this flag does NOT change ``ok`` - the pre-commit hook selects this test
 module when either budgeted document is staged, so turning a warning into a
 failure here would start refusing ordinary commits.
 
+THE PAIR CHANNEL, AND WHY IT IS TESTED AGAINST A GROWN ARCHIVE. ``OPS-62``
+added a second channel: the two archives the ``OPS-57`` split created carry no
+budget of their own, by decision, and the bound is on each live document and its
+archive TOGETHER. The bug that motivated it is a specific, testable shape - a
+live document comfortably inside its own budget beside an archive that has grown
+large - and :class:`TestArchiveGrowthAloneFiresThePairBudget` builds exactly
+that tree and asserts BOTH halves of the claim in one place: the live-only check
+reports OK on it while the pair check fails. A single assertion on the new check
+would leave "the old guard was blind" as narration; asserting both makes the
+blindness itself a measurement, and makes any future regression that stops
+looking at the archive show up as a red test rather than as a quiet OK.
+
+The decision not to budget the archives individually is itself pinned, in
+:class:`TestArchivesAreUnbudgetedByRecordedDecision`, because criterion 4 asks
+for the decision recorded WITH ITS COST where a reader looking for the missing
+archive budget will find it - which makes the note a tested artifact rather than
+a comment that can rot. And the model rests on ONE split, so
+:class:`TestTheProvisionalCaveatIsInTheCodeNotOnlyInAReport` pins that the code
+says so and that the rendered report repeats it: a caveat stated in chat but
+dropped from the artifact is a lie in the artifact.
+
 Fixture files live under ``tmp_path`` (never under this repo's own tree) and
 are pure ASCII with no line breaks at all, so git's text/eol normalization has
 nothing to rewrite and the byte counts chosen here are exactly the byte counts
@@ -526,6 +547,581 @@ class TestRealDeclaredHeadroomInSessionsIsReported:
                 f"{report.findings}"
             )
             print(f"doc_size_budget: {path} has {left:.2f} session(s) of headroom")
+
+
+class TestArchivesAreUnbudgetedByRecordedDecision:
+    """OPS-62 criterion 4: the archives are deliberately NOT budgeted alone.
+
+    ``OPS-57`` split both continuity documents, and the two archives it created
+    are the largest documents in the repository. Giving each of them its own
+    byte budget would need a growth rate for a document that gains nothing
+    between splits and then takes one large step when a split runs, and there
+    has been exactly ONE split - a slope through one point is not a
+    measurement, and this repository omits rather than guesses. So the archives
+    carry no individual budget and the bound is on the PAIR instead.
+
+    The failure this pins is a documentation failure with teeth: a reader who
+    goes looking for the missing archive budget must find the DECISION at the
+    archive's own path, not silence. So every archive path must appear in
+    ``UNBUDGETED_BY_DECISION``, must NOT appear in ``BUDGETS``, and its recorded
+    reason must name where the real bound lives and what the decision costs.
+    """
+
+    def test_no_archive_path_has_its_own_byte_budget(self) -> None:
+        for name, pair in doc_size_budget.PAIRS.items():
+            assert pair.archive not in doc_size_budget.BUDGETS, (
+                f"{pair.archive} has its own budget in BUDGETS, which "
+                f"contradicts the OPS-62 decision recorded for pair {name}: "
+                "archives are bounded through the pair, not individually"
+            )
+
+    def test_every_archive_records_the_decision_where_it_will_be_looked_for(
+        self,
+    ) -> None:
+        for pair in doc_size_budget.PAIRS.values():
+            reason = doc_size_budget.UNBUDGETED_BY_DECISION.get(pair.archive)
+            assert reason, (
+                f"{pair.archive} carries no budget and no recorded reason - a "
+                "reader looking for the missing archive budget finds silence, "
+                "which is exactly what OPS-62 criterion 4 forbids"
+            )
+            assert "PAIR_BUDGETS" in reason, (
+                f"the note for {pair.archive} does not say where the real "
+                "bound lives"
+            )
+
+    def test_the_recorded_decision_states_its_cost(self) -> None:
+        for pair in doc_size_budget.PAIRS.values():
+            reason = doc_size_budget.UNBUDGETED_BY_DECISION[pair.archive]
+            lowered = reason.lower()
+            assert "cost" in lowered, (
+                f"the note for {pair.archive} records a decision without its "
+                "cost - OPS-62 criterion 4 wants the decision AND the cost, "
+                "because a decision without its cost reads as a free lunch"
+            )
+
+    def test_every_archive_named_in_a_pair_is_covered_and_no_more(self) -> None:
+        archives = {pair.archive for pair in doc_size_budget.PAIRS.values()}
+        assert set(doc_size_budget.UNBUDGETED_BY_DECISION) == archives
+
+
+class TestTheProvisionalCaveatIsInTheCodeNotOnlyInAReport:
+    """OPS-62 criterion 2: one split is one data point, and it must say so.
+
+    A caveat stated in chat but dropped from the artifact is a lie in the
+    artifact, so the code itself must carry it: each pair's growth model
+    declares how many splits it rests on, reports itself provisional while that
+    is under two, and the rendered report repeats the caveat next to the number
+    it qualifies.
+    """
+
+    def test_every_pair_model_declares_how_many_splits_it_rests_on(self) -> None:
+        for name, model in doc_size_budget.PAIR_GROWTH.items():
+            assert model.splits_measured >= 1, (
+                f"pair {name} declares {model.splits_measured} splits - a "
+                "model with no measured split is not a measurement at all"
+            )
+
+    def test_a_one_split_model_reports_itself_provisional(self) -> None:
+        for name, model in doc_size_budget.PAIR_GROWTH.items():
+            if model.splits_measured < 2:
+                assert model.provisional is True, (
+                    f"pair {name} rests on {model.splits_measured} split(s) "
+                    "and does not report itself provisional"
+                )
+
+    def test_a_two_split_model_would_stop_being_provisional(self) -> None:
+        # Pins the boundary rather than only the current state, so the flag
+        # cannot quietly become a constant that says "provisional" forever.
+        model = doc_size_budget.PairGrowthModel(
+            append_median=100,
+            live_budget=600,
+            live_size_at_split=100,
+            split_overhead_bytes=100,
+            splits_measured=2,
+        )
+        assert model.provisional is False
+
+    def test_the_rendered_pair_report_repeats_the_provisional_caveat(
+        self, tmp_path: Path
+    ) -> None:
+        _write(tmp_path / "live.md", 100)
+        _write(tmp_path / "arch.md", 100)
+        pairs = {"P": doc_size_budget.DocumentPair("live.md", "arch.md")}
+        models = {
+            "P": doc_size_budget.PairGrowthModel(
+                append_median=100,
+                live_budget=600,
+                live_size_at_split=100,
+                split_overhead_bytes=0,
+                splits_measured=1,
+            )
+        }
+        report = doc_size_budget.check_pair_budgets(
+            pairs=pairs, budgets={"P": 1000}, models=models, repo_root=tmp_path
+        )
+        rendered = report.format()
+
+        assert "provisional" in rendered.lower(), (
+            "the sessions figure is printed without the caveat that its split "
+            "overhead term rests on a single split"
+        )
+        assert "1 split" in rendered
+
+
+class TestPairGrowthModelArithmetic:
+    """The pair rate is derived, not declared, so a test can re-derive it.
+
+    The model is: pair bytes grow per session at the LIVE document's measured
+    append rate (six sessions, and before the split the live document WAS the
+    whole pair, so that rate is a pair rate already), plus the one-off overhead
+    a split adds, amortized over the sessions between splits.
+    """
+
+    def test_split_interval_is_derived_from_the_live_budget_and_rate(self) -> None:
+        model = doc_size_budget.PairGrowthModel(
+            append_median=100,
+            live_budget=600,
+            live_size_at_split=100,
+            split_overhead_bytes=0,
+        )
+        # (600 - 100) / 100 == 5.0 sessions between one split and the next.
+        assert model.split_interval_sessions == pytest.approx(5.0)
+
+    def test_effective_rate_adds_the_amortized_split_overhead(self) -> None:
+        model = doc_size_budget.PairGrowthModel(
+            append_median=100,
+            live_budget=600,
+            live_size_at_split=100,
+            split_overhead_bytes=100,
+        )
+        # 100 bytes of overhead spread over 5 sessions is 20 bytes a session.
+        assert model.per_session_split_overhead == pytest.approx(20.0)
+        assert model.effective_rate == pytest.approx(120.0)
+
+    def test_a_zero_overhead_model_falls_back_to_the_append_rate(self) -> None:
+        model = doc_size_budget.PairGrowthModel(
+            append_median=100,
+            live_budget=600,
+            live_size_at_split=100,
+            split_overhead_bytes=0,
+        )
+        assert model.effective_rate == pytest.approx(100.0)
+
+    def test_the_overhead_term_shortens_headroom_rather_than_lengthening_it(
+        self,
+    ) -> None:
+        # Direction matters: OPS-57 chose median_high because UNDERestimating
+        # the rate is the failure this whole check exists to stop. Every real
+        # model must therefore report a rate at or above its append rate.
+        for name, model in doc_size_budget.PAIR_GROWTH.items():
+            assert model.effective_rate >= model.append_median, (
+                f"pair {name} reports a rate below its own append rate, which "
+                "would make its headroom read longer than measured"
+            )
+
+    def test_every_pair_append_rate_matches_the_live_documents_measured_rate(
+        self,
+    ) -> None:
+        for name, pair in doc_size_budget.PAIRS.items():
+            model = doc_size_budget.PAIR_GROWTH[name]
+            live_rate = doc_size_budget.SESSION_GROWTH_RATES[pair.live]
+            assert model.append_median == live_rate.median, (
+                f"pair {name} carries its own copy of a rate that already "
+                "exists for its live half - two copies of one measurement is "
+                "how the two drift apart"
+            )
+
+    def test_every_pair_has_a_budget_and_a_model(self) -> None:
+        assert doc_size_budget.PAIRS, "no pairs declared - nothing is guarded"
+        for name in doc_size_budget.PAIRS:
+            assert name in doc_size_budget.PAIR_BUDGETS
+            assert name in doc_size_budget.PAIR_GROWTH
+
+
+class TestPairTotalIsMeasuredAcrossBothHalves:
+    """The measured figure is the sum, and both halves stay visible."""
+
+    def test_the_pair_total_is_the_sum_of_both_halves(self, tmp_path: Path) -> None:
+        _write(tmp_path / "live.md", 100)
+        _write(tmp_path / "arch.md", 200)
+        pairs = {"P": doc_size_budget.DocumentPair("live.md", "arch.md")}
+        report = doc_size_budget.check_pair_budgets(
+            pairs=pairs, budgets={"P": 1000}, models={}, repo_root=tmp_path
+        )
+
+        assert report.ok is True
+        assert report.measured["P"] == 300
+
+    def test_both_component_sizes_are_reported_separately(
+        self, tmp_path: Path
+    ) -> None:
+        # A pair total that cannot be attributed is a number nobody can act
+        # on, so the halves are printed beside it.
+        _write(tmp_path / "live.md", 100)
+        _write(tmp_path / "arch.md", 200)
+        pairs = {"P": doc_size_budget.DocumentPair("live.md", "arch.md")}
+        report = doc_size_budget.check_pair_budgets(
+            pairs=pairs, budgets={"P": 1000}, models={}, repo_root=tmp_path
+        )
+        rendered = report.format()
+
+        assert report.components["P"] == {"live.md": 100, "arch.md": 200}
+        assert "live.md" in rendered
+        assert "arch.md" in rendered
+
+
+class TestArchiveGrowthAloneFiresThePairBudget:
+    """OPS-62 criterion 3, the whole point: an archive cannot grow unwatched.
+
+    The tree here is exactly the blindness OPS-62 describes - a live document
+    comfortably inside its own budget beside an archive that has grown large.
+    The live-only check must report OK on that tree (that is the bug, stated as
+    a measurement) while the pair check must fail on the same tree in the same
+    run.
+    """
+
+    def test_a_large_archive_fires_the_pair_budget(self, tmp_path: Path) -> None:
+        _write(tmp_path / "live.md", 100)
+        _write(tmp_path / "arch.md", 900)
+        pairs = {"P": doc_size_budget.DocumentPair("live.md", "arch.md")}
+
+        report = doc_size_budget.check_pair_budgets(
+            pairs=pairs, budgets={"P": 1000}, models={}, repo_root=tmp_path
+        )
+
+        assert report.ok is False
+        assert len(report.findings) == 1
+        finding = report.findings[0]
+        assert finding.kind == "pair_over_budget"
+        assert finding.path == "P"
+        assert finding.size == 1000
+        assert finding.budget == 1000
+        assert "arch.md" in finding.detail, (
+            "the finding does not say which half carries the bytes, so nobody "
+            "reading it knows whether a split would help"
+        )
+
+    def test_the_live_only_check_is_green_on_the_very_same_tree(
+        self, tmp_path: Path
+    ) -> None:
+        _write(tmp_path / "live.md", 100)
+        _write(tmp_path / "arch.md", 900)
+
+        live_only = doc_size_budget.check_budgets(
+            {"live.md": 500}, repo_root=tmp_path
+        )
+        paired = doc_size_budget.check_pair_budgets(
+            pairs={"P": doc_size_budget.DocumentPair("live.md", "arch.md")},
+            budgets={"P": 1000},
+            models={},
+            repo_root=tmp_path,
+        )
+
+        # Both halves of the claim, in one place: the old guard passes and the
+        # new one fails. If the pair check ever stops looking at the archive,
+        # the second assertion goes red while the first stays green.
+        assert live_only.ok is True
+        assert paired.ok is False
+
+    def test_growth_in_the_archive_alone_moves_the_pair_total(
+        self, tmp_path: Path
+    ) -> None:
+        _write(tmp_path / "live.md", 100)
+        _write(tmp_path / "arch.md", 100)
+        pairs = {"P": doc_size_budget.DocumentPair("live.md", "arch.md")}
+        before = doc_size_budget.check_pair_budgets(
+            pairs=pairs, budgets={"P": 1000}, models={}, repo_root=tmp_path
+        )
+
+        _write(tmp_path / "arch.md", 800)  # only the archive changes
+        after = doc_size_budget.check_pair_budgets(
+            pairs=pairs, budgets={"P": 1000}, models={}, repo_root=tmp_path
+        )
+
+        assert before.measured["P"] == 200
+        assert after.measured["P"] == 900
+        assert before.ok is True
+        assert after.ok is True  # 900 < 1000, still inside
+
+    def test_the_pair_boundary_is_at_or_over_like_the_live_one(
+        self, tmp_path: Path
+    ) -> None:
+        _write(tmp_path / "live.md", 100)
+        _write(tmp_path / "arch.md", 900)
+        pairs = {"P": doc_size_budget.DocumentPair("live.md", "arch.md")}
+        at_budget = doc_size_budget.check_pair_budgets(
+            pairs=pairs, budgets={"P": 1000}, models={}, repo_root=tmp_path
+        )
+
+        _write(tmp_path / "arch.md", 899)
+        one_under = doc_size_budget.check_pair_budgets(
+            pairs=pairs, budgets={"P": 1000}, models={}, repo_root=tmp_path
+        )
+
+        assert at_budget.ok is False, "exactly at budget must fail, as for a doc"
+        assert one_under.ok is True
+
+
+class TestPairMissingHalfFailsTheCheck:
+    """A half that does not exist is a finding, never a cheap pass."""
+
+    def test_a_missing_archive_is_a_finding_not_a_small_pair(
+        self, tmp_path: Path
+    ) -> None:
+        _write(tmp_path / "live.md", 100)
+        pairs = {"P": doc_size_budget.DocumentPair("live.md", "arch.md")}
+        report = doc_size_budget.check_pair_budgets(
+            pairs=pairs, budgets={"P": 1000}, models={}, repo_root=tmp_path
+        )
+
+        assert report.ok is False
+        assert [f.kind for f in report.findings] == ["missing"]
+        assert report.findings[0].path == "arch.md"
+        assert "P" not in report.measured, (
+            "an unmeasurable pair must be absent from measured, not present "
+            "with a total that silently omits a half"
+        )
+
+    def test_a_missing_half_does_not_stop_a_later_pair_being_reported(
+        self, tmp_path: Path
+    ) -> None:
+        _write(tmp_path / "live_a.md", 100)
+        _write(tmp_path / "live_b.md", 100)
+        _write(tmp_path / "arch_b.md", 900)
+        pairs = {
+            "A": doc_size_budget.DocumentPair("live_a.md", "arch_a.md"),
+            "B": doc_size_budget.DocumentPair("live_b.md", "arch_b.md"),
+        }
+        report = doc_size_budget.check_pair_budgets(
+            pairs=pairs,
+            budgets={"A": 1000, "B": 1000},
+            models={},
+            repo_root=tmp_path,
+        )
+
+        kinds = sorted(f.kind for f in report.findings)
+        assert kinds == ["missing", "pair_over_budget"]
+
+
+class TestPairHeadroomInSessions:
+    """The pair states headroom in sessions too, at its own rate."""
+
+    def _model(self, overhead: int = 0) -> object:
+        return doc_size_budget.PairGrowthModel(
+            append_median=100,
+            live_budget=600,
+            live_size_at_split=100,
+            split_overhead_bytes=overhead,
+        )
+
+    def test_exactly_one_session_of_headroom(self) -> None:
+        left = doc_size_budget.pair_headroom_sessions(
+            "P", total=900, budgets={"P": 1000}, models={"P": self._model()}
+        )
+        assert left == pytest.approx(1.0)
+
+    def test_exactly_zero_sessions_of_headroom(self) -> None:
+        left = doc_size_budget.pair_headroom_sessions(
+            "P", total=1000, budgets={"P": 1000}, models={"P": self._model()}
+        )
+        assert left == pytest.approx(0.0)
+
+    def test_already_over_budget_is_negative_not_clamped(self) -> None:
+        left = doc_size_budget.pair_headroom_sessions(
+            "P", total=1500, budgets={"P": 1000}, models={"P": self._model()}
+        )
+        assert left == pytest.approx(-5.0)
+
+    def test_a_pair_with_no_model_returns_none_rather_than_a_guess(self) -> None:
+        left = doc_size_budget.pair_headroom_sessions(
+            "P", total=100, budgets={"P": 1000}, models={}
+        )
+        assert left is None
+
+    def test_the_overhead_term_is_used_not_just_the_append_rate(self) -> None:
+        # 1000 - 880 == 120 bytes left; at 120 bytes a session that is exactly
+        # one session, while the bare append rate would report 1.2 and read as
+        # more room than there is.
+        left = doc_size_budget.pair_headroom_sessions(
+            "P",
+            total=880,
+            budgets={"P": 1000},
+            models={"P": self._model(overhead=100)},
+        )
+        assert left == pytest.approx(1.0)
+
+    def test_a_pair_report_states_sessions_and_keeps_the_bytes(
+        self, tmp_path: Path
+    ) -> None:
+        _write(tmp_path / "live.md", 300)
+        _write(tmp_path / "arch.md", 400)
+        pairs = {"P": doc_size_budget.DocumentPair("live.md", "arch.md")}
+        report = doc_size_budget.check_pair_budgets(
+            pairs=pairs,
+            budgets={"P": 1000},
+            models={"P": self._model()},
+            repo_root=tmp_path,
+        )
+        rendered = report.format()
+
+        assert report.headroom_sessions["P"] == pytest.approx(3.0)
+        assert "700 bytes" in rendered
+        assert "3.0 sessions" in rendered
+
+
+class TestPairLowHeadroomWarnsEarlierThanTheLiveBudget:
+    """The pair warns sooner, because its remedy is not mechanical.
+
+    A live budget firing has a documented mechanical response: re-run the
+    split. A PAIR budget firing does not - the split moves bytes between the
+    halves and leaves the pair total alone (it nudges it UP, by the split's own
+    overhead), so the only responses are an operator ruling or a real reduction
+    in content. A gate whose remedy needs the operator has to warn early enough
+    for the operator to be asked, which means earlier than two sessions.
+    """
+
+    def test_the_pair_threshold_is_further_out_than_the_document_one(
+        self,
+    ) -> None:
+        assert (
+            doc_size_budget.PAIR_LOW_HEADROOM_SESSIONS
+            > doc_size_budget.LOW_HEADROOM_SESSIONS
+        )
+
+    def test_low_pair_headroom_is_flagged_while_still_under_budget(
+        self, tmp_path: Path
+    ) -> None:
+        # 700 bytes left at 100 a session is 7.0 sessions; set the budget so
+        # the figure lands just inside the pair threshold.
+        _write(tmp_path / "live.md", 100)
+        _write(tmp_path / "arch.md", 100)
+        pairs = {"P": doc_size_budget.DocumentPair("live.md", "arch.md")}
+        models = {
+            "P": doc_size_budget.PairGrowthModel(
+                append_median=100,
+                live_budget=600,
+                live_size_at_split=100,
+                split_overhead_bytes=0,
+            )
+        }
+        budget = 200 + int(100 * doc_size_budget.PAIR_LOW_HEADROOM_SESSIONS) - 50
+        report = doc_size_budget.check_pair_budgets(
+            pairs=pairs, budgets={"P": budget}, models=models, repo_root=tmp_path
+        )
+
+        assert report.ok is True, "a warning must never be a failure"
+        assert report.low_headroom == ("P",)
+        assert "LOW HEADROOM" in report.format()
+
+    def test_comfortable_pair_headroom_is_not_flagged(self, tmp_path: Path) -> None:
+        _write(tmp_path / "live.md", 100)
+        _write(tmp_path / "arch.md", 100)
+        pairs = {"P": doc_size_budget.DocumentPair("live.md", "arch.md")}
+        models = {
+            "P": doc_size_budget.PairGrowthModel(
+                append_median=100,
+                live_budget=600,
+                live_size_at_split=100,
+                split_overhead_bytes=0,
+            )
+        }
+        report = doc_size_budget.check_pair_budgets(
+            pairs=pairs, budgets={"P": 100_000}, models=models, repo_root=tmp_path
+        )
+
+        assert report.low_headroom == ()
+        assert "LOW HEADROOM" not in report.format()
+
+    def test_the_rendered_threshold_is_the_pair_threshold_not_the_doc_one(
+        self, tmp_path: Path
+    ) -> None:
+        _write(tmp_path / "live.md", 100)
+        _write(tmp_path / "arch.md", 100)
+        pairs = {"P": doc_size_budget.DocumentPair("live.md", "arch.md")}
+        models = {
+            "P": doc_size_budget.PairGrowthModel(
+                append_median=100,
+                live_budget=600,
+                live_size_at_split=100,
+                split_overhead_bytes=0,
+            )
+        }
+        report = doc_size_budget.check_pair_budgets(
+            pairs=pairs, budgets={"P": 400}, models=models, repo_root=tmp_path
+        )
+        rendered = report.format()
+
+        assert f"{doc_size_budget.PAIR_LOW_HEADROOM_SESSIONS:.1f}" in rendered
+
+
+class TestRealDeclaredPairBudgetsCurrentlyPass:
+    """Re-measure the real pairs now; never hardcode a byte count here.
+
+    Same shape as the live-document version above and for the same reason: a
+    filed count is a hypothesis, so this measures, prints, and asserts the
+    measurement clears the declared budget.
+    """
+
+    def test_declared_pair_budgets_are_not_exceeded_right_now(self) -> None:
+        assert doc_size_budget.PAIR_BUDGETS, "no pair budgets declared"
+
+        report = doc_size_budget.check_pair_budgets()
+
+        for name, budget in doc_size_budget.PAIR_BUDGETS.items():
+            total = report.measured.get(name)
+            assert total is not None, (
+                f"pair {name} was not measured at all - findings: "
+                f"{report.findings}"
+            )
+            print(
+                f"doc_size_budget: pair {name} is {total} bytes against a "
+                f"{budget}-byte budget ({budget - total} bytes headroom); "
+                f"components {report.components.get(name)}"
+            )
+            assert total < budget, (
+                f"pair {name} is {total} bytes, at or over its {budget}-byte "
+                "budget - and a split will NOT relieve this one; see the "
+                "PAIR_BUDGETS comment for what the operator has to decide"
+            )
+
+        assert report.ok is True
+
+    def test_every_real_pair_reports_sessions_of_headroom(self) -> None:
+        report = doc_size_budget.check_pair_budgets()
+
+        for name in doc_size_budget.PAIR_BUDGETS:
+            left = report.headroom_sessions.get(name)
+            assert left is not None, (
+                f"pair {name} has no sessions-of-headroom figure - findings: "
+                f"{report.findings}"
+            )
+            print(f"doc_size_budget: pair {name} has {left:.2f} session(s) left")
+
+    def test_the_real_pairs_cover_both_split_documents(self) -> None:
+        # Every budgeted live document must be half of a declared pair,
+        # otherwise a future split could create a third unwatched archive and
+        # nothing here would notice.
+        paired_live = {pair.live for pair in doc_size_budget.PAIRS.values()}
+        assert set(doc_size_budget.BUDGETS) == paired_live
+
+
+class TestMainReportsBothChannels:
+    """main() must print the pair channel too, or nobody ever sees it."""
+
+    def test_main_prints_documents_and_pairs(self, capsys) -> None:
+        code = doc_size_budget.main()
+        out = capsys.readouterr().out
+
+        assert code == 0, f"the real tree is not green:\n{out}"
+        for path in doc_size_budget.BUDGETS:
+            assert path in out
+        for pair in doc_size_budget.PAIRS.values():
+            assert pair.archive in out, (
+                f"{pair.archive} never appears in the report, so the largest "
+                "documents in the repository are still invisible to a reader "
+                "running this module"
+            )
 
 
 if __name__ == "__main__":

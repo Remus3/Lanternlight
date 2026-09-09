@@ -426,6 +426,15 @@ KNOWN_NON_HOSTS = frozenset(
         # `OPS-63`'s outcome rather than discovered again each time.
         "NOPE.md",
         "sys.argv",
+        # `PairGrowthModel.splits`, the truncation of
+        # `PairGrowthModel.splits_measured`, introduced 2026-09-08 by `OPS-62`'s
+        # closure prose. Third of three tokens this session's own closures added
+        # to this set, after `NOPE.md` and `sys.argv`. The rate is the cost
+        # `OPS-63` measured and stated: with `ROADMAP.md` and `docs/LEDGER.md` in
+        # scope, a session that writes about its own code contributes a few of
+        # these, and vetting them is the price of reading the documents where
+        # this project actually cites its sources.
+        "PairGrowthModel.splits",
         # A git CONFIG KEY, quoted by `LL-0169` and `OPS-49`. `core.filemode`
         # is not a host and not a file; `.filemode` simply parses as a TLD-
         # shaped tail. Looked at before adding, per the regenerating note.
