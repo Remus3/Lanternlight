@@ -127,6 +127,63 @@ a DECISION GATE for the operator, not a chore, which is why
 :data:`PAIR_LOW_HEADROOM_SESSIONS` warns further out than the per-document
 threshold does.
 
+THE COMMAND LINE REFUSES WHAT IT DOES NOT UNDERSTAND, AND ITS ONE OPTION IS
+REAL. ROADMAP ``OPS-67``, and this module is the one of that item's four that
+actually mattered. Measured 2026-09-08:
+``python tools/doc_size_budget.py --lanternlight-bogus-flag`` exited 0 and
+printed an ordinary green report about the live documents, because :func:`main`
+took no parameters and never read ``sys.argv`` at all - the flag was not
+rejected, it was never seen. That is worse here than in a script whose output
+nobody reads, because THESE NUMBERS GET QUOTED: this repository's own hand-off
+tells the next session to ask this module for headroom in sessions rather than
+repeat a byte figure. A caller who believed they had scoped the tool at a
+scratch document, and got a confident verdict about ROADMAP.md and
+docs/LEDGER.md, is the ``OPS-64`` failure exactly - a true verdict answering a
+different question than the one asked.
+
+Two changes answer it and both are needed. Unknown argv is now a usage error
+with its own exit code (:data:`USAGE_EXIT_CODE`), and ``--repo-root`` is a REAL
+option in the sense ``OPS-67`` criterion 2 demands: passing it changes which
+documents are measured, not merely which string is printed. Every run also
+prints the root it read, so a verdict cannot be mistaken for an answer about a
+different tree.
+
+``--repo-root`` SCOPES BOTH CHANNELS AT ONCE, AND THERE IS DELIBERATELY NO
+FLAG THAT SCOPES ONLY ONE. This module has two channels since ``OPS-62`` - the
+per-document budgets in :data:`BUDGETS` and the pair budgets in
+:data:`PAIR_BUDGETS` - and :func:`main` prints both on every run because an
+archive that only appears in the output when it fails is an archive nobody
+watches. A ``--documents-only`` or ``--pairs-only`` switch would reintroduce
+the very defect this item is about one level up: a run that measured one
+channel, printed one confident OK line, and left a reader to assume the other
+channel had been checked too. So the option names a TREE, both channels resolve
+their watched paths under it, and the scope line names it once for both.
+
+WHAT ``--repo-root`` DOES NOT CHANGE, WHICH MATTERS BECAUSE THIS MODULE
+WRITES GIT OBJECTS. :func:`git_blob_size` shells out to ``git hash-object -w``,
+and that ``-w`` writes a loose object. ``--repo-root`` moves only where WATCHED
+PATHS are resolved from; it does NOT move the git working directory, which
+stays this repository's own root (:data:`REPO_ROOT`) exactly as
+:func:`git_blob_size`'s default already documents. The consequences, stated
+plainly rather than left to be discovered:
+
+- Pointing ``--repo-root`` at a directory that is not a git repository WORKS,
+  and is the intended way to check a scratch pair. The scratch files are read
+  off disk by absolute path and hashed into THIS repository's object database.
+- Every such run therefore leaves loose objects under this repository's
+  ``.git/objects`` - one per file measured. They are unreferenced and ordinary
+  ``git gc`` reclaims them, but a test suite that counts loose objects will see
+  them, so this module is not a good neighbour to run in a tight loop.
+- If git itself fails - no repository to write into, an unreadable path - the
+  ``subprocess.CalledProcessError`` propagates and the run dies loudly. It is
+  never caught and turned into a zero, because "git failed" and "the document
+  is small" are different facts and this whole module exists to keep facts like
+  those apart.
+- A watched path that does not exist under ``--repo-root`` is still a Finding
+  and still exits 1. Scoping the tool at an empty directory must not turn a
+  missing document into a green run; that would be building the textbook
+  vacuous guard on purpose, with a flag.
+
 WHAT COUNTS AS FAILURE. A watched path that does not exist on disk is a
 Finding, not a silent pass - a missing file trivially satisfies "under
 budget" for reasons that have nothing to do with the document being small,
@@ -139,7 +196,9 @@ the first bad path would hide every problem after it.
 
 from __future__ import annotations
 
+import argparse
 import subprocess
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -153,11 +212,13 @@ __all__ = [
     "REPO_ROOT",
     "SESSION_GROWTH_RATES",
     "UNBUDGETED_BY_DECISION",
+    "USAGE_EXIT_CODE",
     "DocumentPair",
     "Finding",
     "GrowthRate",
     "PairGrowthModel",
     "Report",
+    "build_parser",
     "check_budgets",
     "check_pair_budgets",
     "git_blob_size",
@@ -967,23 +1028,132 @@ def check_pair_budgets(
     )
 
 
-def main() -> int:
+#: Exit code for a usage error - a flag this module does not understand, or a
+#: positional argument it takes none of. Deliberately NOT 1: 1 means the checks
+#: ran and a document or a pair is at or over budget, and a caller that cannot
+#: tell "you typed something I do not understand" from "the roadmap is too big"
+#: learns nothing from either. Matches ``argparse``'s own choice and the value
+#: ``tools/archive_link_guard.py`` settled on for the same reason under
+#: ``OPS-64``.
+USAGE_EXIT_CODE = 2
+
+
+def build_parser() -> argparse.ArgumentParser:
+    """Build the command-line parser for :func:`main`.
+
+    ONE OPTION, AND IT IS REAL. ``--repo-root`` is handed straight to both
+    :func:`check_budgets` and :func:`check_pair_budgets` as their ``repo_root``,
+    so it changes which files are opened and which byte counts are printed -
+    ``OPS-67`` criterion 2's test is that pointing it at a scratch pair makes
+    the numbers change, and it does. An option that were accepted and ignored
+    would be worse than one refused, because the resulting verdict is true about
+    a corpus the caller did not ask about.
+
+    IT SCOPES BOTH CHANNELS, ON PURPOSE, and there is no flag to scope one. See
+    the module docstring: a run that measured only the per-document channel and
+    printed one OK line would be this item's own defect one level up.
+
+    ABBREVIATION IS DISABLED ON PURPOSE. ``argparse`` accepts any unambiguous
+    prefix by default, so ``--repo-roo`` would silently mean ``--repo-root``.
+    That is again the same class of defect - a caller getting an answer about
+    something other than what they typed - so only the exact spelling is
+    accepted.
+
+    THERE ARE NO BUDGET-OVERRIDE OPTIONS, WHICH IS ALSO A DECISION. The budgets
+    in :data:`BUDGETS` and :data:`PAIR_BUDGETS` each carry a paragraph of
+    measurement beside them saying how the number was derived and what to do
+    when it fires. A ``--budget`` flag would let a caller print a green verdict
+    against a number nobody measured, which is the "raise the budget to make a
+    red run green" antipattern this repository has already written down, handed
+    a command-line spelling. Scoping the TREE answers the question this item
+    asked; loosening the THRESHOLD answers a different one nobody asked.
+    """
+    parser = argparse.ArgumentParser(
+        prog="doc_size_budget",
+        description=(
+            "Report each watched continuity document against its byte budget, "
+            "and each live-plus-archive pair against its pair budget. Reads "
+            "documents and writes no tracked file; see --repo-root."
+        ),
+        allow_abbrev=False,
+    )
+    parser.add_argument(
+        "--repo-root",
+        default=str(REPO_ROOT),
+        metavar="PATH",
+        help=(
+            "tree the watched documents are resolved from, for BOTH the "
+            "per-document and the per-pair channel (default: this repository). "
+            "It does not move where git runs: blobs are always hashed into this "
+            "repository's own object database, so a non-git PATH is fine"
+        ),
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
     """Run both real checks and print a human report for each.
+
+    ``argv`` is the argument list WITHOUT the program name; ``None`` means read
+    ``sys.argv[1:]``, which is what this module's ``__main__`` block relies on.
+    An in-process caller - a test, most often - should pass an explicit list,
+    because a test runner's ``sys.argv`` is not this module's and is now refused
+    rather than ignored.
 
     Two channels, printed in order: the per-document budgets in :data:`BUDGETS`
     and the per-pair budgets in :data:`PAIR_BUDGETS`. Both are printed on every
     run, because the pair channel exists to make the two archives visible and an
     archive that only appears in the output when it fails is an archive nobody
-    watches shrinking towards a bound.
+    watches.
 
-    Exit code reflects the combined verdict (0 ok, 1 findings) so this can be
-    wired into a hook later by whoever owns that decision - nothing in this repo
-    calls this entry point today, by design; see the module docstring. Never
-    mutates a tracked file or the working tree.
+    EXIT CODES, KEPT DISTINCT BECAUSE THEY ARE DIFFERENT FACTS:
+
+    ``0``
+        Both checks ran and found nothing, OR ``--help`` was asked for.
+    ``1``
+        A check ran and found a Finding - a document or pair at or over budget,
+        or a watched path missing. Low headroom is a warning and never reaches
+        this code; see :data:`LOW_HEADROOM_SESSIONS`.
+    ``2``
+        A usage error: an unknown flag, an abbreviation, or a positional
+        argument. See :data:`USAGE_EXIT_CODE`.
+
+    WHY ``argparse``'S ``SystemExit`` IS CAUGHT AND TURNED BACK INTO A RETURN
+    VALUE. ``parse_args`` exits the process on a usage error, which would make
+    every in-process caller wrap this function in ``pytest.raises`` and would
+    make the return type a lie. Catching it keeps the contract "``main`` returns
+    an int, always" - and the code is taken FROM the exception rather than
+    replaced, so ``--help``'s 0 stays 0 while an error's 2 stays 2. ``argparse``
+    has already written its own message, naming the offending argument, to
+    stderr by then; the ``str`` branch below exists only for the documented case
+    where ``SystemExit`` carries a message instead of a code.
+
+    NOTHING IS PRINTED ON A USAGE ERROR EXCEPT ARGPARSE'S OWN MESSAGE. A refused
+    run that still printed a green report about the live documents would leave
+    the exact artifact this item was filed against sitting in the caller's
+    terminal, one exit code away from being believed.
+
+    Still never mutates a tracked file or the working tree. It does write loose
+    git objects - see the module docstring - which is what ``git add`` does too.
     """
-    report = check_budgets()
+    args_list = sys.argv[1:] if argv is None else list(argv)
+    parser = build_parser()
+    try:
+        args = parser.parse_args(args_list)
+    except SystemExit as exc:
+        code = exc.code
+        if code is None:
+            return 0
+        if isinstance(code, int):
+            return code
+        print(str(code), file=sys.stderr)
+        return USAGE_EXIT_CODE
+
+    repo_root = Path(args.repo_root)
+    print(f"doc size budget: scope both channels under {repo_root}")
+    report = check_budgets(repo_root=repo_root)
     print(report.format())
-    pair_report = check_pair_budgets()
+    pair_report = check_pair_budgets(repo_root=repo_root)
     print(pair_report.format())
     return 0 if report.ok and pair_report.ok else 1
 

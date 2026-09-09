@@ -496,3 +496,198 @@ def test_exit_is_always_zero_with_a_broken_stderr_pipe(
     rc = run_hook_with_broken_stderr_pipe(payload_for(subject), tmp_path)
 
     assert rc == 0, f"a broken stderr pipe made the hook exit {rc}, not 0"
+
+
+# ---------------------------------------------------------------------------
+# OPS-67: BOTH PostToolUse hooks IGNORE an unknown argument, deliberately.
+#
+# `OPS-64`'s sweep found nine `tools/` entry points that read an unknown flag
+# as a pass. Two of them were answered by changing the code - the archive link
+# guard grew real options, the pre-commit gate named two contracts and refused
+# everything else. The two PostToolUse hooks are answered by NOT changing the
+# code, and that is the answer this section exists to make legible.
+#
+# The reasoning is written out in each module's own docstring; the short form
+# is that neither hook takes its subject from argv (it arrives on stdin as
+# JSON), neither has a caller that passes an argument, and a non-zero exit from
+# a PostToolUse hook breaks the session it runs in - so a usage-error exit code
+# would be a loaded gun pointed at the one path that must never fail.
+#
+# WHY BOTH HOOKS ARE PINNED IN THIS ONE MODULE. `tools/ascii_check.py` has no
+# test module of its own, and the property under test here is not the ASCII
+# rule - it is the shared PostToolUse fail-soft contract that this module's
+# docstring already names ascii_check as carrying. Splitting one contract
+# across two files would hide the fact that the two hooks were decided
+# together and for the same reason.
+#
+# THE PREMISE IS PINNED, NOT JUST THE BEHAVIOUR. The whole argument for
+# ignoring argv is an argument about who calls these files. So
+# `test_the_posttooluse_wiring_passes_no_arguments` re-reads
+# `.claude/settings.json` and asserts the real command lines still carry no
+# trailing token. If a future session adds a flag there, that test goes red and
+# the decision is reopened rather than silently outlived. Without it, this
+# section would pin a behaviour whose justification could rot unobserved -
+# which is exactly the "unexamined default mistaken for a decision" that
+# OPS-67 criterion 3 is about.
+# ---------------------------------------------------------------------------
+
+
+ASCII_HOOK = REPO_ROOT / "tools" / "ascii_check.py"
+
+SETTINGS = REPO_ROOT / ".claude" / "settings.json"
+
+#: The sentence each module must carry to prove the argv behaviour was decided
+#: rather than merely inherited. Asserting the module TEXT is the only way to
+#: tell those two apart - the runtime behaviour of a decision and of an
+#: oversight are byte-identical, which is the whole difficulty OPS-67 names.
+ARGV_DECISION_ANCHOR = "ARGV IS NOT A CONTRACT HERE, AND THAT IS A DECISION"
+
+#: Deliberately plausible rather than absurd. A flag a real caller might type
+#: after reading a sibling tool's options is the case that matters; `--zzz`
+#: would prove less.
+UNKNOWN_ARGV = ["--quiet", "--paths", "docs/LEDGER.md"]
+
+#: A module whose only sin is a non-ASCII byte. It must still be valid Python,
+#: so that a failure here cannot be confused with a syntax error.
+#: The em-dash is written as an ESCAPE, not as a literal byte: this test file
+#: is itself subject to the 7-bit rule the hook enforces, and a literal here
+#: would make tests/test_ascii_hygiene.py fail on the module that proves the
+#: guard works.
+NON_ASCII_SOURCE = '"""A docstring with an em-dash \u2014 in it."""\n'
+
+#: The head of the message `tools/ascii_check.py` prints. Asserted for the same
+#: reason MARKER is above: it proves OUR tool spoke, not some bystander.
+ASCII_MARKER = "ASCII VIOLATION"
+
+
+def run_script(
+    script: Path, stdin_text: str, cwd: Path, argv: list[str]
+) -> subprocess.CompletedProcess:
+    """Run ``script`` as a real subprocess with ``argv`` appended.
+
+    Both hooks are processes to the harness, and both properties under test -
+    an exit code and what reaches stderr - are invisible from inside the
+    interpreter doing the asserting.
+    """
+    return subprocess.run(
+        [sys.executable, str(script), *argv],
+        input=stdin_text,
+        capture_output=True,
+        text=True,
+        cwd=str(cwd),
+        timeout=120,
+    )
+
+
+def posttooluse_commands() -> list[str]:
+    """Every ``PostToolUse`` hook command line in ``.claude/settings.json``.
+
+    The settings file is parsed rather than grepped. A single-backslash Windows
+    path makes that file invalid JSON, which registers no hooks at all and
+    warns about nothing - so a test that merely searched the text would report
+    on a file the harness had already given up on.
+    """
+    settings = json.loads(SETTINGS.read_text(encoding="ascii"))
+    commands = []
+    for entry in settings["hooks"]["PostToolUse"]:
+        for hook in entry["hooks"]:
+            commands.append(hook["command"])
+    return commands
+
+
+def test_the_ascii_hook_script_exists_and_is_not_empty() -> None:
+    assert ASCII_HOOK.is_file(), f"the ascii hook script is missing: {ASCII_HOOK}"
+    assert ASCII_HOOK.stat().st_size > 0, "the ascii hook script is empty"
+
+
+def test_the_posttooluse_wiring_passes_no_arguments() -> None:
+    """The premise of the OPS-67 decision, checked against the real settings."""
+    commands = posttooluse_commands()
+
+    assert commands, "no PostToolUse hook commands found - the parse or the key is wrong"
+
+    scripts_seen = []
+    for command in commands:
+        tokens = shlex.split(command)
+        assert len(tokens) == 2, (
+            "a PostToolUse hook command now carries arguments, so the OPS-67 "
+            "decision to ignore argv in these hooks rests on a premise that is "
+            f"no longer true. Re-open it. Command: {command!r}"
+        )
+        scripts_seen.append(tokens[1])
+
+    joined = " ".join(scripts_seen)
+    assert "tools/ascii_check.py" in joined, (
+        f"ascii_check.py is no longer wired as a PostToolUse hook: {scripts_seen!r}"
+    )
+    assert "tools/syntax_check_hook.py" in joined, (
+        f"syntax_check_hook.py is no longer wired as a PostToolUse hook: {scripts_seen!r}"
+    )
+
+
+@pytest.mark.parametrize(
+    ("script_name", "script"),
+    [("syntax_check_hook.py", HOOK), ("ascii_check.py", ASCII_HOOK)],
+)
+def test_each_posttooluse_hook_records_its_argv_decision(
+    script_name: str, script: Path
+) -> None:
+    """The reason lives in the module, per OPS-67 criterion 1."""
+    text = script.read_text(encoding="ascii")
+
+    assert ARGV_DECISION_ANCHOR in text, (
+        f"tools/{script_name} no longer explains why it ignores argv. A later "
+        "reader cannot tell a decision from an unexamined default without it."
+    )
+    assert "OPS-67" in text, f"tools/{script_name} no longer cites the item that decided this"
+
+
+def test_an_unknown_argument_does_not_change_the_syntax_hook(tmp_path: Path) -> None:
+    """It still exits 0 AND still reports - the flag is ignored, not obeyed."""
+    subject = write_subject(tmp_path, f"{STEM}_argv.py", BROKEN_SOURCE)
+
+    result = run_script(HOOK, payload_for(subject), tmp_path, UNKNOWN_ARGV)
+
+    assert result.returncode == 0, (
+        f"an unknown argument made the syntax hook exit {result.returncode}, "
+        "which would wedge the session it ran in: "
+        f"stdout={result.stdout!r} stderr={result.stderr!r}"
+    )
+    assert MARKER in result.stderr, (
+        "an unknown argument silenced the syntax hook's report, so the flag was "
+        f"obeyed rather than ignored: stderr={result.stderr!r}"
+    )
+
+
+def test_an_unknown_argument_does_not_change_the_ascii_hook(tmp_path: Path) -> None:
+    """Same contract, the sibling hook. See this section's header for why here."""
+    subject = tmp_path / f"{STEM}_argv_ascii.py"
+    subject.write_text(NON_ASCII_SOURCE, encoding="utf-8")
+
+    result = run_script(ASCII_HOOK, payload_for(subject), tmp_path, UNKNOWN_ARGV)
+
+    assert result.returncode == 0, (
+        f"an unknown argument made the ascii hook exit {result.returncode}, "
+        "which would wedge the session it ran in: "
+        f"stdout={result.stdout!r} stderr={result.stderr!r}"
+    )
+    assert ASCII_MARKER in result.stderr, (
+        "an unknown argument silenced the ascii hook's report, so the flag was "
+        f"obeyed rather than ignored: stderr={result.stderr!r}"
+    )
+
+
+def test_the_ascii_hook_says_nothing_about_an_unknown_argument(tmp_path: Path) -> None:
+    """A clean subject plus a bad flag draws NO usage complaint.
+
+    The negative matters because a usage message on stderr from a PostToolUse
+    hook is noise injected into the operator's session on every edit, and the
+    hook that nags gets disabled.
+    """
+    subject = write_subject(tmp_path, f"{STEM}_argv_clean.py", CLEAN_SOURCE)
+
+    result = run_script(ASCII_HOOK, payload_for(subject), tmp_path, UNKNOWN_ARGV)
+
+    assert result.returncode == 0, f"exit was {result.returncode}, not 0"
+    assert result.stderr == "", f"the ascii hook complained about argv: {result.stderr!r}"
+    assert result.stdout == "", f"the ascii hook wrote to stdout: {result.stdout!r}"

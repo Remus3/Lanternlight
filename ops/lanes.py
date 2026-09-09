@@ -523,6 +523,12 @@ LANES: tuple[Lane, ...] = (
         owns=(
             "tools/frame_poller.py",
             "tools/probe_paks.py",
+            # OPS-67. The pak probe's first test module. It matches none of the
+            # globs below - it is not a vision or a capture test - so it has to
+            # be named, and it belongs beside the tool it pins rather than with
+            # the hygiene guards, because what it pins is the probe's REFUSAL
+            # and its scope line rather than anything about content.
+            "tests/test_probe_paks.py",
             "lanternlight/vision*.py",
             "tests/test_vision*.py",
             "tests/test_capture*.py",

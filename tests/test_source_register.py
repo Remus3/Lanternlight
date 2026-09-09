@@ -435,6 +435,17 @@ KNOWN_NON_HOSTS = frozenset(
         # these, and vetting them is the price of reading the documents where
         # this project actually cites its sources.
         "PairGrowthModel.splits",
+        # `path.name`, a pathlib attribute, cited by `LL-0205` where it quotes
+        # what `tools/probe_paks.py` used to print. Fourth of four tokens this
+        # session's own closure prose added to this set. The running count is
+        # the point rather than the token: `OPS-63` widened the scope to the
+        # documents where this project writes about its own code, and four per
+        # session is what that costs. If a later session finds itself adding ten
+        # in one pass, that is the signal to revisit the extractor rather than
+        # to keep typing - `OPS-63`'s criterion 3 measured the alternative and
+        # refuted it at 45 retired against 52 introduced, so the answer is not
+        # simply "stop truncating at underscores".
+        "path.name",
         # A git CONFIG KEY, quoted by `LL-0169` and `OPS-49`. `core.filemode`
         # is not a host and not a file; `.filemode` simply parses as a TLD-
         # shaped tail. Looked at before adding, per the regenerating note.

@@ -1110,7 +1110,18 @@ class TestMainReportsBothChannels:
     """main() must print the pair channel too, or nobody ever sees it."""
 
     def test_main_prints_documents_and_pairs(self, capsys) -> None:
-        code = doc_size_budget.main()
+        """The default run, scoped explicitly - see the OPS-67 note below.
+
+        ``main([])`` and not ``main()``. Since ``OPS-67`` a bare ``main()``
+        reads ``sys.argv[1:]``, which inside a test runner is pytest's own
+        argument list and is now REFUSED rather than ignored - that refusal is
+        the whole point of the item. Passing an empty list asks for the default
+        scope, which is what this test was always about. The behaviour of
+        ``main()`` with no argument is pinned separately by
+        ``TestCommandLineRefusesUnknownArguments.test_argv_none_reads_sys_argv``,
+        so nothing was lost by making the scope explicit here.
+        """
+        code = doc_size_budget.main([])
         out = capsys.readouterr().out
 
         assert code == 0, f"the real tree is not green:\n{out}"
@@ -1122,6 +1133,222 @@ class TestMainReportsBothChannels:
                 "documents in the repository are still invisible to a reader "
                 "running this module"
             )
+
+
+# ---------------------------------------------------------------------------
+# ROADMAP OPS-67: the command line refuses what it does not understand, and the
+# one option it grows is REAL.
+#
+# WHAT WAS MEASURED, AND WHY IT IS THE LOAD-BEARING ONE OF THE FOUR. On
+# 2026-09-08 ``python tools/doc_size_budget.py --lanternlight-bogus-flag``
+# exited 0 and printed an ordinary green report about ROADMAP.md and
+# docs/LEDGER.md. ``main`` took no parameters and never read ``sys.argv``, so
+# the flag was not rejected - it was never seen. This module's numbers are
+# QUOTED: the repository's own hand-off tells the next session to ask it for
+# headroom in SESSIONS rather than repeat a byte figure. A caller who believed
+# they had scoped it at a scratch document, and got a confident verdict about
+# the live ones, is the OPS-64 failure exactly - a true verdict answering a
+# different question than the one asked.
+#
+# The tests below pin both halves of the answer, because either alone is
+# incomplete. Refusing unknown argv without growing a real option would leave
+# the tool unable to be scoped at all, and a scoping option that did not
+# actually change which files are read would be the same lie with a nicer
+# spelling.
+# ---------------------------------------------------------------------------
+
+
+def _write_scratch_tree(root: Path) -> dict[str, int]:
+    r"""Build a four-document scratch tree and return each file's LF byte size.
+
+    The tree mirrors the real one's SHAPE - the two live documents in
+    :data:`tools.doc_size_budget.BUDGETS` and the two archives in
+    :data:`tools.doc_size_budget.PAIRS` - so a run pointed at it exercises BOTH
+    channels rather than only the per-document one.
+
+    Bytes are written with :meth:`pathlib.Path.write_bytes` and contain no
+    carriage returns on purpose. ``Path.write_text`` on Windows turns ``\n``
+    into ``\r\n``, and while ``core.autocrlf`` would normalize that back out of
+    the blob, a test whose expected size depends on that normalization is a test
+    about git configuration rather than about this module. Writing LF bytes
+    directly makes each expected size the exact length written.
+    """
+    sizes = {
+        "ROADMAP.md": 100,
+        "docs/LEDGER.md": 200,
+        "docs/ROADMAP_ARCHIVE.md": 300,
+        "docs/LEDGER_ARCHIVE.md": 400,
+    }
+    for rel_path, size in sizes.items():
+        target = root / rel_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        body = ("scratch " * size).encode("ascii")[: size - 1] + b"\n"
+        target.write_bytes(body)
+        assert len(body) == size
+    return sizes
+
+
+class TestCommandLineRefusesUnknownArguments:
+    """An unknown token is a usage error with its own exit code, never a pass.
+
+    Exit code 2 rather than 1, matching ``tools/archive_link_guard.py``: 1 means
+    the check ran and a document is over budget, and a caller that cannot tell
+    "you typed something I do not understand" from "the roadmap is too big"
+    learns nothing from either.
+    """
+
+    def test_the_measured_bogus_flag_is_refused(self, capsys) -> None:
+        code = doc_size_budget.main(["--lanternlight-bogus-flag"])
+        err = capsys.readouterr().err
+
+        assert code == doc_size_budget.USAGE_EXIT_CODE, (
+            "the exact flag measured on 2026-09-08 still exits "
+            f"{code}; it must be a usage error"
+        )
+        assert "--lanternlight-bogus-flag" in err, (
+            "the refusal must name the offending token, or a caller cannot "
+            "tell which of their arguments was wrong"
+        )
+
+    def test_no_report_is_printed_when_argv_is_refused(self, capsys) -> None:
+        doc_size_budget.main(["--lanternlight-bogus-flag"])
+        out = capsys.readouterr().out
+
+        assert "ROADMAP.md" not in out, (
+            "a refused run still printed a verdict about the live documents, "
+            "which is the OPS-64 failure the refusal exists to stop"
+        )
+
+    def test_a_positional_argument_is_refused(self, capsys) -> None:
+        code = doc_size_budget.main(["ROADMAP.md"])
+        capsys.readouterr()
+
+        assert code == doc_size_budget.USAGE_EXIT_CODE, (
+            "this module takes no positional arguments; accepting one and "
+            "ignoring it would measure the defaults while looking scoped"
+        )
+
+    def test_abbreviation_is_refused(self, capsys) -> None:
+        code = doc_size_budget.main(["--repo-roo", "."])
+        capsys.readouterr()
+
+        assert code == doc_size_budget.USAGE_EXIT_CODE, (
+            "argparse accepts unambiguous prefixes by default, so --repo-roo "
+            "would silently mean --repo-root; that is this item's own defect "
+            "one level down and allow_abbrev must be False"
+        )
+
+    def test_help_exits_zero(self, capsys) -> None:
+        code = doc_size_budget.main(["--help"])
+        out = capsys.readouterr().out
+
+        assert code == 0, "--help is not a usage error"
+        assert "--repo-root" in out, "help must document the option that exists"
+
+    def test_argv_none_reads_sys_argv(self, capsys, monkeypatch) -> None:
+        """``main()`` with no argument reads the process argv, not nothing.
+
+        This is what the ``__main__`` block relies on, and it is the exact path
+        that was broken: a flag on the real command line has to reach the
+        parser. Asserting it through ``sys.argv`` rather than through an
+        explicit list is the point - an explicit list would pass even if
+        ``main`` ignored ``sys.argv`` entirely, which is the bug.
+        """
+        monkeypatch.setattr(
+            sys, "argv", ["doc_size_budget.py", "--lanternlight-bogus-flag"]
+        )
+        code = doc_size_budget.main()
+        capsys.readouterr()
+
+        assert code == doc_size_budget.USAGE_EXIT_CODE
+
+
+class TestRepoRootOptionIsReal:
+    """``--repo-root`` changes WHICH documents are measured - OPS-67 criterion 2.
+
+    An option that were accepted and ignored would be worse than one refused,
+    because the resulting verdict is true about a corpus the caller did not ask
+    about. So these tests do not check that the flag parses; they check that the
+    printed byte counts are the scratch tree's and are not the live tree's.
+    """
+
+    def test_both_channels_report_the_scratch_sizes(self, tmp_path, capsys) -> None:
+        sizes = _write_scratch_tree(tmp_path)
+        code = doc_size_budget.main(["--repo-root", str(tmp_path)])
+        out = capsys.readouterr().out
+
+        assert code == 0, f"the scratch tree is tiny and must pass:\n{out}"
+        # Per-document channel: each live document reports its own scratch size.
+        roadmap_size = sizes["ROADMAP.md"]
+        ledger_size = sizes["docs/LEDGER.md"]
+        assert f"ROADMAP.md: {roadmap_size} bytes" in out, out
+        assert f"docs/LEDGER.md: {ledger_size} bytes" in out, out
+        # Pair channel: the same flag moved it too, and the totals are sums of
+        # the scratch halves rather than of the live ones.
+        roadmap_pair = roadmap_size + sizes["docs/ROADMAP_ARCHIVE.md"]
+        ledger_pair = ledger_size + sizes["docs/LEDGER_ARCHIVE.md"]
+        assert f"ROADMAP: {roadmap_pair} bytes" in out, out
+        assert f"LEDGER: {ledger_pair} bytes" in out, out
+
+    def test_the_numbers_differ_from_the_live_tree(self, tmp_path, capsys) -> None:
+        """The same assertion stated as a difference, which is what changed.
+
+        Pinning the scratch numbers alone would still pass if the live documents
+        happened to be that size. Measuring the real tree in the same test and
+        asserting the two runs disagree is the claim that actually matters.
+        """
+        _write_scratch_tree(tmp_path)
+        doc_size_budget.main(["--repo-root", str(tmp_path)])
+        scratch_out = capsys.readouterr().out
+        doc_size_budget.main([])
+        live_out = capsys.readouterr().out
+
+        assert scratch_out != live_out
+        live_roadmap = doc_size_budget.git_blob_size(
+            doc_size_budget.REPO_ROOT / "ROADMAP.md"
+        )
+        assert f"ROADMAP.md: {live_roadmap} bytes" in live_out, live_out
+        assert f"ROADMAP.md: {live_roadmap} bytes" not in scratch_out, (
+            "the scratch run still reported the live ROADMAP.md size, so "
+            "--repo-root was parsed and then ignored"
+        )
+
+    def test_every_run_prints_the_root_it_read(self, tmp_path, capsys) -> None:
+        _write_scratch_tree(tmp_path)
+        doc_size_budget.main(["--repo-root", str(tmp_path)])
+        out = capsys.readouterr().out
+
+        assert str(tmp_path) in out, (
+            "a verdict that does not name its own scope can be mistaken for an "
+            "answer about a different tree, which is the whole OPS-64 defect"
+        )
+
+
+class TestMissingDocumentUnderACustomRootStaysLoud:
+    """Scoping the tool elsewhere must not turn a missing document into a pass.
+
+    This is the constraint the dispatch named explicitly. An empty directory
+    trivially satisfies every byte budget for reasons that have nothing to do
+    with any document being small, and a scoping flag that made that a green run
+    would have built the textbook vacuous guard on purpose.
+    """
+
+    def test_an_empty_root_fails_loudly(self, tmp_path, capsys) -> None:
+        code = doc_size_budget.main(["--repo-root", str(tmp_path)])
+        out = capsys.readouterr().out
+
+        assert code == 1, f"an empty tree reported success:\n{out}"
+        assert "WATCHED PATH DOES NOT EXIST" in out
+        assert "OK" not in out, out
+
+    def test_every_missing_path_is_named_in_one_run(self, tmp_path, capsys) -> None:
+        doc_size_budget.main(["--repo-root", str(tmp_path)])
+        out = capsys.readouterr().out
+
+        for rel_path in doc_size_budget.BUDGETS:
+            assert rel_path in out, out
+        for pair in doc_size_budget.PAIRS.values():
+            assert pair.archive in out, out
 
 
 if __name__ == "__main__":

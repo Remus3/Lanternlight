@@ -58,6 +58,37 @@ that litters the repository on every edit would be reverted within the day. The
 compile target is therefore a temporary directory that is removed on the way
 out, whatever the outcome.
 
+ARGV IS NOT A CONTRACT HERE, AND THAT IS A DECISION - ROADMAP ``OPS-67``.
+Measured 2026-09-08: ``python tools/syntax_check_hook.py --not-a-flag`` exits 0
+and ignores the flag. That is the same shape ``OPS-64`` fixed in
+``archive_link_guard.py`` with real options and ``OPS-66`` fixed in
+``precommit_gate.py`` with two named contracts and a refusal, and neither fix
+belongs here. The reason is the caller and the exit contract, not consistency:
+
+- **The only caller passes no arguments.** ``.claude/settings.json`` wires this
+  as ``python "$CLAUDE_PROJECT_DIR/tools/syntax_check_hook.py"`` with no
+  trailing token, and the path this hook checks arrives on stdin as JSON - see
+  :data:`PATH_KEYS`. The ``OPS-64`` defect is a tool answering confidently about
+  a scope the caller did not ask for; here there is no scope in argv to get
+  wrong, because the subject is named in the payload and only there.
+- **Refusing would break the one path that must not break.** Everything above
+  in this docstring exists to make "always exits 0" true against a ``None``
+  stderr, a closed descriptor and a broken pipe. Adding a usage exit code would
+  hand this module a way to exit non-zero on purpose, in a ``PostToolUse`` hook,
+  where non-zero wedges the session. ``precommit_gate.py`` can spend exit code 2
+  because refusing is its verdict; this file has no verdict to give.
+- **``argparse`` would put a ``SystemExit`` inside a module that ends in
+  ``os._exit(0)``.** The ``finally`` block below is the single place that
+  decides this process's exit status. A parser that raises ``SystemExit(2)``
+  before ``main`` is even entered would be a second decider, and the one thing
+  this file cannot afford is two of those.
+
+The current behaviour therefore stays, and the tests pin it - including the
+premise, by re-reading ``.claude/settings.json`` and asserting the wiring still
+passes no arguments. A future session that adds a flag to that command line
+turns the pin red and reopens this decision, which is correct: the whole
+argument for ignoring argv is an argument about who calls this file.
+
 Standard library only. A hook the harness runs on every edit is not the place
 to acquire a dependency.
 """

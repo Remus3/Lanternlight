@@ -1156,6 +1156,19 @@ recorded here with their note names, or their continued absence is recorded
 with the same weight. The item is not closed on results nobody has, for the
 same reason `OPS-47` was not closed on a count nobody had.
 
+**2026-09-08 night, and this does NOT lift the hold.** The operator directed, in
+chat, that the next session prepare a RESPONDER RUNNER and adjacent filings, and
+said the other four projects carry the same directive - so question 1 above,
+"does Lanternlight want an auto-responder at all", has an operator answer coming
+from a coordinated instruction rather than from a sibling's proposal. When asked
+what authority that runner gets and how to propagate it, the operator answered
+**"standby on this decision then, i will keep it to the test for now"**. So
+questions 2, 3 and 4 are exactly as unanswered as they were, nothing was built,
+and no note went out. The directive and the standby are filed together as
+`OPS-68`, because a directive that arrives and is then paused is the shape a cold
+session loses: it remembers the instruction and forgets the pause. Read both
+items or neither.
+
 ## OPS-57. Both continuity documents will outgrow their budgets within days, and raising the numbers is not the fix - CLOSED 2026-09-08
 
 Filed 2026-09-08, the moment the roadmap's size budget fired for real and the
@@ -3721,7 +3734,7 @@ recorded for `_block`. Restored from a pristine copy and verified sha256-identic
 rather than by `git checkout`, because the tree carried other slices' uncommitted
 work.
 
-## OPS-67. Four `tools/` entry points still read an unknown argument as a pass, and the four are not one decision - OPEN
+## OPS-67. Four `tools/` entry points still read an unknown argument as a pass, and the four are not one decision - CLOSED 2026-09-08
 
 Filed 2026-09-08 out of `OPS-64`'s criterion-4 sweep, and re-probed by the merger:
 `tools/ascii_check.py`, `tools/syntax_check_hook.py`, `tools/probe_paks.py` and
@@ -3765,6 +3778,168 @@ uniform change would be a guess dressed as consistency:
    many refuse, how many accept real options, and how many are documented as
    argv-unreachable. The sweep in `OPS-64` said nine; re-derive it rather than
    quoting it, because a filed count is a hypothesis.
+
+### Outcome - CLOSED 2026-09-08
+
+**Criterion 1, four decisions and they differ, which is the whole point of the
+item.** Each reason is written in the module it governs, not here:
+
+1. **`tools/ascii_check.py` - NO CHANGE, argv ignored on purpose.** Its only
+   caller is the `PostToolUse` wiring, which passes no arguments; its subject
+   arrives on stdin; and a non-zero exit from a `PostToolUse` hook breaks the
+   session it runs in. Adding argparse would import a SECOND exit channel into a
+   module that is deliberately fail-soft. Recorded in the docstring under a
+   heading a reader will find - `ARGV IS NOT A CONTRACT HERE, AND THAT IS A
+   DECISION`.
+2. **`tools/syntax_check_hook.py` - NO CHANGE, same reason plus one of its
+   own.** Its `finally: os._exit(0)` is the single decider of this process's
+   exit status, and an argparse `SystemExit(2)` would be a second decider inside
+   a module whose whole design is that exactly one thing decides.
+3. **`tools/probe_paks.py` - CHANGED, because it has no automated caller at
+   all.** It is typed by a person and nothing reads its exit code that a
+   non-zero could break, so refusing costs nothing. Unknown argv now returns
+   `USAGE_EXIT_CODE = 2` quoting the argument back. No argparse and no invented
+   options: it has no scope to take.
+4. **`tools/doc_size_budget.py` - CHANGED, argparse, and it is the load-bearing
+   one.** Its numbers get QUOTED, including by this repository's own hand-off,
+   so it needs a real way to be scoped; and its exit codes are a verdict channel
+   that a usage error must not borrow. `--repo-root`, `allow_abbrev=False`,
+   `USAGE_EXIT_CODE = 2`, and `SystemExit` caught and returned so `main` always
+   returns an int.
+
+**Criterion 2, the options are REAL, measured against a scratch pair rather than
+inspected.** Default run: `ROADMAP.md 236,909`, `docs/LEDGER.md 322,447`, pairs
+712,382 and 909,218. Same command with `--repo-root <scratch>`: 16 and 15, pairs
+40 and 38, exit 0. Against an EMPTY directory: exit 1 with six missing-path
+Findings, because a missing document stays a Finding and never becomes a silent
+pass. `--repo-roo` exits 2 rather than being accepted as an abbreviation.
+
+**One option, scoping BOTH channels, and the reason is this item one level up.**
+`--repo-root` moves the per-document channel and the `OPS-62` pair channel
+together. No `--documents-only` or `--pairs-only`, because a run that measures
+one channel and prints one confident OK line is precisely the defect `OPS-64`
+and this item exist to remove. Also refused: a `--budget` override, which is
+"raise the budget to go green" with a command-line spelling.
+
+**What `--repo-root` does NOT move, written into the docstring because it would
+otherwise be a trap.** It moves only where the watched paths resolve, never
+git's working directory, so blobs are always hashed into THIS repository's
+object database. A non-git root works; a git failure propagates loudly instead
+of returning a zero that would read as a very small document.
+
+**Criterion 3, non-vacuity, proved both ways.** For what changed: seven
+mutations on the budget module - `allow_abbrev=True`, ignoring `--repo-root` in
+the document channel, ignoring it in the pair channel only, `parse_known_args`,
+a silent pass on a missing path, `argv=None` ignoring `sys.argv`, and dropping
+the root from the scope line - killing 1, 3, 2, 5, 4, 1 and 1 tests
+respectively. On the probe: pinning against `HEAD`'s copy gave 5 failed of 6,
+deleting the scope line killed 1, and refusing in WORDS while continuing to run
+killed 2.
+
+**For what deliberately did NOT change, the pin is non-vacuous too**, which is
+the half criterion 3 asks for and the half that is usually skipped: making
+`ascii_check.py` refuse argv turned 2 tests red, making the syntax hook
+`os._exit(2)` on argv turned 1 red, and deleting the decision sentence from
+either docstring turned 2 red. So the decision is held by tests rather than by
+an unexamined default. The premise underneath it - that the wiring passes no
+arguments - is pinned against a SCRATCH copy of `.claude/settings.json`:
+appending an argument to a hook command turns it red, and unwiring the hook
+turns it red.
+
+**Criterion 4, the count, RE-DERIVED by the merger rather than quoted from the
+sweep that filed this item.** Nine modules in `tools/` carry a `__main__` block,
+each invoked here with an unknown flag:
+
+    refuse, exit 2   probe_paks, doc_size_budget, archive_link_guard,
+                     doc_archive, frame_poller, hook_command_guard,
+                     precommit_gate                                    7 of 9
+    ignore argv,     ascii_check, syntax_check_hook                    2 of 9
+      exit 0, BY DECISION, reason in the module, pinned by a test
+
+Nine was also the sweep's figure, so this is one filed count that reproduced.
+The two remaining zeros are the answer rather than an omission: they are the
+only two entry points whose caller is a hook that a non-zero exit would break.
+
+`tests/test_doc_size_budget.py` went 65 to 76, `tests/test_syntax_check_hook.py`
+34 to 41, and `tests/test_probe_paks.py` is new at 6 - the pak probe had no test
+module before this item, so it shipped unpinned. It is owned by the capture lane
+beside the tool it pins.
+
+## OPS-68. The operator directed a RESPONDER RUNNER and cross-project propagation, then put both decisions on STANDBY - OPEN, operator-held 2026-09-08
+
+Filed 2026-09-08 night, from an operator instruction given in chat, and filed
+BECAUSE the follow-up was a standby rather than a ruling. A directive that
+arrives and is then paused is exactly the thing a cold session loses: the
+instruction is remembered, the pause is not, and the next session acts on half
+of it.
+
+**What the operator said, in chat, in this order.**
+
+1. "setup next session to headlessly continue the work for the responder runner
+   and adjacent filings to propagate it to the other projects", with the note
+   that RSC, RC, CS and LW carry the same directive.
+2. Then, when asked what authority the runner gets and how to propagate:
+   **"standby on this decision then, i will keep it to the test for now"** - to
+   BOTH questions.
+
+**What that settles and what it does not.** It settles that the operator wants a
+responder runner here eventually and that the same directive went to the other
+four projects, so this is a coordinated instruction rather than a sibling's
+proposal. It does NOT settle any of the three questions `OPS-48` still holds -
+the A1-A5 / D1-D8 action allowlist, consent to being SPAWNED INTO by a sibling's
+machinery, and the 1900-2100 action window - and it does not settle what
+authority a runner here would have.
+
+**NOTHING WAS BUILT AND NOTHING WAS SENT.** No runner exists, no note went out
+on the channel, and no answer to any `OPS-48` question was given to any sibling.
+That is recorded positively so a later session does not go looking for work that
+is not there, and so nobody assumes a sibling has already been told.
+
+**The rule that governs this item is the one at the top of `CLAUDE.md` and it is
+unchanged.** Adopting a cross-project charter, protocol, key scheme, lock,
+governor, allowlist or schedule is an OPERATOR RULING, never a session decision.
+A directive to prepare is not a ruling on scope. **No session may decide what
+the runner is allowed to do**, and in particular no session may consent, on this
+project's behalf, to another project's machinery spawning into this tree - a
+read-only session still reads this tree, which is `OPS-48`'s own point.
+
+**Four shapes were put to the operator and are recorded here so the standby
+resumes from the same menu rather than from a fresh guess.** They are options,
+not a recommendation this item is entitled to make:
+
+1. Reply-only, no spawn consent: the runner reads OUR inbox, drafts and delivers
+   replies through `ops.outbox.deliver`, and never executes an action a note
+   asks for. Keeps "a note is MAIL, not a task" intact.
+2. Reply-only plus RC's allowlist adopted as vocabulary, so replies are
+   machine-comparable with siblings. Adopting the allowlist is itself a
+   cross-project adoption and would need writing into `CLAUDE.md` beside the
+   `OPS-35` / `OPS-36` exception.
+3. Full participation: allowlist plus consent to being spawned into.
+4. Draft-only: the runner writes drafts to disk and delivers nothing; a session
+   or the operator sends.
+
+And three propagation shapes: send one note now to all four siblings; file only
+and let a later session announce the runner with MEASURED results attached; or
+send the ruling alone now and the design once it is built.
+
+### Acceptance
+
+1. The standby is lifted by the operator, in chat, and the answer is written
+   here with the same weight whether it is a YES or a NO - `OPS-48`'s criterion
+   1, which exists because an unrecorded NO gets re-opened as though it had
+   never been asked.
+2. Nothing is built before criterion 1. A runner whose authority is undecided
+   cannot be given one by a session choosing a default, and "we built the safe
+   version first" is that choice wearing a modest hat.
+3. If the ruling adopts anything cross-project, it goes into `CLAUDE.md` beside
+   the `OPS-35` / `OPS-36` exception rather than being left as a contradiction a
+   cold session would refuse to act on.
+4. Whatever is ruled, the siblings are told through `ops.outbox.deliver` so the
+   answer is recorded in THIS tree as well as delivered - `OPS-48`'s criterion 3,
+   and the reason `OPS-43` exists: a note sent by hand leaves no trace here.
+5. `OPS-48` is updated in the same pass, because these two items now describe one
+   situation. It is HELD waiting on RC's and RSC's results; this one is HELD
+   waiting on a scope decision. Neither should be read as the other.
 
 ## Archive index
 

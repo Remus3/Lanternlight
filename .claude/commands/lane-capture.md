@@ -38,6 +38,7 @@ Touch these paths and nothing else. Every other path in the repository belongs t
 
 - `tools/frame_poller.py`
 - `tools/probe_paks.py`
+- `tests/test_probe_paks.py`
 - `lanternlight/vision*.py`
 - `tests/test_vision*.py`
 - `tests/test_capture*.py`
