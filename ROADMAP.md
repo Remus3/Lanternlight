@@ -2976,7 +2976,7 @@ the guard reports OK - the instrument reporting on itself again.
    with its cost, and `tools/doc_size_budget.py` says so where a reader looking
    for the missing archive budget will find it.
 
-## OPS-63. The source register never reads `ROADMAP.md`, and the OPS-57 split made that visible rather than new - OPEN
+## OPS-63. The source register never reads `ROADMAP.md`, and the OPS-57 split made that visible rather than new - CLOSED 2026-09-08
 
 Filed 2026-09-08, out of `OPS-57`'s merge. Not caused by the split - the split
 walked into it.
@@ -3039,7 +3039,96 @@ session will find it rather than living only in a constant's comment.
    it is removed. A scope that widens without a control is a scope that might
    not have widened at all.
 
-## OPS-64. `tools/archive_link_guard.py` accepts any argv and silently ignores it - OPEN
+### Outcome - CLOSED 2026-09-08
+
+**Criterion 2 first, because it asked for a count taken BEFORE the change.**
+Measured with the scan unchanged, per document, counting host-shaped tokens that
+would redden the guard:
+
+    ROADMAP.md 8   CLAUDE.md 12   WAKEUP_NOTES.md 4   README.md 2
+    LL-NEXT-SESSION.txt 4   CONTRIBUTING.md 3   CODE_OF_CONDUCT.md 2
+    SECURITY.md 1   BACKLOG.md 0   .github/PULL_REQUEST_TEMPLATE.md 0
+    the four lane ledgers 0 each   .claude/** 23 across 13 files
+    UNION 52
+
+Confirmed live afterwards rather than left as an estimate: with the scope widened
+and the denylist untouched the guard reported `1 failed, 12 passed` and named
+exactly 52 tokens. The last measurement of this cost was 57 for `docs/` alone, so
+52 for everything else is the same order and the item's expectation was right.
+
+**FOUR OF THE 52 ARE REAL HOSTS AND TWO WERE UNREGISTERED, which is the payoff
+and it is not a formality.** `docs.github.com`, cited by `CODE_OF_CONDUCT.md` and
+`SECURITY.md` for GitHub's abuse-reporting and private-vulnerability-reporting
+instructions, and `contributor-covenant.org`, cited as attribution in
+`CODE_OF_CONDUCT.md`. Both were invisible to the register for as long as those
+documents have existed, which is since `LL-0200` two days ago. Both now carry a
+row in `docs/ECOSYSTEM.md` saying REPOSITORY GOVERNANCE ONLY, never evidence
+about this game - the distinction the register exists to keep. The other two,
+`x.com` and `t.co`, are the fragments the `OPS-57` passage quotes as the pieces
+hiding inside two launch-window wiki hosts; they are registered rather than
+denylisted, because a real host must never hide in `KNOWN_NON_HOSTS`, and their
+row says plainly that nobody has fetched either.
+
+**Criterion 1, the scope, stated instead of inherited.** Every tracked `*.md` and
+`*.txt` in the repository, plus the original `docs/**/*.md` walk kept verbatim so
+the new rule is a strict SUPERSET and no coverage was traded for coverage. One
+enumerated exclusion with its reason: `docs/ROADMAP_ARCHIVE.md`, whose 57
+previously-unread tokens were checked by hand under `OPS-57` and were all false
+positives; a document must not gain guards by being archived any more than it
+loses them.
+
+- **Rejected: "everything except `.claude/**`",** which would have cost 29 tokens
+  instead of 52. It requires storing a directory list in this file, and a
+  committed list of paths goes stale the moment one is added - the same doctrine
+  that made `tracked_paths` ask `git` on every run rather than carry a list.
+- **Code is deliberately out of scope**, stated rather than left as an accident
+  of the glob. A host in a `.py` file is nearly always a test fixture or a
+  pattern, and the register is about what this project CITES.
+
+**Criterion 3 is REFUTED, with numbers, and that is a real result rather than a
+failure to deliver.** The item's hypothesis was that a pattern which stopped
+truncating at underscores would retire a whole class of denylist entries, and
+that if it retired most of them the denylist was treating a pattern defect.
+Measured against the pre-widening denylist:
+
+    retires 45 of 266 load-bearing entries   16.9%, not most
+    introduces 52 brand-new red tokens       net 267 -> 274, WORSE
+
+Zero of the 52 long forms are covered by `is_repo_filename`, because `OPS-44`
+already harvested that win when it started asking `git ls-files` at test time.
+So the underscore truncation is not the denylist's cause; it is a cosmetic detail
+of tokens that would need vetting either way.
+
+**And the sub-case this item recorded from `OPS-61` behaves differently than the
+hypothesis predicted.** `reported.json` does not retire - it is RENAMED to
+`inbox_reported.json` and still needs an entry, because the file is a runtime
+record under gitignored `ops/runtime/` and `is_repo_filename` asks `git ls-files`.
+Names of untracked-by-design files land in the denylist by construction. The
+alternative, resolving tokens against `.gitignore`, is `LL-0079`'s
+auto-exemption failure with a new input.
+
+**Also measured and rejected: skipping fenced code blocks.** It would cut the new
+tokens from 52 to 34 at zero coverage cost measured TODAY, and it buys that by
+never reading a region of every document again. An unbounded, unreviewed blind
+spot is the wrong trade for 18 tokens, and this project has already been bitten
+by a source hiding in a region a guard had stopped reading.
+
+**What it cost, stated rather than implied.** `KNOWN_NON_HOSTS` grew from 267 to
+315, its largest single addition, and that set is the one place this module's own
+docstring says a real source can hide. Every added token was looked at; the
+merger re-read the additions and they are dotted code identifiers, our own
+filenames, and two Windows program names. The cost is real and it is the price of
+reading the documents where this project actually writes.
+
+**Criterion 4, non-vacuity against the NEW scope, proved by four mutations with
+each anchor asserted before the edit.** A fabricated host planted in
+`.github/PULL_REQUEST_TEMPLATE.md` produced `1 failed, 15 passed` naming that
+file; the same in `LL-NEXT-SESSION.txt` did likewise - both documents the old
+scan never read. Narrowing `SCAN_SUFFIXES` back to `("md",)` produced
+`2 failed, 14 passed`, and an empty tracked listing also `2 failed, 14 passed`,
+so the guard still gets NOISIER when its input disappears rather than quieter.
+
+## OPS-64. `tools/archive_link_guard.py` accepts any argv and silently ignores it - CLOSED 2026-09-08
 
 Filed 2026-09-08 by the wrap's own refutation pass, which hit it while trying to
 break the guard: it passed flags naming scratch files, and `main()` printed an
@@ -3253,6 +3342,74 @@ mid-session.
   rather than deleted, because "we checked and there is nothing" was wrong for
   two days and the shape of that error is the useful part.
 
+### Outcome - CLOSED 2026-09-08
+
+**Criterion 1 and 2 together, because the decision joins them.** `main()` now
+builds an `argparse` parser with `allow_abbrev=False`, so an unknown flag or a
+stray positional exits 2 with a message naming the token, and `--arch` is refused
+rather than silently accepted as `--archive`. The options are REAL, which is what
+criterion 2 demanded: `--repo-root`, `--roadmap` and `--archive` map onto
+`check_repo`'s existing parameters and change what is read.
+
+Proved against a scratch pair rather than by inspection: a broken pair exited 1
+naming the SCRATCH heading; adding the stub produced
+`OK (2 archived heading(s), 2 stub link(s))`; pointing `--roadmap` at a different
+file produced a dangling finding; and `--archive docs/NOPE.md` produced DID NOT
+RUN, which is the distinct third answer this guard already knew how to give. The
+live default is unchanged at `OK (65 archived heading(s), 65 stub link(s))`,
+exit 0.
+
+**The filed defect, stated positively.** Every run now prints its own scope line -
+`scope ROADMAP.md vs docs/ROADMAP_ARCHIVE.md under C:\Lanternlight` - so a
+verdict says what it was a verdict ABOUT. `check_texts` also takes the roadmap's
+relative path for its MESSAGES, so a finding names the document actually read
+instead of the default constant. A true verdict answering a different question is
+this repository's recurring shape; a scope line is the cheapest possible defence
+against it.
+
+**Criterion 3, non-vacuity, three mutations, each anchor asserted before the
+substitution because a mutation that fails to apply looks exactly like a passing
+test.** Turning `parse_args` into `parse_known_args` - the rejection removed -
+gave `5 failed, 31 passed`. Making the options accepted and ignored, by calling
+`check_repo()` with no arguments, gave `5 failed, 31 passed` too, which is the
+point of criterion 2: the same tests catch both halves. Reverting the finding text
+to the default constant gave `1 failed, 35 passed`. Restored to `36 passed` after
+each.
+
+`tests/test_archive_link_guard.py` went 23 collected to 36. One existing test was
+ADAPTED and not weakened: `main()` now reads `sys.argv[1:]` when its argument is
+`None`, so the test that called `main()` bare under pytest was passing the test
+runner's own argv; it calls `main([])` and a new test covers the `None` contract
+with `sys.argv` monkeypatched.
+
+**Criterion 4, the sweep, reported as a COUNT because an empty sweep is a claim
+about the sweep.** Nine of nine `tools/` entry points - every module with a
+`__main__` block - each invoked with an unknown flag, exit codes read WITHOUT a
+pipe after a piped read returned the pager's status instead:
+
+    refuse (exit 2)   doc_archive.py, frame_poller.py, hook_command_guard.py
+    fixed here        archive_link_guard.py, 0 and a green line -> 2
+    ignore argv       ascii_check.py, syntax_check_hook.py, probe_paks.py,
+      and exit 0      doc_size_budget.py, precommit_gate.py
+
+The merger re-probed the four remaining ignorers independently and all four exit
+0 on an unknown flag.
+
+**THE SWEEP FOUND A FAIL-OPEN IN A SAFETY GATE, which is filed and closed as
+`OPS-66` rather than folded in here.** `tools/precommit_gate.py` recognised only
+`lint-staged` as `argv[1]`; anything else fell through to the PreToolUse stdin
+path, found no JSON, and returned 0 - which git reads as a pass. Since
+`.githooks/pre-commit` invokes it by that exact string, a one-character typo in
+that line turned the lint gate off and reported success. Measured both ways before
+the fix: `--lintstaged` exited 0 silently and the real `lint-staged` also exits 0
+on a clean repository, so the two were indistinguishable by the only thing a git
+hook reads.
+
+**The remaining four are `OPS-67`,** filed rather than swept in, because two of
+them are stdin hooks whose wiring passes no argv at all and two are
+manually-invoked tools whose numbers get quoted - a real difference in stakes
+that deserves a decision rather than one uniform change.
+
 ## OPS-65. The wrap ritual writes the hand-off to an ABSOLUTE target, so a wrap from a worktree overwrites the primary tree's hand-off - OPEN
 
 Filed 2026-09-08 out of `OPS-61`'s merge. `OPS-61` fixed every command the
@@ -3307,6 +3464,134 @@ how a fix becomes a surprise.
    in `LL-NEXT-SESSION.txt`'s own hand-off instructions agree with it. Three
    copies of an instruction are two stale copies waiting to happen, and this
    session found the third copy only by grepping for the absolute root.
+
+## OPS-66. `tools/precommit_gate.py` read an unknown argument as a PASS, so a typo in `.githooks/pre-commit` would switch the lint gate off silently - CLOSED 2026-09-08
+
+Filed and closed 2026-09-08, out of `OPS-64`'s criterion-4 sweep. Filed rather
+than folded into that item because it is a FAIL-OPEN in a safety gate and belongs
+where someone searching for one will find it.
+
+**What was measured before the fix.** The `__main__` block recognised only
+`lint-staged` and `--lint-staged` as `argv[1]`. Anything else fell through to the
+PreToolUse path, which read stdin, found no JSON, and returned 0.
+
+    python tools/precommit_gate.py --lintstaged   exit 0, no output
+    python tools/precommit_gate.py lint-staged    exit 0 on a clean repository
+
+Those two are INDISTINGUISHABLE by the only thing a git hook reads. And
+`.githooks/pre-commit` invokes the module as
+`"$lint_py" "$repo_top/tools/precommit_gate.py" lint-staged`, so a one-character
+slip in that line - the kind a reflow or a rename makes - would have turned the
+lint gate off while reporting success on every commit thereafter.
+
+**The shape, because it is the third instance in three sessions.** A true verdict
+answering a different question than the one asked. `OPS-56` was the pre-commit
+hook that ran the WRONG test module and reported that the guard had run. `OPS-64`
+was the archive link guard printing an identical green line having read the real
+documents while flags named scratch ones. This is the same defect in the one place
+where the failure direction is a permitted commit.
+
+### Acceptance
+
+1. An argument this module does not understand exits non-zero and says which
+   argument it was. Both entry points that DO exist keep working: no argv at all
+   for the PreToolUse hook, and the lint entry point under both spellings.
+2. Proved non-vacuous by mutation - remove the refusal, watch the guard-tests go
+   red, restore.
+3. The end-to-end exit code is measured in a real process, not inferred from a
+   function's return value, because the exit code IS the verdict.
+
+### Outcome - CLOSED 2026-09-08
+
+`dispatch(argv)` is a new named function and `__main__` is now three lines around
+it. Two contracts, spelled out - empty argv is the PreToolUse stdin path, the lint
+spellings are the git-hook helper - and everything else returns
+`USAGE_EXIT_CODE = 2`. Two is chosen because it refuses on BOTH of this file's
+contracts at once: a PreToolUse hook blocks on exactly 2, and git reads any
+non-zero exit from a hook helper as a refusal. One code, both callers, no branch
+that could pick wrongly. `lint-staged` followed by junk is refused as well; it was
+previously accepted with the junk ignored.
+
+**Deliberately NOT argparse, where `OPS-64` chose argparse one file over.** That
+guard grew real options and needed a parser. This module's exit codes ARE its
+verdicts, and adding a parser would put an argparse `SystemExit` and a `--help`
+path inside that. Two contracts do not need a parser; they need to be named.
+
+**The refusal survives the soft-fail on purpose.** `__main__` still returns 0 on an
+unexpected EXCEPTION, because a crashing gate that blocks every command is worse
+than no gate - `OPS-15`. A usage error is a RETURN VALUE, not an exception, so it
+passes through that handler untouched. This was checked rather than assumed.
+
+**TDD, and the failing step is worth recording.** Six tests were written first and
+observed red at `4 failed, 63 passed`; two of the six - both spellings still
+dispatch, and no-argv still reaches the stdin path - were GREEN from the start,
+which is what makes them positive controls: without them, refusing EVERYTHING
+would have passed.
+
+After the fix, `102 passed` across `tests/test_precommit_gate_lint.py` and
+`tests/test_precommit_gate.py`.
+
+**Criterion 2, and the mutation attempt that failed first, which is the part worth
+keeping.** The first mutation DID NOT APPLY - the anchor did not match - and the
+suite then printed `67 passed`. Read without the anchor assertion, that green is
+exactly the false comfort `CLAUDE.md` warns about: it looks like a mutation that
+killed nothing. The assertion fired and said so. The line endings were checked and
+ruled out as the cause; the anchor was rebuilt programmatically and verified to
+match once before being used.
+
+The mutation that did apply was chosen to be informative: it left the `_say`
+message in place and changed only the return, so the gate still PRINTS its refusal
+while no longer refusing. That killed exactly three tests - `3 failed, 64 passed` -
+and left the trailing-extra-argument test green, because that is a separate branch.
+Two tests guarding independent halves, which is the same result the `OPS-15` work
+recorded for `_block`. Restored from a pristine copy and verified sha256-identical
+rather than by `git checkout`, because the tree carried other slices' uncommitted
+work.
+
+## OPS-67. Four `tools/` entry points still read an unknown argument as a pass, and the four are not one decision - OPEN
+
+Filed 2026-09-08 out of `OPS-64`'s criterion-4 sweep, and re-probed by the merger:
+`tools/ascii_check.py`, `tools/syntax_check_hook.py`, `tools/probe_paks.py` and
+`tools/doc_size_budget.py` each exit 0 on an unknown flag. `OPS-64` fixed
+`archive_link_guard.py` and `OPS-66` fixed `precommit_gate.py`; these four are
+what is left of the nine.
+
+**Why they are filed together and answered separately.** The stakes differ, and one
+uniform change would be a guess dressed as consistency:
+
+- `ascii_check.py` and `syntax_check_hook.py` are `PostToolUse` hooks. The wiring
+  in `.claude/settings.json` passes them NO arguments, and both exit 0 on every
+  path by design because a `PostToolUse` hook that exits non-zero breaks the
+  session it runs in. An unknown argv is not reachable from the only caller they
+  have, so the fix may be worth nothing here and the honest answer may be a
+  comment saying so.
+- `doc_size_budget.py` is the one that worries. Its numbers get QUOTED - this
+  repository's own hand-off tells the next session to ask it for headroom in
+  sessions rather than repeat a byte figure - so a caller who believed they had
+  scoped it at a scratch document and got a confident verdict about the live ones
+  is the `OPS-64` failure exactly. It also writes real git objects via
+  `git hash-object -w`, which is why `OPS-8`'s concurrency question keeps
+  resurfacing around it.
+- `probe_paks.py` is an analysis script whose output nobody gates on. It is
+  probably the cheapest to fix and the least valuable.
+
+### Acceptance
+
+1. Each of the four gets a decision, not a batch: refuse unknown argv, grow real
+   options, or document why argv can never reach it. A file whose only caller
+   passes no arguments may legitimately keep its current behaviour, and if so the
+   REASON is written in the module.
+2. `doc_size_budget.py` is treated as the load-bearing one. If it grows options
+   they are real, in the sense that passing them changes which documents are
+   measured, and that is proved by pointing it at a scratch pair and watching the
+   numbers change.
+3. Whatever changes is proved non-vacuous by mutation, and whatever does not
+   changes carries a test pinning the current behaviour so a later reader cannot
+   mistake an unexamined default for a decision.
+4. The count is restated at the end: how many `tools/` entry points exist, how
+   many refuse, how many accept real options, and how many are documented as
+   argv-unreachable. The sweep in `OPS-64` said nine; re-derive it rather than
+   quoting it, because a filed count is a hypothesis.
 
 ## Archive index
 

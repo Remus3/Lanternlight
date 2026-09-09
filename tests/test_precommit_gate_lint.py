@@ -1352,3 +1352,87 @@ class TestEveryFilenameHandedToAnExternalTool:
             "a relative --config is only meaningful with the working "
             f"directory pinned to the repository: {seen['cwd']!r}"
         )
+
+
+# ---------------------------------------------------------------------------
+# argv - OPS-66. An argument this entry point does not understand must REFUSE
+# ---------------------------------------------------------------------------
+
+
+class TestUnrecognisedArgvIsRefused:
+    """A typo in the invocation must not read as a pass.
+
+    FOUND BY `OPS-64`'S SWEEP, 2026-09-08, and measured before it was fixed:
+    ``python tools/precommit_gate.py --lintstaged`` exited 0 and printed
+    nothing. The real invocation, ``lint-staged``, also exits 0 on a clean
+    repository, so the two were indistinguishable by the only thing a git hook
+    reads - the exit code.
+
+    ``.githooks/pre-commit`` invokes this module as
+    ``precommit_gate.py lint-staged``. A one-character slip in that line
+    therefore turned the lint gate off and reported success, and nothing
+    anywhere would have said so. That is the same shape as the pre-commit hook
+    that ran the WRONG test module while reporting the guard had run, and as
+    the archive link guard that answered a question nobody asked - a true
+    verdict about something other than what was requested.
+
+    Why this is a refusal and not a soft pass: every other path in this module
+    exists to refuse. A gate that cannot tell "I checked and it is clean" from
+    "I did not understand you" has no verdict to give, and the failure direction
+    for an unreadable request is REFUSE.
+    """
+
+    def test_an_unknown_flag_is_refused_in_process(self) -> None:
+        assert precommit_gate.dispatch(["--lintstaged"]) != 0
+
+    def test_the_refusal_names_the_argument_it_did_not_understand(self, capsys) -> None:
+        precommit_gate.dispatch(["--lintstaged"])
+        assert "--lintstaged" in capsys.readouterr().err
+
+    def test_a_trailing_extra_argument_is_refused_too(self) -> None:
+        """``lint-staged`` plus junk is a request nobody meant to make."""
+        assert precommit_gate.dispatch(["lint-staged", "--nope"]) != 0
+
+    def test_both_spellings_of_the_real_entry_point_still_dispatch(self, tmp_path) -> None:
+        """The positive control. Without it, refusing EVERYTHING would pass."""
+        for spelling in sorted(precommit_gate._LINT_ARGV):
+            result = subprocess.run(
+                [sys.executable, str(GATE_SOURCE), spelling],
+                cwd=str(REPO_ROOT),
+                capture_output=True,
+                text=True,
+                timeout=180,
+            )
+            assert result.returncode == 0, (spelling, result.stderr)
+
+    def test_no_argv_still_reaches_the_pretooluse_stdin_path(self) -> None:
+        """The hook passes NO argument, and that path must be untouched.
+
+        Run as a subprocess with empty stdin, which is the shape a PreToolUse
+        hook sees when the payload is unreadable: the gate permits, exit 0.
+        """
+        result = subprocess.run(
+            [sys.executable, str(GATE_SOURCE)],
+            cwd=str(REPO_ROOT),
+            input="",
+            capture_output=True,
+            text=True,
+            timeout=180,
+        )
+        assert result.returncode == 0, result.stderr
+
+    def test_an_unknown_flag_is_refused_end_to_end(self) -> None:
+        """The exit code is the whole verdict, so measure the real process."""
+        result = subprocess.run(
+            [sys.executable, str(GATE_SOURCE), "--lintstaged"],
+            cwd=str(REPO_ROOT),
+            input="",
+            capture_output=True,
+            text=True,
+            timeout=180,
+        )
+        assert result.returncode != 0, (
+            "an unrecognised argument exited 0, which a git hook reads as a pass "
+            f"and a PreToolUse hook reads as permission: {result.stdout!r}"
+        )
+        assert "--lintstaged" in result.stderr, result.stderr

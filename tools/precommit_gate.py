@@ -838,21 +838,85 @@ def main() -> int:
 #: are the obvious thing to type.
 _LINT_ARGV = {"lint-staged", "--lint-staged"}
 
+#: Exit code for an argument this module does not understand. 2 is chosen
+#: because it refuses on BOTH of this file's contracts at once: a PreToolUse
+#: hook blocks on exactly 2, and git reads any non-zero exit from a hook helper
+#: as a refusal. One code, both callers, no branch that could pick wrongly.
+USAGE_EXIT_CODE = 2
+
+
+def dispatch(argv: list[str]) -> int:
+    """Route ``argv`` to an entry point, or REFUSE - ``OPS-66``.
+
+    **The defect this exists to close, measured 2026-09-08 by `OPS-64`'s
+    sweep.** ``python tools/precommit_gate.py --lintstaged`` exited 0 and
+    printed nothing: the ``__main__`` block recognised only
+    :data:`_LINT_ARGV` as ``argv[1]`` and anything else fell through to the
+    PreToolUse path, which found no JSON on stdin and returned 0. The real
+    invocation exits 0 on a clean repository too, so the two were
+    indistinguishable by the only thing a git hook reads.
+
+    ``.githooks/pre-commit`` invokes this module as
+    ``precommit_gate.py lint-staged``. A one-character slip in that line turned
+    the lint gate OFF and reported success. That is this repository's recurring
+    shape - a true verdict answering a different question than the one asked -
+    and it is the third instance in three sessions, after the pre-commit hook
+    that ran the wrong test module and the archive link guard that accepted
+    flags it never read.
+
+    **Why refuse rather than fall back.** Every other path in this file exists
+    to refuse. A gate that cannot tell "I checked and it is clean" from "I did
+    not understand you" has no verdict to give, so the failure direction for an
+    unreadable request is REFUSE. This is deliberately NOT covered by the
+    ``__main__`` soft-fail, which returns 0 on an unexpected EXCEPTION so a
+    crash cannot wedge a session: a usage error is a return value, not an
+    exception, and it survives that handler untouched.
+
+    **Why no argparse here, where `OPS-64` chose argparse for the link guard.**
+    That guard grew real options and needed a parser. This one has exactly two
+    contracts - no argv at all, or the lint entry point - and adding a parser
+    would put an ``--help`` path and an argparse ``SystemExit`` inside a module
+    whose exit codes ARE its verdicts. Two contracts, spelled out, refusing
+    everything else.
+
+    Args:
+        argv: Arguments after the program name, i.e. ``sys.argv[1:]``.
+
+    Returns:
+        The process exit code. ``0`` permits, ``2`` refuses a request this
+        module could not read.
+    """
+    if not argv:
+        return main()
+
+    if argv[0] in _LINT_ARGV:
+        if len(argv) > 1:
+            _say(
+                "precommit_gate: the lint entry point takes no further "
+                f"arguments, REFUSING: {argv[1:]!r}\n"
+            )
+            return USAGE_EXIT_CODE
+        # NOT covered by the soft-fail in ``__main__`` on purpose. That
+        # fail-open is correct for a PreToolUse hook, where a crash must not
+        # wedge the session. Here a crash means the lint gate did not run, and
+        # a gate that did not run has not passed.
+        try:
+            return lint_staged_main(REPO)
+        except Exception as exc:
+            _say(f"precommit_gate lint-staged crashed, REFUSING: {exc}\n")
+            return 1
+
+    _say(
+        "precommit_gate: unrecognised argument, REFUSING rather than reporting "
+        f"a pass it did not measure: {argv[0]!r}. Known: no arguments at all "
+        f"for the PreToolUse hook, or one of {sorted(_LINT_ARGV)}.\n"
+    )
+    return USAGE_EXIT_CODE
+
+
 if __name__ == "__main__":
     try:
-        if len(sys.argv) > 1 and sys.argv[1] in _LINT_ARGV:
-            # NOT covered by the soft-fail below on purpose. That fail-open is
-            # correct for a PreToolUse hook, where a crash must not wedge the
-            # session. Here a crash means the lint gate did not run, and a
-            # gate that did not run has not passed.
-            try:
-                _exit(lint_staged_main(REPO))
-            except SystemExit:
-                raise
-            except Exception as exc:
-                _say(f"precommit_gate lint-staged crashed, REFUSING: {exc}\n")
-                _exit(1)
-        _exit(main())
+        _exit(dispatch(sys.argv[1:]))
     except SystemExit:
         raise
     except Exception as exc:  # a gate must never wedge the session

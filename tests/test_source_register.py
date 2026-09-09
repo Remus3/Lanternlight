@@ -22,9 +22,10 @@ restore, watch it go green - and the proof was worthless against this bug.
 ask separately what it is blind to, which is why this module says so out loud
 below rather than leaving the caveat in a chat log.
 
-HOW IT WORKS. Extract every host-shaped token from every ``*.md`` under
-``docs/`` with a TLD-AGNOSTIC pattern, subtract the tokens that are this
-repository's own FILENAMES, subtract an enumerated denylist of further tokens a
+HOW IT WORKS. Extract every host-shaped token from every document in
+:func:`scanned_documents` with a TLD-AGNOSTIC pattern, subtract the tokens that
+are this repository's own FILENAMES, subtract an enumerated denylist of further
+tokens a
 human has vetted as not-an-external-source, and require every survivor to
 appear in the register section. A leading ``www.`` is normalised away, because
 ``www.twitch.tv`` and ``twitch.tv`` are one source and a guard that reported
@@ -81,8 +82,13 @@ that lives only in conversation is a lie in the artifact:
   written down here rather than left in a chat log.
 * It checks that a host STRING is present in the register section. It does not
   check that the row next to it says anything true, or that the tier is right.
-* It reads ``docs/**/*.md`` only. A source cited from ``README.md``,
-  ``ROADMAP.md`` or code is out of scope and unchecked.
+* It reads DOCUMENTS, never CODE. Every tracked ``*.md`` and ``*.txt`` in the
+  repository is in scope since `OPS-63` - see :func:`scanned_documents` for the
+  scope decision and the one enumerated exclusion - but a source cited from a
+  ``*.py`` docstring, a ``*.ps1``, ``*.toml`` or ``*.yml`` is still unchecked.
+  That is a deliberate line and not an oversight: a Python file is dense with
+  dotted attribute access, so scanning code would multiply the denylist without
+  finding a citation, and this project cites its sources in prose.
 * Presence is matched against the lowercased section text. It now requires a
   host BOUNDARY - see :func:`_present_in_register` - so a tail match no longer
   counts. Before `LL-0081` it did, and that was not hypothetical:
@@ -99,6 +105,52 @@ that lives only in conversation is a lie in the artifact:
   is seen as ``hunter.wiki`` and ``example.xn--p1ai`` as ``example.xn``,
   because the label pattern excludes ``_`` and stops at the first hyphenated
   suffix. The truncated form is what any failure message will name.
+
+THE UNDERSCORE TRUNCATION - MEASURED, AND DELIBERATELY KEPT. ``OPS-63``
+criterion 3, 2026-09-08. This is written down because the item's own hypothesis
+was REFUTED by measuring it, and a refutation that lives only in a chat log gets
+re-derived by the next session that reads the denylist and has the same idea.
+
+The hypothesis: most of :data:`KNOWN_NON_HOSTS` is truncation debris that a
+pattern permitting ``_`` inside a label would retire wholesale, so the denylist
+is treating a pattern defect. Measured against the pre-``OPS-63`` scope, with
+267 entries of which 266 were actually emitted by the extractor somewhere
+(``19.18.28.701.png`` was already dead weight):
+
+* the underscore-tolerant pattern retires **45** of the 266, not most of them -
+  16.9 per cent;
+* and it introduces **52** brand-new red tokens in the same scope, because the
+  longer form it now emits is not in the denylist either. Net 267 to 274. The
+  change makes the thing it was supposed to shrink BIGGER.
+* **Zero** of those 52 longer forms are covered by :func:`is_repo_filename`.
+  That is the whole explanation, and it is that ``OPS-44`` already harvested
+  this win: the truncations whose long form IS one of our tracked filenames were
+  the 109 entries ``OPS-44`` deleted. What is left is dominated by names no
+  filename check can ever excuse - gitignored runtime records
+  (``inbox_reported.json``, ``loop_state.json``), captured frame filenames
+  (``f0566_00.43.29.png``), a sibling's files, and dotted module paths carrying
+  an underscore mid-chain (``ops.merge_gate.verify``, ``ops.lane_state.claim``),
+  which this module deliberately does not resolve at all.
+
+**THE UNTRACKED-BY-DESIGN SUB-CASE, which is the part worth carrying forward.**
+``reported.json`` does retire under the wider pattern - and ``inbox_reported.json``
+appears in its place, cited by ``docs/LEDGER.md``, still unexcusable because the
+file is gitignored ON PURPOSE. The pattern change RENAMES the entry; it does not
+retire it. So the answer to "what happens to the names of files this project
+writes about but deliberately does not track" is: they land here under whichever
+name the extractor emits, and no pattern can change that. The only mechanisms
+that could are to resolve tokens against ``.gitignore`` - which would make any
+gitignored path auto-excusing and is ``LL-0079``'s auto-exemption failure with a
+new data source - or a human reading each one, which is what this set is.
+
+**A second FP reduction was measured and also rejected: skipping fenced code
+blocks.** It works, in the narrow sense - it cuts the ``OPS-63`` widening's 52
+new tokens to 34, and in the existing scope it drops 10 tokens of which ZERO are
+registered external sources, so it costs no coverage on today's tree. It is
+rejected because it creates an UNBOUNDED and UNREVIEWED blind spot: any host
+inside any code fence in any document becomes invisible, in a guard whose
+founding defect was a silent exemption. The denylist is at least a list somebody
+has to read. A fence is not.
 
 REGENERATING THE DENYLIST, rewritten for ``OPS-44``. A new token that reddens
 this guard now falls into one of three cases, and only the third ends here:
@@ -363,6 +415,17 @@ KNOWN_NON_HOSTS = frozenset(
         # committed. `OPS-63`'s criterion 3 counts entries that a pattern which
         # stopped truncating at underscores would retire; this is one of them.
         "reported.json",
+        # `NOPE.md` and `sys.argv`, both introduced 2026-09-08 by `OPS-64`'s and
+        # `OPS-66`'s own closure prose - `docs/NOPE.md` is the deliberately
+        # absent archive the link guard was pointed at to make it report DID NOT
+        # RUN, and `sys.argv` is a Python attribute. This is `LL-0199`'s shape
+        # once more: writing a measurement down changed the tree the measurement
+        # was about, and here it did so through a guard that had just been
+        # widened to read the document doing the writing. Expect more of these
+        # per session now that `ROADMAP.md` is in scope - that cost is stated in
+        # `OPS-63`'s outcome rather than discovered again each time.
+        "NOPE.md",
+        "sys.argv",
         # A git CONFIG KEY, quoted by `LL-0169` and `OPS-49`. `core.filemode`
         # is not a host and not a file; `.filemode` simply parses as a TLD-
         # shaped tail. Looked at before adding, per the regenerating note.
@@ -757,6 +820,115 @@ KNOWN_NON_HOSTS = frozenset(
         # decision is still deferred: additions are reviewed here, the LOGIC is
         # left alone, and `OPS-44` holds the choice.
         "winmutex.py",
+        # `OPS-63`, 2026-09-08 - THE SCOPE WIDENING. 48 entries, the largest
+        # single wave this set has ever taken, and the reason is not a new defect
+        # but a scope that was finally stated: see :func:`scanned_documents`.
+        # Every tracked `*.md` and `*.txt` is now read, so 52 host-shaped tokens
+        # that had sat unread for the life of this guard arrived at once. All 52
+        # were read in context before anything was written here, and they sorted
+        # into four kinds:
+        #
+        # 1. FOUR ARE REAL HOSTS AND ARE NOT IN THIS SET. `docs.github.com` and
+        #    `contributor-covenant.org` are genuine unregistered external sources
+        #    this widening FOUND, cited by `CODE_OF_CONDUCT.md` and
+        #    `SECURITY.md` in a public repository with no register row at all;
+        #    `x.com` and `t.co` are named in `ROADMAP.md` only as the fragments
+        #    hiding inside `gamingpromax.com` and `grindnstrat.com` in the
+        #    `OPS-57` substring passage. All four got register rows in
+        #    `docs/ECOSYSTEM.md` instead. A real host never goes in this set,
+        #    whatever the sentence around it says it is - the register has rows
+        #    for a host that is deliberately unused and for one that is
+        #    deliberately unassessed, and those are the sanctioned homes.
+        # 2. DOTTED PYTHON PATHS AND ATTRIBUTES, truncated at an underscore by
+        #    :data:`HOST_SHAPED` exactly as the entries above record.
+        #    `before.values` is `before.values()`, `report.format` is
+        #    `report.format()`, `gate.collect` and `gate.parse` are
+        #    `merge_gate.collect_output` and `merge_gate.parse_collect_counts`,
+        #    `launcher.assert` and `launcher.ensure` are
+        #    `lane_launcher.assert_in_lane_worktree` and `ensure_worktree`,
+        #    `lanes.by` is `lanes.by_id`, `state.*` and `ops.loop.state.*` are
+        #    `ops/loop/state.py` calls, `guard.owner` is `guard.owner_of`,
+        #    `guard.read` is `guard.read_owner`, `watch.check` is
+        #    `watch.check_watcher`, `armed.armed` is a field of the arm-watch
+        #    result, `render.line` and `window.*` are `lanternlight/overlay`
+        #    calls, `lanternlight.avgprice` and `lanternlight.vision` are our own
+        #    modules, `ops.outbox.replies` is `ops.outbox.replies_to`,
+        #    `ops.lanes.WORKTREE` and `ops.lanes.primary` are
+        #    `WORKTREE_ROOT` and `primary_checkout`, and `tmp.write` and
+        #    `tmp.replace` are the atomic-write recipe in `CLAUDE.md` itself.
+        #    `wrote.py` is the tail of the placeholder path
+        #    `files/the/agent/said/it/wrote.py` in nine dispatch prompts, and
+        #    `word.word` is a toy name in a `WAKEUP_NOTES.md` passage about THIS
+        #    guard reading a dotted identifier as a hostname.
+        # 3. WINDOWS AND POWERSHELL API NAMES, none of them a host and none of
+        #    them ours. `WScript.Shell` is the COM class the `/done` shortcut
+        #    recipe instantiates, `ws.CreateShortcut` and `lnk.Save`,
+        #    `lnk.TargetPath`, `lnk.WorkingDirectory` are its members,
+        #    `System.Speech` and `System.Speech.Synthesis.SpeechSynthesizer` are
+        #    the .NET assembly and type behind the text-to-speech recipe, with
+        #    `s.Rate` and `s.Speak` its members, and `cmd.exe` is the Windows
+        #    shell - the same class as `python.exe` and `pythonw.exe` above.
+        # 4. FILENAMES AND URL PATH TAILS. `LL-NEXT-SESSION.lnk` is the Desktop
+        #    shortcut `/done` writes, which is on the Desktop and therefore
+        #    never tracked. `RSC-NEXT-SESSION.txt` is a SIBLING project's
+        #    hand-off, named in the shared-surface warning - the same situation
+        #    as `slots.py` and `winmutex.py` above, and `git ls-files` matches
+        #    zero paths for it. `Lanternlight.git` and `badge.svg` are PATH
+        #    TAILS of two URLs whose HOST is `github.com`, which is registered
+        #    and is extracted separately because `/` ends a host token; neither
+        #    tail is a host. `Hit.Light` and
+        #    `StandaloneLevelCtrl.battleSnapUpdate` are the GAME's own log field
+        #    and producer symbol, the same class as the `Game.PlayState` and
+        #    `Status.Talent` tags above. `inventory.equipments` is a save-file
+        #    property path.
+        "Hit.Light",
+        "LL-NEXT-SESSION.lnk",
+        "Lanternlight.git",
+        "RSC-NEXT-SESSION.txt",
+        "StandaloneLevelCtrl.battleSnapUpdate",
+        "System.Speech",
+        "System.Speech.Synthesis.SpeechSynthesizer",
+        "WScript.Shell",
+        "armed.armed",
+        "badge.svg",
+        "before.values",
+        "cmd.exe",
+        "gate.collect",
+        "gate.parse",
+        "guard.owner",
+        "guard.read",
+        "inventory.equipments",
+        "lanes.by",
+        "lanternlight.avgprice",
+        "lanternlight.vision",
+        "launcher.assert",
+        "launcher.ensure",
+        "lnk.Save",
+        "lnk.TargetPath",
+        "lnk.WorkingDirectory",
+        "ops.lanes.WORKTREE",
+        "ops.lanes.primary",
+        "ops.loop.ledger.append",
+        "ops.loop.state.advance",
+        "ops.loop.state.load",
+        "ops.outbox.replies",
+        "render.line",
+        "report.format",
+        "s.Rate",
+        "s.Speak",
+        "state.dispatch",
+        "state.in",
+        "state.load",
+        "state.retire",
+        "tmp.replace",
+        "tmp.write",
+        "watch.check",
+        "window.color",
+        "window.font",
+        "window.geometry",
+        "word.word",
+        "wrote.py",
+        "ws.CreateShortcut",
         }
 )
 
@@ -813,7 +985,10 @@ def _present_in_register(host: str, section: str) -> bool:
     return False
 
 
-#: Documents under ``docs/`` that this scan does NOT read, with the reason.
+#: The ONE document in scope that this scan does NOT read, with the reason.
+#: Since `OPS-63` stated the scope - see :func:`scanned_documents` - this is the
+#: whole of the enumerated-exclusion half of that decision, and a second entry
+#: here needs its own reason written down beside it.
 #:
 #: **`OPS-57`, 2026-09-08.** `ROADMAP.md` lives at the repository ROOT, and this
 #: guard has always read ``docs/**/*.md`` only - its own module docstring says
@@ -838,31 +1013,122 @@ def _present_in_register(host: str, section: str) -> bool:
 #: module's own docstring calls the one place a real source can hide. Adding
 #: 57 lines of noise there to absorb a path change is the worse trade.
 #:
-#: **What this exclusion does NOT fix, and it is filed rather than absorbed:**
-#: `ROADMAP.md` itself is still unread by this guard, so a real source cited
-#: there is invisible today exactly as it was yesterday. That gap is older than
-#: the split and is `OPS-63`.
+#: **What this exclusion did NOT fix, and it was filed rather than absorbed:**
+#: `ROADMAP.md` itself was still unread by this guard, so a real source cited
+#: there was invisible after the split exactly as it was before. That gap was
+#: older than the split and was `OPS-63`, which CLOSED IT - `ROADMAP.md` is read
+#: now, and `x.com` and `t.co` therefore reached this guard from the live
+#: `ROADMAP.md` rather than from the archive. They were registered in
+#: `docs/ECOSYSTEM.md` as fragments-not-sources rather than denylisted, because
+#: they are real hosts.
+#:
+#: **The archive stays excluded, and `OPS-63` did not change that.** Its reason
+#: is the one above and is untouched by the scope decision: a document must not
+#: acquire or lose a guard by being moved. Note what that now means precisely -
+#: the words of every closed roadmap section are unread HERE, and the guard's
+#: coverage of them ended when they were archived rather than when the scope
+#: widened. That is the trade `OPS-57` chose deliberately and `OPS-63` re-read
+#: without reversing.
 UNSCANNED_DOCS = frozenset({"docs/ROADMAP_ARCHIVE.md"})
 
+#: The file extensions :func:`scanned_documents` reads. Prose only - see the
+#: "reads DOCUMENTS, never CODE" bullet in the module docstring for why a
+#: ``*.py`` is deliberately not in this tuple.
+SCAN_SUFFIXES = ("md", "txt")
 
-def cited_hosts(root: Path = DOCS) -> dict[str, set[str]]:
-    """Map every host-shaped token under ``root`` to the files citing it.
 
-    Skips :data:`UNSCANNED_DOCS`; read that constant for why one document is
-    excluded and what the exclusion costs.
+def scanned_documents() -> tuple[str, ...]:
+    """Every document this guard reads, as repo-relative POSIX paths.
+
+    **THE SCOPE DECISION, `OPS-63`, 2026-09-08. Stated because "it happens to
+    read ``docs/``" was never a scope.** This guard read ``docs/**/*.md`` and
+    nothing else from the day it was written, which meant a real source cited in
+    ``ROADMAP.md``, ``CLAUDE.md``, ``README.md``, ``WAKEUP_NOTES.md``,
+    ``BACKLOG.md``, a lane ledger, a community-standards document, an agent
+    prompt under ``.claude/`` or the tracked hand-off was invisible. The scope is
+    now EVERY TRACKED DOCUMENT, with one enumerated exclusion:
+
+    * every path ``git ls-files`` reports whose extension is in
+      :data:`SCAN_SUFFIXES`, which is 46 documents at the time of writing;
+    * PLUS every ``*.md`` present under ``docs/`` whether tracked or not, which
+      is exactly what this guard read before `OPS-63` and is kept verbatim so
+      that a document written in the current uncommitted wave is covered the
+      moment it exists rather than only once it is staged;
+    * MINUS :data:`UNSCANNED_DOCS`, which is the single exclusion and carries its
+      own reason on that constant.
+
+    **Why an enumerated set of directories was rejected.** The cheaper option was
+    "every tracked ``*.md`` except ``.claude/**``", which measured 29 new
+    false-positive tokens against 52 for the full set - the 13 agent-prompt files
+    under ``.claude/`` are dense with Python call recipes (the merge-gate snippet
+    appears verbatim in nine of them) and cite no external source today. It was
+    rejected anyway, on this repository's own doctrine that a stored list goes
+    stale: see :func:`tracked_paths`, which refuses to write down a filename
+    listing for exactly that reason. A scope defined as "every tracked document"
+    covers a document nobody has thought of yet; a scope defined as a directory
+    exclusion list has to be re-litigated every time someone adds a directory,
+    and the next cold session would find the list rather than the reason.
+
+    **What the widening actually cost and bought, measured BEFORE the change**
+    because the item required the count first. 52 previously-unread host-shaped
+    tokens entered scope. 50 are false positives - dotted Python attribute paths
+    (``report.format``, ``before.values``), PowerShell COM and .NET names
+    (``WScript.Shell``, ``System.Speech``), Windows binaries (``cmd.exe``), URL
+    path tails (``badge.svg``), the game's own log symbols (``Hit.Light``) and a
+    sibling project's hand-off filename (``RSC-NEXT-SESSION.txt``). TWO ARE REAL
+    EXTERNAL SOURCES that had been cited in a public repository with no register
+    row at all: ``docs.github.com``, cited by ``CODE_OF_CONDUCT.md`` and
+    ``SECURITY.md``, and ``contributor-covenant.org``, cited by
+    ``CODE_OF_CONDUCT.md``. Both were registered while closing `OPS-63`. The
+    `OPS-57` archive exclusion was decided against a measured cost of 57 tokens
+    and a measured yield of ZERO real sources; this widening is the same trade
+    with a non-zero yield, which is why it went the other way.
+
+    Returns paths, not text, so a caller can report WHICH document cited a token.
     """
+    listed = {
+        path
+        for path in tracked_paths()
+        if path.rsplit(".", 1)[-1].lower() in SCAN_SUFFIXES and "." in path
+    }
+    docs_dir = REPO_ROOT / "docs"
+    if docs_dir.is_dir():
+        for path in docs_dir.rglob("*.md"):
+            listed.add(path.relative_to(REPO_ROOT).as_posix())
+    return tuple(sorted(listed - UNSCANNED_DOCS))
+
+
+def cited_hosts(root: Path | None = None) -> dict[str, set[str]]:
+    """Map every host-shaped token in scope to the documents citing it.
+
+    With ``root`` omitted - which is how every check in this module calls it -
+    the scope is :func:`scanned_documents`. Passing an explicit ``root`` keeps
+    the pre-`OPS-63` behaviour of walking ``*.md`` beneath that directory, which
+    is how ``tests/test_docguards.py`` plants a token in a temporary tree
+    without writing to the append-only real ledger.
+
+    Skips :data:`UNSCANNED_DOCS` on both paths; read that constant for why one
+    document is excluded and what the exclusion costs.
+    """
+    if root is None:
+        rels: tuple[str, ...] = scanned_documents()
+    else:
+        rels = tuple(
+            rel
+            for rel in sorted(
+                path.relative_to(REPO_ROOT).as_posix() for path in root.rglob("*.md")
+            )
+            if rel not in UNSCANNED_DOCS
+        )
     hits: dict[str, set[str]] = {}
-    for path in sorted(root.rglob("*.md")):
-        rel = path.relative_to(REPO_ROOT).as_posix()
-        if rel in UNSCANNED_DOCS:
-            continue
-        text = path.read_text(encoding="utf-8")
+    for rel in rels:
+        text = (REPO_ROOT / rel).read_text(encoding="utf-8")
         for match in HOST_SHAPED.finditer(text):
             hits.setdefault(match.group(0), set()).add(rel)
     return hits
 
 
-def external_sources(root: Path = DOCS) -> dict[str, set[str]]:
+def external_sources(root: Path | None = None) -> dict[str, set[str]]:
     """:func:`cited_hosts` minus this repo's own filenames and the vetted
     non-hosts.
 
@@ -902,10 +1168,11 @@ def test_the_denylist_actually_subtracts_something():
     """
     raw = cited_hosts()
     kept = external_sources()
-    assert raw, "the extractor found no host-shaped tokens anywhere in docs/"
+    assert raw, "the extractor found no host-shaped tokens in any scanned document"
     assert len(raw) - len(kept) > 0, (
         "the denylist subtracted NOTHING, which means the extractor is no "
-        "longer matching the dotted code identifiers docs/ is full of. A "
+        "longer matching the dotted code identifiers these documents are "
+        "full of. A "
         "checker that reports zero non-host noise is misconfigured rather "
         "than clean"
     )
@@ -1179,10 +1446,125 @@ def test_every_cited_external_source_appears_in_the_register():
             for token, files in sorted(missing.items())
         ]
         raise AssertionError(
-            f"{len(missing)} host(s) cited in docs/ are ABSENT from the "
+            f"{len(missing)} host(s) cited in this repository's documents "
+            "are ABSENT from the "
             "source register in docs/ECOSYSTEM.md:\n"
             + "\n".join(lines)
             + "\n\nEither add each one to the register with its provenance, "
             "tier and basis, or - if it is not an external source - add it to "
             "KNOWN_NON_HOSTS in this file after looking at it."
         )
+
+
+def test_the_scan_reads_every_tracked_document_and_names_its_exclusions():
+    """`OPS-63` positive control on the SCOPE, and the fail-loud path for it.
+
+    A scope that widens without a control is a scope that might not have widened
+    at all, so this names documents that were unreadable by this guard for its
+    entire life before `OPS-63` and requires them to be in scope now.
+
+    IT IS ALSO THE FAIL-LOUD MECHANISM for a broken listing. If ``git ls-files``
+    fails, is absent or returns nothing, :func:`tracked_paths` returns an empty
+    tuple and :func:`scanned_documents` degrades to the pre-`OPS-63`
+    ``docs/**/*.md`` walk - silently, because a narrower scan raises nothing and
+    finds nothing. Every path asserted below except the ``docs/`` one is outside
+    that walk, so the degradation reddens this test instead of passing quietly.
+    That is the same fail-closed direction as
+    :func:`test_an_empty_tracked_listing_exempts_nothing`, applied to the scope
+    rather than to the exemption.
+    """
+    scanned = set(scanned_documents())
+    for rel in (
+        "README.md",
+        "ROADMAP.md",
+        "CLAUDE.md",
+        "BACKLOG.md",
+        "WAKEUP_NOTES.md",
+        "CODE_OF_CONDUCT.md",
+        "SECURITY.md",
+        "CONTRIBUTING.md",
+        "LL-NEXT-SESSION.txt",
+        "lanes/safety.LEDGER.md",
+        ".claude/commands/done.md",
+        "docs/ECOSYSTEM.md",
+    ):
+        assert rel in scanned, (
+            f"{rel} is not in this guard's scope. Either the tracked listing is "
+            "empty - in which case every document outside docs/ has silently "
+            "stopped being checked - or the OPS-63 scope has been narrowed "
+            "without its reason being written into scanned_documents()"
+        )
+    assert len(scanned) >= 40, (
+        f"the scan covers only {len(scanned)} documents, which is implausibly "
+        "few for this repository - the listing is probably empty"
+    )
+    # It reads DOCUMENTS, never code. A stray suffix here would multiply the
+    # denylist without ever finding a citation.
+    offenders = sorted(
+        rel for rel in scanned if rel.rsplit(".", 1)[-1].lower() not in SCAN_SUFFIXES
+    )
+    assert not offenders, f"non-document paths entered the scan: {offenders}"
+    # An exclusion for a document that no longer exists narrows the scope
+    # forever and reads as deliberate. Every one must still be a real file.
+    for rel in sorted(UNSCANNED_DOCS):
+        assert (REPO_ROOT / rel).is_file(), (
+            f"{rel} is excluded from the scan by UNSCANNED_DOCS but does not "
+            "exist. Delete the exclusion rather than leaving a stale one"
+        )
+        assert rel not in scanned, f"{rel} is excluded and was scanned anyway"
+
+
+def test_the_widened_scope_is_actually_being_read():
+    """`OPS-63` criterion 4 as a PERMANENT control, not a one-off mutation.
+
+    The mutation proof - plant a fabricated host in a newly-covered document,
+    watch this module go red, remove it - was run when `OPS-63` landed and is
+    recorded in the ledger. A mutation nobody re-runs proves the scope widened
+    once. These assertions prove it is still widened on every run.
+
+    ``docs.github.com`` is the load-bearing case: it is a REAL external source
+    that this repository cited in two public community-standards documents with
+    no register row at all, and it was invisible until `OPS-63`. Finding it is
+    what the widening bought.
+    """
+    hits = cited_hosts()
+    seen_in = hits.get("docs.github.com", set())
+    assert {"CODE_OF_CONDUCT.md", "SECURITY.md"} <= seen_in, (
+        "the guard no longer sees the citation in CODE_OF_CONDUCT.md and "
+        "SECURITY.md that OPS-63 was closed on. Those documents are out of "
+        f"scope again. saw: {sorted(seen_in)}"
+    )
+    for rel in ("ROADMAP.md", "CLAUDE.md", "LL-NEXT-SESSION.txt"):
+        assert any(rel in files for files in hits.values()), (
+            f"not one host-shaped token was extracted from {rel}, so it is "
+            "either unread or empty. Before OPS-63 it was unread"
+        )
+
+
+def test_the_extractor_truncates_at_underscores_deliberately():
+    """`OPS-63` criterion 3: the truncation is MEASURED, not unexamined.
+
+    A future session will read :data:`KNOWN_NON_HOSTS`, notice that many entries
+    are truncations made at an underscore, and reach for a pattern that permits
+    ``_`` inside a label. That was measured on 2026-09-08 and refuted: it retires
+    45 of 266 load-bearing entries and introduces 52 new ones, net 267 to 274,
+    because `OPS-44` already deleted the 109 whose long form is a tracked
+    filename and what remains is gitignored runtime records, frame filenames, a
+    sibling's files and dotted module paths with an underscore mid-chain. The
+    full numbers are in this module's docstring.
+
+    This test pins the behaviour so the change cannot be made silently. If a
+    later session has a better answer, it must delete this test and say why.
+    """
+    assert HOST_SHAPED.search("inbox_reported.json").group(0) == "reported.json", (
+        "the extractor no longer truncates at an underscore. That is a real "
+        "decision with a measured cost - read the OPS-63 section of this "
+        "module's docstring before keeping the change"
+    )
+    # And the underscore splits ONE identifier into TWO tokens, which is why
+    # `ops.merge` and `gate.verify` are both separate denylist entries.
+    assert HOST_SHAPED.findall("ops.merge_gate.verify") == ["ops.merge", "gate.verify"]
+    # And the truncated form is what a failure message names, which is why the
+    # denylist has to carry the truncation rather than the real identifier.
+    assert "reported.json" in KNOWN_NON_HOSTS
+    assert "inbox_reported.json" not in KNOWN_NON_HOSTS

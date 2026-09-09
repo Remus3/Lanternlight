@@ -52,6 +52,17 @@ already carries stub links to the archive and the archive is missing, the guard
 RUNS and reports ``archive_missing`` as a hard failure, because at that point
 the entry point is dangling for real.
 
+THE COMMAND LINE REFUSES WHAT IT DOES NOT UNDERSTAND - ROADMAP ``OPS-64``.
+:func:`main` used to take no parameters and read ``sys.argv`` not at all, so
+a flag naming a scratch file was not rejected - it was never seen, and the
+guard printed a green line about the REAL documents. The refutation pass
+that filed OPS-64 was misled by exactly that. Two changes answer it, and
+both are needed: the options ``--repo-root``, ``--roadmap`` and ``--archive``
+are REAL, in that each one changes which documents are read, and anything
+else is a usage error with its own exit code. Every run also prints the
+scope it read, so a verdict cannot be mistaken for an answer about a
+different pair of documents.
+
 Nothing here returns early on the first problem. Every unreachable heading,
 every dangling anchor and every ambiguous duplicate in one run is collected
 into a single :class:`Report`, since a scan that stopped at the first bad item
@@ -60,7 +71,9 @@ would hide every problem after it.
 
 from __future__ import annotations
 
+import argparse
 import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -68,9 +81,11 @@ __all__ = [
     "ARCHIVE_REL_PATH",
     "REPO_ROOT",
     "ROADMAP_REL_PATH",
+    "USAGE_EXIT_CODE",
     "Finding",
     "Report",
     "anchor_for",
+    "build_parser",
     "check_repo",
     "check_texts",
     "iter_headings",
@@ -254,8 +269,16 @@ def check_texts(
     roadmap_text: str,
     archive_text: str | None,
     archive_rel_path: str = ARCHIVE_REL_PATH,
+    roadmap_rel_path: str = ROADMAP_REL_PATH,
 ) -> Report:
     """Check reachability between a roadmap text and an archive text.
+
+    ``roadmap_rel_path`` is used for MESSAGES ONLY - the roadmap's text is
+    already a parameter, so this is the name the findings should call it by.
+    It exists because :func:`main` can be pointed at another roadmap
+    (``OPS-64``), and a finding that named the default document while reporting
+    about a different one would be the same "true answer to a different
+    question" defect one level down, inside the message a reader acts on.
 
     ``archive_text`` is ``None`` when the archive file does not exist. That is
     the DID-NOT-RUN case only while the roadmap carries NO stub links into the
@@ -273,7 +296,7 @@ def check_texts(
                 ok=False,
                 findings=(),
                 reason=(
-                    f"{archive_rel_path} does not exist and {ROADMAP_REL_PATH} "
+                    f"{archive_rel_path} does not exist and {roadmap_rel_path} "
                     "links to no anchor in it - the split has not happened yet, "
                     "so there is nothing to check. This is NOT a pass."
                 ),
@@ -282,7 +305,7 @@ def check_texts(
             Finding(
                 kind="archive_missing",
                 detail=(
-                    f"{archive_rel_path}: MISSING, but the roadmap carries "
+                    f"{archive_rel_path}: MISSING, but {roadmap_rel_path} carries "
                     f"{len(anchors)} stub link(s) into it - every one of those "
                     "entry points is dangling"
                 ),
@@ -326,7 +349,7 @@ def check_texts(
                 Finding(
                     kind="unreachable",
                     detail=(
-                        f"archived item has no stub in {ROADMAP_REL_PATH}: "
+                        f"archived item has no stub in {roadmap_rel_path}: "
                         f"{heading} (expected a link to "
                         f"{archive_rel_path}#{anchor})"
                     ),
@@ -346,7 +369,7 @@ def check_texts(
             Finding(
                 kind="dangling",
                 detail=(
-                    f"stub in {ROADMAP_REL_PATH} links to "
+                    f"stub in {roadmap_rel_path} links to "
                     f"{archive_rel_path}#{anchor}, which matches no '## ' "
                     "heading in the archive"
                 ),
@@ -390,18 +413,140 @@ def check_repo(
         roadmap_text=roadmap_path.read_text(encoding="utf-8"),
         archive_text=archive_text,
         archive_rel_path=archive_rel_path,
+        roadmap_rel_path=roadmap_rel_path,
     )
 
 
-def main() -> int:
-    """Run the real check and print a human report.
+#: Exit code for a usage error - a flag this guard does not understand, or a
+#: positional argument it takes none of. Deliberately NOT 1: 1 means the check
+#: ran and the documents are wrong, and a caller that cannot tell "you typed
+#: something I do not understand" from "reachability is broken" learns nothing
+#: from either. Matches ``argparse``'s own choice and the sibling guard's.
+USAGE_EXIT_CODE = 2
 
-    Exit code is 1 only for a check that RAN and FAILED. A did-not-run report
-    exits 0 - it has found no defect and must not block work on a tree where
-    the split has simply not happened yet - but it says DID NOT RUN in its
-    output, so a reader is never told OK by something that checked nothing.
+
+def build_parser() -> argparse.ArgumentParser:
+    """Build the command-line parser for :func:`main`.
+
+    THE OPTIONS ARE REAL, WHICH IS THE POINT OF ``OPS-64``. Each one is passed
+    straight through to :func:`check_repo`, so it changes which files are read
+    and which link target counts as a stub. A flag that were accepted and
+    ignored would be worse than one refused, because the resulting verdict is
+    true about a corpus the caller did not ask about.
+
+    ``--roadmap`` and ``--archive`` are REPO-RELATIVE paths, resolved under
+    ``--repo-root``, matching :func:`check_repo`'s own parameters. The archive
+    path is also the string a roadmap link must name to count as a stub, so
+    changing it changes the reachability question and not only the file opened.
+    An absolute path given to either still resolves - :class:`pathlib.Path`
+    joining prefers the absolute right-hand side - but then the stub matcher is
+    comparing link targets against an absolute string, which is unlikely to be
+    how any real document is written. Point ``--repo-root`` at the tree instead.
+
+    ABBREVIATION IS DISABLED ON PURPOSE. ``argparse`` accepts any unambiguous
+    prefix by default, so ``--arch`` would silently mean ``--archive``. That is
+    the same class of defect this item was filed against - a caller getting an
+    answer about something other than what they typed - one level down, so only
+    exact spellings are accepted here.
     """
-    report = check_repo()
+    parser = argparse.ArgumentParser(
+        prog="archive_link_guard",
+        description=(
+            "Prove every archived roadmap item is still reachable from the "
+            "roadmap, in both directions. Reads two documents and writes nothing."
+        ),
+        allow_abbrev=False,
+    )
+    parser.add_argument(
+        "--repo-root",
+        default=str(REPO_ROOT),
+        metavar="PATH",
+        help="tree the two documents are read from (default: this repository)",
+    )
+    parser.add_argument(
+        "--roadmap",
+        default=ROADMAP_REL_PATH,
+        metavar="REL_PATH",
+        help=(
+            "document that must carry the stubs, relative to --repo-root "
+            f"(default: {ROADMAP_REL_PATH})"
+        ),
+    )
+    parser.add_argument(
+        "--archive",
+        default=ARCHIVE_REL_PATH,
+        metavar="REL_PATH",
+        help=(
+            "archive the stubs must link into, relative to --repo-root, and the "
+            "path a link must name to count as a stub "
+            f"(default: {ARCHIVE_REL_PATH})"
+        ),
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Run the check and print a human report. ``ROADMAP.md`` ``OPS-64``.
+
+    ``argv`` is the argument list WITHOUT the program name; ``None`` means read
+    ``sys.argv[1:]``, which is what the module's own ``__main__`` block relies
+    on. An in-process caller - a test, most often - should pass an explicit
+    list, because a test runner's ``sys.argv`` is not this guard's and would now
+    be refused rather than ignored.
+
+    EXIT CODES, KEPT DISTINCT BECAUSE THEY ARE DIFFERENT FACTS:
+
+    ``0``
+        The check ran and passed, OR it reported DID NOT RUN, OR ``--help`` was
+        asked for. A did-not-run report exits 0 because it has found no defect
+        and must not block work on a tree where the split has simply not
+        happened yet - but it prints DID NOT RUN, so a reader is never told OK
+        by something that checked nothing.
+    ``1``
+        The check ran and found a reachability defect.
+    ``2``
+        A usage error: an unknown flag, or a positional argument. See
+        :data:`USAGE_EXIT_CODE`.
+
+    WHY ``argparse``'S ``SystemExit`` IS CAUGHT AND TURNED BACK INTO A RETURN
+    VALUE. ``parse_args`` exits the process on a usage error, which would make
+    every in-process caller wrap this function in ``pytest.raises`` and would
+    make the return type a lie. Catching it keeps the contract "``main``
+    returns an int, always" - and the code is taken FROM the exception rather
+    than replaced, so ``--help``'s 0 stays 0 while an error's 2 stays 2.
+    ``argparse`` has already written its own message, naming the offending
+    argument, to stderr by then; the ``str`` branch below exists only for the
+    documented case where ``SystemExit`` carries a message instead of a code.
+
+    EVERY RUN PRINTS ITS OWN SCOPE. That is the OPS-64 defect stated
+    positively: the refutation pass that filed this item was misled by a green
+    line that named nothing, so the verdict now says which root, roadmap and
+    archive produced it. A verdict that cannot be mistaken for an answer about
+    a different corpus is the whole deliverable here.
+    """
+    args_list = sys.argv[1:] if argv is None else list(argv)
+    parser = build_parser()
+    try:
+        args = parser.parse_args(args_list)
+    except SystemExit as exc:
+        code = exc.code
+        if code is None:
+            return 0
+        if isinstance(code, int):
+            return code
+        print(str(code), file=sys.stderr)
+        return USAGE_EXIT_CODE
+
+    repo_root = Path(args.repo_root)
+    print(
+        f"archive link guard: scope {args.roadmap} vs {args.archive} "
+        f"under {repo_root}"
+    )
+    report = check_repo(
+        repo_root=repo_root,
+        roadmap_rel_path=args.roadmap,
+        archive_rel_path=args.archive,
+    )
     print(report.format())
     return 0 if (not report.ran or report.ok) else 1
 

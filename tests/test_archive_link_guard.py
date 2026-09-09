@@ -496,6 +496,287 @@ class TestLiveRepoEntryPoint:
             assert "DID NOT RUN" in report.format()
 
     def test_main_exit_code_matches_the_verdict(self) -> None:
+        # An EXPLICIT empty argument list, not main(). Since OPS-64 the guard
+        # reads sys.argv when argv is None, and under a test runner sys.argv is
+        # the runner's own - which is now refused rather than ignored, and would
+        # make this test measure argument handling instead of the verdict. The
+        # None-means-sys.argv contract has its own test in
+        # TestArgvIsRefusedOrReal, with sys.argv patched so the argv under test
+        # is a known one.
         report = archive_link_guard.check_repo()
         expected = 0 if (not report.ran or report.ok) else 1
+        assert archive_link_guard.main([]) == expected
+
+
+class TestArgvIsRefusedOrReal:
+    """ROADMAP ``OPS-64``: an argument must change the check or be refused.
+
+    WHY THIS CLASS EXISTS. Until OPS-64 was closed, ``main()`` took no
+    parameters and read ``sys.argv`` not at all, so a caller who passed a flag
+    naming a scratch file got a verdict about the REAL documents and no
+    indication that the flag had gone nowhere. The wrap's own refutation pass
+    hit exactly that: it tried to break the guard by pointing it at scratch
+    files, and the guard printed an identical green line. A true answer to a
+    question nobody asked is worse than an error, because an error is visible.
+
+    THE TWO HALVES ARE TESTED SEPARATELY BECAUSE EITHER CAN REGRESS ALONE.
+    An unknown argument must be REFUSED with a non-zero exit and a message
+    naming it, and the options that ARE understood must be REAL - passing them
+    must change which documents are read. The second half is the one an exit
+    code cannot prove, so every test of it asserts something that could only
+    have come from the scratch pair: the scratch pair carries two archived
+    headings where the live archive carries dozens, and the scratch heading
+    text appears nowhere in this repository's real documents.
+    """
+
+    #: An argument no version of this guard has ever understood. Spelled to be
+    #: unmistakable in an assertion failure, and deliberately not a near-miss
+    #: of a real option - the near-miss case has its own test below.
+    BOGUS = "--pretend-this-does-something"
+
+    def _scratch_pair(
+        self,
+        tmp_path: Path,
+        roadmap_rel: str,
+        archive_rel: str,
+        stub_anchors: tuple[str, ...],
+        headings: tuple[str, ...],
+    ) -> None:
+        """Write a roadmap and an archive under ``tmp_path``.
+
+        ``stub_anchors`` are written as stub links to ``archive_rel`` and
+        ``headings`` become the archive's ``## `` sections. They are passed
+        separately rather than derived from each other so a caller can build a
+        pair that is deliberately INCONSISTENT - a heading with no stub, say -
+        which is what the negative case here needs.
+        """
+        roadmap_path = tmp_path / roadmap_rel
+        archive_path = tmp_path / archive_rel
+        roadmap_path.parent.mkdir(parents=True, exist_ok=True)
+        archive_path.parent.mkdir(parents=True, exist_ok=True)
+        stubs = "\n".join(
+            f"- [archived item]({archive_rel}#{anchor})" for anchor in stub_anchors
+        )
+        roadmap_path.write_text(
+            "# Scratch roadmap\n\n## Archived items\n\n" + stubs + "\n",
+            encoding="utf-8",
+        )
+        sections = "\n".join(f"## {heading}\n\nBody.\n" for heading in headings)
+        archive_path.write_text("# Scratch archive\n\n" + sections, encoding="utf-8")
+
+    def test_unknown_flag_is_refused_rather_than_ignored(self) -> None:
+        """Criterion 1: a made-up flag exits non-zero, and not with 1.
+
+        2 rather than 1 on purpose: 1 means the check ran and found a real
+        reachability defect in the documents, and a usage error is not that. A
+        caller that cannot tell the two apart learns nothing from either.
+        """
+        assert archive_link_guard.main([self.BOGUS]) == 2
+
+    def test_refusal_names_the_argument(self, capsys) -> None:
+        """Criterion 1: the message says WHICH argument was refused.
+
+        "bad usage" sends the reader back to the source; the offending token
+        sends them to their own command line.
+        """
+        assert archive_link_guard.main([self.BOGUS]) == 2
+        assert self.BOGUS in capsys.readouterr().err
+
+    def test_a_positional_argument_is_refused_too(self) -> None:
+        """A bare path is the most likely wrong invocation, so it must fail.
+
+        ``python tools/archive_link_guard.py ROADMAP.md`` looks like it scopes
+        the check to one document. This guard takes no positional argument, so
+        that invocation must be an error rather than a whole-tree verdict
+        wearing the appearance of a scoped one.
+        """
+        assert archive_link_guard.main(["ROADMAP.md"]) == 2
+
+    def test_an_abbreviated_option_is_refused(self) -> None:
+        """Prefix abbreviation is switched OFF, so a truncated flag fails.
+
+        ``argparse`` accepts any unambiguous prefix by default, which means
+        ``--arch`` would silently become ``--archive``. That is a second way for
+        a caller to get a verdict about something other than what they typed, so
+        :func:`tools.archive_link_guard.build_parser` disables it and this test
+        pins the decision. The token is deliberately a prefix of a REAL option -
+        the plain unknown-flag case above would pass even with abbreviation on.
+        """
+        assert archive_link_guard.main(["--arch"]) == 2
+
+    def test_help_is_not_a_refusal(self) -> None:
+        """``--help`` is understood, so it exits 0 rather than 2.
+
+        Folding help into the usage-error path would make the one invocation
+        that asks what the options ARE report failure.
+        """
+        assert archive_link_guard.main(["--help"]) == 0
+
+    def test_empty_argv_runs_the_live_check(self) -> None:
+        """No arguments still means the real tree, exactly as before OPS-64."""
+        report = archive_link_guard.check_repo()
+        expected = 0 if (not report.ran or report.ok) else 1
+        assert archive_link_guard.main([]) == expected
+
+    def test_none_argv_reads_the_process_arguments(self, monkeypatch) -> None:
+        """``main(None)`` means "read ``sys.argv``", proved by patching it.
+
+        This is the property that makes the command line work at all, and it is
+        invisible in-process because a test runner's own ``sys.argv`` is not the
+        guard's. Both directions are pinned: a patched argv carrying a bogus
+        flag must be REFUSED, and a patched argv carrying nothing must run the
+        live check. Without the second half an implementation that always
+        returned 2 would pass the first.
+        """
+        monkeypatch.setattr(sys, "argv", ["archive_link_guard.py", self.BOGUS])
+        assert archive_link_guard.main() == 2
+
+        report = archive_link_guard.check_repo()
+        expected = 0 if (not report.ran or report.ok) else 1
+        monkeypatch.setattr(sys, "argv", ["archive_link_guard.py"])
         assert archive_link_guard.main() == expected
+
+    def test_repo_root_option_reads_the_scratch_tree(self, tmp_path, capsys) -> None:
+        """Criterion 2: ``--repo-root`` changes which tree is read.
+
+        The scratch pair is consistent, so the verdict is green - and the counts
+        in the report are the SCRATCH pair's two headings. The live archive
+        carries dozens, so a report of "2 archived heading(s)" could not have
+        been produced by reading the real documents. That count, not the exit
+        code, is what makes this test able to fail.
+        """
+        self._scratch_pair(
+            tmp_path,
+            "ROADMAP.md",
+            ARCHIVE_REL,
+            stub_anchors=("scratch-one", "scratch-two"),
+            headings=("scratch one", "scratch two"),
+        )
+        code = archive_link_guard.main(["--repo-root", str(tmp_path)])
+        out = capsys.readouterr().out
+        assert code == 0, out
+        assert "OK (2 archived heading(s), 2 stub link(s))" in out
+
+    def test_roadmap_and_archive_options_read_those_documents(
+        self, tmp_path, capsys
+    ) -> None:
+        """Criterion 2: ``--roadmap`` and ``--archive`` change which FILES are read.
+
+        Named differently from the defaults on purpose. If either option were
+        accepted and ignored, the guard would look for ``ROADMAP.md`` and
+        ``docs/ROADMAP_ARCHIVE.md`` under the scratch root, find neither, and
+        report DID NOT RUN - so this test fails loudly instead of passing on a
+        coincidence.
+        """
+        self._scratch_pair(
+            tmp_path,
+            "scratch_roadmap.md",
+            "scratch_archive.md",
+            stub_anchors=("scratch-one", "scratch-two"),
+            headings=("scratch one", "scratch two"),
+        )
+        code = archive_link_guard.main(
+            [
+                "--repo-root",
+                str(tmp_path),
+                "--roadmap",
+                "scratch_roadmap.md",
+                "--archive",
+                "scratch_archive.md",
+            ]
+        )
+        out = capsys.readouterr().out
+        assert code == 0, out
+        assert "OK (2 archived heading(s), 2 stub link(s))" in out
+
+    def test_a_broken_scratch_pair_is_red_and_names_the_scratch_item(
+        self, tmp_path, capsys
+    ) -> None:
+        """Criterion 2, the half an exit code cannot prove.
+
+        The scratch archive holds a heading with no stub, so the verdict must be
+        RED and the finding must NAME that heading. The heading text exists
+        nowhere in this repository's real documents, so its presence in the
+        output is positive evidence about which archive was read - which an exit
+        code of 1 alone would not be, since the live tree could be red too.
+        """
+        self._scratch_pair(
+            tmp_path,
+            "ROADMAP.md",
+            ARCHIVE_REL,
+            stub_anchors=("scratch-one",),
+            headings=("scratch one", "scratch two only in the scratch archive"),
+        )
+        code = archive_link_guard.main(["--repo-root", str(tmp_path)])
+        out = capsys.readouterr().out
+        assert code == 1, out
+        assert "scratch two only in the scratch archive" in out
+
+    def test_a_missing_scratch_archive_is_did_not_run(self, tmp_path, capsys) -> None:
+        """The archive option is read for EXISTENCE as well as for content.
+
+        A roadmap with no stub links and no archive on disk is the pre-split
+        state, which is DID NOT RUN rather than a pass. Pointing the options at
+        a scratch tree in that state must reproduce it - if ``--repo-root`` were
+        ignored the live tree would answer OK instead.
+        """
+        (tmp_path / "ROADMAP.md").write_text(
+            "# Scratch roadmap\n\nNo stub links at all.\n", encoding="utf-8"
+        )
+        assert archive_link_guard.main(["--repo-root", str(tmp_path)]) == 0
+        assert "DID NOT RUN" in capsys.readouterr().out
+
+    def test_a_finding_names_the_roadmap_that_was_actually_read(
+        self, tmp_path, capsys
+    ) -> None:
+        """A finding must call the roadmap by the name that was read.
+
+        The findings used to interpolate the module-level default
+        ``ROADMAP.md`` even when another document had been read, which is the
+        OPS-64 defect moved down one level: the verdict is true, and the
+        sentence a reader acts on points at the wrong file. Proved by reading a
+        scratch roadmap under a different name and requiring that name, and only
+        that name, in the finding text.
+        """
+        self._scratch_pair(
+            tmp_path,
+            "scratch_roadmap.md",
+            "scratch_archive.md",
+            stub_anchors=(),
+            headings=("scratch one",),
+        )
+        code = archive_link_guard.main(
+            [
+                "--repo-root",
+                str(tmp_path),
+                "--roadmap",
+                "scratch_roadmap.md",
+                "--archive",
+                "scratch_archive.md",
+            ]
+        )
+        out = capsys.readouterr().out
+        assert code == 1, out
+        assert "no stub in scratch_roadmap.md" in out
+        assert "no stub in ROADMAP.md" not in out
+
+    def test_the_verdict_says_which_documents_it_read(self, tmp_path, capsys) -> None:
+        """A verdict must carry its own scope, so it cannot answer for elsewhere.
+
+        This is the OPS-64 defect stated positively. The refutation pass was
+        misled by a green line that named nothing, so every run now prints the
+        root, the roadmap and the archive it actually read. Asserted against a
+        scratch tree, whose path cannot appear unless the flag was honoured.
+        """
+        self._scratch_pair(
+            tmp_path,
+            "ROADMAP.md",
+            ARCHIVE_REL,
+            stub_anchors=("scratch-one",),
+            headings=("scratch one",),
+        )
+        archive_link_guard.main(["--repo-root", str(tmp_path)])
+        out = capsys.readouterr().out
+        assert str(tmp_path) in out
+        assert "ROADMAP.md" in out
+        assert ARCHIVE_REL in out
