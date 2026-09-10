@@ -3950,7 +3950,7 @@ send the ruling alone now and the design once it is built.
    situation. It is HELD waiting on RC's and RSC's results; this one is HELD
    waiting on a scope decision. Neither should be read as the other.
 
-## OPS-69. `docs/INVENTORY.md` is guarded in ONE direction, so a module missing from it is invisible - OPEN
+## OPS-69. `docs/INVENTORY.md` is guarded in ONE direction, so a module missing from it is invisible - CLOSED 2026-09-10
 
 Filed 2026-09-08 at the wrap, found while syncing the living docs after `OPS-61`
 and `OPS-67` added two test modules and one tool.
@@ -4005,7 +4005,73 @@ has grown by four entries in this session alone.
    completeness check states a COMMAND or a derived comparison, never a total
    that rots.
 
-## OPS-70. `.claude/settings.json` still hardcodes an absolute repo root in `permissions.allow` - the OPS-61 defect surviving in the file OPS-61 cleaned - OPEN
+### Outcome - CLOSED 2026-09-10
+
+`tests/test_inventory.py` went from 8 tests to 13. The reverse direction is
+`test_every_file_the_scope_covers_is_named_in_the_inventory`, and the scope it
+enforces is stated rather than assumed: `.claude/commands/*.md`,
+`.claude/agents/*.md`, `.githooks/*`, `tools/*.py`, `tests/*.py` and
+`scripts/*.py`. Enumeration reuses `tests/_tracked.iter_authored_files` rather
+than inventing a second way to list tracked files.
+
+**The gap was twelve times the size the item predicted.** This item was filed
+because three modules had gone missing. The guard found 37 - 33 test modules and
+four tools - and `tools/` had no section in the document at all, so the miss was
+a whole CATEGORY rather than a few stragglers. Two new sections were added, each
+description taken from the module's own docstring.
+
+**The refutation pass found three things the closure had wrong, and that is the
+part worth keeping.** An independent agent confirmed the property was
+non-vacuous - 81 of 81 scope files turn it red when their naming line is cut -
+and then found:
+
+1. The document asserted, in its own voice, "Between the two tables, every
+   `tests/test_*.py` in the repository is named". That was FALSE, and the file it
+   omitted was `tests/test_inventory.py` itself - the module doing the checking.
+   The new guard did not catch it, because the guard asks whether a name appears
+   ANYWHERE in the document while the sentence claims it appears IN THE TABLES.
+   A looser guard standing behind a stricter sentence reads as enforcement and is
+   not. Both were fixed: the row was added, and
+   `test_every_test_module_is_named_in_one_of_the_two_tables` now requires a
+   TABLE ROW. `test_the_two_table_claim_is_still_the_sentence_this_guard_enforces`
+   pins the sentence to the guard so the two cannot drift apart again.
+2. `tests/_tracked.py` - the shared walker the new guard itself runs on - was
+   tracked, uninventoried, and OUTSIDE the stated scope, along with
+   `tests/conftest.py` and `scripts/write_lane_contracts.py`. The scope was
+   widened to `tests/*.py` and `scripts/*.py`. `scripts/` was the worst of the
+   three states: half-covered by luck, with `scripts/install_hooks.py` named only
+   because CLAUDE.md's fresh-clone instructions happen to cite it. Directories
+   that stay out - `tests/fixtures/`, `lanternlight/`, `ops/`, `docs/` - are now
+   NAMED as out, because an unmentioned directory is indistinguishable from an
+   overlooked one.
+3. The slice reported to the merger that its exclusion-cap test "is vacuous while
+   the dict is empty and the module says so". The module said no such thing.
+   `EXCLUDED_FROM_INVENTORY` is empty, its per-entry checks were watched failing
+   against injected entries, and the module now records exactly that - which of
+   its checks execute on an ordinary run and which were verified by measurement
+   instead.
+
+**A wrong DATE, caught at the merge.** The repair stamped `2026-09-09` into eight
+places across the two files. The work happened on 2026-09-10, confirmed against
+the machine clock in local and UTC - both read 2026-09-10, so no midnight
+ambiguity was available to excuse it. This is the same defect class as the three
+numbers the 2026-09-08 wrap had to refute: prose in a committed artifact, stated
+flat, that nothing mechanical reads.
+
+### Acceptance, met
+
+1. **Met.** The scope is stated in `_SCOPE` and restated in the document.
+2. **Met.** `EXCLUDED_FROM_INVENTORY` is EMPTY - nothing needed excusing once the
+   document was completed - and a test caps growth at 12, requires each entry to
+   be in scope, to exist on disk, and to carry a reason.
+3. **Met.** Proved by mutation twice independently, each time asserting the anchor
+   was present before the cut and absent after it, re-reading from disk, and
+   restoring under a SHA-256 equality check.
+4. **Met.** All four original properties are kept; the count moved 8 to 13.
+5. **Met.** No total is written into the document; its Test count section states
+   commands only.
+
+## OPS-70. `.claude/settings.json` still hardcodes an absolute repo root in `permissions.allow` - the OPS-61 defect surviving in the file OPS-61 cleaned - CLOSED 2026-09-10
 
 Filed 2026-09-08 by the wrap's refutation pass, which found it while checking
 something else. `OPS-61` rewrote all six hook COMMANDS to reach their scripts
@@ -4054,6 +4120,147 @@ undefined for a command a session types. Measure before writing.
    item is about, one level up.
 4. Proved non-vacuous by embedding a different absolute root in whatever section
    the guard newly reads, and watching it go red.
+
+### Outcome - CLOSED 2026-09-10
+
+**Criterion 1 was answered with a DECLINE, and the decline is the result.**
+Whether the permission matcher expands `$CLAUDE_PROJECT_DIR` was NOT observed on
+this machine, and the reason is recorded rather than glossed: the session ran in
+BYPASS PERMISSIONS MODE, where every tool call is pre-approved regardless of the
+allow list, so a did-it-prompt probe cannot distinguish a MATCHED rule from a
+BYPASSED one and returns a false green either way. What was established instead
+rests on two non-observational sources that agree with each other - the published
+permissions documentation, and the shipped client's own rule-anchoring code read
+on this machine - and says a rule's content is gitignore syntax with four anchors
+into none of which any environment variable is substituted. `OPS-61`'s fix does
+not carry across. The observation that would settle it is filed as `OPS-71`.
+
+**The three rules were KEPT**, with the reason in the file's own `$comment`: they
+work in this checkout, no measurement says to drop a working pre-approval, and
+the documented portable successor (`Edit(/**)`, anchored at the settings source)
+is a live change to what this machine pre-approves resting on exactly the claim
+that could not be observed.
+
+**`tools/hook_command_guard.py` now reads `permissions.allow`, `permissions.deny`,
+`permissions.ask` and `permissions.additionalDirectories` as well as `hooks.*`,**
+and pins the three existing rules by exact string so a fourth absolute rule turns
+the suite red. It uses a SEPARATE pattern set from the hook side, because the two
+grammars disagree about a single leading slash - in a permission rule it anchors
+at the settings source - and reusing the hook patterns reported the recommended
+fix as the defect. Its OK line now names its own scope: `6 hook command(s), 12
+permission rule(s)`, so the green line no longer answers a narrower question than
+a reader assumes. That was this item's whole complaint, and the fix is that the
+verdict states what it covered.
+
+**The refutation pass broke the first closure in three places.** All three were
+reproduced before being repaired:
+
+1. A trailing space - `Read(//C/Evil/**) ` - bypassed the guard entirely, because
+   the splitter required a closing parenthesis and returned the rule unsplit when
+   it found none, after which the root pattern never matched. Its docstring
+   promised a "safer default ... still scanned", which was therefore false as
+   written. The BEHAVIOUR was fixed rather than the docstring; an unterminated
+   `Read(//C/Evil/**` now reports too.
+2. The UNC backslash spelling was missed, because the permission pattern set held
+   a hand-written near-copy of the UNC pattern rather than the pattern itself.
+   The two are now one object and cannot drift.
+3. `Bash(cd //C/Evil && ls)` was missed while `Bash(cd C:/Evil && ls)` was caught
+   - an inconsistency nothing disclosed. Resolved deliberately by WIDENING: a
+   path in a rule's argument is in scope wherever it appears.
+
+**A claim was being SHIPPED as measured when nothing had been measured.** The
+module asserted "Measured for `OPS-70`" in three places, one of them inside the
+user-facing finding text, so the guard PRINTED false provenance at the moment it
+fired - the worst place in the file for it, because that string is read by
+someone who has just been told something is wrong. It hedged nowhere: a search
+for "observ", "bypass permission" or "not measured" returned nothing.
+`MATCHER_CLAIM_PROVENANCE` now states the claim is an INFERENCE from two named
+documentary sources, names bypass-permissions mode as the reason it is not an
+observation, and says what would settle it. A test asserts the word "measured"
+does not appear in the detail text. Two sentences in the `$comment` that were
+stated FLAT - that the POSIX spelling is "therefore the correct absolute form",
+and that the rules "match in this checkout and nowhere else" - were attributed to
+their sources instead.
+
+**The merger's own refutation was itself refuted, twice, by the merger.** Two
+independent re-probes of the UNC repair reported BYPASS. Both were the probe's
+own escaping losing a backslash, so the string tested was not a UNC path at all;
+built unambiguously with `chr(92)` and verified by its on-disk repr, the guard
+catches it. This is the repository's "an empty grep is a claim about your
+pattern" rule landing on the person applying it, and it is recorded because the
+first instinct on seeing BYPASS was to disbelieve the agent rather than the probe.
+
+### Acceptance, met
+
+1. **Met by an explicit DECLINE**, with the confound named and the settling
+   measurement specified. Successor filed as `OPS-71`.
+2. **Met.** Kept, with the reason and its provenance in the `$comment`.
+3. **Met.** The guard reaches `permissions.*`, states its scope in its OK line,
+   and names its remaining blind spots in its own docstring:
+   `settings.local.json`, user settings, and the other keys of the tracked file.
+4. **Met.** Proved non-vacuous against the LIVE file under an
+   assert-anchor / verify-on-disk / restore-and-compare-SHA-256 discipline, with
+   six spellings: `//D/Elsewhere/**`, `D:/Elsewhere/**`, `//E/Somewhere/**`, a
+   lower-case drive letter, a rule in `permissions.deny`, and the UNC form. The
+   count moved 20 to 60.
+
+## OPS-71. The portable successor to the three absolute permission rules is UNADOPTED, and the measurement that would settle it cannot be taken in bypass permissions mode - OPEN
+
+Filed 2026-09-10 out of `OPS-70`'s own decision. `OPS-70` measured what it could
+and DECLINED the rest, which is the correct outcome and is why this is a separate
+item rather than an unfinished one.
+
+`.claude/settings.json` keeps three rules anchored at a filesystem root:
+
+    "Read(//C/Lanternlight/**)",
+    "Write(//C/Lanternlight/**)",
+    "Edit(//C/Lanternlight/**)"
+
+**What `OPS-70` established, with its trust tier attached.** A permission rule's
+content is gitignore syntax with four anchors - `//path` from the filesystem
+root, `~/path` from the home directory, `/path` from the SETTINGS SOURCE, and a
+bare path from the working directory - and no environment variable is
+substituted into any of them, so `OPS-61`'s `$CLAUDE_PROJECT_DIR` fix does not
+carry across. That rests on TWO NON-OBSERVATIONAL SOURCES that agree with each
+other: the published permissions documentation, and the shipped client's own
+rule-anchoring code read on this machine. Neither is an observation of a rule
+MATCHING on this machine, and this repository's own rule is that two agreeing
+sources are a hypothesis rather than a verification.
+
+**Why it was not observed, and this is the whole difficulty.** The session that
+measured it ran in BYPASS PERMISSIONS MODE, where every tool call is pre-approved
+regardless of the allow list. A did-it-prompt test there cannot distinguish a
+MATCHED rule from a BYPASSED one and returns a false green either way. The
+measurement is not hard, it is unavailable in the mode the work was done in.
+
+**The candidate change, deliberately not made.** The documented portable form is
+a rule anchored at the settings source - `Edit(/**)` in place of
+`Edit(//C/Lanternlight/**)` - which would match in a clone and in every git
+worktree rather than in this checkout alone. It was NOT adopted because it is a
+live change to what this machine pre-approves, made on exactly the class of claim
+the session could not observe. Adopting a broader pre-approval on an unverified
+inference is the wrong direction to be wrong in.
+
+**The cost of leaving it.** A clone or a worktree prompts for the reads and
+writes this file pre-approves here. That is a nuisance, not a wrong answer, which
+is why nothing is urgent about this item.
+
+### Acceptance
+
+1. The expansion question is settled by OBSERVATION, not by a third agreeing
+   document: a session in DEFAULT permission mode, with its working directory in
+   a clone at a path other than this repository's primary checkout, records
+   whether a tool call inside that clone is pre-approved or prompts. Presence in
+   the file is not the fact; a matched rule is.
+2. The same session records the same observation for the settings-source form
+   (`Edit(/**)`), because the portable claim is a SEPARATE fact from the
+   non-expansion claim and this item must not repeat `OPS-70`'s own lesson by
+   inferring one from the other.
+3. Whatever is then adopted, the `$comment` in `.claude/settings.json` says which
+   sentences are observations and which are inferences, keeping the distinction
+   `OPS-70`'s repair pass had to install after stating two of them flat.
+4. A DECLINE remains acceptable if the observation says the current rules are
+   correct, provided the decline carries the observation behind it.
 
 ## Archive index
 

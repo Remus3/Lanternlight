@@ -456,6 +456,35 @@ KNOWN_NON_HOSTS = frozenset(
         # and six in one session is the first real datum for that rate.
         "check.main",
         "permissions.allow",
+        # THE SAME settings.json KEY FAMILY, three more of it, added
+        # 2026-09-10 while closing `OPS-70`. `tools/hook_command_guard.py` was
+        # widened to read the whole `permissions` object rather than
+        # `hooks.*` alone, and `docs/INVENTORY.md` now describes it doing so -
+        # which means naming the keys. Each was looked at: all three are keys
+        # in `.claude/settings.json`, none is a host, and none resolves to
+        # anything. `.deny`, `.ask` and `.additionalDirectories` simply parse
+        # as TLD-shaped tails the way `.allow` above does.
+        #
+        # The rate this set is growing at is the thing to watch rather than
+        # these three entries. `OPS-63`'s cost paragraph predicted it: a
+        # project that writes documents about its own configuration keeps
+        # minting host-shaped tokens that are not hosts. The defect is the
+        # extractor's, and the denylist is absorbing it one wave at a time.
+        "permissions.deny",
+        "permissions.ask",
+        "permissions.additionalDirectories",
+        # `settings.local.json`, added 2026-09-10 while closing `OPS-70`,
+        # whose guard names it as a blind spot it deliberately does not read.
+        # Looked at: it is Claude Code's per-machine settings file, sitting
+        # beside the tracked `.claude/settings.json`. It is not a host.
+        #
+        # THE INTERESTING PART IS WHY THE TRACKED-FILE ORACLE DID NOT ABSORB IT
+        # THE WAY IT ABSORBS EVERY OTHER FILENAME WE WRITE DOWN. `is_repo_filename`
+        # trusts `git ls-files`, and this file is GITIGNORED, so it is a real
+        # filename in this repository that the oracle cannot see. Any gitignored
+        # filename this project describes in prose lands here for the same reason -
+        # `OPS-44` bought the tracked listing's trust, and this is the edge of it.
+        "settings.local.json",
         # A git CONFIG KEY, quoted by `LL-0169` and `OPS-49`. `core.filemode`
         # is not a host and not a file; `.filemode` simply parses as a TLD-
         # shaped tail. Looked at before adding, per the regenerating note.
