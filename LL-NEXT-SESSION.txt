@@ -60,7 +60,9 @@ WHAT CLOSED THIS SESSION - two commits, 49dc2a6 and 1e4b4d1, both pushed
           with an explicit DECLINE - see OPS-71.
   OPS-71  FILED. The portable successor to the three absolute permission rules.
   OPS-35  criterion 1 MET, item still OPEN. Nothing under moon_sync_inbox/ can
-          reach git. Criteria 2 through 6 untouched.
+          reach git. THEN the operator lifted the criterion 2 gate, and acting
+          on that revealed criteria 2, 3, 4 and 6 had ALREADY BEEN MET on
+          2026-09-07 - see below, and read it before you touch this item.
 
 THE REFUTATION PASS EARNED ITS COST TWICE, AND NEITHER FINDING WAS A COUNT.
 This is the change from the last four sessions, where the wrap kept catching
@@ -111,15 +113,63 @@ clock in local AND UTC, so no midnight ambiguity could excuse it. Note for the
 next wrap: this project dates by LOCAL time - the machine is UTC-5, so a session
 working late is already on the next UTC day while its ledger entries are not.
 
-NEXT ITEM - OPS-35 criterion 2, WHICH IS A DECISION GATE AND NOT A TASK.
-The question is recorded inside OPS-35 itself, immediately after the acceptance
-list, so you read it beside the criterion. In short: criterion 2 wants the lock
-protocol in our own words, steers away from reading a sibling's source for it,
-and suggests asking RC instead - but OPS-48 forbids soliciting RC, and OPS-68
-put cross-project propagation on standby. BOTH ROUTES ARE CLOSED TO A SESSION
-ACTING ALONE. Do not resolve this by picking the reading that lets you proceed.
-Criterion 5 is separate and cannot be met by any session that cannot arrange a
-REAL sibling holder; that criterion already says the item stays open if so.
+THE OPERATOR ANSWERED THE OPS-35 GATE ON 2026-09-10: "yes, write it from the
+drop". Acting on that produced a refutation rather than a document, and this is
+the single most important thing in this hand-off.
+
+  THE DROP IS GONE. OPS-35 refers to a source drop at
+  moon_sync_inbox/from-RC-verbatim/. That directory does not exist. Measured:
+  132 files, 130 .md plus one .txt and one .json, ZERO .py anywhere, _outbox/
+  the only subdirectory. An RSC note of 2026-09-07 reports its drop "swept
+  clean", so it was deliberately removed. What remains is about 29 notes
+  DESCRIBING the lock in prose, which is a licensing-safer source than code.
+
+  CRITERION 2 DID NOT NEED WRITING - IT WAS WRITTEN ON 2026-09-07. Four of the
+  six criteria were already met and the item said otherwise:
+    2  docs/adr/ADR-007-lane-slot-root-is-ours.md, section "The protocol,
+       reconstructed in our own words"
+    3  tests/test_lane_slot.py::TestIdentityNotPath
+    4  tests/test_lane_slot.py::TestNothingHappensAtImportTime
+    6  mutation recorded in docs/LEDGER.md, including dropping the
+       exclusive-create in ops/lane_slot.py
+  ops/lane_slot.py is 21,061 bytes; tests/test_lane_slot.py collects 45, all
+  passing, re-measured 2026-09-10.
+
+  THE MERGER WROTE A FALSE CLAIM INTO ROADMAP.md EARLIER THE SAME SESSION -
+  "Criteria 2 through 6 are untouched" - by reading the ITEM rather than the
+  TREE, in the very session that closed two items about guards whose green line
+  answers a narrower question than a reader assumes. Both copies are corrected
+  in place rather than deleted, because the recorded question was asked on the
+  strength of that premise. IF AN ITEM TELLS YOU ITS OWN STATUS, MEASURE IT.
+
+THE REAL REMAINING GATE ON OPS-35 IS CRITERION 5, AND IT IS AN OPERATOR RULING
+RATHER THAN WORK. ADR-007 deliberately put our lock root INSIDE this repository
+at ops/runtime/lane_slots/, overridable by LL_LANE_SLOT_ROOT, instead of joining
+the machine-wide bucket several siblings ration between themselves. Its reasons
+are recorded there: the reserved-floor widening has not landed, so a reserved
+lock in today's deployed bucket is a file no sibling's reaper recognises, and a
+surplus lock is a slot taken from trees already rationing three. Either is a
+unilateral change to another project's concurrency - the same class of act as
+using a neighbour's port block.
+
+  So the question is: DOES LANTERNLIGHT JOIN THE SHARED BUCKET? It is one
+  environment variable rather than a code change, which makes it look small and
+  is exactly why it needs the ruling. ADR-007 asks that it be taken in a round
+  with the other carriers so the width and the reserved names land in the same
+  window. Until then criterion 5 stays open and so does the item, which is what
+  that criterion instructs.
+
+ONE NUMBER IN OUR IMPLEMENTATION IS OURS RATHER THAN THE CHANNEL'S.
+lane_slot.STALE_SECONDS is 16200.0. The corpus says "4.5 hours" in four separate
+notes and NEVER states a seconds value or a constant name, so 16200 is our own
+arithmetic. It is correct, and ADR-007 writes both forms - but a sibling that
+spells the window differently would not be caught by comparing constants.
+
+A FACTUAL ERROR IN OPS-35'S PREAMBLE IS CORRECTED IN THE ITEM: it called the
+lock "slots.py over a Windows named mutex in winmutex.py", conflating two
+unrelated mechanisms. The slot lock is a DIRECTORY OF LOCK FILES claimed by
+atomic exclusive create, with no mutex in it; the named-mutex module guards a
+different resource. Nothing we built depended on the error.
 
 IF THE GATE IS STILL UNANSWERED, the actionable queue is EMPTY of anything that
 does not need the operator or the game:
@@ -133,6 +183,15 @@ does not need the operator or the game:
   OPS-71  needs a session in DEFAULT permission mode, in a clone at another
           path. It CANNOT be settled in bypass permissions mode by any probe -
           that is the whole reason it exists as an item.
+  OPS-72  FILED THIS SESSION AND IS THE ONE ACTIONABLE ITEM LEFT. A
+          store-drift guard failed ONCE in a full run and would not reproduce -
+          five green runs after one red, including three of that module alone.
+          Recorded rather than dismissed because an intermittent guard failure
+          is what a later green run quietly buries. Do NOT fix it with a retry,
+          a sleep, or a widened tolerance: a guard that passes on the second
+          attempt reports clean about a different attempt, which is the exact
+          defect OPS-69 and OPS-70 were both about. "Could not reproduce in N
+          runs" is an acceptable result; "probably a flake" is not.
   5, 6, 7 blocked on the game. NO NEW GAME DATA SINCE 2026-08-30. Do not
           schedule a capture session; fold those into whichever session next has
           the game running.

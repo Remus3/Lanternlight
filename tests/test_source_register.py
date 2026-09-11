@@ -522,6 +522,16 @@ KNOWN_NON_HOSTS = frozenset(
         # it at 45 retired against 52 introduced; that measurement is two
         # sessions old and the input has changed since.
         "Path.is",
+        # `slot.STALE`, added 2026-09-10 while re-measuring `OPS-35`. Looked
+        # at: the truncation of `lane_slot.STALE_SECONDS` at its underscore,
+        # leaving a tail whose `.STALE` parses as a TLD-shaped label. It is a
+        # module constant, not a host and not a file.
+        #
+        # Unlike `git.py`, which the tracked-file oracle absorbed the moment
+        # its file was staged, this fragment matches no tracked filename and
+        # so cannot be retired that way. It is the durable half of the same
+        # defect.
+        "slot.STALE",
         # A git CONFIG KEY, quoted by `LL-0169` and `OPS-49`. `core.filemode`
         # is not a host and not a file; `.filemode` simply parses as a TLD-
         # shaped tail. Looked at before adding, per the regenerating note.

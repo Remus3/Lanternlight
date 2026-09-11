@@ -1077,11 +1077,14 @@ new module was owned by no lane; it is assigned to SAFETY, beside the PII
 backstop and the home-path guard, because it guards what gets PUBLISHED rather
 than reading the channel the way the `tests/test_inbox_*.py` modules do.
 
-**Criteria 2 through 6 are untouched**, and criterion 5 cannot be met by any
-session that cannot arrange a real sibling holder. See the recorded question
-below for why criterion 2 was not started.
+**A CLAIM THIS SESSION WROTE HERE WAS FALSE AND IS CORRECTED BELOW.** This block
+originally ended by saying criteria 2 through 6 were untouched. They were not.
+Four of them had been met on 2026-09-07 and this item was never updated to say
+so, and the sentence was written by reading the item rather than the tree - the
+exact defect this repository keeps paying for, committed in the act of closing
+two items about it. See the status section below.
 
-### Recorded question - 2026-09-10, NOT answered by this session
+### Recorded question - 2026-09-10, ANSWERED by the operator the same day
 
 **Criterion 2 asks for the protocol in our own words, and does not say where the
 words may come from.** It says a cold session must be able to re-implement
@@ -1104,7 +1107,10 @@ closed, which is why this is a question rather than a task:
 **What this session did instead.** Criterion 1 was implemented, because it is
 entirely ours, needs no sibling, and its value does not depend on how criterion 2
 is resolved: it stops an unlicensed sibling file reaching a public repository.
-Criteria 2 through 6 are untouched.
+This paragraph originally continued "Criteria 2 through 6 are untouched", which
+was FALSE when written - four of them had been met on 2026-09-07. The sentence
+is corrected rather than deleted, because the question below was asked on the
+strength of it and a reader needs to see the premise it rested on.
 
 **The narrow ruling needed.** May the protocol document be written from the drop
 already sitting in `moon_sync_inbox/`, describing observed behaviour in our own
@@ -1113,6 +1119,100 @@ standby on soliciting? Criterion 5 is a separate matter and is not being asked
 here: proving interoperation against a REAL sibling holder cannot be arranged by
 this session under either answer, so `OPS-35` stays open regardless, exactly as
 that criterion instructs.
+
+**THE OPERATOR RULED IN CHAT ON 2026-09-10: "yes, write it from the drop".**
+The question above is therefore settled in favour of the first route. Nothing
+else moved: `OPS-48` still forbids soliciting RC or RSC, and `OPS-68` still holds
+the responder runner and cross-project propagation on standby.
+
+**A PREMISE OF THIS ITEM HAS EXPIRED, AND THE RULING WAS GIVEN AGAINST IT.**
+The paragraph above, and the item's own preamble, refer to a source drop at
+`moon_sync_inbox/from-RC-verbatim/`. THAT DIRECTORY NO LONGER EXISTS. Measured
+2026-09-10: `moon_sync_inbox/` holds 132 files - 130 `.md`, one `.txt` and one
+`.json` - with ZERO `.py` files anywhere in the tree and `_outbox/` as its only
+subdirectory. A note dated 2026-09-07 from RSC reports its drop "swept clean"
+after a containment measurement, so the source was deliberately removed rather
+than never delivered.
+
+**What this changes, and it is a narrowing rather than a block.** The material
+the ruling points at is roughly 29 notes that DESCRIBE the lock in prose rather
+than any sibling source. Working from those is strictly safer than working from
+code would have been - the licensing hazard that made vendoring refusable is a
+hazard of SOURCE, and protocol facts in a prose note are not copyrightable in
+the first place. It also happens to be closer to what criterion 2 asks for,
+since the criterion wants observed behaviour described in our own words rather
+than a paraphrase of an implementation.
+
+**The consequence to watch.** A prose corpus can be INCOMPLETE in ways a source
+tree cannot: a field nobody happened to mention is simply absent. Any value the
+notes do not establish must be recorded as a GAP rather than inferred, and a gap
+in a key string or a timeout is the one kind of hole that cannot be papered over
+without breaking interoperation. Criterion 2's own standard - that a cold session
+can re-implement from our document WITHOUT opening a sibling's file - is the test
+of whether the corpus was sufficient, and it is now also the test of whether the
+drop's removal cost us anything.
+
+### Status, RE-MEASURED 2026-09-10 - four criteria were ALREADY MET
+
+The ruling above was acted on, and the first thing it produced was a refutation
+of this item's own description of itself. **Criterion 2 does not need writing.
+It was written on 2026-09-07**, and the work is on disk:
+
+| Criterion | State | Evidence |
+|---|---|---|
+| 1. Nothing from `moon_sync_inbox/` reaches git | **MET 2026-09-10** | `tests/test_no_inbox_in_git.py`, 8 tests |
+| 2. Protocol written down in our own words first | **MET 2026-09-07** | `docs/adr/ADR-007-lane-slot-root-is-ours.md`, section "The protocol, reconstructed in our own words" |
+| 3. Keys on IDENTITY, not on the filesystem path | **MET 2026-09-07** | `tests/test_lane_slot.py::TestIdentityNotPath::test_a_renamed_root_still_holds_the_same_reservation` |
+| 4. Never acquired at import time | **MET 2026-09-07** | `tests/test_lane_slot.py::TestNothingHappensAtImportTime` |
+| 5. Interoperation proven against a REAL sibling holder | **NOT MET, deferred by decision** | `ADR-007` says so in its own Consequences section rather than hedging it out |
+| 6. Every guard watched red under mutation | **MET 2026-09-07** | recorded in `docs/LEDGER.md`, including an independent mutation of `ops/lane_slot.py` dropping the exclusive-create |
+
+`ops/lane_slot.py` is 21,061 bytes and `tests/test_lane_slot.py` collects 45
+tests, all passing, re-measured 2026-09-10.
+
+**The protocol section discharges criterion 2 in substance, not merely by having
+the right heading.** It gives the two lock-naming schemes, the closed five-key
+set, the atomic claim order, the payload with every field's meaning, the release
+path and its Windows unlink hazard, the reserved floor, and the stale arm as
+4.5 hours. It also does something the criterion did not ask for and should have:
+it labels WHICH payload fields were seen quoted verbatim from a sibling's live
+bucket and which were reconstructed, and it makes the reader's fail-safe
+explicit - a lock with no readable `ts` is treated as stale, never as fresh.
+
+**One number in it is ours rather than the channel's, and that is worth
+knowing.** `STALE_SECONDS` is `16200.0`. The corpus states "4.5 hours" in four
+separate notes and NEVER states a seconds value or a constant name, so 16200 is
+our own arithmetic. It is correct arithmetic and the ADR writes both forms, but
+a sibling that spells the window differently would not be caught by comparing
+constants.
+
+**Why criterion 5 cannot be closed by effort.** `ADR-007` deliberately put our
+lock root INSIDE this repository at `ops/runtime/lane_slots/`, overridable by
+`LL_LANE_SLOT_ROOT`, rather than joining the machine-wide bucket several
+siblings ration between themselves. The reasoning is recorded there: the
+reserved-floor widening has not landed, so a reserved lock written into today's
+deployed bucket is a file no sibling's reaper recognises, and a surplus lock
+written into it is a slot taken from trees already rationing three. Either would
+be a unilateral change to another project's concurrency, which is the same class
+of act as using a neighbour's port block.
+
+**So the remaining gate is an OPERATOR RULING and not a piece of work**, and it
+is a different question from the one answered on 2026-09-10: does Lanternlight
+JOIN the shared machine-wide bucket? Joining is a configuration act - one
+environment variable, not a code change - but it changes another project's
+available concurrency, and `ADR-007` says it should be taken in a round with the
+other carriers so the width and the reserved names land in the same window.
+Until then criterion 5 stays open and this item stays OPEN with it, which is
+exactly what that criterion instructs.
+
+**A factual error in this item's own preamble, corrected here.** It describes
+the lock as "`ops/loop/slots.py` over a Windows named mutex in
+`ops/loop/winmutex.py`", which conflates two unrelated mechanisms. The corpus
+describes the slot lock as a DIRECTORY OF LOCK FILES claimed by atomic exclusive
+create - there is no mutex in it - while the named-mutex module guards a
+different resource entirely. Nothing in our implementation depended on the
+error, because the protocol section was reconstructed from behaviour rather than
+from the preamble.
 
 ## OPS-36. Adopt CONVERGENCE CHARTER v4 as written - OPEN, operator-ruled 2026-09-07
 
@@ -4340,6 +4440,67 @@ is why nothing is urgent about this item.
    `OPS-70`'s repair pass had to install after stating two of them flat.
 4. A DECLINE remains acceptable if the observation says the current rules are
    correct, provided the decline carries the observation behind it.
+
+## OPS-72. A store-drift guard FAILED ONCE in a full run and will not reproduce - OPEN
+
+Filed 2026-09-10. Recorded rather than dismissed, because an intermittent
+failure in a guard is the one kind this project cannot afford to forget: the
+next session sees green, assumes the observation was noise, and the guard is
+quietly unreliable in exactly the situation it exists for.
+
+**What was observed, once.**
+
+    FAILED tests/test_store_drift.py::TestTheArithmeticThatWasWrong::
+        test_two_stashes_from_an_unchanged_index_leave_THREE_commits_not_four
+
+in a full `python -m pytest` run that otherwise reported 2833 passed, 1 skipped.
+No assertion text was captured, because the summary line was read and the run
+was not repeated before the next edit - that is a mistake in the observation and
+is recorded as one.
+
+**What was measured afterwards, and what it does NOT establish.**
+
+- `python -m pytest tests/test_store_drift.py` three times in a row: 46 passed
+  each time.
+- `python -m pytest tests/test_store_drift.py::TestTheArithmeticThatWasWrong`
+  alone: 2 passed.
+- The next full `python -m pytest`: 2835 passed, 1 skipped. The failure did not
+  recur.
+
+None of that explains the failure. Five green runs after one red is consistent
+with a flake AND with an order-dependence that the second full run happened not
+to hit, and this item exists because those two are different facts.
+
+**Why it is plausible rather than obviously spurious.** That module builds real
+throwaway git repositories and counts objects in the store, and the class under
+test is named for arithmetic that was already wrong once. It runs `git stash` in
+its fixtures, which is the operation `SHARED_WORKTREE_BAN` in `ops/store_drift.py`
+warns is whole-tree in reach. A test that shells out to `git` is also exposed to
+whatever else on the machine touches a repository at the same moment - and this
+session had background agents running, though none of them should have been
+inside a scratch repository belonging to this module.
+
+**The trap to avoid when picking this up.** Do not "fix" it by adding a retry, a
+sleep, or a tolerance to the assertion. A guard that passes on the second attempt
+is a guard that reports clean about a different attempt, which is the defect
+`OPS-69` and `OPS-70` were both about. Find the cause or record that it could not
+be found.
+
+### Acceptance
+
+1. The failure is REPRODUCED, or a bounded attempt to reproduce it is recorded
+   with what was tried - run count, ordering, and whether anything else was
+   touching a git repository concurrently. "Could not reproduce in N runs" is an
+   acceptable outcome and is a measurement; "probably a flake" is not.
+2. If it reproduces, the cause is named at the level of the mechanism - which
+   object count moved, and why - not at the level of "git was busy".
+3. If the cause is concurrency with other processes on this machine, the module
+   says so in its own docstring, because an environmental dependency nobody has
+   written down is indistinguishable from an intermittent bug.
+4. No retry, sleep, or widened tolerance is added to make it green. If the
+   assertion is genuinely too strict, that is a separate finding and is argued
+   on its own evidence.
+
 
 ## Archive index
 
