@@ -84,6 +84,60 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0215 - 2026-09-11 - Three items filed from measurement rather than from opinion - OPS-74 and OPS-75 from the cross-project channel, OPS-77 from this session's own refutation pass
+
+**Evidence:**
+- The three unread notes on the moon_sync_inbox channel were read in full and every claim they made about THIS tree was re-measured rather than relayed. OPS-74 adopts the git-off-PATH false-red probe as an IDEA, re-implemented from described behaviour; nothing was vendored, no file was copied and no module is imported from a sibling tree. OPS-75 is the ignore-shadowing sweep.
+- MEASURED on this tree, and recorded in OPS-74 so nobody quotes a sibling's figure as ours: 57 files carrying a subprocess call site across tools/, ops/ and tests/, 114 call-site occurrences, 16 passing check=True, and 11 shutil.which presence guards. That shape does not prove a false red exists - it says the surface is large enough that the question is worth asking. Whether this tree has any such site is UNMEASURED and the item says so.
+- One note's claim that an identical trust-key path-separator bug was found LIVE on Lanternlight is NOT CORROBORATED anywhere in this tree's own records - searched docs/LEDGER.md, docs/LEDGER_ARCHIVE.md, ROADMAP.md, docs/ROADMAP_ARCHIVE.md and docs/adr/ both line-wise and on a whitespace-collapsed copy, because prose here is hard-wrapped near 80 columns and a single-line pattern misses a sentence that spans two. Recorded as a gap, not as a refutation.
+- OPS-77 is this session's own defect, found by the refuter while trying to break the three-state distinction OPS-73 had just established: a surplus width of zero, from the parameter or from the environment override, produces an empty candidate order and therefore a permanent silent BUSY against a healthy empty bucket. That is OPS-73's own hole 2 one level up.
+
+No note was answered and nothing was sent. OPS-68 holds the responder runner and all propagation on standby by the operator's own words, and OPS-48 forbids soliciting RC or RSC.
+
+### LL-0214 - 2026-09-11 - A refutation pass found three shipped documents asserting the opposite of the session's headline behaviour, and a privacy defect that printed the operator's account name once per cycle
+
+**Evidence:**
+- With the suite green at 2924 passed, ops/loop/lane.py, docs/HEADLESS.md and .claude/commands/loop.md all still said this project never removes a lock it did not create. True for the whole life of the module; made false by OPS-76 in the same session. All three are rewritten to carry the change as the headline, including the honest sentence that this project now deletes files from a directory other projects' live loops depend on.
+- PRIVACY: the bucket display helper in ops/loop/lane.py was INVERTED. It elided paths inside the checkout and printed every other path verbatim - and every bucket this project actually uses is outside the checkout. A status line printed once per cycle therefore carried the operator's account name, which CLAUDE.md names explicitly as an operator identifier. The red run printed the real account name before the fix.
+- It now enumerates the safe renderings - a repo-relative form, and the shared bucket named by its namespace constant - and elides anything else behind a truncated SHA-256, so distinct buckets stay distinguishable without being named. Covers the status line and all three reason strings.
+- lanternlight/redact.py was MEASURED and deliberately not used: it masks enumerated identifier tokens in log-shaped text and has no filesystem-path rule, so calling it here would have been a no-op wearing the costume of coverage. Recorded because the next session will reasonably ask why the sanctioned path was not taken.
+- The UNUSABLE reason also interpolated the failing absolute path while two documents promised it did not. The code was fixed and the promise kept.
+- Safety instrument, proved before its zero was believed: the refuter wrapped the standard library's file-creating, writing and removing entry points, filtered to the shared prefix, and ran the full suite under them. Nine deliberate writes against the real prefix were caught and blocked, a negative control outside the prefix was allowed, and the suite then reported zero hits. The real bucket was byte-identical before and after, directory mtime included.
+
+Nothing mechanical catches a document that has gone false. A green suite says an implementation matches its tests and says nothing about the prose beside it. This is the third time this project has found a written claim the code did not support, after ADR-008's Consequences paragraph and OPS-35's report of its own status.
+
+### LL-0213 - 2026-09-11 - OPS-73 closed - detection now reads a wider alphabet than claiming, an unusable bucket no longer answers busy, and both root branches agree about whitespace
+
+**Evidence:**
+- DETECTION_REPO_KEYS is a strict superset of REPO_KEYS adding rm and ds, used only by detection. Claiming is untouched and UnknownRepoKey still refuses both. Provenance is in the constant's own comment and pinned by a test reading the module source: the two codes are read off CLAUDE.md's ports table, the same document that assigned this repository its own key, and they are NOT confirmed lock keys agreed by those projects. Nobody was asked, because OPS-48 forbids soliciting.
+- That is how acceptance criterion 2's refusal of a guess is satisfied: we widened what we can SEE and assigned nobody anything. We never write another project's reserved name and never claim with its key.
+- BucketUnusable is raised where None was returned, so None means exactly one thing - every candidate slot is taken. The refuter could not invert it in either direction across four unusable shapes (a file as the bucket, a bucket under a file, slot names occupied by directories, a permission-denied directory) and three fresh locks.
+- An all-whitespace LL_LANE_SLOT_ROOT is now ignored exactly as an all-whitespace PROGRAMDATA already was, with a test per branch - acceptance criterion 4.
+- tests/test_lane_slot.py went from 73 to 113 collected, none deleted.
+
+### LL-0212 - 2026-09-11 - OPS-76 - the stale arm was DEAD CODE on the live path, found because arming refuted the hand-off's own prediction that the leaked lock would be reclaimed
+
+**Evidence:**
+- The 2026-09-10 hand-off predicted our reaper would reclaim the leaked 0.lock on arming. MEASURED: it did not. The acquire took 1.lock and left 0.lock identical in size, st_mtime_ns and sha256. try_acquire never called reap, and reap had NO CALLER anywhere in ops/, tools/, lanternlight/ or scripts/.
+- reap_for_acquire is now called by acquire_lane as its first act on the bucket. Criterion 1 proved behaviourally, not by grep: a stale lock planted in an earlier candidate position is reclaimed and that slot taken. Watched red first - the headline failure read assert '1.lock' == '0.lock', which is exactly the stepping-past that was measured against the live bucket.
+- Criterion 3 was DECIDED rather than omitted: the acquire path never reclaims another participant's reserved floor even when it is stale, and does reclaim stale surplus locks and our own stale floor. Accepted blind spot, disclosed in ADR-008 and in docs/HEADLESS.md: a sibling's genuinely leaked floor is never reclaimed by us.
+- Safety direction attacked independently by the refutation pass: a live-pid lock and a fresh-timestamp lock both survived byte-identical and mtime-identical; every foreign reserved name across the detection alphabet plus an unknown key survived while our own was reclaimed.
+- Criterion 5's anti-recurrence guard is real rather than decorative: unwiring the reap reddens eight tests, checked by unwiring it.
+- Ten mutations watched red in total, five by the implementing slice and five re-broken independently by the refuter, anchors asserted each time.
+
+The lesson is narrower than test your code. Seventy-three tests covered a reaper that no production path could reach, and ADR-008, the hand-off and the module docstring all described its live behaviour in the present tense. A green suite proves a behaviour is IMPLEMENTED, never that it is WIRED. It took an acquire against the real bucket to find out.
+
+### LL-0211 - 2026-09-11 - The lane is ARMED - a session-scoped lane wired into the loop's entry block, verified by a real acquire against the shared bucket rather than by a fixture
+
+**Evidence:**
+- Operator instruction, chat 2026-09-10: re arm the lane next session. Before this, nothing in the tree called acquire_lane or hold_lane - the names appeared only in ops/lane_slot.py, its tests and ADR-008, so arming was a wiring job rather than a setting.
+- ops/loop/lane.py is new: session_lane() composes hold_lane and yields a frozen LaneStatus reporting held, slot, bucket, reserved-scheme state and the order tried. Held for the whole session, not per cycle - the concurrency budget is consumed continuously, not in cycle-aligned bursts.
+- MEASURED against the live bucket, read back at each step: before, one lock 0.lock at 104 bytes and reserved scheme absent, so the try order was the surplus names only and our own floor was never a candidate. While held, a second lock at 1.lock, 120 bytes, carrying exactly cycle, pid, repo, run_id and ts - pid this process, repo this checkout, ts age 0.02 s. After release the bucket was back to its prior contents byte for byte.
+- tests/test_loop_lane.py added, 30 collected, none deleted. The documented with-block in .claude/commands/loop.md was sliced out of the fence at run time and executed verbatim by the refutation pass against a temporary root: it printed a HELD status line and left the bucket empty on exit.
+- Suite this run: 2933 passed, 1 skipped. Ruff: All checks passed. Merge gate OK at 2934 collected, no per-file drop against the HEAD 89b0b2a baseline.
+
+OPS-35 criterion 5 is ADVANCED but still NOT MET, and the item says so. It asks for interoperation proven against a REAL SIBLING HOLDER. A real acquire in the real shared bucket is strictly more than the mock the criterion forbids, but the only other lock present belonged to a holder whose pid is dead. Contending with a leaked artifact is not contending with a participant. Still unobserved: being refused a slot because a live sibling holds it, and any sibling's reaper reclaiming a lock of ours.
+
 ### LL-0210 - 2026-09-10 - Joined the shared lane-slot bucket by operator ruling, SURPLUS-ONLY, because measurement refuted ADR-007's claim that joining was one environment variable - and the live bucket confirmed a payload this project had only ever reconstructed from prose
 
 **Evidence:**
