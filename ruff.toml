@@ -12,6 +12,17 @@ extend-exclude = [
     "scratchpad",
     "_scratch",
     "data",
+    # OPS-84. Vendored third-party work, kept byte-identical to what was
+    # licensed. Linting it would be pointless at best and harmful at worst:
+    # ruff's PTH rules want `builtins.open` and `os.replace` in
+    # third_party/lw_write_tracer/ rewritten to their pathlib equivalents, and
+    # those two calls are the PATCHED ROUTES its own positive control exists to
+    # exercise - rewriting them would silently disarm the control. Editing it
+    # would also make it a derivative work needing a declared change, which
+    # third_party/lw_write_tracer/NOTICE.md and
+    # tests/test_vendored_write_tracer.py both say plainly. We do not lint code
+    # we are not going to modify.
+    "third_party",
 ]
 
 [lint]

@@ -4009,6 +4009,130 @@ rather than an edit.
 5. Every guard is watched red under mutation, with the anchor asserted before any
    survivor is believed.
 
+## OPS-84. Vendor Legion Wallpaper's write tracer under the license it named - CLOSED 2026-09-11, operator-ruled
+
+Filed and closed 2026-09-11. The operator ruled VENDOR in chat after LW named a
+license explicitly.
+
+**THE RULE WAS SATISFIED, NOT WAIVED, and that distinction is the item.** An
+earlier copy of this same file was refused here because the drop carried no
+license statement and this repository is public and Apache-2.0. Lanternlight
+asked LW to NAME a license if they wanted it vendorable rather than read for the
+idea only. LW answered on 2026-09-11: both delivered files are tracked in
+`Remus3/Legion-Wallpaper`, which is PUBLIC and Apache-2.0, the operator is sole
+copyright holder, and vendoring with attribution is intended rather than an
+accident of publication. LW added that it would rather the rule was applied than
+waived. The `CLAUDE.md` license gate then passes on its own terms - Apache-2.0
+into Apache-2.0, with GPL and AGPL still DO-NOT-VENDOR whatever is offered.
+
+**VERIFIED BEFORE A BYTE WAS COPIED.** The drop hashes to the sha256 LW published
+in its 14:15 note and is 11,267 bytes as stated, and it is 7-bit ASCII
+throughout. A license statement about a file nobody checked is a statement about
+some other file.
+
+**WHAT WAS ACTUALLY CHANGED, because Apache-2.0 section 4(b) requires saying.**
+One thing, and it is mechanical: CRLF was normalised to LF, because
+`.gitattributes` pins `*.py` to `eol=lf` and this repository is public, where a
+CRLF blob reads as a whole-file diff to every non-Windows contributor. No other
+byte differs.
+
+**THE TRAP THAT SHAPED THE GUARD.** A hash of a working file is not a hash of the
+commit - this repository's own anti-pattern list, met head-on. Recording a single
+digest would have been a confident lie whichever form was chosen, so
+`NOTICE.md` records BOTH and says which is which, and
+`tests/test_vendored_write_tracer.py` asserts the identity in the form that
+survives the policy: read the vendored file, restore CRLF, require the result to
+hash to LW's published digest. That binds the test to the licensed CONTENT rather
+than to a line-ending rule, and it fails the moment anyone edits the file.
+
+**MEASURED, WHICH IS WHY IT WAS WORTH VENDORING RATHER THAN FILING.** Run against
+this repository's full suite with the plugin's own positive control PROVED, its
+negative specimen clean and the interpreter confirmed restored, watching
+`ops/runtime`, `logs` and `moon_sync_inbox`:
+
+- The operator's live `inbox_seen.json` and `inbox_reported.json` do NOT appear.
+  What appears in their place are the `.restore.<pid>.tmp` temporaries that
+  `OPS-82` introduced this same day. That is independent corroboration of
+  `OPS-82` from an instrument this project did not write: LW saw the live records
+  written because the restore truncated them in place, and after the fix the only
+  bytes that move go to a temporary that is then renamed.
+- `docguard_observed.json.<pid>.tmp`, 21,782 bytes, from the audit-hook recorder
+  `tests/conftest.py` documents. By design.
+- Two probe files of 2 and 3 bytes from `tests/test_tracked_walker.py`, which LW
+  called debatable. Measured under `OPS-85` and there is NO defect: both are
+  removed in a `finally` and zero remain after a full run.
+- `opened_for_write_only`: empty.
+
+**NOT CLAIMED.** Every number above is a LOWER BOUND. The plugin does not see
+writes performed by a CHILD PROCESS, it says so itself, and this suite spawns
+processes constantly - every hook test does. That limit is load-bearing here
+rather than a footnote, and it is the exact limit that made LW's original finding
+about this tree wrong.
+
+### Acceptance - all met
+
+1. The license is named by the upstream, verified, and recorded with the
+   upstream, the holder and the digest of what was licensed. MET -
+   `third_party/lw_write_tracer/NOTICE.md`.
+2. The statement of changes is checkable rather than promised. MET - the
+   round-trip assertion, watched red under mutation: a one-comment edit to the
+   vendored file reddened two arms with the anchor asserted first, and the file
+   was restored from a byte copy.
+3. The vendored work actually runs here, proving its own control. MET - end to
+   end through a real pytest subprocess, `proved` true, `negative_clean` true,
+   `restored` true.
+4. The first run against this tree is recorded as a result with a date. MET -
+   above, and in the ledger.
+
+## OPS-85. Two test probe files write into the live `ops/runtime/` - CLOSED 2026-09-11, NO DEFECT, and the first version of this item was wrong
+
+Filed and closed 2026-09-11, in that order and within minutes, because the filing
+was wrong and the correction is the part worth reading.
+
+**WHAT THE INSTRUMENT SAW.** The first run of the vendored write tracer against
+this suite reported two files written into the operator's live `ops/runtime/`:
+
+    2 B  ops/runtime/_walker_probe_ignored_<pid>.bin
+    3 B  ops/runtime/_walker_probe_ignored_<pid>.json
+
+by `tests/test_tracked_walker.py`. Legion Wallpaper's own report of the same
+shape called them debatable rather than clearly wrong.
+
+**WHAT THIS ITEM FIRST CLAIMED, AND IT WAS FALSE.** That the files carry a pid in
+the name, are not removed, and accumulate in the operator's live runtime
+directory one pair per suite run indefinitely. That was written from the tracer's
+report alone, without opening the test. It is the exact failure this repository's
+standing rule exists to prevent - a claim about a file, made from a report about
+that file - and it was committed to nothing only because the measurement was
+taken before the commit.
+
+**MEASURED, and it settles it.** Both probes are removed in a `finally` block by
+the tests that write them, at `tests/test_tracked_walker.py:88` and
+`tests/test_tracked_walker.py:160`. Counted in the live `ops/runtime/`
+immediately after a full suite run that the tracer had just watched write them:
+ZERO remain. The writes are real and they are transient.
+
+**WHY THE LOCATION IS CORRECT AND MUST NOT BE "FIXED".** The thing under test is
+that a GITIGNORED file stays out of the scannable view. `ops/runtime/` is
+gitignored, which is why the probe goes there. A probe in `tmp_path` would not be
+inside this repository at all and would be excluded for the wrong reason, turning
+a real guard into decoration that passes no matter what the walker does. Anyone
+arriving here with a plan to move these into `tmp_path` should read this
+paragraph first.
+
+**THE ONE RESIDUE, CONSIDERED AND DISMISSED IN WRITING.** A `finally` does not
+survive a hard kill, so a process killed mid-test could leave one 2 or 3 byte
+file behind in a gitignored directory. That is not worth an item, and saying so
+here is cheaper than having the question re-opened by the next reader of a trace
+report.
+
+**THE GENERALISATION, which is why this stayed on the record instead of being
+deleted.** A write tracer reports that BYTES MOVED. It cannot report that state
+CHANGED, and the difference is the whole of `OPS-82` and the whole of this. Both
+findings from the same instrument on the same day were writes that a `finally`
+undid, and in both cases the instrument was working perfectly and the reading was
+the error.
+
 ## Archive index
 
 Every closed and refuted item is still here, one hop away, in

@@ -321,6 +321,23 @@ KNOWN_NON_HOSTS = frozenset(
         "os.rename",
         "os.replace",
         "path.write",
+        # QUOTED BY `OPS-84`, the vendored write tracer and its Apache-2.0
+        # obligations. `NOTICE.md` and `tracer.py` are deliberately NOT listed
+        # here: both are now TRACKED files, so the live tracked-file check
+        # covers them, and the guard below refuses a denylist entry that the
+        # live check has absorbed - a hardcoded name that git already answers
+        # for is the stale list this module exists to avoid.
+        #
+        # These two are not tracked and so are not covered by it.
+        # `observed.json` is the extractor's tail of the `docguard_observed`
+        # recorder named in the trace result, which writes into the gitignored
+        # `ops/runtime/`. `tracer.py.from` is the tail of
+        # `moon_sync_inbox/lw_write_tracer.py.from-lw`, the ORIGINAL DROP, which
+        # lives in the gitignored mail directory and will never be tracked -
+        # `.from` is not a TLD but the host-shaped pattern cannot know that.
+        # Neither is an external source; both were looked at before being added.
+        "observed.json",
+        "tracer.py.from",
         # TEST MODULE FILENAMES quoted by `LL-0159`, the entry closing the
         # `OPS-33` follow-up. Each is a file in THIS tree - `git ls-files`
         # matches `tests/test_inbox_acknowledge.py` and its three siblings -

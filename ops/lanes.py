@@ -413,6 +413,14 @@ LANES: tuple[Lane, ...] = (
             # suggestion filed outside ROADMAP.md, and the outbox holds sent
             # copies rather than unsent ones.
             "docs/drafts/**",
+            # OPS-84, the vendored write tracer and its Apache-2.0 NOTICE. It
+            # is an instrument for auditing what the suite writes, which is
+            # this lane's own continuity concern, and the NOTICE is a licensing
+            # obligation rather than a piece of anyone's feature work. The
+            # plugin itself must not be edited by ANY lane - see its NOTICE and
+            # tests/test_vendored_write_tracer.py, which fails if it is.
+            "third_party/**",
+            "tests/test_vendored_write_tracer.py",
             # OPS-45, the Stop-hook claim auditor. ops/** already covers
             # ops/stop_audit.py; the test module matches no glob here. It is
             # this lane's work for the same reason the merge gate is: both
