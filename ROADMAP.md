@@ -3784,7 +3784,7 @@ work out whether a changed newline run means something.
 4. Watched red under mutation: with the fix in place, re-introducing the extra
    newline must redden the fixed-point test, with the anchor asserted first.
 
-## OPS-82. The guard that protects the operator's live mail records is the only NON-ATOMIC writer of them in the tree - OPEN
+## OPS-82. The guard that protects the operator's live mail records is the only NON-ATOMIC writer of them in the tree - CLOSED 2026-09-11, criteria 1-5 met, 6 held on an operator ruling
 
 Filed 2026-09-11 out of a defect report from Legion Wallpaper, which is worth
 reading as an example of a finding that was measured, published in good faith,
@@ -3878,6 +3878,66 @@ one, and the same applies to a confident wrong severity.
    precedent. The draft states what was refuted, what survived, and the
    subprocess reasoning that explains the difference, and quotes no raw command
    output - the finding is stated instead, per `ADR-004` as amended.
+
+### Outcome - 2026-09-11 - fixed, and the window is ACCEPTED with the reasoning written down
+
+**Criteria 1 to 5 are MET. Criterion 6 is as far as this session may take it.**
+
+**1 and 2.** `tests/test_inbox_watch.py::_restore_live_record` writes through a
+temporary in the target's own directory and `replace`s it, and removes the
+temporary in a `finally` so a failed `replace` leaves nothing beside the
+operator's live records. `_write_json_atomic` was NOT reused, and the docstring
+says why: it takes a JSON payload and builds its own envelope, while a restore
+must put back the exact bytes that were there, including bytes written by a
+schema this test knows nothing about. The discipline is copied and the payload is
+not. The absent-record branch stays an `unlink`, also with its reason recorded -
+removing a directory entry has no partially-written state to leave behind, which
+is the property the write branch had to be given.
+
+**3 and 5.** The regression arm compares file IDENTITY rather than bytes, because
+comparing bytes at the end cannot fail for a truncating restore. Probed on this
+filesystem before the arm was written: `write_bytes` preserved `st_ino` and
+`replace` changed it. Watched red under mutation with the anchor asserted first -
+reverting to `write_bytes` reddened two arms and left three green, so the
+mutation localises. The identity arm carries its own anchor and refuses to pass
+where `st_ino` is 0, which would make the comparison true of every
+implementation.
+
+**4 - THE WINDOW IS ACCEPTED, not closed, and this is the reasoning rather than a
+silence.** Between the hook subprocess's write and the restore, the live records
+hold values a test produced. MEASURED: the hook command completes in 0.12 to 0.13
+seconds across three runs, so the window is roughly an eighth of a second, and
+the only reader that could land in it is another session's `SessionStart` hook on
+this machine.
+
+Closing it was considered and rejected. The only way to keep the live paths
+untouched is to stop running the real command string - and the real command
+string, with no arguments, IS the thing under test. `OPS-61` already narrowed
+what "the exact string the harness will execute" may honestly mean here, and
+redirecting the paths would leave the test asserting that a string this
+repository composed runs some other way than the harness will run it. That trades
+a measured eighth of a second against the only end-to-end proof this repository
+has that its own session-start hook works.
+
+What the accepted risk actually is, stated so nobody re-derives it as larger: a
+concurrent reader in that window sees a COMPLETE, well-formed record holding
+fixture values, not a torn one - the torn case is the thing criterion 1 closed.
+It would report wrongly once and be correct on its next run, because the restore
+puts the real record back and nothing downstream caches it.
+
+**6.** The reply is written at
+[`docs/drafts/reply-to-LW-inbox-record-finding.md`](docs/drafts/reply-to-LW-inbox-record-finding.md)
+and is HELD. It is tracked rather than left in the gitignored outbox, because the
+outbox holds SENT copies and a draft nobody can find is the same failure as a
+suggestion filed outside this document. The question is recorded for the
+operator: LW published a defect report about this tree and then retracted its own
+earlier clean bill, so a reply is owed on the merits - but sending one is an
+outward action, `OPS-68` holds cross-project propagation on standby by the
+operator's own words, and the single note this channel carried from here on
+2026-09-11 went out on a specific operator instruction that was explicitly not a
+precedent. This item does not close that question and no session should answer it
+alone.
+
 
 ## OPS-83. 49 tests need a POSIX userland, not `bash`, and no guard names what they actually need - OPEN
 

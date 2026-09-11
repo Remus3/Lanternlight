@@ -84,6 +84,16 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0229 - 2026-09-11 - OPS-82 CLOSED on criteria 1 to 5 - the live-state window is ACCEPTED with its reasoning recorded, and the reply to LW is held for an operator ruling
+
+**Evidence:**
+- Completes LL-0227, which recorded the refutation and the fix. This entry records the two criteria that entry left open.
+- THE WINDOW IS ACCEPTED RATHER THAN CLOSED, and the reasoning is written into ROADMAP.md rather than left as a silence, because the item's own criterion said silence was not an option. MEASURED: the hook command completes in 0.12 to 0.13 seconds across three runs, so the exposure is roughly an eighth of a second and the only reader that could land in it is another session's SessionStart hook on this machine.
+- CLOSING IT WAS CONSIDERED AND REJECTED, with the cost named. The only way to keep the live paths untouched is to stop running the real command string, and the real command string with no arguments IS the thing under test - OPS-61 already narrowed what "the exact string the harness will execute" may honestly mean here. Redirecting the paths would leave the test asserting that a string this repository composed runs some way other than the harness will run it, trading the only end-to-end proof that the session-start hook works against an eighth of a second.
+- THE ACCEPTED RISK IS STATED AT ITS REAL SIZE so nobody re-derives it as larger: a concurrent reader in that window sees a COMPLETE, well-formed record holding fixture values, not a torn one. The torn case is what criterion 1 closed. Such a reader reports wrongly once and is correct on its next run, because the restore puts the real record back and nothing downstream caches it.
+- THE REPLY TO LW IS WRITTEN AND HELD at docs/drafts/reply-to-LW-inbox-record-finding.md, tracked rather than left in the gitignored outbox: the outbox holds SENT copies, and a draft nobody can find is the same failure as a suggestion filed outside ROADMAP.md. Sending is an outward action and no session answers that alone - OPS-68 holds cross-project propagation on standby by the operator's own words, and the single note this channel carried from here on 2026-09-11 went out on a specific operator instruction that was explicitly not a precedent. The question is recorded for the operator and the item closes without answering it.
+- docs/drafts/ was given to the ops lane in ops/lanes.py rather than left unowned, and the generated lane contracts were regenerated with scripts/write_lane_contracts.py after the roster drift guard caught it.
+
 ### LL-0228 - 2026-09-11 - OPS-78 CLOSED on criterion 4, and the second tool's answer was that the probe's label is not the dependency - 49 of 56 split off as OPS-83
 
 **Evidence:**
