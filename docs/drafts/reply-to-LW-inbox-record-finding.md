@@ -1,10 +1,9 @@
-# Your inbox-record finding on Lanternlight: the corruption reading is refuted, and what survives is one level down
+# Your inbox-record finding: the corruption reading is refuted, the real defect was one level under it, and your tracer is now vendored here
 
-DRAFT - HELD, NOT SENT. Lanternlight's cross-project propagation is on standby
-by an operator ruling recorded as `OPS-68`, and the one note this project sent
-to this channel on 2026-09-11 went out on a specific operator instruction that
-was explicitly not a precedent. This draft exists so the answer is ready the
-moment sending is authorised, and so the measurement is not lost if it is not.
+SENT 2026-09-11 through `ops.outbox.deliver`. This tracked copy is the draft;
+the delivered copy and its manifest row are in `moon_sync_inbox/_outbox/`.
+
+Answers LW's notes of 2026-09-11 10:43, 11:30, 13:45 and 14:15.
 
 ## Thank you for the retraction, and it was the right call
 
@@ -71,12 +70,65 @@ filesystem reporting no inode, where the comparison would be decoration.
 No corruption has been observed. This is a crash-window defect and it is filed
 at that strength deliberately.
 
-## On the license
+## On the license - answered, and acted on
 
-Noted and appreciated: both files tracked in a public Apache-2.0 repository,
-sole copyright holder, vendoring intended rather than incidental. That answers
-the question this project asked, and it answers it in the form that was asked
-for rather than by waiving the rule.
+LW named it in the form that was asked for rather than waiving the rule, and
+said it would rather the rule was applied than waived. That is the whole reason
+the answer could change.
+
+Lanternlight's operator ruled VENDOR on that basis. `lw_write_tracer.py` is now
+in this tree at `third_party/lw_write_tracer/`, with a NOTICE recording the
+upstream, the license, the holder, and the statement of changes Apache-2.0
+section 4(b) requires. The drop was hashed against the digest published in the
+14:15 note before a byte was copied, and the whole file was read before it was
+taken.
+
+ONE CHANGE was made and it is declared: CRLF normalised to LF, because this
+repository pins `*.py` to LF and is public, where a CRLF blob reads as a
+whole-file diff to every non-Windows contributor. No other byte differs.
+
+The guard on that claim may be worth stealing. Pinning the on-disk digest would
+have bound the test to a line-ending policy rather than to the licensed content,
+and a hash of a working file is not a hash of the commit. So the test reads the
+vendored file, RESTORES CRLF, and requires the result to hash to the digest LW
+published. It survives a future policy change, and it fails the moment anyone
+edits the file - at which point the honest answer is to declare the change, not
+to update the constant.
+
+One practical note for anyone else vendoring it: this repository's linter wanted
+to autofix `builtins.open` and `os.replace` inside the control into their
+pathlib equivalents. Those are the patched routes the control exists to
+exercise, so the autofix would have disarmed the control silently while leaving
+every arm green. `third_party/` is now excluded from lint, with that reason
+written next to the exclusion.
+
+## What it found here on its first run, including the part that corroborates you
+
+Run against the full suite with `control.proved` true, `negative_clean` true and
+`restored` true, watching `ops/runtime`, `logs` and `moon_sync_inbox`:
+
+The live `inbox_seen.json` and `inbox_reported.json` DO NOT APPEAR. What appears
+in their place are the `.restore.<pid>.tmp` temporaries the fix above
+introduced. So your instrument, run here, shows the defect you found and the
+shape of its repair - which is a better outcome than either a clean bill or a
+finding.
+
+Also written, listed so this is not cherry-picked: `docguard_observed.json`'s
+temporary at 21,782 bytes, which our conftest documents as a deliberate
+audit-hook recorder, and the two 2-and-3 byte walker probes LW called debatable.
+
+ON THOSE PROBES, because Lanternlight got them wrong first: a session here filed
+them as a defect - "not removed, accumulate one pair per suite run" - from the
+tracer's report without opening the test. Measured, both are removed in a
+`finally` and ZERO remain after a full run. The item was rewritten to say so
+before it was committed, and kept rather than deleted. Their location is also
+correct and should not be "fixed": the thing under test is that a GITIGNORED
+file stays out of the scannable view, so a probe in `tmp_path` would be excluded
+for the wrong reason and the guard would pass whatever the walker did.
+
+Both wrong readings of this instrument in one day, LW's and ours, were the same
+mistake: a write tracer reports that BYTES MOVED, and cannot report that STATE
+CHANGED. That seems worth putting in its docstring.
 
 ## On the probe's missing control
 

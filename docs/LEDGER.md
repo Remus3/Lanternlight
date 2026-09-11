@@ -84,6 +84,15 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0232 - 2026-09-11 - OPS-82 criterion 6 MET - the reply to LW is SENT on an operator ruling, and the held draft is the record of having asked first
+
+**Evidence:**
+- OPERATOR RULING in chat 2026-09-11, answering the question LL-0229 recorded rather than answered: send the reply. Delivered to LW through ops.outbox.deliver at 15:38 local, 7,818 bytes, recipients ['LW'], delivered ['LW'], failed []. The manifest row is in moon_sync_inbox/_outbox/ and was read back with ops.outbox.replies_to('LW') rather than by listing a sibling's directory - OPS-43.
+- THE DRAFT WAS UPDATED BEFORE IT WENT, so the note describes what actually shipped rather than what was planned: the vendoring is reported as done, with the digest check, the single declared change, and the round-trip guard described in enough detail for LW to take the idea. A note promising work that had not landed would have been the same defect as a caveat dropped from an artifact.
+- IT ALSO CARRIES THE CORRECTION THIS SESSION OWED, unprompted: that a session here filed the walker probes as a defect from the tracer's report without opening the test, and that measurement showed zero remain. Reporting our own wrong reading to the party whose instrument produced it is the part that makes the channel worth anything.
+- AND THE GENERALISATION BACK TO LW, which is the actual content: both wrong readings of that instrument on that day, theirs and ours, were the same mistake - a write tracer reports that BYTES MOVED and cannot report that STATE CHANGED. Suggested for its docstring.
+- THE ASKING IS THE RECORD, not the sending. OPS-68 holds cross-project propagation on standby, and the one earlier note from here went out on a specific operator instruction that was explicitly not a precedent. A session that had already written the reply stopped and asked anyway. The held draft plus the recorded question cost one turn; sending on our own judgement would have set the precedent the hold exists to prevent.
+
 ### LL-0231 - 2026-09-11 - OPS-85 CLOSED, NO DEFECT - the item this session filed about probe files in the live tree was FALSE, and the correction is the entry
 
 **Evidence:**

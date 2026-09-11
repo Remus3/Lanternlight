@@ -338,6 +338,11 @@ KNOWN_NON_HOSTS = frozenset(
         # Neither is an external source; both were looked at before being added.
         "observed.json",
         "tracer.py.from",
+        # A JSON FIELD PATH quoted by the reply draft to LW, naming the key the
+        # vendored tracer writes its self-check under. `.proved` is not a TLD
+        # and resolves nowhere; the host-shaped pattern cannot tell a dotted
+        # field path from a domain. Not an external source.
+        "control.proved",
         # TEST MODULE FILENAMES quoted by `LL-0159`, the entry closing the
         # `OPS-33` follow-up. Each is a file in THIS tree - `git ls-files`
         # matches `tests/test_inbox_acknowledge.py` and its three siblings -

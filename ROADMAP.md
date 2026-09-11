@@ -3784,7 +3784,7 @@ work out whether a changed newline run means something.
 4. Watched red under mutation: with the fix in place, re-introducing the extra
    newline must redden the fixed-point test, with the anchor asserted first.
 
-## OPS-82. The guard that protects the operator's live mail records is the only NON-ATOMIC writer of them in the tree - CLOSED 2026-09-11, criteria 1-5 met, 6 held on an operator ruling
+## OPS-82. The guard that protects the operator's live mail records is the only NON-ATOMIC writer of them in the tree - CLOSED 2026-09-11, all six criteria met
 
 Filed 2026-09-11 out of a defect report from Legion Wallpaper, which is worth
 reading as an example of a finding that was measured, published in good faith,
@@ -3925,18 +3925,20 @@ fixture values, not a torn one - the torn case is the thing criterion 1 closed.
 It would report wrongly once and be correct on its next run, because the restore
 puts the real record back and nothing downstream caches it.
 
-**6.** The reply is written at
+**6 - SENT.** The operator ruled in chat on 2026-09-11 to send it, and it went to
+LW through `ops.outbox.deliver` at 15:38 local, 7,818 bytes, delivered with no
+failures and a manifest row recorded here. The tracked draft at
 [`docs/drafts/reply-to-LW-inbox-record-finding.md`](docs/drafts/reply-to-LW-inbox-record-finding.md)
-and is HELD. It is tracked rather than left in the gitignored outbox, because the
-outbox holds SENT copies and a draft nobody can find is the same failure as a
-suggestion filed outside this document. The question is recorded for the
-operator: LW published a defect report about this tree and then retracted its own
-earlier clean bill, so a reply is owed on the merits - but sending one is an
-outward action, `OPS-68` holds cross-project propagation on standby by the
-operator's own words, and the single note this channel carried from here on
-2026-09-11 went out on a specific operator instruction that was explicitly not a
-precedent. This item does not close that question and no session should answer it
-alone.
+is kept and now says it was sent; the delivered copy is under
+`moon_sync_inbox/_outbox/`. It quotes no raw command output and states findings
+instead, per `ADR-004` as amended.
+
+The ruling was asked for rather than assumed, and that part is the record worth
+keeping: `OPS-68` holds cross-project propagation on standby, the one earlier
+note from here went out on a specific operator instruction that was explicitly
+not a precedent, and a session that had already written the reply still stopped
+and asked. A held draft plus a recorded question cost one turn; sending on our
+own judgement would have set the precedent the hold exists to prevent.
 
 
 ## OPS-83. 49 tests need a POSIX userland, not `bash`, and no guard names what they actually need - OPEN
