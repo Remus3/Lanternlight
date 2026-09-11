@@ -1272,6 +1272,52 @@ free. Our leaks now land in a shared directory where our own stale arm remains
 the only thing that reclaims them, because a repository-local reaper is the only
 one that knows our keys.
 
+### THE LANE IS ARMED - 2026-09-11 - criterion 5 ADVANCED, still NOT MET
+
+**The operator instructed in chat on 2026-09-10: "re arm the lane next session."
+That was done on 2026-09-11, and arming meant actually taking a slot rather than
+flipping a setting.** The code landed on 2026-09-10 with no consumer at all;
+`acquire_lane` and `hold_lane` appeared only in the module, its tests and the
+ADR. `ops/loop/lane.py` now wires a SESSION-SCOPED lane into the loop's entry
+block, beside the single-instance lock and the session watcher, and
+`.claude/commands/loop.md` and `docs/HEADLESS.md` carry it.
+
+**Why session scope rather than per cycle**, recorded so nobody re-litigates it:
+the budget being rationed is the machine's and the account's concurrency, which
+this project consumes continuously for as long as a loop is alive, not in bursts
+that line up with cycle boundaries. A per-cycle acquire would release a slot the
+session is still effectively using, and would turn a mid-loop "busy" into a
+stalled cycle with no good answer.
+
+**What was MEASURED against the live bucket, not asserted.** A real acquire was
+performed and the bucket read back at each step:
+
+- Before: one lock, `0.lock`, 104 bytes. Reserved scheme state `absent`, so the
+  try order was the surplus names only and `reserved-ll.lock` was never a
+  candidate - the surplus-only branch `ADR-008` chose, confirmed in the live
+  bucket rather than in a fixture.
+- While held: a second lock appeared at `1.lock`, 120 bytes, carrying EXACTLY the
+  five wire fields - `cycle`, `pid`, `repo`, `run_id`, `ts` - with `pid` this
+  process, `repo` this checkout, and a `ts` age of 0.02 seconds. Our writer and
+  the observed wire agree, now proven by writing rather than by reading.
+- After release: the lock was gone and the bucket was back to its prior contents
+  byte for byte.
+
+**A PREDICTION THIS ITEM'S OWN HAND-OFF MADE WAS REFUTED BY THE ARMING.** It said
+our reaper would reclaim the leaked `0.lock`. It did not: the acquire stepped
+past it to `1.lock` and left it identical to the nanosecond. `try_acquire` never
+calls `reap`, and `reap` has no caller anywhere in this tree. Filed as `OPS-76`.
+
+**WHY CRITERION 5 IS STILL NOT MET.** It asks for interoperation proven against a
+REAL SIBLING HOLDER. What happened here is a real acquire in the real shared
+bucket, which is strictly more than the mock the criterion forbids - but the only
+other lock present belonged to a holder whose pid is dead. Contending with a
+leaked artifact is not contending with a participant. Two things are still
+unobserved: this project being refused a slot because a live sibling holds it,
+and any sibling's reaper reclaiming a lock of ours. Until one of those is watched
+happening, this criterion stays open and says so.
+
+
 ## OPS-36. Adopt CONVERGENCE CHARTER v4 as written - OPEN, operator-ruled 2026-09-07
 
 **The operator ruled ADOPT AS WRITTEN on 2026-09-07**, over adopting with
@@ -4635,7 +4681,7 @@ be found.
    on its own evidence.
 
 
-## OPS-73. Two holes in the lane-slot join, both found by the wrap that shipped it - OPEN
+## OPS-73. Two holes in the lane-slot join, both found by the wrap that shipped it - CLOSED 2026-09-11
 
 Filed 2026-09-10 by the refutation pass over `ADR-008`. Neither blocks the join
 and neither is a reason to revert it; both are cases where a wrong answer is
@@ -4689,6 +4735,300 @@ override of `"   "` yields `Path("   ")` rather than being ignored.
 4. The override branch and `shared_root()` agree about whitespace.
 5. Every guard above is watched red under mutation, with the anchor asserted
    before any survivor is believed.
+
+
+## OPS-74. Nothing here measures whether a guard is GREEN only because a tool is absent - OPEN
+
+Filed 2026-09-11 from a cross-project note read on the `moon_sync_inbox/`
+channel. The IDEA is adopted and nothing is vendored: no file was copied in, no
+module is imported from a sibling tree, and the method below is re-implemented
+from the described behaviour in this project's own words.
+
+**The failure class.** A test that shells out to an external tool and guards
+itself with a presence check has two behaviours, and a green suite only ever
+exercises one of them. When the tool is present the guard is invisible; when it
+is absent the test skips, errors, or - worst - passes trivially because the
+thing it was supposed to check never ran. That last shape is a FALSE RED's
+mirror image and this repository has no measurement of how much of it it has.
+It is the same defect as every entry in `CLAUDE.md`'s anti-patterns list: a
+claim about the TOOL wearing the costume of a claim about the world. The
+crashed `grep -iF`, the `taskkill` that killed nothing and the `-q` that printed
+no summary are all this failure in other clothes.
+
+**What is MEASURED here, and what is not.** Measured 2026-09-11 across `tools/`,
+`ops/` and `tests/`: 57 files carry a subprocess call site, 114 call-site
+occurrences in total, 16 of them passing `check=True`, and 11 `shutil.which`
+presence guards. That shape does not by itself prove a single false red exists -
+it only says the surface is large enough that the question is worth asking.
+**Whether this tree actually has any such site is UNMEASURED**, and the note that
+prompted this item makes no measured claim about Lanternlight either. A count
+quoted from a sibling's tree is not a finding about ours.
+
+### Acceptance
+
+1. A `tools/` entry point, re-implemented here, that runs the suite twice - once
+   normally and once with every `PATH` entry carrying a `git` executable removed
+   - and reports the DELTA by test id and by file, not merely a total. A total
+   hides a file that lost five tests while another gained five, which is the
+   per-file lesson `ops/merge_gate.py` already learned.
+2. The probe distinguishes three outcomes and never collapses them: a test that
+   SKIPPED cleanly, a test that FAILED or errored only because the tool was
+   absent, and a test that PASSED in both directions without the guarded code
+   ever running. The third is the one this item exists for.
+3. The probe's own instrument is proved before any zero it reports is believed.
+   A deliberately planted false-red site must be SEEN by it, and the positive
+   control is run and reported every time, exactly as the ADR-008 refutation
+   pass proved its file-write instrument before trusting its zero. A negative
+   result from an unproven instrument is not a result.
+4. The delta measured on this tree is recorded in the ledger as a number with a
+   date, whatever it turns out to be - including zero. A measured zero and an
+   unmeasured absence are different facts and this project keeps them apart.
+5. **Bidirectional guard discipline is written down and applied.** Any guard
+   whose job is "skip cleanly when tool X is missing" also asserts that the
+   guarded path actually RUNS when X is present. One direction alone is a
+   negative assertion, which rules something out without pinning anything down.
+6. Every guard above is watched red under mutation, with the anchor asserted
+   before any survivor is believed.
+
+## OPS-75. No check asks whether a `.gitignore` pattern already shadows a tracked file - OPEN
+
+Filed 2026-09-11, same channel note, same re-implemented-not-vendored basis as
+`OPS-74`.
+
+**The shape.** An unanchored ignore pattern can match a path that is ALREADY
+tracked. Git keeps honouring the tracked entry, so nothing breaks and nothing
+warns - but an untracked sibling added next to it in the same directory is
+silently refused by `git add`, and the refusal looks like the file simply not
+mattering. This project has two live reasons to care: `moon_sync_inbox/` is
+gitignored and is exactly where a mistaken addition would be invisible, and
+`ops/runtime/` is gitignored while sitting inside a package directory that is
+not.
+
+**Not yet measured here.** Whether any Lanternlight pattern currently shadows a
+tracked file is unknown; the read that produced this item was read-only and
+could not run `git ls-files` or `git check-ignore`. The item is filed as a
+question to answer, not as a defect to fix.
+
+### Acceptance
+
+1. A test or script that cross-references every `.gitignore` pattern against the
+   tracked listing and fails if any tracked path is matched by a pattern that
+   would also ignore an untracked sibling in the same directory.
+2. The tracked listing is asked of `git` at run time and never stored in the
+   file, for the reason `tests/test_source_register.py` already gives: a
+   committed list of filenames goes stale on the first rename and then reads as
+   a confident lie.
+3. If `git` is absent or returns nothing, the check gets NOISIER rather than
+   quieter, and that direction is tested. This is `OPS-74` criterion 5 applied
+   to the check this item builds, and the two items must not both assume the
+   other proved it.
+4. The result of the first run is recorded in the ledger as a number with a
+   date, including zero.
+5. Every guard above is watched red under mutation, with the anchor asserted
+   before any survivor is believed.
+
+
+## OPS-76. The stale arm is DEAD CODE on the live path - nothing calls `reap()`, so a leaked lock holds a shared slot forever - CLOSED 2026-09-11
+
+Filed 2026-09-11, by the session that armed the lane. **Found by measurement,
+and it refutes a prediction the previous hand-off made in good faith.**
+
+**What was predicted.** The 2026-09-10 hand-off said, of the single leaked lock
+sitting in the shared bucket: "OUR REAPER WILL RECLAIM THAT LEAKED LOCK when you
+arm; that is the protocol working, not us deleting a sibling's file."
+
+**What was MEASURED when the lane was armed, 2026-09-11.** The bucket held one
+lock, `0.lock`, stale by both arms - its holder pid dead and its timestamp about
+33 hours old. On a real acquire this project took `1.lock` and left `0.lock`
+exactly as it found it: same size, same mtime to the nanosecond, same SHA-256.
+It was not reclaimed, and it was never going to be.
+
+**The mechanism.** `try_acquire` creates the bucket, lists it once to prove it is
+readable, and then walks its candidate names calling `_claim` on each. It never
+calls `reap`. And `reap` has NO CALLER ANYWHERE IN THIS TREE - the name appears
+only in its own definition, in `tests/test_lane_slot.py` and in prose. The stale
+arm, `STALE_SECONDS`, the two-scheme reaper and every test that exercises them
+are all correct and all unreachable from the operational entry points.
+
+**Why this is worse than an unused function.** It makes two written claims false:
+
+- `docs/adr/ADR-008-join-the-shared-bucket.md` states as a consequence that "our
+  leaks now land in a shared directory, and our own stale arm is still the only
+  thing that reclaims them". As deployed, NOTHING reclaims them. A lock this
+  project leaks into a directory other projects share stays there permanently.
+- The surplus width we contend for is a claim about how many slots exist, not
+  about how many are reachable. Every permanently-leaked lock silently lowers our
+  real concurrency by one, and the symptom is an ordinary "busy" answer - the
+  exact silent shape `OPS-73` hole 2 just removed one layer down.
+
+**This is the repository's own lesson in a new costume.** A test suite that is
+green about a behaviour proves the behaviour is implemented, never that it is
+WIRED. Seventy-three tests covered a reaper that no production path could reach,
+and the previous session, this session's hand-off and `ADR-008` all described its
+live behaviour in the present tense. It took an acquire against the real bucket
+to find out. Compare `OPS-35`, where an item reported its own status and was
+wrong: here a MODULE reported its own behaviour and was wrong.
+
+**Deliberately NOT decided here.** Whether reaping should fire on every acquire,
+and whether this project should ever remove another participant's stale
+`reserved-<key>.lock` as opposed to a surplus one, are design questions with a
+cost in a shared directory. Removing a surplus lock is the scheme working as
+`ADR-008` describes it. Removing somebody's guaranteed FLOOR is a larger act and
+is not the same decision.
+
+### Acceptance
+
+1. A test proves that an acquire against a bucket containing a STALE lock in an
+   earlier candidate position reclaims it and takes that slot, rather than
+   stepping past it. The test must fail against the code as it stands today -
+   watch it red before believing it.
+2. A test proves the reverse direction with equal strength: an acquire NEVER
+   removes a lock that is not stale, whoever owns it. A reaper wired into the
+   hot path is the single most dangerous thing this repository does to a
+   directory other projects depend on, and one-directional evidence is what
+   `OPS-74` criterion 5 forbids.
+3. The decision about another participant's stale RESERVED floor is made
+   explicitly, written down in the ADR with its reasoning, and tested in
+   whichever direction is chosen. Silence is not an answer here: an undisclosed
+   blind spot is the defect `OPS-70` closed.
+4. `ADR-008`'s consequence paragraph is corrected, because it is currently a
+   claim the code does not support. The correction is an amendment, never a
+   rewrite of the original decision.
+5. Whatever is built has a caller. A follow-up probe asserts that the reaping
+   path is reachable from `acquire_lane`, so this item's own defect cannot recur
+   silently - an implemented-but-unwired behaviour must fail a test, not a
+   reading.
+6. Every guard above is watched red under mutation, with the anchor asserted
+   before any survivor is believed.
+
+
+## OPS-77. A surplus width of ZERO is a permanent silent "busy", one level up from the hole `OPS-73` just closed - OPEN
+
+Filed 2026-09-11 by the refutation pass over this session's own work, which
+found it while trying to break the three-state distinction `OPS-73` hole 2
+established. It is the same defect shape, one layer up, and it was introduced by
+nothing this session did - it has been reachable since the width became
+configurable.
+
+**Measured.** `acquire_lane` with `surplus=0`, or with the environment override
+`LL_LANE_SLOT_SURPLUS` set to `0`, produces an EMPTY candidate order. The loop
+over candidates then has nothing to walk, `try_acquire` falls out of it, and the
+return is `None` - which by the contract `OPS-73` hole 2 just made explicit means
+exactly one thing: every candidate slot is taken. Against an empty, writable,
+perfectly healthy bucket it reports `BUSY - no slot free`, forever.
+
+`ops/lane_slot.py` accepts a width of 0 deliberately - `shared_surplus_width`
+rejects a NEGATIVE width and a non-numeric one, and treats 0 as a legitimate
+value. That is defensible on its own terms; what is not defensible is the answer
+it produces downstream, because a caller cannot distinguish "the machine is busy"
+from "you asked for a bucket with no slots in it".
+
+**Why this matters more than its size suggests.** The whole point of the
+`BucketUnusable` work was that a permanent fault must never wear the BUSY
+wording, since BUSY is the one condition a caller is expected to shrug off and
+retry past. A zero width is a configuration error that produces a permanent
+fault, and it currently wears exactly that wording. It is also the cheapest
+possible way for a future operator to silently take this project out of the
+shared lane scheme while every status line reads as if it were participating.
+
+### Acceptance
+
+1. A width of zero, from the parameter or from the environment override, is
+   distinguishable from a full bucket at the call site. Whether that is a refusal,
+   a third status, or a documented and tested decision to treat zero as "opt out
+   of lane contention" is open - but if it is the last of those, the opt-out is
+   NAMED in the status line so a reader can see it, because an undisclosed
+   opt-out is the blind spot `OPS-70` closed wearing a configuration hat.
+2. The decision covers both entry points. `acquire_lane`'s parameter and
+   `LL_LANE_SLOT_SURPLUS` must not disagree, for the reason `OPS-73` criterion 4
+   already established about the two whitespace branches.
+3. A test asserts the new answer against an EMPTY, writable bucket, which is the
+   case that today reads as contention.
+4. Every guard above is watched red under mutation, with the anchor asserted
+   before any survivor is believed.
+
+
+### Outcome - OPS-73 CLOSED 2026-09-11
+
+All five criteria met, each judged individually against the tree by an
+independent refutation pass rather than against the implementing slice's report.
+
+- **Criterion 1 and 2, the detection alphabet.** `DETECTION_REPO_KEYS` is a
+  strict superset of `REPO_KEYS` adding `rm` and `ds`, used ONLY by detection.
+  Claiming is untouched: `UnknownRepoKey` still refuses both. The provenance is
+  in the constant's own comment and pinned by a test that reads the module's
+  source - the two codes are read off `CLAUDE.md`'s ports table, the same
+  document that assigned this repository `ll`, and they are NOT confirmed lock
+  keys agreed by those projects. Nobody was asked, because `OPS-48` forbids it.
+  Recording the limit of the provenance beside the provenance is what satisfies
+  criterion 2's refusal of a guess: we widened what we can SEE and assigned
+  nobody anything.
+- **Criterion 3, unusable versus busy.** `BucketUnusable` is raised where `None`
+  was returned, so `None` now means exactly one thing. Verified by refutation
+  against four separate unusable shapes - a file as the bucket, a bucket under a
+  file, slot names occupied by directories, and a permission-denied directory -
+  none of which could be made to report BUSY, and three fresh locks which report
+  BUSY and could not be made to report UNUSABLE.
+- **Criterion 4, whitespace.** An all-whitespace `LL_LANE_SLOT_ROOT` is now
+  ignored exactly as an all-whitespace `PROGRAMDATA` already was, in both
+  branches, with a test per branch.
+- **Criterion 5.** Seven guards watched red under mutation by the implementing
+  slice and three more re-broken independently by the refuter, anchors asserted
+  each time.
+
+**A defect found while closing this, filed rather than folded in:** a surplus
+width of zero produces an empty candidate order and therefore a permanent silent
+BUSY against a healthy empty bucket. That is this item's own hole 2 one level up.
+`OPS-77`.
+
+### Outcome - OPS-76 CLOSED 2026-09-11
+
+All six criteria met. `reap_for_acquire` is called by `acquire_lane` as its first
+act on the bucket, so the stale arm is reachable from the only production path.
+
+- **Criterion 1**, the reclaim, proved behaviourally rather than by grep: a stale
+  lock planted in an earlier candidate position is reclaimed and that slot taken,
+  by both `acquire_lane` and `session_lane`. The test was watched red against the
+  code as it stood - the headline failure read `assert '1.lock' == '0.lock'`,
+  which is precisely the stepping-past that was measured against the live bucket.
+- **Criterion 2**, the safety direction, attacked independently: a live-pid lock
+  and a fresh-timestamp lock both survived byte-identical and mtime-identical.
+- **Criterion 3 was DECIDED, not omitted.** The acquire path never reclaims
+  another participant's `reserved-<key>.lock`, even a stale one; it reclaims
+  stale surplus locks and our own stale floor. The reasoning is in the ADR
+  amendment, and so is the accepted blind spot: **a sibling's genuinely leaked
+  floor is never reclaimed by us.** Tested for every key in the detection
+  alphabet plus an unknown one, all of which survived while `reserved-ll.lock`
+  was reclaimed.
+- **Criterion 4**, the false Consequences sentence in `ADR-008`, is corrected by
+  amendment with the original quoted, never by rewriting the decision.
+- **Criterion 5**, the anti-recurrence guard, is real: unwiring the reap reddens
+  eight tests, checked by unwiring it.
+- **Criterion 6**, five mutations red by the implementing slice and five more by
+  the refuter, anchors asserted.
+
+**THE DOCUMENTS WERE THE LAST THING TO BE TRUE, AND ONLY A REFUTATION PASS FOUND
+IT.** With the suite green at 2924 passed, three shipped documents -
+`ops/loop/lane.py`, `docs/HEADLESS.md` and `.claude/commands/loop.md` - still
+said this project never removes a lock it did not create. That had been true for
+the whole life of the module and was made false by this very item. Nothing
+mechanical caught it: a green suite says an implementation matches its tests, and
+says nothing about whether the prose beside it still describes the code. All
+three are rewritten to carry the change as the headline it is, including the
+honest sentence that this project now deletes files from a directory other
+projects' live loops depend on.
+
+**A PRIVACY DEFECT WAS FOUND IN THE SAME PASS AND FIXED.** `_display_bucket` was
+inverted: it elided paths INSIDE the checkout and printed every other path
+verbatim - and every bucket this project actually uses is outside it. A status
+line printed once per cycle therefore carried the operator's account name, which
+`CLAUDE.md` names explicitly as an operator identifier. It now enumerates the
+safe renderings and elides anything else behind a truncated digest, so distinct
+buckets stay distinguishable without being named. `lanternlight/redact.py` was
+measured and deliberately NOT used here: it masks enumerated identifier tokens in
+log-shaped text and has no filesystem-path rule, so calling it would have been a
+no-op wearing the costume of coverage. That judgement is recorded because the
+next session will reasonably ask why the sanctioned path was not taken.
 
 
 ## Archive index

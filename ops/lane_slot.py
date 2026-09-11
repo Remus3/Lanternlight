@@ -103,6 +103,50 @@ Our OWN reserved lock is deliberately not counted as evidence. Evidence the
 observer produced is not evidence about the world, and counting it would latch
 the detector at ``RESERVED_PRESENT`` after a single write.
 
+Detection reads a WIDER alphabet than claiming does
+---------------------------------------------------
+
+``OPS-73`` hole 1, and the two alphabets are separate on purpose:
+
+* CLAIMING uses :data:`REPO_KEYS`, the five short codes the channel agreed. A
+  key outside that set is still REFUSED - see :class:`UnknownRepoKey`.
+* DETECTION uses :data:`DETECTION_REPO_KEYS`, a strict superset of it. Before
+  the widening, a bucket whose only reserved name was ``reserved-ds.lock`` read
+  as ``RESERVED_ABSENT``, so the reserved-floor widening could have landed
+  without our noticing, and the miss looked exactly like correct pre-widening
+  behaviour.
+
+The reaper's alphabet is NOT widened with it. :func:`is_slot_name` stays narrow
+so a reaper never removes a file it does not understand.
+
+Busy is not the same as unusable
+--------------------------------
+
+``OPS-73`` hole 2. ``None`` from :func:`try_acquire`, :func:`acquire_lane` and
+:func:`hold_lane` means exactly ONE thing: every candidate slot is currently
+taken. A bucket that cannot be created, listed or written to raises
+:class:`BucketUnusable` instead, because a caller that cannot start has to be
+able to say why. Folding the two together reproduced, one level down in root
+resolution, the silent-fallback shape :class:`UnknownRepoKey` exists to refuse:
+a ``PROGRAMDATA`` naming a FILE made every acquire answer "busy" forever.
+
+Reclaiming is wired into the acquire, and is narrower than reaping by hand
+-------------------------------------------------------------------------
+
+``OPS-76``. :func:`reap` had NO CALLER anywhere in this tree until 2026-09-11.
+Measured against the real shared bucket that day: it held one lock stale by both
+arms - holder pid dead, timestamp about 33 hours old - and a real acquire took
+the next slot and left the stale one byte for byte as it found it. The stale
+arm, :data:`STALE_SECONDS`, the two-scheme reaper and every test covering them
+were correct and unreachable from production, which is this repository's own
+lesson in a new costume: a green suite proves a behaviour is implemented, never
+that it is WIRED.
+
+:func:`acquire_lane` now calls :func:`reap_for_acquire` before it does anything
+else with the bucket. That reaper is narrower than :func:`reap` in exactly one
+way: it never removes another participant's ``reserved-<key>.lock``. See
+:func:`is_ours_to_reclaim` for the reasoning and for the blind spot it accepts.
+
 :func:`acquire_lane` and :func:`hold_lane` are the operational entry points and
 apply all of the above. :func:`try_acquire` keeps its original contract - own
 floor, then surplus - for callers that state an order themselves, and refuses
@@ -121,6 +165,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 __all__ = [
+    "BucketUnusable",
+    "DETECTION_ONLY_REPO_KEYS",
+    "DETECTION_REPO_KEYS",
     "Held",
     "LaneSlotError",
     "LOCK_SUFFIX",
@@ -147,10 +194,13 @@ __all__ = [
     "hold",
     "hold_lane",
     "holders",
+    "is_detectable_reserved_name",
+    "is_ours_to_reclaim",
     "is_reserved_name",
     "is_slot_name",
     "is_stale",
     "reap",
+    "reap_for_acquire",
     "release",
     "repo_local_root",
     "reserved_name",
@@ -166,8 +216,35 @@ __all__ = [
 #: operator ruled on; short, lowercase, no spaces and no path separators.
 REPO_KEY = "ll"
 
-#: The agreed set. A key outside it is a configuration error, not a fallback.
+#: The agreed set, and the CLAIMING alphabet. A key outside it is a
+#: configuration error, not a fallback.
 REPO_KEYS: tuple[str, ...] = ("rc", "lw", "rsc", "cs", "ll")
+
+#: The two codes DETECTION recognises on top of :data:`REPO_KEYS`.
+#:
+#: PROVENANCE, stated honestly because a key with no provenance becomes an
+#: agreed key by attrition: ``rm`` (Red Moon) and ``ds`` (Daemon Slayer) are
+#: read off the machine-wide ports table in ``CLAUDE.md`` - the same document
+#: that assigned this repository ``ll`` - and they are NOT confirmed lock keys
+#: agreed by those two projects. Nobody from either has told us what short code
+#: their governor would write. They are a reasonable reading of the only roster
+#: this machine keeps, and that is all they are.
+DETECTION_ONLY_REPO_KEYS: tuple[str, ...] = ("rm", "ds")
+
+#: The DETECTION alphabet: a strict superset of :data:`REPO_KEYS`.
+#:
+#: Why the two sets are separate, and why this one is not simply "any token
+#: after the prefix". The asymmetry runs one way. A false ABSENT costs us our
+#: floor for an acquire and self-corrects the moment a recognised reserved name
+#: is visible. A false PRESENT is the EXPENSIVE direction: it makes us write
+#: ``reserved-ll.lock`` into a shared directory where, per ADR-008, nobody
+#: else's reaper recognises it, so our leak sits there until our own stale arm
+#: fires. Stray litter named ``reserved-anything.lock`` must therefore not flip
+#: the detector, which a wide-open pattern would let it do.
+#:
+#: Widening this does NOT widen :func:`is_slot_name`, and must not: the reaper
+#: stays narrow so it never deletes a file it does not understand.
+DETECTION_REPO_KEYS: tuple[str, ...] = (*REPO_KEYS, *DETECTION_ONLY_REPO_KEYS)
 
 RESERVED_PREFIX = "reserved-"
 LOCK_SUFFIX = ".lock"
@@ -263,6 +340,25 @@ class UnknownRepoKey(LaneSlotError):
     """
 
 
+class BucketUnusable(LaneSlotError):
+    """The bucket cannot be created, listed or written to at all.
+
+    Raised rather than answering ``None``, and the distinction is the whole
+    point of this class: ``None`` from :func:`try_acquire` means every candidate
+    slot is TAKEN, which is a normal, self-clearing condition. This means the
+    governor could not operate the bucket at all, which is a configuration or
+    permission fault and clears only when somebody fixes it.
+
+    Measured cause, ``OPS-73``: a ``PROGRAMDATA`` naming a FILE resolved the
+    shared root underneath that file, ``mkdir`` failed, and every acquire
+    answered ``None`` forever. A caller could not tell that from a full bucket
+    and would have debugged a permanent misconfiguration as contention. That is
+    the same silent-fallback shape :class:`UnknownRepoKey` refuses, one level
+    down. The general case is the same: a read-only volume, a directory we may
+    not write, or a listing we are refused.
+    """
+
+
 class NoSlotAvailable(LaneSlotError):
     """Every slot this repository may take is held. Not raised by default."""
 
@@ -297,11 +393,27 @@ def shared_root() -> Path | None:
 
     ``None`` is a real answer rather than a guess. If the all-users root is not
     in the environment, this function does not invent a drive letter for it.
+
+    ``None`` is also the answer when the all-users root EXISTS AND IS NOT A
+    DIRECTORY - ``OPS-73`` hole 2, part (a). The bucket would otherwise resolve
+    to a path underneath a file, which no ``mkdir`` can ever create, so the
+    in-repository bucket is used instead and the loop stays GOVERNED rather than
+    permanently busy. A root that is simply absent is NOT this case: it is
+    created on first use, as it always was.
+
+    Nothing is created here, and a stat that cannot be taken - a malformed path,
+    a device that is not there - answers ``None`` rather than propagating.
     """
     base = os.environ.get(PROGRAMDATA_ENV_VAR)
     if not base or not base.strip():
         return None
-    return Path(base) / SHARED_BUCKET_RELATIVE
+    root = Path(base)
+    try:
+        if root.exists() and not root.is_dir():
+            return None
+    except OSError:
+        return None
+    return root / SHARED_BUCKET_RELATIVE
 
 
 def default_root() -> Path:
@@ -311,9 +423,15 @@ def default_root() -> Path:
     in-repository fallback. Creating anything here would make merely importing
     something that reads the default enough to materialise a bucket, which is
     the import-time side effect this module refuses to have.
+
+    The override and :func:`shared_root` agree about whitespace - ``OPS-73``
+    acceptance criterion 4. They disagreed: an override of ``"   "`` yielded
+    ``Path("   ")`` and a bucket literally named three spaces, while the same
+    value in the all-users variable was ignored. Two readers of the same kind of
+    value must not mean different things by blank.
     """
     override = os.environ.get(ROOT_ENV_VAR)
-    if override:
+    if override and override.strip():
         return Path(override)
     shared = shared_root()
     if shared is not None:
@@ -379,10 +497,74 @@ def is_slot_name(name: str) -> bool:
 
 
 def is_reserved_name(name: str) -> bool:
-    """True for a reserved lock filename belonging to any agreed key."""
+    """True for a reserved lock filename belonging to any agreed CLAIM key.
+
+    This is the reaper's and the claimer's question, so it uses the narrow
+    :data:`REPO_KEYS` alphabet. :func:`is_detectable_reserved_name` is the
+    wider, detection-only one.
+    """
     if not is_slot_name(name):
         return False
     return name.startswith(RESERVED_PREFIX)
+
+
+def is_ours_to_reclaim(name: str, key: str = REPO_KEY) -> bool:
+    """Whether the AUTOMATIC acquire path may remove this lock once it is stale.
+
+    ``OPS-76`` acceptance criterion 3, and the answer is deliberately narrower
+    than :func:`is_slot_name`. Three cases:
+
+    * a SURPLUS name - ``0.lock``, ``7.lock`` - yes, whoever wrote it. The
+      surplus namespace is first-come, every participant's reaper understands
+      it, and reclaiming a leaked one is the scheme working exactly as
+      ``ADR-008`` describes it.
+    * OUR OWN reserved floor - yes. It is ours; nobody else can lose anything.
+    * ANOTHER participant's reserved floor - NO, however stale it looks.
+
+    The asymmetry is in who pays for an error, and it is the whole reasoning.
+    :func:`is_stale` requires its evidence rather than guessing, but it treats
+    an UNREADABLE payload as stale, and a lock is briefly unreadable in the
+    window between an exclusive create and the payload write - a window our own
+    :func:`_claim` has, so a sibling's very likely does too. A surplus lock
+    removed in that window costs its owner one lane it will take again next
+    cycle. A FLOOR removed in that window costs its owner the single guarantee
+    the reserved scheme sells, which is that a starved repository can always
+    start one lane. No reserved name of any key has ever been observed in the
+    shared bucket, so removing one would be exercising judgement about a
+    protocol nobody here has watched anybody else run.
+
+    The disclosed cost of choosing this way: another participant's genuinely
+    leaked floor is left in the bucket by us forever. That costs nobody a
+    surplus slot - a floor is not a slot we could have taken - and the explicit
+    :func:`reap` still removes it when an operator asks for it by hand.
+    """
+    if not is_slot_name(name):
+        return False
+    if not is_reserved_name(name):
+        return True
+    return name == reserved_name(key)
+
+
+def is_detectable_reserved_name(name: str) -> bool:
+    """True for a reserved lock filename in the wider DETECTION alphabet.
+
+    Used only by :func:`reserved_scheme_state`, to answer "has the reserved
+    widening landed in this bucket". It recognises every key in
+    :data:`DETECTION_REPO_KEYS`, which includes two codes read off a ports table
+    rather than agreed with the projects they name.
+
+    It is NOT used by :func:`is_slot_name`, :func:`reap` or :func:`holders`.
+    Seeing a name is a cheaper act than deleting one, so the set that decides
+    what we may DELETE stays narrower than the set that decides what we may
+    NOTICE. It is also not an arbitrary token, because a false PRESENT is the
+    expensive direction - see :data:`DETECTION_REPO_KEYS`.
+    """
+    if not name.endswith(LOCK_SUFFIX):
+        return False
+    stem = name[: -len(LOCK_SUFFIX)]
+    if not stem.startswith(RESERVED_PREFIX):
+        return False
+    return stem[len(RESERVED_PREFIX) :] in DETECTION_REPO_KEYS
 
 
 def reserved_scheme_state(root: Path | str, key: str = REPO_KEY) -> str:
@@ -406,6 +588,14 @@ def reserved_scheme_state(root: Path | str, key: str = REPO_KEY) -> str:
       this at ``RESERVED_PRESENT`` after a single write of our own and the check
       would then be measuring our own footprint.
 
+    And one deliberate WIDTH, ``OPS-73`` hole 1: the names it recognises come
+    from :data:`DETECTION_REPO_KEYS`, not from :data:`REPO_KEYS`. A bucket whose
+    only reserved name was ``reserved-ds.lock`` used to read ``RESERVED_ABSENT``,
+    so the widening could land and we would go on taking surplus slots while
+    everyone else had moved to floors - a wrong answer that looked exactly like
+    the right one. Claiming is unaffected and still refuses every key outside
+    the agreed five.
+
     Creates nothing. A bucket that is not there stays not there.
     """
     bucket = Path(root)
@@ -419,7 +609,7 @@ def reserved_scheme_state(root: Path | str, key: str = REPO_KEY) -> str:
     for entry in entries:
         if entry.name == ours:
             continue
-        if is_reserved_name(entry.name):
+        if is_detectable_reserved_name(entry.name):
             return RESERVED_PRESENT
     return RESERVED_ABSENT
 
@@ -615,7 +805,9 @@ def holders(root: Path | str) -> dict[str, dict]:
     return report
 
 
-def reap(root: Path | str, *, now: float | None = None, pid_alive=None) -> list[str]:
+def reap(
+    root: Path | str, *, now: float | None = None, pid_alive=None, only=None
+) -> list[str]:
     """Remove stale locks in BOTH naming schemes. Returns the names removed.
 
     A reaper that knows only ``0.lock``-style names leaves a stale
@@ -623,6 +815,12 @@ def reap(root: Path | str, *, now: float | None = None, pid_alive=None) -> list[
     design exists to guarantee. That is the orphan bug at a new address, and it
     is harder to see there, because a missing reservation reads as a policy
     decision rather than as a leak.
+
+    ``only`` is an optional predicate taking a filename, applied ON TOP OF
+    :func:`is_slot_name` and never instead of it, so no caller can widen what
+    this function is willing to delete - it can only narrow it. The default of
+    ``None`` is the unchanged two-scheme contract ``ADR-008`` section 6 lists,
+    and :func:`reap_for_acquire` is the one narrowing this repository ships.
     """
     bucket = Path(root)
     removed: list[str] = []
@@ -633,6 +831,8 @@ def reap(root: Path | str, *, now: float | None = None, pid_alive=None) -> list[
     for entry in entries:
         if not is_slot_name(entry.name):
             continue
+        if only is not None and not only(entry.name):
+            continue
         payload = _read_payload(entry)
         if not is_stale(payload, now=now, pid_alive=pid_alive):
             continue
@@ -642,6 +842,36 @@ def reap(root: Path | str, *, now: float | None = None, pid_alive=None) -> list[
             continue
         removed.append(entry.name)
     return removed
+
+
+def reap_for_acquire(
+    root: Path | str, key: str = REPO_KEY, *, now: float | None = None, pid_alive=None
+) -> list[str]:
+    """The reaper the ACQUIRE path runs, narrowed to what is ours to reclaim.
+
+    ``OPS-76``. This exists so the stale arm has a caller: before this, ``reap``
+    had none anywhere in the tree, so a lock leaked into the shared bucket was
+    reclaimed by nothing and each one silently lowered our real concurrency by
+    one while presenting as an ordinary busy answer.
+
+    It differs from :func:`reap` in exactly one way - it never removes another
+    participant's ``reserved-<key>.lock``. See :func:`is_ours_to_reclaim` for
+    why, and for the blind spot that choice accepts. Everything else, including
+    the narrow :func:`is_slot_name` alphabet and both arms of
+    :func:`is_stale`, is unchanged.
+
+    Answering ``[]`` on a bucket it cannot list is deliberate and is inherited
+    from :func:`reap`. Reclaiming is opportunistic; deciding whether the bucket
+    is usable at all is :func:`try_acquire`'s job, and doing it here as well
+    would give ``OPS-73``'s ``BucketUnusable`` a second, quieter path to be
+    swallowed on.
+    """
+    return reap(
+        root,
+        now=now,
+        pid_alive=pid_alive,
+        only=lambda name: is_ours_to_reclaim(name, key),
+    )
 
 
 def _require_known_key(key: str) -> None:
@@ -656,20 +886,36 @@ def _require_known_key(key: str) -> None:
 
 
 def _claim(path: Path, payload: str) -> bool:
-    """Create one lock atomically. False means somebody else holds it."""
+    """Create one lock atomically. ``False`` means somebody else holds it.
+
+    ``False`` is reserved for exactly one cause - the exclusive create lost,
+    which is what a held slot looks like. Every OTHER failure raises
+    :class:`BucketUnusable`, because a bucket we cannot write into is not a
+    bucket that is busy, and collapsing the two is ``OPS-73`` hole 2: the caller
+    reads "full" and debugs contention that is not there.
+    """
     try:
         descriptor = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
     except FileExistsError:
         return False
-    except OSError:
-        return False
+    except OSError as error:
+        raise BucketUnusable(
+            f"could not create the lock {str(path)!r}: {error}. This is NOT a "
+            "full bucket - a read-only volume, a directory we may not write, or "
+            "a root that is not a directory all land here, and none of them "
+            "clear on their own."
+        ) from error
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
             handle.write(payload)
-    except OSError:
+    except OSError as error:
         with contextlib.suppress(OSError):
             path.unlink()
-        return False
+        raise BucketUnusable(
+            f"took the lock {str(path)!r} but could not write its payload: "
+            f"{error}. The lock was removed again rather than left empty for "
+            "somebody else's reader to find."
+        ) from error
     return True
 
 
@@ -710,7 +956,13 @@ def try_acquire(
     surplus: int = SURPLUS_WIDTH,
     order=None,
 ) -> Held | None:
-    """Take a lane if one is available. Never blocks; ``None`` means busy.
+    """Take a lane if one is available. Never blocks.
+
+    ``None`` means exactly ONE thing: every candidate slot is currently taken.
+    A bucket that cannot be created, listed or written to raises
+    :class:`BucketUnusable` instead - ``OPS-73`` hole 2. A caller that cannot
+    start has to be able to say why, and "busy" is a lie that clears by itself
+    while a broken root does not.
 
     Order is own floor, then surplus, unless ``order`` states one - which is how
     :func:`acquire_lane` supplies a surplus-only order for a shared bucket that
@@ -725,8 +977,19 @@ def try_acquire(
     bucket = Path(root)
     try:
         bucket.mkdir(parents=True, exist_ok=True)
-    except OSError:
-        return None
+    except OSError as error:
+        raise BucketUnusable(
+            f"could not create the lane-slot bucket {str(bucket)!r}: {error}. "
+            "Refusing to report this as a busy bucket: a root that is a file, "
+            "or one under a file, would then present as permanent contention."
+        ) from error
+    try:
+        list(bucket.iterdir())
+    except OSError as error:
+        raise BucketUnusable(
+            f"the lane-slot bucket {str(bucket)!r} exists but cannot be listed: "
+            f"{error}. A bucket we cannot read is not a bucket that is full."
+        ) from error
     payload = encode_payload(pid=os.getpid(), repo=repo, run_id=run_id, cycle=cycle)
     for name in candidates:
         path = bucket / name
@@ -840,9 +1103,36 @@ def acquire_lane(
     bucket's shape, and contends on whatever terms the shape implies. Callers
     that want to bound only their own concurrency pass ``root`` explicitly.
 
-    ``None`` means busy, exactly as :func:`try_acquire` means it.
+    ``None`` means busy - every candidate slot taken - exactly as
+    :func:`try_acquire` means it, and nothing else means it. An unusable bucket
+    raises :class:`BucketUnusable` rather than joining that answer.
+
+    **It reaps before it walks the candidates**, through
+    :func:`reap_for_acquire`. ``OPS-76``: until 2026-09-11 nothing in this tree
+    called :func:`reap` at all, so a lock leaked into the shared bucket was
+    reclaimed by nothing, and each permanently leaked lock lowered our real
+    concurrency by one while presenting as an ordinary busy answer.
+
+    WHY THE WIRING IS HERE AND NOT IN :func:`try_acquire`. This is the
+    operational entry point: it is the function that resolves the bucket and
+    decides the try order by looking at it, so it is also the one place that
+    knows the acquire is an automatic, unattended act rather than a caller
+    stating its own terms. :func:`try_acquire` keeps its documented contract of
+    doing exactly what its ``order`` says and nothing more, because a caller
+    that passes an explicit order is asserting knowledge about the bucket, and
+    a primitive that silently deletes files underneath such a caller is a worse
+    surprise than one that does not. Every production path in this tree reaches
+    the bucket through here - ``ops/loop/lane.py`` uses :func:`hold_lane`, which
+    is this function plus a release - so nothing operational loses the reclaim.
+    The disclosed cost: :func:`hold` and a direct :func:`try_acquire` caller do
+    NOT reap, and a future caller that reaches for the primitive instead of this
+    entry point would reintroduce the hole for itself.
+
+    The reap runs BEFORE the try order is computed as well as before the
+    candidates are walked, so a stale lock cannot influence either decision.
     """
     bucket = default_root() if root is None else Path(root)
+    reap_for_acquire(bucket, key)
     order = bucket_slot_order(bucket, key, surplus)
     return try_acquire(
         bucket, key, repo=repo, run_id=run_id, cycle=cycle, order=order
@@ -866,6 +1156,11 @@ def hold_lane(
     reason :func:`hold` does: a governor that blocks by default turns a
     coordination miss into a hang, and the caller is the one that knows what a
     busy machine means for it.
+
+    An UNUSABLE bucket is not a full one and does not yield ``None``: it raises
+    :class:`BucketUnusable` before the block runs. A caller that silently does
+    nothing forever because a root is misconfigured is the failure ``OPS-73``
+    exists to remove.
     """
     held = acquire_lane(
         repo=repo, run_id=run_id, cycle=cycle, key=key, root=root, surplus=surplus

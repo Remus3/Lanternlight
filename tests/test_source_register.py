@@ -563,6 +563,44 @@ KNOWN_NON_HOSTS = frozenset(
         # `slot.REPO` is the truncation of `lane_slot.REPO_KEYS`, the third in
         # this module's `lane_slot.*` set after `slot.STALE` and `slot.default`.
         "slot.REPO",
+        # `slot.reap` and `slot.holders` are the fourth and fifth of that same
+        # `lane_slot.*` set, added 2026-09-11 when `docs/HEADLESS.md` gained the
+        # operator instructions for a BUSY bucket. Looked at, both: they are the
+        # truncations of `ops.lane_slot.reap` and `ops.lane_slot.holders` at the
+        # underscore in `lane_slot`, leaving a tail whose final label parses as
+        # TLD-shaped. Both are first-party functions in this repository's own
+        # `ops/lane_slot.py`, neither is a host and neither is a file.
+        #
+        # They are registered rather than reworded because they sit in the same
+        # numbered list as `ops.lane_slot.STALE_SECONDS`, which is already here
+        # as `slot.STALE`. Paraphrasing two of the three module paths in one
+        # list while the third stays dotted would make the prose read worse to
+        # buy nothing - the third would still need this entry. Dotted module
+        # and API paths are the category this module's docstring says stays in
+        # the denylist after a human vets them, and these were vetted.
+        "slot.reap",
+        "slot.holders",
+        # THE LANE WIRING'S OWN TWO, added 2026-09-11 when `ops/loop/lane.py`
+        # wired the loop to the bucket at session scope. Looked at, both:
+        # neither is a host, and neither can be retired by staging, because the
+        # tracked-file oracle answers about FILENAMES and these are attribute
+        # chains.
+        #
+        # `lane.session` is the truncation of `lane.session_lane()` and
+        # `slot.status` the truncation of `slot.status_line()`, both cut at
+        # their underscore. Both appear inside the FENCED PYTHON BLOCK that
+        # `.claude/commands/loop.md` and `docs/HEADLESS.md` each carry to show a
+        # session how to take the three governors in one `with` statement. That
+        # block is code a reader copies, and `CLAUDE.md` is explicit that
+        # rewording never applies to byte-exact content - the same reasoning
+        # already recorded for `tools.doc` further down this list.
+        #
+        # The prose mentions around those fences WERE reworded rather than
+        # denylisted, which is why `slot.held` and `slot.reason` are not here:
+        # they were attributes of the example's local variable and read as well
+        # or better named bare. Only the fence is irreducible.
+        "lane.session",
+        "slot.status",
         # `tools.doc` is the truncation of the module path in the command
         # `python -m tools.doc_size_budget`, cut at the underscore. Looked at:
         # not a host. It is registered rather than reworded because the string

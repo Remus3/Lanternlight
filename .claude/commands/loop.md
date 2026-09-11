@@ -33,16 +33,23 @@ output to notice that it was never really exercised.
 
 ## Before the first cycle
 
-Take the single-instance lock AND arm the session watcher, in one step. Two
-loops would interleave commits and race each other's ledger appends; and a
-cycle that runs without a watcher armed is how the log of 2026-08-09 was lost
-and how 2026-08-30 launched the client with nothing watching.
+Take the single-instance lock, arm the session watcher AND take a lane slot, in
+one step. Two loops would interleave commits and race each other's ledger
+appends; a cycle that runs without a watcher armed is how the log of 2026-08-09
+was lost and how 2026-08-30 launched the client with nothing watching; and a
+session that takes no lane slot rations the machine's concurrency with nobody,
+which is the state this project was in until the lane was wired.
 
 ```python
-from ops.loop import guard, state, watch
+from ops.loop import guard, lane, state, watch
 
-with guard.released() as lock, watch.session_armed("C:/ll-captures") as armed:
+with (
+    guard.released() as lock,
+    watch.session_armed("C:/ll-captures") as armed,
+    lane.session_lane() as slot,
+):
     print(armed)
+    print(slot.status_line())
     ...  # every cycle runs inside here
 ```
 
@@ -60,6 +67,65 @@ with guard.released() as lock, watch.session_armed("C:/ll-captures") as armed:
 - **Never start a second watcher and never stop the one you find.**
   `ensure_armed` refuses on its own, and nothing in this project terminates a
   process it did not start.
+- **The lane slot is the third governor, and it is held for the whole session**
+  rather than per cycle. The budget it rations is the machine's and the
+  account's concurrency, which this project consumes continuously for as long
+  as a loop is alive, not in bursts that line up with cycle boundaries. Print
+  `slot.status_line()` so the cycle's output says which bucket was contended
+  for, which slot was taken, and whether the reserved-floor widening has landed
+  there. The line deliberately carries no repository path.
+
+Five caveats about the lane, written out because each one is a real cost the
+operator is now paying and none of them is visible from a green suite:
+
+- **This project DELETES stale locks it did not write.** Every acquire runs
+  `ops.lane_slot.reap_for_acquire` before it claims anything, so a STALE lock
+  in the first-come SURPLUS namespace is reclaimed whoever wrote it. That is
+  [ADR-008](../../docs/adr/ADR-008-join-the-shared-bucket.md)'s scheme working
+  as designed, not a unilateral deletion - but it does mean this project now
+  removes files from `%PROGRAMDATA%\lw-loop\slots`, a directory other projects'
+  live loops depend on, and that bucket held exactly one such lock when this was
+  measured on 2026-09-11. Three limits: another participant's
+  `reserved-<key>.lock` is never reclaimed on this path however stale it looks
+  (so a sibling's leaked floor is our accepted blind spot, cleared only by
+  running `ops.lane_slot.reap` by hand); a lock that is not stale is never
+  removed, whoever owns it; and "stale" is not an age check - it needs an
+  unreadable or timestamp-less payload, or a timestamp older than four and a
+  half hours, or a recorded pid that is not alive. `docs/HEADLESS.md` section 4c
+  carries the full statement.
+- **A `held` of False is not an error.** It means every lane slot this
+  repository may take is already held, and the status's `reason` says BUSY in
+  words.
+  The cycle proceeds. Do not spin waiting for a slot, do not raise, and do not
+  reach into the bucket by hand - the locks a BUSY answer leaves behind are the
+  ones the reaper just judged LIVE, so deleting one manually overrides that
+  judgement rather than completing it. If BUSY persists across a whole session,
+  that is worth a ledger note, not a workaround.
+- **UNUSABLE is a THIRD answer and is not a busy bucket.** A status whose
+  `usable` is False means the bucket could not be created, listed or written at
+  all - its parent is a file, the volume is read-only, or this account may not
+  write the directory. The loop PROCEEDS UNGOVERNED: the block still runs, this
+  session rations with nobody, and the status line says UNUSABLE in those words
+  every cycle so the condition cannot be mistaken for contention. Refusing to
+  start would turn a misconfigured directory into an outage while the operator
+  is playing and cannot fix it, which is the worse trade - but running quietly
+  ungoverned would be worse still, so it is loud. **What to do when you see it:
+  it does not clear on its own.** A busy bucket clears when a sibling finishes;
+  this one waits for a person. Check that the bucket's parent is a directory
+  this account may write, then ledger it. Do not retry it in a loop, and do not
+  silence it by pointing the lane at a private directory without saying so in
+  the ledger - that is a withdrawal from the shared budget, not a fix.
+- **We are now consuming a slot the sibling projects were rationing between
+  themselves.** Joining the shared bucket was an operator ruling
+  ([ADR-008](../../docs/adr/ADR-008-join-the-shared-bucket.md)), and its honest
+  consequence is that a lane Lanternlight holds is a lane another project on
+  this machine cannot have. That is the intended behaviour, not a side effect.
+- **A lock we leak lands in a directory other projects share.** The release
+  runs in a `finally`, so an exception in the body still frees the slot, but a
+  hard kill or a power loss leaves the lock behind and it is reclaimed only
+  when the stale arm fires - four and a half hours. Until the reserved-floor
+  widening lands in that bucket we contend for surplus slots only, so a leak of
+  ours is a name every participant's reaper already understands.
 
 ## Each cycle
 

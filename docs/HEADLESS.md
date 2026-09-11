@@ -125,13 +125,19 @@ owning pid.
 running process is unwanted is an operator decision, and an unattended loop is
 the worst possible thing to be making it.
 
-Usage - the lock and the session watcher are taken together, see below:
+Usage - the lock, the session watcher and the lane slot are taken together,
+see below:
 
 ```python
-from ops.loop import guard, watch
+from ops.loop import guard, lane, watch
 
-with guard.released() as lock, watch.session_armed("C:/ll-captures") as armed:
+with (
+    guard.released() as lock,
+    watch.session_armed("C:/ll-captures") as armed,
+    lane.session_lane() as slot,
+):
     print(armed)
+    print(slot.status_line())
     ...  # the lock is held here and released however the block exits
 ```
 
@@ -342,6 +348,187 @@ call routed into a THIRD module that did the killing, under an
 ordinary-looking name, is invisible to both. `OPS-16` names the spellings
 that were found; a denylist that reads as exhaustive and is not is worse than
 one that says what it misses.
+
+### 4c. The third governor - the lane slot, `ops/loop/lane.py`
+
+The single-instance lock bounds this repository to one loop. The lane slot
+bounds the MACHINE. Several projects live on this machine and share one
+Anthropic account, so their headless loops contend for one concurrency budget,
+and they coordinate through a directory of lock files at
+`%PROGRAMDATA%\lw-loop\slots`. The operator ruled on 2026-09-10 that
+Lanternlight joins that bucket; the protocol lives in `ops/lane_slot.py` and
+the decision is recorded in
+[ADR-008](adr/ADR-008-join-the-shared-bucket.md).
+
+`ops/lane_slot.py` was complete and UNARMED until `ops/loop/lane.py` landed.
+Nothing in this tree called `acquire_lane` or `hold_lane`, so the protocol was
+implemented and rationed nothing. Arming it was a wiring job, and this is the
+wiring.
+
+**The lane is held for a SESSION, not for a cycle.** The budget being rationed
+is consumed continuously for as long as a loop session is alive - a session
+between cycles still holds a worktree and is still the thing a sibling's loop
+would contend with - so a per-cycle acquire would hand back a slot this session
+is still effectively using. It would also make a mid-loop BUSY answer into a
+stalled cycle with no good response: the session cannot stop, because it holds
+the single-instance lock and has work in flight, and it must not spin, because
+a governor that blocks turns a coordination miss into a hang. Asking once, at
+session entry, is the only moment when "somebody else is using the machine" is
+an answer a caller can act on. That also makes the lane the exact peer of the
+two governors above.
+
+`session_lane()` yields a `LaneStatus`, always, held or not:
+
+- `held` - whether a lane is held for the duration of the block.
+- `usable` - whether the bucket could be operated at all. Read with `held` this
+  is the whole answer, and it has THREE states rather than two: held is HELD,
+  not held but usable is BUSY, and not usable is UNUSABLE. See below for what
+  the third one means and what to do about it.
+- `slot` - the lock filename taken, or `None` when busy.
+- `reserved` - whether it is this repository's own reserved floor or a
+  first-come surplus slot. "Did I get my guarantee or did I get lucky" is the
+  question an operator asks on a busy machine.
+- `bucket` - the bucket directory contended for.
+- `scheme` - `present`, `absent` or `unknown`, from `ops.lane_slot`. Three
+  answers, not two: "I looked and found no reserved name" and "I could not
+  look" are different facts, and both take the surplus-only branch.
+- `order` - the slot names tried, in order. Advisory: it is the look this
+  module took immediately before the acquire, and `hold_lane` looks again for
+  itself. `slot` is evidence; `order` is the reading that preceded it.
+- `reason` and `status_line()` - the same answer in words. `status_line()` is
+  the one line a cycle prints, and it deliberately carries no repository path.
+
+**This project now DELETES FILES from a directory other projects depend on.**
+That is the behaviour `OPS-76` changed on 2026-09-11, and it is stated here
+first because the three documents describing this governor - this one included
+- said the opposite of it until that day, and a green suite did not notice.
+
+Every acquire calls `ops.lane_slot.reap_for_acquire` before it computes a try
+order or claims a slot, so a STALE lock in the first-come SURPLUS namespace
+(`0.lock`, `1.lock`, and any other digit index) is reclaimed **regardless of
+which project wrote it**. That is the reserved-floor scheme working as
+[ADR-008](adr/ADR-008-join-the-shared-bucket.md) describes it, not a unilateral
+deletion: the surplus namespace is first-come, every participant's reaper is
+expected to understand it, and until 2026-09-11 our own reaper had no caller at
+all, so a leaked lock lowered this machine's real concurrency permanently while
+presenting as ordinary contention.
+
+Four limits bound what is removed:
+
+- **Another participant's `reserved-<key>.lock` is never reclaimed on this
+  path, however stale it looks.** Only our own floor and the surplus names are.
+  A surplus lock removed inside the brief window between an exclusive create and
+  its payload write costs its owner one lane it takes again next cycle; a FLOOR
+  removed in that window costs its owner the single guarantee the reserved
+  scheme sells. See the `is_ours_to_reclaim` predicate in `ops/lane_slot.py`. **The accepted blind
+  spot:** a sibling's genuinely leaked floor is therefore never reclaimed by us
+  and sits there until an operator runs `ops.lane_slot.reap` by hand.
+- **A lock that is not stale is never removed, whoever owns it.**
+- **"Stale" is not an age check**, so do not read it as one. The `is_stale`
+  predicate in `ops/lane_slot.py` demands evidence in three arms: an unreadable payload, or a missing or
+  non-numeric `ts`, counts as stale; a `ts` older than
+  `ops.lane_slot.STALE_SECONDS` - four and a half hours - counts as stale; and
+  otherwise the lock is stale only when the `pid` it records is not alive.
+- **A filename outside the scheme is never touched**, because `ops.lane_slot.reap`
+  applies the narrow `is_slot_name` filter first and the reclaim
+  predicate second.
+
+**The honest consequence.** The bucket being written to is
+`%PROGRAMDATA%\lw-loop\slots`, which sibling projects' live loops depend on.
+Measured on 2026-09-11, it holds one lock, `0.lock`, stale by BOTH arms - the
+pid it records is dead, and its timestamp is about 33 hours old - so the next
+real acquire this project makes on this machine will remove it. That is the
+intended behaviour of the ruling, and it is also the first time this repository
+has deleted anything it did not write.
+
+**What an operator does when it reports BUSY.** Nothing, first of all: BUSY is
+a first-class answer and not an error, the block still runs, and the cycle
+proceeds unrationed. In order:
+
+1. **Do not spin and do not retry.** There is no wait loop here by design.
+2. **Do not delete a lock in that bucket by hand.** A BUSY answer means the
+   locks that are there were still considered LIVE by the reaper the acquire
+   just ran, so deleting one manually is overriding that judgement rather than
+   completing it. Reclaiming stale locks is automatic and is described in the
+   section below; `ops.lane_slot.reap` remains the by-hand escape hatch and is
+   the only way another participant's stale reserved floor is ever removed.
+3. **Look, if you want to know why.** `ops.lane_slot.holders(root)` reads every
+   readable lock in the bucket without opening a handle that would block its
+   owner's unlink. A lock older than four and a half hours
+   (`ops.lane_slot.STALE_SECONDS`) is a leak rather than a live holder - one
+   was measured in that bucket on 2026-09-10.
+4. **If BUSY persists across a whole session, ledger it.** That is a real
+   observation about how this machine is being shared, and it is invisible to
+   the next cold session unless it is written down.
+5. **To bound only this project instead of the machine**, pass a private
+   directory as `root=`, or set `LL_LANE_SLOT_ROOT`. That is a deliberate
+   withdrawal from the shared budget, not a workaround, and it should be said
+   out loud in the ledger if it is done.
+
+**What an operator does when it reports UNUSABLE.** This is a DIFFERENT answer
+from BUSY and the difference is the whole point of it having its own word. BUSY
+means every slot this repository may take is currently held, which is normal
+and clears by itself the moment a sibling's loop finishes. UNUSABLE means the
+bucket could not be created, listed or written AT ALL - its parent is a file,
+the volume is read-only, the directory refuses this account, or a listing is
+denied. That is a configuration fault and **it does not clear on its own.** It
+waits for a person.
+
+The loop does not stop. It **proceeds UNGOVERNED**: the block still runs, every
+cycle runs, and this session rations with nobody and is counted against the
+machine's concurrency budget by no one. That is deliberate. An unattended loop
+that refused to start because a lock directory was misconfigured would have
+turned a coordination problem into an outage, and the operator is playing the
+game and is the one person who cannot fix a permission on a shared directory
+right now. A loop that will not run does none of its work; a loop that runs
+unrationed does all of it and merely does it without coordinating.
+
+The price of proceeding is that it must SAY SO, and it does - the status line
+carries the word UNUSABLE every single cycle, and shares no wording with BUSY,
+so a reader skimming a cycle's output cannot mistake a permanent fault for
+ordinary contention. In order:
+
+1. **Read the line, do not just count it.** It names the bucket and the kind of
+   operating-system error - the error's CLASS, never its message, because the
+   message carries the absolute path it failed on. The bucket itself is named
+   through `_display_bucket` in `ops/loop/lane.py`, which prints no absolute path
+   either: a bucket inside this checkout reads `<repo>/...`, the shared machine
+   bucket reads `<all-users>/lw-loop/slots`, and **anything else is elided to a
+   fingerprint** such as `<elided bucket #1a2b3c4d>`. The fingerprint is a
+   truncated digest of the path, so two different buckets still read
+   differently and a bucket that changed between cycles is still visible, while
+   no segment of the path is printed.
+
+   That rendering was corrected on 2026-09-11 and the correction matters here.
+   It previously elided only a bucket lying INSIDE the checkout and printed
+   every other one verbatim - which is backwards, because every bucket this
+   project actually uses is outside the checkout, and the `LL_LANE_SLOT_ROOT`
+   workflow in step 5 of the BUSY list above can point the bucket under the
+   operator's profile, where a path segment is the operator's account name.
+   `CLAUDE.md` names an account name an operator identifier, and this line is
+   printed every cycle and pasted into hand-offs.
+2. **Check the bucket's parent.** The measured cause in `OPS-73` was an
+   all-users root that resolved underneath a FILE, so no directory could be
+   created there. Confirm the parent is a directory and that this account may
+   write it.
+3. **Do not retry it in a spin**, and do not treat repetition as progress. The
+   same line every cycle is the expected behaviour of this state, not a hint
+   that it is about to resolve.
+4. **Ledger it.** An ungoverned session is a real fact about how this machine
+   is being shared, and it is invisible to the next cold session unless it is
+   written down.
+5. **Do not silence it** by pointing the lane at a private directory and moving
+   on. That is a deliberate withdrawal from the shared budget - legitimate, and
+   described in step 5 of the BUSY list above - and it must be said out loud in
+   the ledger rather than used to make a warning go away.
+
+**Three honest costs**, each a consequence of the ruling rather than a defect:
+a lane Lanternlight holds is a lane another project cannot have; a lock this
+session leaks lands in a directory other projects share and is reclaimed only
+when the stale arm fires; and until the reserved-floor widening lands in that
+bucket we contend for surplus slots ONLY, so this project has no guaranteed
+floor there and can be starved by a busy neighbour. Nothing here binds a port,
+and nothing here terminates anything.
 
 ---
 

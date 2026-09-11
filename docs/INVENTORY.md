@@ -202,6 +202,7 @@ is about.
 | `tests/test_lane_state.py` | Per-lane on-disk state, and the reason lanes never share one ledger file. |
 | `tests/test_logparse.py` | The log parser, against log lines copied byte-for-byte from a real capture. |
 | `tests/test_loop_guard.py` | The single-instance loop guard - refuse a second loop, and never terminate anything. |
+| `tests/test_loop_lane.py` | `ops/loop/lane.py`, the session-scoped lane governor that arms `ops/lane_slot.py`. No test in it may write into the real machine-wide bucket, and a named test proves the isolation fixture actually moved the default root. |
 | `tests/test_loop_ledger.py` | `ops/loop/ledger.py`, the only sanctioned writer of `docs/LEDGER.md`. |
 | `tests/test_loop_state.py` | The on-disk loop state - an atomic write, and a load that never raises. |
 | `tests/test_loop_watch.py` | The loop's session-watcher supervisor, so arming the watcher is not left to human memory. |

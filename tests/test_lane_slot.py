@@ -15,6 +15,7 @@ present as "busy" or as "fine" rather than as an error.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -729,3 +730,680 @@ class TestSurplusIndexWeDoNotUse:
             encoding="utf-8",
         )
         assert lane_slot.holders(bucket)["7.lock"]["run_id"] == "r7"
+
+
+class TestDetectionAlphabetIsWiderThanClaiming:
+    """Detection sees more keys than claiming does, and the two sets are apart.
+
+    ``OPS-73`` hole 1. ``REPO_KEYS`` holds the five short codes the channel
+    agreed, but this machine carries seven projects in ``CLAUDE.md``'s ports
+    table. A bucket whose only reserved name is ``reserved-ds.lock`` therefore
+    read as ``RESERVED_ABSENT``: the reserved-floor widening could land and we
+    would keep taking surplus slots, and the failure would look exactly like
+    correct pre-widening behaviour. A silent wrong answer is the kind this
+    repository cares most about.
+
+    The fix is deliberately NOT a wider ``is_slot_name``. That function is
+    narrow so a reaper never deletes a file it does not understand, and ADR-008
+    leans on the narrowness. DETECTION gets its own wider alphabet; CLAIMING
+    keeps the agreed five and still refuses anything else.
+    """
+
+    def test_the_detection_alphabet_is_a_strict_superset_of_the_claim_alphabet(self):
+        detect = set(lane_slot.DETECTION_REPO_KEYS)
+        claim = set(lane_slot.REPO_KEYS)
+        assert claim < detect
+
+    def test_the_detection_only_keys_are_exactly_red_moon_and_daemon_slayer(self):
+        extra = set(lane_slot.DETECTION_REPO_KEYS) - set(lane_slot.REPO_KEYS)
+        assert extra == {"rm", "ds"}
+
+    def test_the_provenance_of_the_detection_only_keys_is_written_down_beside_them(
+        self,
+    ):
+        # Same discipline the note-sourced surplus width carries, and for the
+        # same reason: a key with no provenance becomes an agreed key by
+        # attrition. These two were read off a ports table, not agreed by the
+        # projects they name, and the comment has to say so.
+        source = (REPO_ROOT / "ops" / "lane_slot.py").read_text(encoding="utf-8")
+        # The DEFINITION, not the export list entry of the same spelling. An
+        # anchor that matches the wrong occurrence reads the wrong preamble and
+        # passes for the wrong reason.
+        marker = "DETECTION_REPO_KEYS: tuple"
+        assert marker in source
+        preamble = source[: source.index(marker)][-2000:].lower()
+        assert "ports table" in preamble
+        assert "claude.md" in preamble
+        assert "not confirmed" in preamble
+
+    def test_a_daemon_slayer_reserved_name_reads_as_present(self, bucket: Path):
+        (bucket / "reserved-ds.lock").write_text("{}", encoding="utf-8")
+        assert lane_slot.reserved_scheme_state(bucket) == lane_slot.RESERVED_PRESENT
+
+    def test_a_red_moon_reserved_name_reads_as_present(self, bucket: Path):
+        (bucket / "reserved-rm.lock").write_text("{}", encoding="utf-8")
+        assert lane_slot.reserved_scheme_state(bucket) == lane_slot.RESERVED_PRESENT
+
+    def test_a_detection_only_reserved_name_flips_the_try_order_to_our_floor_first(
+        self, bucket: Path
+    ):
+        (bucket / "reserved-ds.lock").write_text("{}", encoding="utf-8")
+        order = lane_slot.bucket_slot_order(bucket, "ll", surplus=3)
+        assert order == ("reserved-ll.lock", "0.lock", "1.lock", "2.lock")
+
+    def test_a_reserved_name_outside_the_detection_alphabet_still_reads_absent(
+        self, bucket: Path
+    ):
+        # A false PRESENT is the expensive direction. It makes us write
+        # reserved-ll.lock into a shared directory where, per ADR-008, nobody
+        # else's reaper recognises it - so stray litter must never flip us.
+        (bucket / "reserved-zz.lock").write_text("{}", encoding="utf-8")
+        (bucket / "reserved-notakey.lock").write_text("{}", encoding="utf-8")
+        assert lane_slot.reserved_scheme_state(bucket) == lane_slot.RESERVED_ABSENT
+
+    def test_claiming_with_a_detection_only_key_is_still_refused(self, bucket: Path):
+        for key in ("ds", "rm"):
+            with pytest.raises(lane_slot.UnknownRepoKey):
+                lane_slot.slot_order(key)
+            with pytest.raises(lane_slot.UnknownRepoKey):
+                lane_slot.bucket_slot_order(bucket, key)
+            with pytest.raises(lane_slot.UnknownRepoKey):
+                lane_slot.try_acquire(bucket, key, repo="C:\\x", run_id="r", cycle=0)
+        assert list(bucket.iterdir()) == []
+
+    def test_the_reaper_alphabet_is_not_widened_by_detection(self, bucket: Path):
+        # The whole point of keeping the two sets apart. A reaper that deletes
+        # what it does not understand eventually eats somebody's notes.
+        assert lane_slot.is_slot_name("reserved-ds.lock") is False
+        assert lane_slot.is_slot_name("reserved-rm.lock") is False
+        assert lane_slot.is_reserved_name("reserved-ds.lock") is False
+        body = json.loads(
+            lane_slot.encode_payload(pid=os.getpid(), repo="C:\\x", run_id="x", cycle=0)
+        )
+        body["ts"] = time.time() - (lane_slot.STALE_SECONDS + 60)
+        (bucket / "reserved-ds.lock").write_text(json.dumps(body), encoding="utf-8")
+        assert lane_slot.reap(bucket) == []
+        assert (bucket / "reserved-ds.lock").exists()
+        assert lane_slot.holders(bucket) == {}
+
+    def test_our_own_floor_is_still_not_evidence_under_the_wider_alphabet(
+        self, bucket: Path
+    ):
+        (bucket / lane_slot.reserved_name("ll")).write_text("{}", encoding="utf-8")
+        assert lane_slot.reserved_scheme_state(bucket) == lane_slot.RESERVED_ABSENT
+
+
+class TestUnusableBucketIsNotABusyOne:
+    """``OPS-73`` hole 2. ``None`` means full, and nothing else.
+
+    A ``PROGRAMDATA`` naming a FILE resolved the shared root underneath that
+    file, ``mkdir`` failed, and ``acquire_lane`` answered ``None`` forever. A
+    caller could not tell that from a bucket every participant had filled. It is
+    the shape ``UnknownRepoKey``'s own docstring condemns, one level down.
+    """
+
+    def test_the_unusable_error_is_exported_and_is_its_own_kind(self):
+        assert "BucketUnusable" in lane_slot.__all__
+        assert issubclass(lane_slot.BucketUnusable, lane_slot.LaneSlotError)
+        assert lane_slot.BucketUnusable is not lane_slot.NoSlotAvailable
+        assert lane_slot.BucketUnusable is not lane_slot.UnknownRepoKey
+
+    def test_an_all_users_root_that_is_a_file_answers_none_rather_than_a_path(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        impostor = tmp_path / "programdata-is-a-file"
+        impostor.write_text("not a directory", encoding="utf-8")
+        monkeypatch.delenv(lane_slot.ROOT_ENV_VAR, raising=False)
+        monkeypatch.setenv(lane_slot.PROGRAMDATA_ENV_VAR, str(impostor))
+        assert lane_slot.shared_root() is None
+
+    def test_programdata_pointing_at_a_file_falls_back_to_the_repo_local_bucket(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        impostor = tmp_path / "programdata-is-a-file"
+        impostor.write_text("not a directory", encoding="utf-8")
+        monkeypatch.delenv(lane_slot.ROOT_ENV_VAR, raising=False)
+        monkeypatch.setenv(lane_slot.PROGRAMDATA_ENV_VAR, str(impostor))
+        # The in-repository bucket is redirected under tmp_path so this test
+        # creates nothing inside the checkout, and nothing anywhere near the
+        # real shared bucket.
+        monkeypatch.setattr(lane_slot, "_REPO_ROOT", tmp_path / "fake-repo")
+        root = lane_slot.default_root()
+        assert root == lane_slot.repo_local_root()
+        assert tmp_path in root.parents
+
+    def test_a_lane_can_still_be_taken_when_programdata_is_a_file(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        # Governed rather than permanently busy. A machine with a broken
+        # all-users root still has a governor bounding our own loop.
+        impostor = tmp_path / "programdata-is-a-file"
+        impostor.write_text("not a directory", encoding="utf-8")
+        monkeypatch.delenv(lane_slot.ROOT_ENV_VAR, raising=False)
+        monkeypatch.setenv(lane_slot.PROGRAMDATA_ENV_VAR, str(impostor))
+        monkeypatch.setattr(lane_slot, "_REPO_ROOT", tmp_path / "fake-repo")
+        held = lane_slot.acquire_lane(repo="C:\\x", run_id="r", cycle=0, surplus=3)
+        assert held is not None
+        assert held.path.parent == lane_slot.repo_local_root()
+        assert lane_slot.release(held, retries=1, backoff=0.0) is True
+
+    def test_a_root_under_a_file_raises_rather_than_returning_none(
+        self, tmp_path: Path
+    ):
+        impostor = tmp_path / "afile"
+        impostor.write_text("not a directory", encoding="utf-8")
+        with pytest.raises(lane_slot.BucketUnusable):
+            lane_slot.try_acquire(
+                impostor / "slots", "ll", repo="C:\\x", run_id="r", cycle=0
+            )
+
+    def test_acquire_lane_raises_for_an_unusable_root(self, tmp_path: Path):
+        impostor = tmp_path / "afile"
+        impostor.write_text("not a directory", encoding="utf-8")
+        with pytest.raises(lane_slot.BucketUnusable):
+            lane_slot.acquire_lane(
+                root=impostor / "slots", repo="C:\\x", run_id="r", cycle=0, surplus=3
+            )
+
+    def test_a_bucket_no_lock_can_be_created_in_raises(
+        self, bucket: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        # The general case behind the file: a read-only volume or a directory
+        # we may not write. mkdir succeeds because the directory is there.
+        real_open = os.open
+
+        def _refuse(path, *args, **kwargs):
+            if str(path).endswith(lane_slot.LOCK_SUFFIX):
+                raise PermissionError(5, "access is denied")
+            return real_open(path, *args, **kwargs)
+
+        monkeypatch.setattr(lane_slot.os, "open", _refuse)
+        with pytest.raises(lane_slot.BucketUnusable):
+            lane_slot.try_acquire(bucket, "ll", repo="C:\\x", run_id="r", cycle=0)
+
+    def test_a_bucket_that_cannot_be_listed_raises(
+        self, bucket: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        def _denied(self):
+            raise PermissionError(5, "access is denied")
+
+        monkeypatch.setattr(Path, "iterdir", _denied)
+        with pytest.raises(lane_slot.BucketUnusable):
+            lane_slot.try_acquire(bucket, "ll", repo="C:\\x", run_id="r", cycle=0)
+
+    def test_a_genuinely_full_bucket_still_returns_none(self, bucket: Path):
+        keep = [
+            lane_slot.acquire_lane(
+                root=bucket, repo="C:\\x", run_id="r", cycle=n, surplus=2
+            )
+            for n in range(2)
+        ]
+        assert all(k is not None for k in keep)
+        assert (
+            lane_slot.acquire_lane(
+                root=bucket, repo="C:\\x", run_id="r", cycle=9, surplus=2
+            )
+            is None
+        )
+
+    def test_busy_and_unusable_are_different_outcomes(self, tmp_path: Path):
+        # "A wrong answer is quiet" is the whole point of OPS-73, so the two
+        # outcomes are asserted to be different KINDS of thing rather than two
+        # values a caller has to squint at.
+        full = tmp_path / "full"
+        full.mkdir()
+        for cycle in range(2):
+            assert (
+                lane_slot.acquire_lane(
+                    root=full, repo="C:\\x", run_id="r", cycle=cycle, surplus=2
+                )
+                is not None
+            )
+        busy = lane_slot.acquire_lane(
+            root=full, repo="C:\\x", run_id="r", cycle=9, surplus=2
+        )
+        assert busy is None
+
+        impostor = tmp_path / "afile"
+        impostor.write_text("x", encoding="utf-8")
+        with pytest.raises(lane_slot.BucketUnusable) as caught:
+            lane_slot.acquire_lane(
+                root=impostor / "slots", repo="C:\\x", run_id="r", cycle=0, surplus=2
+            )
+        assert caught.value is not busy
+        assert isinstance(caught.value, lane_slot.LaneSlotError)
+
+    def test_hold_lane_raises_for_an_unusable_root_rather_than_yielding_none(
+        self, tmp_path: Path
+    ):
+        impostor = tmp_path / "afile"
+        impostor.write_text("x", encoding="utf-8")
+        with (
+            pytest.raises(lane_slot.BucketUnusable),
+            lane_slot.hold_lane(
+                root=impostor / "slots", repo="C:\\x", run_id="r", cycle=0, surplus=2
+            ),
+        ):
+            pass
+
+    def test_the_override_and_the_shared_root_agree_about_whitespace(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        # shared_root() has always ignored a blank all-users root. The override
+        # branch did not, so LL_LANE_SLOT_ROOT="   " produced Path("   ") and a
+        # bucket named three spaces. Two readers of the same kind of value must
+        # not disagree about what blank means.
+        monkeypatch.setenv(lane_slot.ROOT_ENV_VAR, "   ")
+        monkeypatch.setenv(lane_slot.PROGRAMDATA_ENV_VAR, str(tmp_path))
+        assert lane_slot.default_root() == tmp_path / lane_slot.SHARED_BUCKET_RELATIVE
+
+        monkeypatch.setenv(lane_slot.PROGRAMDATA_ENV_VAR, "   ")
+        assert lane_slot.shared_root() is None
+        monkeypatch.setattr(lane_slot, "_REPO_ROOT", tmp_path / "fake-repo")
+        assert lane_slot.default_root() == lane_slot.repo_local_root()
+
+
+# ---------------------------------------------------------------------------
+# OPS-76: the stale arm has to be REACHABLE from the operational entry point
+# ---------------------------------------------------------------------------
+
+
+def _fingerprint(path: Path) -> tuple[int, int, str]:
+    """Size, modification time to the nanosecond, and content digest.
+
+    Three independent facts rather than one. A same-size rewrite, a touch that
+    changes nothing else, and a silent content swap each move a different member
+    of this tuple, and "the file was left alone" is a claim all three have to
+    agree on. This is the same instrument the 2026-09-11 measurement used
+    against the real shared bucket, kept here so a regression is caught in
+    ``tmp_path`` instead.
+    """
+    stat = path.stat()
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    return (stat.st_size, stat.st_mtime_ns, digest)
+
+
+def _plant_lock(
+    bucket: Path, name: str, *, age: float, pid: int, run_id: str = "planted"
+) -> Path:
+    """Write one lock with an exact age and an exact holder pid.
+
+    ``age`` is subtracted from the current wall clock, so a value above
+    :data:`ops.lane_slot.STALE_SECONDS` fires the timestamp arm and a small one
+    does not. ``pid`` of ``0`` is deterministically dead - ``_pid_alive``
+    refuses any non-positive pid without probing the operating system - which
+    lets the liveness arm be exercised without spawning and reaping a process.
+    """
+    path = bucket / name
+    body = json.loads(
+        lane_slot.encode_payload(pid=pid, repo="C:\\some-tree", run_id=run_id, cycle=0)
+    )
+    body["ts"] = time.time() - age
+    path.write_text(json.dumps(body), encoding="utf-8")
+    return path
+
+
+class TestTheAcquirePathReclaimsStaleLocks:
+    """``OPS-76``. A behaviour that is implemented and UNWIRED is not a behaviour.
+
+    Measured on 2026-09-11 against the real shared bucket: it held one lock,
+    ``0.lock``, stale by both arms - holder pid dead and timestamp about 33
+    hours old. A real acquire took ``1.lock`` and left ``0.lock`` byte for byte
+    as it found it. The cause was that ``reap`` had no caller anywhere in this
+    tree, so :data:`ops.lane_slot.STALE_SECONDS`, the two naming schemes and
+    seventy-odd green tests were all correct and all unreachable from
+    :func:`ops.lane_slot.acquire_lane`.
+
+    The consequence is worse than an unused function. Every lock this project
+    leaks into a directory other projects share stays there permanently, and
+    each one silently lowers our real concurrency by one while presenting as an
+    ordinary "busy" answer.
+    """
+
+    def test_an_acquire_reclaims_a_stale_lock_in_an_earlier_candidate_position(
+        self, bucket: Path
+    ):
+        # Criterion 1, and the exact shape of the measured defect: the stale
+        # lock sits in the FIRST candidate position and the acquire used to
+        # step over it.
+        planted = _plant_lock(
+            bucket, "0.lock", age=lane_slot.STALE_SECONDS + 3600, pid=0
+        )
+        assert planted.exists()
+        held = lane_slot.acquire_lane(
+            root=bucket, repo="C:\\Lanternlight", run_id="r", cycle=0, surplus=2
+        )
+        assert held is not None
+        assert held.name == "0.lock", (
+            "the acquire stepped past a stale lock instead of reclaiming it, "
+            "which is the OPS-76 defect measured against the real bucket"
+        )
+        assert lane_slot.release(held, retries=1, backoff=0.0) is True
+
+    def test_a_bucket_full_of_stale_locks_is_not_reported_as_busy(self, bucket: Path):
+        # The cost of the defect stated as a test. Permanently leaked locks
+        # lower real concurrency to zero while every acquire answers "busy",
+        # which is the self-clearing condition this one is not.
+        for index in range(3):
+            _plant_lock(
+                bucket, f"{index}.lock", age=lane_slot.STALE_SECONDS + 60, pid=0
+            )
+        held = lane_slot.acquire_lane(
+            root=bucket, repo="C:\\Lanternlight", run_id="r", cycle=0, surplus=3
+        )
+        assert held is not None, (
+            "every slot was leaked rather than held, so the bucket was "
+            "reclaimable and answering None was a lie about contention"
+        )
+        assert lane_slot.release(held, retries=1, backoff=0.0) is True
+
+    def test_hold_lane_reclaims_on_the_way_in_as_well(self, bucket: Path):
+        # The wiring has to be on the path ops/loop/lane.py actually uses, and
+        # that path is hold_lane rather than acquire_lane directly.
+        _plant_lock(bucket, "0.lock", age=lane_slot.STALE_SECONDS + 60, pid=0)
+        with lane_slot.hold_lane(
+            root=bucket, repo="C:\\Lanternlight", run_id="r", cycle=0, surplus=2
+        ) as held:
+            assert held is not None
+            assert held.name == "0.lock"
+        assert not (bucket / "0.lock").exists()
+
+    def test_the_timestamp_arm_alone_is_enough_to_reclaim(self, bucket: Path):
+        # Arm one, isolated: the holder pid is THIS interpreter and is very much
+        # alive, so only the age of the lock can be what reclaims it. This is
+        # also the arm that catches the real orphan, because a long-lived
+        # controller keeps its pid alive across a leak.
+        _plant_lock(
+            bucket, "0.lock", age=lane_slot.STALE_SECONDS + 60, pid=os.getpid()
+        )
+        held = lane_slot.acquire_lane(
+            root=bucket, repo="C:\\Lanternlight", run_id="r", cycle=0, surplus=2
+        )
+        assert held is not None and held.name == "0.lock"
+        assert lane_slot.release(held, retries=1, backoff=0.0) is True
+
+    def test_the_liveness_arm_alone_is_enough_to_reclaim(self, bucket: Path):
+        # Arm two, isolated: the timestamp is seconds old, so the age arm
+        # cannot fire, and only the dead holder can be what reclaims it.
+        _plant_lock(bucket, "0.lock", age=5.0, pid=0)
+        held = lane_slot.acquire_lane(
+            root=bucket, repo="C:\\Lanternlight", run_id="r", cycle=0, surplus=2
+        )
+        assert held is not None and held.name == "0.lock"
+        assert lane_slot.release(held, retries=1, backoff=0.0) is True
+
+
+class TestAnAcquireNeverRemovesALockThatIsNotStale:
+    """``OPS-76`` criterion 2, the direction that can do real harm.
+
+    A reaper wired into the hot path is the single most dangerous thing this
+    repository does to a directory other projects depend on. One-directional
+    evidence - only that reclaiming works - is exactly what this criterion
+    forbids, so every arm of :func:`ops.lane_slot.is_stale` is also tested from
+    the other side, and survival is asserted on three independent facts about
+    the file rather than on its mere existence.
+    """
+
+    def test_a_live_pid_holders_lock_survives_an_acquire_untouched(
+        self, bucket: Path
+    ):
+        # The liveness arm from the safe side. Fresh timestamp, and the holder
+        # pid is this running interpreter.
+        planted = _plant_lock(bucket, "0.lock", age=5.0, pid=os.getpid())
+        before = _fingerprint(planted)
+        held = lane_slot.acquire_lane(
+            root=bucket, repo="C:\\Lanternlight", run_id="r", cycle=0, surplus=2
+        )
+        assert held is not None
+        assert held.name == "1.lock", "the acquire took a lock it did not own"
+        assert planted.exists()
+        assert _fingerprint(planted) == before
+        assert lane_slot.release(held, retries=1, backoff=0.0) is True
+
+    def test_a_fresh_timestamp_holders_lock_survives_an_acquire_untouched(
+        self, bucket: Path
+    ):
+        # The timestamp arm from the safe side, at the boundary rather than in
+        # the comfortable middle: the lock is only just inside the window, so a
+        # reaper that widened its arm by a whisker still fails this.
+        planted = _plant_lock(
+            bucket, "0.lock", age=lane_slot.STALE_SECONDS - 60, pid=os.getpid()
+        )
+        before = _fingerprint(planted)
+        held = lane_slot.acquire_lane(
+            root=bucket, repo="C:\\Lanternlight", run_id="r", cycle=0, surplus=2
+        )
+        assert held is not None and held.name == "1.lock"
+        assert planted.exists()
+        assert _fingerprint(planted) == before
+        assert lane_slot.release(held, retries=1, backoff=0.0) is True
+
+    def test_a_busy_bucket_of_fresh_locks_answers_none_rather_than_stealing_one(
+        self, bucket: Path
+    ):
+        # The strongest statement of the safety direction. When the only way to
+        # get a lane is to take somebody else's live lock, the answer is BUSY.
+        planted = {}
+        for index in range(2):
+            path = _plant_lock(bucket, f"{index}.lock", age=5.0, pid=os.getpid())
+            planted[path] = _fingerprint(path)
+        assert (
+            lane_slot.acquire_lane(
+                root=bucket, repo="C:\\Lanternlight", run_id="r", cycle=0, surplus=2
+            )
+            is None
+        )
+        for path, before in planted.items():
+            assert path.exists()
+            assert _fingerprint(path) == before
+
+    def test_a_file_the_scheme_does_not_own_survives_an_acquire(self, bucket: Path):
+        # is_slot_name stays narrow, so a reaper on the hot path still leaves
+        # anything it does not understand alone. A reaper that deletes what it
+        # cannot name eventually eats somebody's notes.
+        stray = bucket / "notes.txt"
+        stray.write_text("a sibling operator scratch file", encoding="utf-8")
+        foreign = bucket / "reserved-ds.lock"
+        foreign.write_text("{}", encoding="utf-8")
+        before = {stray: _fingerprint(stray), foreign: _fingerprint(foreign)}
+        held = lane_slot.acquire_lane(
+            root=bucket, repo="C:\\Lanternlight", run_id="r", cycle=0, surplus=2
+        )
+        assert held is not None
+        for path, fingerprint in before.items():
+            assert path.exists()
+            assert _fingerprint(path) == fingerprint
+        assert lane_slot.release(held, retries=1, backoff=0.0) is True
+
+
+class TestAnotherParticipantsReservedFloorIsNeverReapedOnTheAcquirePath:
+    """``OPS-76`` criterion 3, decided explicitly and tested in that direction.
+
+    THE DECISION, recorded in ``docs/adr/ADR-008-join-the-shared-bucket.md``:
+    the acquire path may reclaim a stale SURPLUS lock whoever wrote it, and may
+    reclaim OUR OWN stale ``reserved-ll.lock``, and may never remove another
+    participant's ``reserved-<key>.lock`` however stale it looks.
+
+    The asymmetry is in who pays for an error. A surplus name is first-come,
+    every participant's reaper understands it, and a wrongly reclaimed one
+    costs its owner a lane it will take again on its next cycle. A floor is the
+    single guarantee the reserved scheme sells, and a reaper that is wrong
+    about staleness there costs its owner that guarantee - in a bucket where no
+    reserved name has ever been observed, so we would be exercising judgement
+    about a protocol we have never seen anybody else run.
+
+    :func:`ops.lane_slot.reap` itself is UNCHANGED and still understands both
+    schemes. The narrowing is on the automatic path only, which is the path
+    nobody asked for.
+    """
+
+    def test_another_repositorys_stale_reserved_floor_survives_an_acquire(
+        self, bucket: Path
+    ):
+        planted = _plant_lock(
+            bucket,
+            "reserved-rc.lock",
+            age=lane_slot.STALE_SECONDS * 10,
+            pid=0,
+        )
+        before = _fingerprint(planted)
+        held = lane_slot.acquire_lane(
+            root=bucket, repo="C:\\Lanternlight", run_id="r", cycle=0, surplus=2
+        )
+        assert held is not None
+        assert planted.exists(), (
+            "the acquire path removed another repository's guaranteed floor, "
+            "which ADR-008's OPS-76 amendment rules it may never do"
+        )
+        assert _fingerprint(planted) == before
+        assert lane_slot.release(held, retries=1, backoff=0.0) is True
+
+    def test_every_other_repositorys_floor_is_protected_not_just_one(
+        self, bucket: Path
+    ):
+        others = [k for k in lane_slot.REPO_KEYS if k != lane_slot.REPO_KEY]
+        assert others, "the key set collapsed to our own key, so this proves nothing"
+        before = {}
+        for key in others:
+            path = _plant_lock(
+                bucket,
+                lane_slot.reserved_name(key),
+                age=lane_slot.STALE_SECONDS * 10,
+                pid=0,
+            )
+            before[path] = _fingerprint(path)
+        held = lane_slot.acquire_lane(
+            root=bucket, repo="C:\\Lanternlight", run_id="r", cycle=0, surplus=2
+        )
+        assert held is not None
+        for path, fingerprint in before.items():
+            assert path.exists()
+            assert _fingerprint(path) == fingerprint
+        assert lane_slot.release(held, retries=1, backoff=0.0) is True
+
+    def test_our_own_stale_floor_is_reclaimed_because_it_is_ours(self, bucket: Path):
+        # A fresh foreign reserved lock is what flips the try order to
+        # reserved-first, and it also has to survive, so this test carries both
+        # halves of the decision at once.
+        witness = _plant_lock(
+            bucket, "reserved-rc.lock", age=5.0, pid=os.getpid(), run_id="a-sibling"
+        )
+        witness_before = _fingerprint(witness)
+        _plant_lock(
+            bucket,
+            lane_slot.reserved_name(lane_slot.REPO_KEY),
+            age=lane_slot.STALE_SECONDS + 60,
+            pid=0,
+        )
+        assert (
+            lane_slot.reserved_scheme_state(bucket) == lane_slot.RESERVED_PRESENT
+        ), "the try order was not reserved-first, so this test proves nothing"
+        held = lane_slot.acquire_lane(
+            root=bucket, repo="C:\\Lanternlight", run_id="r", cycle=0, surplus=2
+        )
+        assert held is not None
+        assert held.name == lane_slot.reserved_name(lane_slot.REPO_KEY)
+        assert held.reserved is True
+        assert witness.exists()
+        assert _fingerprint(witness) == witness_before
+        assert lane_slot.release(held, retries=1, backoff=0.0) is True
+
+    def test_the_explicit_reaper_still_understands_both_naming_schemes(
+        self, bucket: Path
+    ):
+        # The narrowing above is scoped to the AUTOMATIC path. reap() called by
+        # hand is the operator's deliberate act and keeps the contract ADR-008
+        # section 6 lists as unchanged.
+        _plant_lock(
+            bucket, "reserved-rc.lock", age=lane_slot.STALE_SECONDS + 60, pid=0
+        )
+        _plant_lock(bucket, "0.lock", age=lane_slot.STALE_SECONDS + 60, pid=0)
+        assert lane_slot.reap(bucket) == ["0.lock", "reserved-rc.lock"]
+
+    def test_the_acquire_path_predicate_says_exactly_which_names_it_will_remove(
+        self,
+    ):
+        assert lane_slot.is_ours_to_reclaim("0.lock") is True
+        assert lane_slot.is_ours_to_reclaim("7.lock") is True
+        assert lane_slot.is_ours_to_reclaim("reserved-ll.lock") is True
+        for key in lane_slot.REPO_KEYS:
+            if key == lane_slot.REPO_KEY:
+                continue
+            assert lane_slot.is_ours_to_reclaim(lane_slot.reserved_name(key)) is False
+        assert lane_slot.is_ours_to_reclaim("reserved-ds.lock") is False
+        assert lane_slot.is_ours_to_reclaim("notes.txt") is False
+
+
+class TestTheReapingPathHasACaller:
+    """``OPS-76`` criterion 5. An implemented-but-unwired behaviour must FAIL.
+
+    The item exists because seventy-odd green tests covered a reaper no
+    production path could reach, and three documents described its live
+    behaviour in the present tense. The primary guard here is behavioural - the
+    tests above observe a real reclaim through the real entry point - and these
+    add the structural half, so that deleting the call rather than breaking it
+    is caught too.
+    """
+
+    def test_acquire_lane_reaps_the_bucket_it_actually_resolves(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        # root=None is the production shape: ops/loop/lane.py lets the module
+        # resolve the bucket. PROGRAMDATA is repointed under tmp_path so this
+        # test cannot reach the real machine-wide bucket.
+        monkeypatch.delenv(lane_slot.ROOT_ENV_VAR, raising=False)
+        monkeypatch.setenv(lane_slot.PROGRAMDATA_ENV_VAR, str(tmp_path / "programdata"))
+        monkeypatch.setenv(lane_slot.SURPLUS_ENV_VAR, "2")
+        resolved = lane_slot.default_root()
+        assert str(resolved).startswith(str(tmp_path)), (
+            "the bucket was not redirected under tmp_path, so this test must "
+            "not be allowed to run"
+        )
+        resolved.mkdir(parents=True, exist_ok=True)
+        _plant_lock(resolved, "0.lock", age=lane_slot.STALE_SECONDS + 60, pid=0)
+        held = lane_slot.acquire_lane(repo="C:\\Lanternlight", run_id="r", cycle=0)
+        assert held is not None
+        assert held.name == "0.lock"
+        assert lane_slot.release(held, retries=1, backoff=0.0) is True
+
+    def test_the_reaping_call_is_reachable_from_acquire_lane(
+        self, bucket: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        seen: list[Path] = []
+        real = lane_slot.reap_for_acquire
+
+        def _spy(root, key=lane_slot.REPO_KEY, **kwargs):
+            seen.append(Path(root))
+            return real(root, key, **kwargs)
+
+        monkeypatch.setattr(lane_slot, "reap_for_acquire", _spy)
+        held = lane_slot.acquire_lane(
+            root=bucket, repo="C:\\Lanternlight", run_id="r", cycle=0, surplus=2
+        )
+        assert held is not None
+        assert seen == [bucket], (
+            "acquire_lane did not call the acquire-path reaper, so the stale "
+            "arm is unreachable from production again - the OPS-76 defect"
+        )
+        assert lane_slot.release(held, retries=1, backoff=0.0) is True
+
+    def test_the_acquire_path_reaper_is_exported(self):
+        assert "reap_for_acquire" in lane_slot.__all__
+        assert "is_ours_to_reclaim" in lane_slot.__all__
+
+    def test_an_unusable_bucket_still_raises_rather_than_being_swallowed(
+        self, tmp_path: Path
+    ):
+        # The reap runs before the candidates are walked, and reap() answers []
+        # on a bucket it cannot list. That must not turn OPS-73's BucketUnusable
+        # into a silent success or a silent busy.
+        impostor = tmp_path / "afile"
+        impostor.write_text("not a directory", encoding="utf-8")
+        with pytest.raises(lane_slot.BucketUnusable):
+            lane_slot.acquire_lane(
+                root=impostor / "slots",
+                repo="C:\\Lanternlight",
+                run_id="r",
+                cycle=0,
+                surplus=2,
+            )
