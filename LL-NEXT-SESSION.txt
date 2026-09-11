@@ -46,7 +46,9 @@ carries `armwatch` in its command line any more.
 
 === WHAT CLOSED, AND THE ONE THING THAT CHANGED A RULE ===
 
-Seven commits, 1e9edbb..7f8950e, all pushed.
+Eight commits on top of 1e9edbb, all pushed. The eighth is the commit that
+carries this file, so no hash for it is written here - see the note under
+origin/main below.
 
   OPS-82  CLOSED, all six criteria. A sibling's defect report about this tree,
           refuted as filed, with a real defect one level under it.
@@ -160,7 +162,13 @@ assuming.
                     second one prints NO summary line at all while still
                     exiting 0.
   ruff              All checks passed.
-  origin/main       7f8950e, confirmed with `git rev-parse HEAD origin/main`.
+  origin/main       NO HASH IS RECORDED HERE ON PURPOSE. This file is tracked
+                    and is committed with the session's work, so any tip hash
+                    written into it is invalidated by its own commit - a wrap
+                    that pins one is publishing a value that was already stale
+                    when it was written. RE-DERIVE IT: `git rev-parse HEAD
+                    origin/main`, and the two must match. The session's work
+                    starts at 1e9edbb and is all pushed.
                     main has NO UPSTREAM, so a bare `git push` FAILS and its
                     advice text reads like success when piped to tail. Use
                     `git push origin main`.
