@@ -185,6 +185,8 @@ __all__ = [
     "CONTROL_MODULE_TEMPLATE",
     "NEGATIVE_CONTROLS",
     "SILENT_PASS_LIMITATION",
+    "co_located_executables",
+    "tool_granularity_limitation",
     "TOOL_NAME_CHARS",
     "control_module_source",
     "Classification",
@@ -585,6 +587,10 @@ class ProbeReport:
     lost_ids: tuple[str, ...] = ()
     gained_ids: tuple[str, ...] = ()
     removed_path_entries: tuple[str, ...] = ()
+    #: Executables that left ``PATH`` WITH the tool, because they share a
+    #: directory with it. ``OPS-78`` criterion 4 - see
+    #: :func:`co_located_executables`.
+    co_located: tuple[str, ...] = ()
     with_total: int = 0
     without_total: int = 0
     with_control_total: int = 0
@@ -932,6 +938,45 @@ def strip_tool_from_path(
     return os.pathsep.join(kept), tuple(removed)
 
 
+def co_located_executables(
+    entries: Sequence[str],
+    tool: str,
+    pathext: str | None = None,
+    lister: Callable[[str], Sequence[str]] = os.listdir,
+) -> tuple[str, ...]:
+    """Other executables that leave ``PATH`` alongside ``tool`` - ``OPS-78`` #4.
+
+    :func:`strip_tool_from_path` removes an ENTRY, never a single executable,
+    so everything else in that directory disappears with the tool. Where the
+    toolchain ships as one directory - Git for Windows' ``usr/bin`` is the case
+    measured here - that is most of a POSIX userland, and a false red then says
+    "this broke when that DIRECTORY left the PATH" rather than "this needs the
+    named tool".
+
+    Returned as a sorted set of stems so the caller can print it. An entry that
+    cannot be listed is SKIPPED rather than raised: this runs after both suite
+    runs have already completed, and losing a twelve-minute measurement to an
+    unreadable directory would trade a whole result for a footnote.
+    """
+    suffixes = executable_suffixes(pathext)
+    lowered = {suffix.lower() for suffix in suffixes}
+    found: set[str] = set()
+    for entry in entries:
+        try:
+            names = lister(entry)
+        except OSError:
+            continue
+        for name in names:
+            stem, dot, suffix = name.rpartition(".")
+            if not dot:
+                continue
+            if lowered and f".{suffix}".lower() not in lowered:
+                continue
+            if stem and stem.lower() != tool.lower():
+                found.add(stem.lower())
+    return tuple(sorted(found))
+
+
 def control_expectations() -> dict[str, str]:
     """Each planted control mapped to the kind the probe must classify it as.
 
@@ -1102,6 +1147,7 @@ def probe(
     runner: Callable[[Sequence[str], Mapping[str, str], str], int] | None = None,
     base_env: Mapping[str, str] | None = None,
     repo_root: Path = REPO_ROOT,
+    lister: Callable[[str], Sequence[str]] = os.listdir,
 ) -> ProbeReport:
     """Run the suite twice and compose the verdict.
 
@@ -1148,6 +1194,9 @@ def probe(
         lost_ids=lost,
         gained_ids=gained,
         removed_path_entries=removed,
+        co_located=co_located_executables(
+            removed, tool, environment.get("PATHEXT"), lister
+        ),
         with_total=sum(1 for nodeid in with_tool if not is_control(nodeid)),
         without_total=sum(1 for nodeid in without_tool if not is_control(nodeid)),
         with_control_total=sum(1 for nodeid in with_tool if is_control(nodeid)),
@@ -1196,6 +1245,50 @@ SILENT_PASS_LIMITATION = (
 )
 
 
+def tool_granularity_limitation(report: ProbeReport) -> tuple[str, ...]:
+    """The second limitation line, COMPUTED rather than written - ``OPS-78`` #4.
+
+    Written as a measurement and not as a sentence on purpose. A sentence about
+    Git for Windows shipping one ``usr/bin`` would be true here and stale on the
+    next machine, and this repository's own rule is that a filed count is a
+    hypothesis. So the line names what was actually beside the tool on THIS run.
+
+    The empty case is printed too, and says so. A directory carrying only the
+    named tool is the one arrangement where ``--tool`` is genuinely
+    tool-granular, and that is the difference between a trustworthy attribution
+    and an untested one - exactly the fact a reader needs and exactly the one a
+    caveat that only appears when non-empty would withhold.
+    """
+    head = (
+        "[limitation] --tool names the QUESTION asked, not the dependency found."
+    )
+    if not report.co_located:
+        return (
+            head,
+            "  The stripped entries carried no other executable, so on THIS run "
+            "the",
+            "  attribution really is tool-granular. That is a property of this "
+            "machine's",
+            "  PATH, not of the probe, and it is re-measured every run.",
+        )
+    shown = list(report.co_located[:12])
+    more = len(report.co_located) - len(shown)
+    tail = ", ".join(shown) + (f", and {more} more" if more else "")
+    return (
+        head,
+        "  Entries are stripped whole, so every executable sharing a directory "
+        "with the",
+        f"  tool left PATH too - {len(report.co_located)} other executable(s) "
+        f"on this run: {tail}.",
+        "  A false red below therefore means 'this broke when that DIRECTORY "
+        "left the",
+        "  PATH'. READ THE INDIVIDUAL FAILURES before converting a call site "
+        "onto the",
+        "  tool's name; measured for bash here, 49 of 56 needed something else "
+        "in it.",
+    )
+
+
 def format_report(report: ProbeReport) -> str:
     """Render the verdict for a human.
 
@@ -1239,6 +1332,7 @@ def format_report(report: ProbeReport) -> str:
         + (", ".join(f"{k}={v}" for k, v in sorted(counts.items())) or "none")
     )
     lines.extend(f"  {line}" for line in SILENT_PASS_LIMITATION)
+    lines.extend(f"  {line}" for line in tool_granularity_limitation(report))
     lines.append(
         "  planted controls (excluded from every count and finding here): "
         + (

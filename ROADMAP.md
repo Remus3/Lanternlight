@@ -3365,7 +3365,7 @@ no-op wearing the costume of coverage. That judgement is recorded because the
 next session will reasonably ask why the sanctioned path was not taken.
 
 
-## OPS-78. 187 tests FAIL rather than skip when `git` is absent, measured - OPEN
+## OPS-78. 187 tests FAIL rather than skip when `git` is absent, measured - CLOSED 2026-09-11, all five criteria met
 
 Filed 2026-09-11 from the first believable run of `tools/false_red_probe.py`,
 whose positive control was PROVED on that run. This is the finding `OPS-74` was
@@ -3459,6 +3459,56 @@ exact failure this whole line of work exists to prevent. Filed as `OPS-79` gap 4
 **The policy is proven for one tool and is UNTESTED as a general policy**, which is
 precisely what criterion 4 was written to stop anyone forgetting.
 
+
+### Outcome - 2026-09-11 - criterion 4 MET, and the answer is that the tool name is not the dependency
+
+**CRITERION 4 IS NOW MET AND THE ITEM IS CLOSED.** The same question was asked of
+`bash`, and the answer changed what the first four criteria are allowed to claim.
+
+**The instrument first.** `--tool bash` now reports its positive control PROVED -
+the control is planted for the tool under test rather than hardcoded to `git`, so
+the blocker recorded above is gone. Re-run by the merger on a clean tree:
+`clean_skip=1, false_red=56, skip_both=1, untouched=3009`, with 3067 tests
+collected in BOTH directions. An earlier run of the same probe collected 3062
+with the tool and 3067 without, because this session added five tests while the
+probe was between its two runs; that run was discarded and re-taken rather than
+reported, and the contamination is recorded here because it is the cheapest
+lesson in the item: the probe's two runs are eight minutes apart and the tree
+must not move between them.
+
+**THE FINDING, and it is the opposite of a generalisation.** Of the 56, only
+SEVEN are about `bash`. They live in `tests/test_syntax_check_hook.py`, which
+really does need a shell that can close a standard file descriptor before the
+interpreter starts, and they have been moved onto the same
+`_toolguard.require("bash")` the `git` work built. Measured after: with `bash`
+withheld those seven now SKIP cleanly and the end-of-run banner names `bash` as
+the absent tool - 35 passed, 7 skipped, where before they were 7 failures.
+
+The other 49 are not about `bash` at all and are filed as `OPS-83`. Four of their
+five files contain no reference to `bash`; what they need is the POSIX userland
+that happens to share a directory with it. Proved in both directions with shim
+runs: restoring ONLY `bash` left all 49 exactly as broken, and restoring the
+utilities while withholding `bash` brought 38 of them back and reddened exactly
+the seven genuine ones.
+
+**WHY THE REPORT COULD SAY "bash" AND MEAN SOMETHING ELSE.** The probe strips a
+PATH ENTRY that carries the tool, never the single executable. On this machine
+the three stripped entries are ONE directory - Git for Windows' `usr/bin`,
+appearing three times in `PATH` - carrying 244 other executables. `--tool bash`
+and `--tool sh` therefore produce a byte-identical stripped `PATH` by
+construction, and no run of this probe can tell them apart. This is now COMPUTED
+and printed on every run beside the count, in the same unconditional way the
+`silent_pass` limitation is, and it states the empty case too: a directory
+carrying only the named tool is the one arrangement where `--tool` is genuinely
+tool-granular, and that is worth saying rather than leaving as a missing line.
+
+**SO THE POLICY GENERALISES, WITH ONE CONDITION ADDED.** Clean skips plus a loud
+banner was the right answer for `git` and is the right answer for `bash`. What
+does NOT generalise is deriving the guard from the probe's tool name: the name is
+the question that was asked, and the dependency has to be read out of the
+individual failures. `OPS-78` criterion 4 exists because a policy tested against
+one tool is untested, and the second tool's answer was that the instrument's
+label was wrong for 49 of 56 cases.
 
 ## OPS-79. Three gaps in the false-red probe's own instrument, found by refuting it - CLOSED 2026-09-11 (a fourth was added, and closed with them)
 
@@ -3828,6 +3878,76 @@ one, and the same applies to a confident wrong severity.
    precedent. The draft states what was refuted, what survived, and the
    subprocess reasoning that explains the difference, and quotes no raw command
    output - the finding is stated instead, per `ADR-004` as amended.
+
+## OPS-83. 49 tests need a POSIX userland, not `bash`, and no guard names what they actually need - OPEN
+
+Filed 2026-09-11 out of `OPS-78` criterion 4. It is the remainder of that item's
+56, split off because the seven that really were `bash` are fixed and these are a
+different and larger question.
+
+**MEASURED, two directions, on a clean tree.** `tools/false_red_probe.py
+--tool bash` reported 56 false reds with its positive control PROVED, re-run by
+the merger with 3067 tests collected in both directions. Four of the five files
+holding them contain ZERO references to `bash`: `tests/test_no_pii.py`,
+`tests/test_precommit_gate_lint.py`, `tests/test_docguards.py` and
+`tests/test_precommit_hook_globbing.py`. What they run is a real `git commit`
+against this repository's own `.githooks/pre-commit`, whose shebang is
+`#!/bin/sh` - not bash - and whose body calls `find`, `grep`, `head`, `mv`,
+`printf`, `tr` and `wc`.
+
+**Proved positively rather than inferred from the absence of the word.** Two
+shim runs, each with Git's `usr/bin` stripped from `PATH` and a scratch
+directory prepended in its place:
+
+- With ONLY `bash` restored, all 49 stayed exactly as broken - 32 errors in
+  `test_no_pii`, 6 failures in `test_precommit_gate_lint`, 6 in `test_docguards`,
+  5 in `test_precommit_hook_globbing` - while `test_syntax_check_hook` went fully
+  green at 42 passed. Restoring the named tool does not restore these tests.
+- With a partial POSIX set restored and `bash` withheld, 38 of the 49 came back
+  and exactly the 7 genuine `bash` tests went red. The 11 that stayed red need
+  utilities that shim did not carry, so the exact per-test dependency is NOT
+  enumerated and is not claimed here.
+
+**Why the number 56 was believable and still misleading.** The probe strips a
+PATH ENTRY that carries the tool, never the single executable. On this machine
+the three stripped entries are ONE directory - Git for Windows' `usr/bin`,
+duplicated in `PATH` - and it carries 244 other executables. So `--tool bash` and
+`--tool sh` produce a byte-identical stripped `PATH` by construction, and no run
+of this probe can separate them. That limitation is now computed and printed on
+every run rather than left for a reader to rediscover.
+
+**What is NOT claimed.** These tests are not wrong and they are not vacuous. They
+exercise the real hooks and they genuinely cannot run without a POSIX userland.
+The defect is the same one `OPS-78` named: the shape of the report when the tool
+is absent. It is only unfixed for these because nobody has said what to name.
+
+**The hard part, recorded so it is not re-derived as if it were easy.** `OPS-78`
+solved `git` by guarding on ONE tool name, and that works when the dependency is
+one executable. Here the dependency is a SET, and three shapes are available:
+guard on `sh` alone as the interpreter every hook shebang names, which is honest
+about the entry point and silent about the seven utilities the hook body calls;
+guard on the full measured set, which is precise and goes stale the moment a hook
+gains a `sed`; or ask the question at the hook level - does this repository's
+hook run at all here - which names the real dependency but reports a tool name
+the banner cannot count. None is obviously right, which is why this is an item
+rather than an edit.
+
+### Acceptance
+
+1. A decision is recorded, with reasoning, on what these 49 should name when the
+   POSIX userland is absent. Silence is not an option; neither is copying
+   `OPS-78`'s single-tool answer without saying why it transfers.
+2. Whatever is chosen, the end-of-run banner still counts and names what was
+   skipped, so a green summary on a bare box cannot conceal them - `OPS-78`
+   criterion 3, applied here rather than assumed from there.
+3. The result is re-measured with `tools/false_red_probe.py` afterwards and
+   recorded in the ledger with a date, with the positive control PROVED on that
+   run or the number is not a result.
+4. The 11 that did not come back under the partial shim are identified, and the
+   utility each actually needs is named. An unexplained residue is where the next
+   wrong generalisation would come from.
+5. Every guard is watched red under mutation, with the anchor asserted before any
+   survivor is believed.
 
 ## Archive index
 

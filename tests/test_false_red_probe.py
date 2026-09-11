@@ -1212,6 +1212,99 @@ class TestTheReportStatesTheModuleLevelLimitation:
         )
 
 
+class TestTheReportSaysWhatToolGranularityItActuallyHas:
+    """``OPS-78`` criterion 4. The tool name is the QUESTION, not the answer.
+
+    MEASURED 2026-09-11 while answering criterion 4 with ``--tool bash``. The
+    three PATH entries stripped for ``bash`` on this machine are the SAME
+    directory - Git for Windows' ``usr/bin``, duplicated in ``PATH`` - and that
+    one directory also carries ``sh``, ``grep``, ``sed``, ``tr``, ``wc``,
+    ``find``, ``head``, ``mv`` and ``printf``. Because
+    :func:`strip_tool_from_path` removes an ENTRY that carries the tool and
+    never the single executable, ``--tool bash`` and ``--tool sh`` produce a
+    byte-identical stripped ``PATH`` by construction, so the probe cannot
+    attribute a false red to any individual member of a shared directory.
+
+    Not hypothetical: of the 56 false reds ``--tool bash`` reported, 49 were in
+    files containing no reference to ``bash`` at all and were unchanged when
+    ``bash`` alone was restored to ``PATH``. Reading the report as a list of
+    bash dependencies would have converted 49 call sites onto the wrong name.
+
+    These arms drive the two new functions directly rather than through
+    :func:`probe`, because the interesting input is a DIRECTORY LISTING and
+    reaching one through a two-run probe would mean faking a PATH, a
+    ``PATHEXT`` and an ``is_file`` as well - three fakes to exercise one.
+    """
+
+    def _report(self, co_located):
+        return probe.ProbeReport(
+            ran=True,
+            controls=probe.ControlResult(
+                proved=True, seen={}, missing=(), expected={}
+            ),
+            co_located=tuple(co_located),
+        )
+
+    def test_it_lists_the_siblings_that_leave_path_with_the_tool(self):
+        found = probe.co_located_executables(
+            ["anywhere"],
+            "bash",
+            pathext=".EXE",
+            lister=lambda entry: ["bash.EXE", "sh.EXE", "grep.EXE"],
+        )
+        assert found == ("grep", "sh"), found
+
+    def test_the_tool_itself_is_never_listed_as_its_own_sibling(self):
+        found = probe.co_located_executables(
+            ["anywhere"],
+            "bash",
+            pathext=".EXE",
+            lister=lambda entry: ["BASH.exe", "sh.EXE"],
+        )
+        assert "bash" not in found, found
+
+    def test_a_non_executable_neighbour_is_not_counted(self):
+        """The anchor for the arm above - without PATHEXT filtering it passes."""
+        found = probe.co_located_executables(
+            ["anywhere"],
+            "bash",
+            pathext=".EXE",
+            lister=lambda entry: ["sh.EXE", "README.txt", "msys-2.0.dll"],
+        )
+        assert found == ("sh",), found
+
+    def test_an_entry_it_cannot_read_is_skipped_rather_than_raised(self):
+        def _explode(entry):
+            raise OSError("permission denied")
+
+        assert probe.co_located_executables(["x"], "bash", ".EXE", _explode) == ()
+
+    def test_the_rendered_report_names_the_siblings(self):
+        rendered = probe.format_report(self._report(["grep", "sed", "sh"]))
+        collapsed = " ".join(rendered.split())
+        assert "[limitation] --tool names the QUESTION" in collapsed, collapsed
+        assert "grep, sed, sh" in collapsed, collapsed
+        assert "READ THE INDIVIDUAL FAILURES" in collapsed, collapsed
+
+    def test_a_long_list_is_capped_and_says_how_many_it_hid(self):
+        rendered = probe.format_report(
+            self._report([f"tool{index:02d}" for index in range(20)])
+        )
+        collapsed = " ".join(rendered.split())
+        assert "and 8 more" in collapsed, collapsed
+
+    def test_an_empty_list_states_the_zero_instead_of_going_quiet(self):
+        """A zero here is a REAL result and must not look like a missing line.
+
+        A lone executable in its own directory is the one arrangement where
+        ``--tool`` really is tool-granular, and saying so is the difference
+        between a trustworthy attribution and an untested one.
+        """
+        collapsed = " ".join(probe.format_report(self._report([])).split())
+        assert "[limitation] --tool names the QUESTION" in collapsed, collapsed
+        assert "no other executable" in collapsed, collapsed
+
+
 class TestTheDocstringExplainsTheModuleLevelMissCorrectly:
     """``OPS-79`` criterion 3 - the filed diagnosis was wrong about the cause."""
 

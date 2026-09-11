@@ -35,11 +35,11 @@ from __future__ import annotations
 
 import json
 import shlex
-import shutil
 import subprocess
 import sys
 from pathlib import Path
 
+import _toolguard
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -339,9 +339,6 @@ def test_no_artifact_lands_in_the_repository(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-BASH = shutil.which("bash")
-
-
 def _bash_command(redirect_tokens: list[str]) -> str:
     """The shell command line: the hook, run under ``sys.executable``.
 
@@ -368,14 +365,14 @@ def run_hook_with_closed_streams(
     present on this machine as part of the same Git for Windows install the
     repo's own ``.githooks`` already require to run at all.
     """
-    assert BASH, "bash not found on PATH - needed to close a standard fd for this test"
+    bash = _toolguard.require("bash")
     tokens = []
     if close_stdout:
         tokens.append("1>&-")
     if close_stderr:
         tokens.append("2>&-")
     return subprocess.run(
-        [BASH, "-c", _bash_command(tokens)],
+        [bash, "-c", _bash_command(tokens)],
         input=stdin_text,
         capture_output=True,
         text=True,
@@ -501,9 +498,10 @@ def test_exit_is_always_zero_with_a_broken_stderr_pipe(
 def test_the_bash_transport_really_runs_the_hook_when_bash_is_present(
     tmp_path: Path,
 ) -> None:
-    """The PRESENT direction of the ``BASH`` presence guard - ``OPS-74`` #5.
+    """The PRESENT direction of the ``bash`` presence guard - ``OPS-74`` #5.
 
-    ``BASH = shutil.which("bash")`` above is a presence guard, and every
+    ``_toolguard.require("bash")`` in :func:`run_hook_with_closed_streams` is a
+    presence guard, and every
     closed-stream case in this section asserts one thing about the result: the
     exit code is zero. That is a negative assertion. A shell that resolved,
     started, and ran nothing whatsoever also exits zero, and so does a hook
@@ -525,7 +523,6 @@ def test_the_bash_transport_really_runs_the_hook_when_bash_is_present(
     same code path inside the hook, only that the path they share up to the
     stream redirection is alive.
     """
-    assert BASH, "bash must resolve on PATH before this transport can be exercised"
     subject = write_subject(tmp_path, f"{STEM}_bash_transport.py", BROKEN_SOURCE)
 
     result = run_hook_with_closed_streams(
