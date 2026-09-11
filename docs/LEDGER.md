@@ -84,6 +84,20 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0234 - 2026-09-11 - The headless capture lane is DISARMED on an operator instruction, and the tooling cannot say so on its own
+
+**Evidence:**
+- OPERATOR INSTRUCTION in chat 2026-09-11: disarm any headless lane for LL. Executed at the wrap.
+- The watcher was `python -m lanternlight.armwatch --dest-base C:\ll-captures --heartbeat ...`, pid 21680, armed since 2026-09-07T17:42:51Z with a fresh heartbeat at 255,159 completed passes. Its identity was confirmed from the process table before anything was sent to it, rather than from the arming record alone.
+- Terminated with `taskkill /F /PID` ISSUED FROM POWERSHELL, not Git Bash - CLAUDE.md records that MSYS path conversion rewrites the `/F` flag into `F:/` so the command dies and kills nothing, and that the only evidence of the failure is taskkill's own output. Its output was read: SUCCESS. Verified twice afterwards and from two directions: the pid is gone, and no process anywhere on the machine carries `armwatch` in its command line.
+- THE TOOLING CANNOT DISTINGUISH A DELIBERATE DISARM FROM A DEATH, which is the whole of LL-0117. With the arming record in place `check_watcher()` answered DEAD with a reason ending "Re-arm." - a standing instruction to undo what the operator had just asked for, printed once per session at every wrap.
+- RESOLVED BY RETIRING THE RECORD RATHER THAN DELETING IT: `ops/runtime/armwatch.json` and `ops/runtime/armwatch_heartbeat.json` were renamed with a dated `disarmed` marker in the stem, so the evidence survives on disk and the state reads NO_RECORD - "not armed" - instead of "died unexpectedly, re-arm". Both are under the gitignored `ops/runtime/`, so nothing left the tree.
+- THE INTENT LIVES IN THE HAND-OFF, which is the only place a cold session reads before acting. It says the watcher is off on purpose, that NO_RECORD is the expected answer, that the /done ritual's step 8 instruction to re-arm on NO_RECORD is overridden by the operator here, and that nothing is archiving the log, saves or market cache while it is off. The tool reports the machine state; the hand-off carries the reason. Neither can do the other's job.
+- A RE-ARM NEEDS THE PROCESS STARTED, not the filenames restored. Restoring the record alone would recreate the record of a process that is not running, which is precisely the failure LL-0117 names. Said in the hand-off in those words.
+- No scheduled task exists for this project - checked, and the LW and RC entries on this machine belong to siblings and were not touched.
+- MEASURED SIDE EFFECT, recorded because it contradicts a live instruction elsewhere: the hand-off is TRACKED at the repo root, and `tests/test_source_register.py` scanned it and refused the two new runtime filenames as unregistered hosts. The /done ritual's step 9 states that this module's reach is `docs/` and nothing else. That is either stale or incomplete - the refusal cited `LL-NEXT-SESSION.txt` by name. Not chased here; recorded so the next session does not trust that sentence.
+- Suite measured bare at the wrap, after the registration this change required: 3082 passed, 1 skipped. ruff: All checks passed.
+
 ### LL-0233 - 2026-09-11 - The wrap's refutation pass found FOUR documentation defects and zero code defects, including CLAUDE.md still forbidding the vendoring this session performed - all four repaired, and this entry corrects LL-0231 and LL-0232
 
 **Evidence:**

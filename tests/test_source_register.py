@@ -343,6 +343,17 @@ KNOWN_NON_HOSTS = frozenset(
         # and resolves nowhere; the host-shaped pattern cannot tell a dotted
         # field path from a domain. Not an external source.
         "control.proved",
+        # GITIGNORED RUNTIME FILENAMES quoted by the hand-off, naming where the
+        # capture watcher's arming record and heartbeat were moved when the
+        # operator had the headless lane disarmed on 2026-09-11. Both live under
+        # `ops/runtime/`, which is gitignored, so neither is tracked and the live
+        # tracked-file check cannot cover them. `.json` is not a TLD, but the
+        # dated stem puts a dot-separated tail in front of it and the host-shaped
+        # pattern reads the whole thing as a domain. The second is the tail the
+        # extractor emits for `armwatch_heartbeat.disarmed-...`, not a separate
+        # file. Neither is an external source.
+        "armwatch.disarmed-2026-09-11.json",
+        "heartbeat.disarmed-2026-09-11.json",
         # TEST MODULE FILENAMES quoted by `LL-0159`, the entry closing the
         # `OPS-33` follow-up. Each is a file in THIS tree - `git ls-files`
         # matches `tests/test_inbox_acknowledge.py` and its three siblings -
