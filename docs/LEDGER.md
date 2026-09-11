@@ -84,6 +84,47 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0219 - 2026-09-11 - Three counts filed by this session were wrong and are withdrawn or corrected - including one where the merger relayed a subagent's figures as MEASURED
+
+**Evidence:**
+- WITHDRAWN: OPS-74 was filed carrying '57 files carry a subprocess call site, 114 call-site occurrences, 16 check=True, 11 shutil.which presence guards', marked Measured. The refutation pass could not reproduce them under six patterns - HEAD over those directories gives 40/98/6, the whole repository 42/100/6, the current tree by matching lines 46/108/9. Only the 16 check=True reproduces.
+- The provenance IS the defect: those figures were relayed out of a research agent's report and written down as MEASURED by a merger who never re-derived them. That is this repository's own standing rule - never quote a subagent's count - broken while filing an item about not believing green things. They are withdrawn rather than corrected, because the item no longer rests on them.
+- CORRECTED: '187 false reds across 22 FILES' in both OPS-74 and OPS-78. Re-derived from the findings themselves: 17 files. The 22 was the probe's own 'files with any change' row, which also counts files whose only change was a clean skip - two different numbers one line apart.
+- CORRECTED: 'six presence guards were found in this tree' scoped to the four files actually swept, with the fifteen unaudited ones named.
+- All three were found by an independent refutation pass that was told to default to refuted, and none by the suite, which was green throughout.
+
+OPS-79 records three gaps the same pass found in the probe's own instrument: the positive control has no NEGATIVE specimen, so a classifier that over-reports still passes it; silent_pass misses the module-level lookup shape and the docstring mis-states why; and the recursion guard matches only one import spelling.
+
+### LL-0218 - 2026-09-11 - Bidirectional guard discipline written down and applied - and a mutation found a real instance of the failure it targets
+
+**Evidence:**
+- Six presence guards were found IN THE FOUR FILES SWEPT. Three were already bidirectional and were correctly left alone rather than edited to look busy. Three were missing the present direction and now assert that the guarded WORK HAPPENED, not merely that the test did not skip.
+- THE REAL INSTANCE: replacing the syntax-check hook with an inert stub left every closed-stream case GREEN against a transport that ran nothing, while the newly added assertion failed. That is precisely the shape the discipline exists to catch, found by breaking the work rather than the assertion.
+- The other two verified the same way: silencing the pre-commit hook copy left the old HEAD assertion passing while the new one failed; a stub standing in for the windowless interpreter exited 0 doing nothing, so resolution and returncode both passed while the marker-file assertion failed. A returncode of 0 is not evidence that work happened.
+- docs/OPERATIONS.md carries the rule, why one direction is not enough, the three outcomes a missing tool can produce, and the honest limit that asserting the work happened is only as good as the effect chosen to observe.
+- Per-file collect counts: test_no_hardcoded_home_path.py 24 to 25, test_syntax_check_hook.py 41 to 42, others unchanged. Nothing dropped.
+
+The SCOPE was overstated in ROADMAP.md when first written - 'six presence guards were found in this tree' rather than in the four files swept - and the same section's report of 22 clean skips already contradicted it. At least fifteen more tool-absence guards exist elsewhere and are unaudited. Corrected in place.
+
+### LL-0217 - 2026-09-11 - 187 tests across 17 files FAIL rather than skip when git is absent - the finding OPS-74 was built to produce, filed as OPS-78 rather than fixed inside the item that measured it
+
+**Evidence:**
+- With git stripped from every PATH entry carrying it, 187 tests fail or error that otherwise pass, and only 22 skip cleanly. Measured with the probe's positive control PROVED on the same run, and re-run by the merger.
+- These are not vacuous tests and they are not wrong. They genuinely exercise git and genuinely cannot run without it. The defect is the SHAPE OF THE REPORT when the tool is absent: CLAUDE.md tells a fresh clone to run the suite as its second command, and this repository is public, so the reader who sees 187 unexplained failures may not be the operator.
+- OPS-78 records the counter-argument rather than burying it: converting 187 failures into 187 skips could let a real regression hide on a machine that quietly lost git, because a skip is invisible in a green summary. Its acceptance requires the decision and its reasoning, a re-measurement afterwards, and the same question asked for a second tool before the answer is generalised.
+
+### LL-0216 - 2026-09-11 - OPS-74 closed - the false-red probe declared its own instrument UNPROVEN on its first real run, which is the only reason its numbers are worth anything
+
+**Evidence:**
+- tools/false_red_probe.py runs the suite twice - once normally, once with every PATH entry carrying git removed BY VALUE - and reports the delta by test id and by file. It classifies a clean skip, a false red, and a test that passed both ways without the guarded code ever running, the last by instrumenting the presence lookup and the subprocess entry points during the run.
+- FIRST RUN: 'positive control UNPROVEN - every count below is an absence of evidence, not evidence of absence'. It printed 188 false reds and refused to let them be believed. A probe that had simply printed 188 would have been believed.
+- The merger's diagnosis of that failure was WRONG and is corrected in place in ROADMAP.md rather than deleted. The merger said the controls were never collected. Measured: collect-only over tests gives 2985 and the planted path makes 2988, and the run's own tally summed to exactly 2988, which is only possible if all three controls were collected. The real defect was node-id RECOGNITION - pytest builds an out-of-tree file's node id by joining the collector chain with a separator, so the id begins with one, file attribution returned an empty string, and the control matcher matched nothing.
+- That single wrong assumption explained BOTH symptoms: the unproven instrument and an empty-filename row in the probe's own report, which had been filed as separately unexplained.
+- AFTER THE FIX, re-run by the merger rather than quoted: 'positive control PROVED' naming all three kinds; 2999 repository tests collected in each direction alongside 3 planted controls; clean_skip=22, exercised=103, false_red=187, skip_both=1, untouched=2686; findings 187. The tally sums to 2999, the repository total. Each kind fell by exactly its one control and untouched rose by exactly the 14 tests the fix added.
+- Suite this run: 2998 passed, 1 skipped. Ruff clean. Per-file baseline 59 files/2934 to 60 files/2999 with NO file dropping.
+
+THE MEASURED ZERO IS WEAKER THAN IT READS, and this was established by refuting the probe rather than claimed by it. A silent pass is recognised only when the presence lookup happens inside the test body; a module-level lookup classifies as untouched instead, and module level is this repository's dominant shape. No test here performs an in-process lookup for git at all, so silent_pass=0 for that tool was STRUCTURALLY GUARANTEED before the probe ran. True, and not the reassurance it looks like. Filed as OPS-79.
+
 ### LL-0215 - 2026-09-11 - Three items filed from measurement rather than from opinion - OPS-74 and OPS-75 from the cross-project channel, OPS-77 from this session's own refutation pass
 
 **Evidence:**

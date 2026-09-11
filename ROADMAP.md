@@ -4737,7 +4737,7 @@ override of `"   "` yields `Path("   ")` rather than being ignored.
    before any survivor is believed.
 
 
-## OPS-74. Nothing here measures whether a guard is GREEN only because a tool is absent - OPEN
+## OPS-74. Nothing here measures whether a guard is GREEN only because a tool is absent - CLOSED 2026-09-11
 
 Filed 2026-09-11 from a cross-project note read on the `moon_sync_inbox/`
 channel. The IDEA is adopted and nothing is vendored: no file was copied in, no
@@ -4755,14 +4755,21 @@ claim about the TOOL wearing the costume of a claim about the world. The
 crashed `grep -iF`, the `taskkill` that killed nothing and the `-q` that printed
 no summary are all this failure in other clothes.
 
-**What is MEASURED here, and what is not.** Measured 2026-09-11 across `tools/`,
-`ops/` and `tests/`: 57 files carry a subprocess call site, 114 call-site
-occurrences in total, 16 of them passing `check=True`, and 11 `shutil.which`
-presence guards. That shape does not by itself prove a single false red exists -
-it only says the surface is large enough that the question is worth asking.
-**Whether this tree actually has any such site is UNMEASURED**, and the note that
-prompted this item makes no measured claim about Lanternlight either. A count
-quoted from a sibling's tree is not a finding about ours.
+**THE FIGURES THIS ITEM WAS FILED WITH ARE WITHDRAWN.** It said, marked Measured:
+57 files carrying a subprocess call site across `tools/`, `ops/` and `tests/`, 114
+call-site occurrences, 16 passing `check=True`, and 11 `shutil.which` presence
+guards. The refutation pass could not reproduce them under six different patterns
+- `HEAD` over those three directories gives 40 files, 98 occurrences and 6 guards;
+the whole repository gives 42, 100 and 6; the current tree counted by matching
+lines gives 46, 108 and 9. **Only the 16 `check=True` reproduces.**
+
+They are withdrawn rather than corrected, because their provenance is the defect:
+they were relayed out of a research agent's report and written down here as
+MEASURED by a merger who did not re-derive them. That is this repository's own
+rule - never quote a subagent's count - broken in the act of filing an item about
+not believing green things. The exact replacement figure does not matter, because
+the item no longer rests on it: the measurement below was taken by running the
+probe, not by counting call sites.
 
 ### Acceptance
 
@@ -4789,6 +4796,141 @@ quoted from a sibling's tree is not a finding about ours.
    negative assertion, which rules something out without pinning anything down.
 6. Every guard above is watched red under mutation, with the anchor asserted
    before any survivor is believed.
+
+### Run against the real tree - 2026-09-11 - the instrument reported itself UNPROVEN, was fixed, and then MEASURED
+
+`tools/false_red_probe.py` exists, runs, and its FIRST act against this tree was
+to refuse to let its own numbers be believed. That is criterion 3 working, and it
+is the most useful thing it could have done.
+
+```
+false red probe: positive control UNPROVEN - every count below is an absence of
+evidence, not evidence of absence
+```
+
+**The numbers it printed are therefore NOT A RESULT and are not recorded here as
+one.** They are written down only so the next session can tell whether the fix
+changed them: `clean_skip=23, exercised=103, false_red=188, silent_pass=1,
+skip_both=1, untouched=2672`, 189 findings across 22 files, 2988 tests collected
+with the tool and 2988 without. **Do not quote any of those as a measurement of
+this tree.** An unproven instrument reporting 188 and an unproven instrument
+reporting 0 are the same epistemic object, which is the whole reason criterion 3
+was written the way it was.
+
+**THE FIRST DIAGNOSIS WRITTEN HERE WAS WRONG, AND IS CORRECTED IN PLACE RATHER
+THAN DELETED.** It said the probe plants its controls OUTSIDE the tree it
+measures, so the measured invocation never collects them. That was the merger's
+reading of the symptom and it was refuted by measurement within the hour, which
+is the third time this session a confident cause was written down before it was
+checked.
+
+**THE MEASURED CAUSE.** The controls WERE collected. `pytest --collect-only tests`
+gives 2985 and adding the planted control path gives 2988, and the first run's own
+tally - 23 + 103 + 188 + 1 + 1 + 2672 - sums to exactly 2988, which is only
+possible if all three controls were collected and counted. The defect was node-id
+RECOGNITION, not collection: pytest builds an out-of-tree file's node id by
+joining its collector chain with `::`, so the id begins with the separator, the
+file attribution split at the first `::` and returned an empty string, and the
+control matcher matched nothing.
+
+**That one cause explains BOTH symptoms**, including the empty-filename bucket
+noted at the end of this section, which was filed here as separately unexplained.
+A single parsing assumption produced an unproven instrument and a nonsense row in
+its own report, and the two looked like unrelated defects.
+
+**What this does NOT cast doubt on.** The probe's own unit tests pass against
+recorded fixture output, and the classification, PATH stripping, parsing and
+report formatting are exercised there. What is unproven is the end-to-end claim
+that the instrument can SEE a false red in a real run - which is exactly the claim
+criterion 3 demands be proved before a count is believed.
+
+**Criterion 5 IS met, and its SCOPE is narrower than this section first said.**
+Six presence guards were found IN THE FOUR FILES THAT WERE SWEPT - not six in the
+tree, which is what the sentence originally implied and which the same section's
+own report of 22 clean skips already contradicted. Three of the six were already
+bidirectional and were correctly left alone; three were missing the present
+direction and now have it. **At least fifteen more tool-absence guards exist
+elsewhere in the suite and were NOT audited** - in the GVAS, hook-file-mode,
+lane-state, lanes, precommit-gate, repo-surfaces and tracked-walker test modules.
+The discipline is written down in `docs/OPERATIONS.md` and applies to them; it has
+simply not been applied to them yet, and that is `OPS-78` criterion 1's business
+rather than a silent gap.
+
+One of the three mutations found a real instance of the failure this item is
+about: every closed-stream case in the syntax-check hook's tests stayed GREEN
+against a transport that ran nothing.
+
+### THE MEASUREMENT, taken after the control was fixed - criterion 4
+
+Re-run by the merger rather than quoted from the slice that fixed it. Headline,
+verbatim:
+
+```
+false red probe: positive control PROVED - test_control_clean_skip=clean_skip,
+test_control_false_red=false_red, test_control_silent_pass=silent_pass
+  stripped 4 PATH entry(ies) carrying the tool; collected 2999 repository test(s)
+  with it and 2999 without, alongside 3 planted control(s) with it and 3 without
+  kinds: clean_skip=22, exercised=103, false_red=187, skip_both=1, untouched=2686
+  findings: 187
+```
+
+**187 FALSE REDS ACROSS 17 FILES.** A test in that set passes with `git` on the
+PATH and FAILS without it. (The file count was first written here as 22, which is
+the probe's `files with any change` line - that row also counts files whose only
+change was a clean SKIP. Re-derived from the findings themselves: 17.) On a machine with no `git` - a fresh clone on a bare
+box, a container, a CI image that forgot it - 187 of this suite's tests report a
+failure that is about the environment and not about the code. The correct
+behaviour for all of them is a clean skip, and only 22 tests do that today.
+
+**ZERO SILENT PASSES, and this is the number worth reading carefully.** The first
+run reported one, and the fix proved it was the probe's OWN planted control being
+counted as a repository test. So the measured figure for the outcome this whole
+item was built to find is ZERO - and it is a MEASURED zero rather than an
+unmeasured absence, which are different facts this project keeps apart.
+
+It is a zero with named limits rather than a clean bill. The detector wraps the
+presence lookup and the subprocess entry points; it is blind to the `system` and
+`popen` helpers in the `os` module, to `ctypes`, to import-time lookups, and to a
+`which` imported by name before the wrap. Those limits are in the module docstring
+rather than only here.
+
+**AND THE ZERO IS WEAKER THAN IT LOOKS, established by the refutation pass rather
+than claimed by the implementation.** A silent pass is recognised only when the
+lookup happens INSIDE the test, while the plugin is loaded. A lookup performed at
+MODULE level classifies as `untouched` instead - and module level is this
+repository's dominant shape, `tests/test_syntax_check_hook.py` among them. More
+bluntly: no test in this tree performs an in-process presence lookup for `git` at
+all, so `silent_pass=0` for that tool was STRUCTURALLY GUARANTEED before the probe
+ran. It is a true zero and it is not the reassurance it reads as. The module
+docstring also mis-described the mechanism as a cached import-time lookup
+performed before the plugin loads, which is wrong about why the case is missed.
+Both are `OPS-79`.
+
+**The deltas, old against new, and why the new set is believable:** clean_skip
+23 to 22, false_red 188 to 187, silent_pass 1 to 0, untouched 2672 to 2686,
+findings 189 to 187. Each of the three kinds falls by exactly its one control;
+untouched rises by exactly the 14 tests the fix added; and the tally now sums to
+2999, the repository total. The pre-fix figures summed to 2988 against a 2985-test
+repository, which is the arithmetic tell that the controls were being counted as
+repository tests.
+
+**Status: ALL SIX CRITERIA MET. OPS-74 is CLOSED.** Criterion 3 was met the hard
+way: the instrument was built, it declared itself unproven on its first real run,
+the cause was diagnosed WRONGLY by the merger and correctly by measurement, and
+the control now fires every run and is reported alongside the finding. A probe
+that had simply printed 188 on its first run would have been believed.
+
+**The 187 are NOT closed by this item** and are not a defect this item promised to
+fix - `OPS-74` asked for the measurement, and the measurement is what it produced.
+Deciding what to do about them is `OPS-78`.
+
+**The empty-filename bucket, filed here as unexplained, has the SAME cause.** The
+per-file report carried a row with an empty filename - three tests with the tool,
+three without, two changed - and those three are the controls themselves. The id
+parser returned an empty file for an id beginning with the separator. Recorded
+because the pair is instructive: the same wrong assumption produced a broken
+instrument and a visibly nonsensical row, and they were filed as two problems.
+
 
 ## OPS-75. No check asks whether a `.gitignore` pattern already shadows a tracked file - OPEN
 
@@ -5029,6 +5171,106 @@ measured and deliberately NOT used here: it masks enumerated identifier tokens i
 log-shaped text and has no filesystem-path rule, so calling it would have been a
 no-op wearing the costume of coverage. That judgement is recorded because the
 next session will reasonably ask why the sanctioned path was not taken.
+
+
+## OPS-78. 187 tests FAIL rather than skip when `git` is absent, measured - OPEN
+
+Filed 2026-09-11 from the first believable run of `tools/false_red_probe.py`,
+whose positive control was PROVED on that run. This is the finding `OPS-74` was
+built to produce; `OPS-74` asked for the measurement and is closed by having taken
+it, and what to DO about the result is this item.
+
+**MEASURED, and re-run by the merger rather than quoted:** with `git` stripped
+from every PATH entry that carries it, 187 tests across 17 files fail or error
+that otherwise pass. Only 22 tests skip cleanly. On a machine with no `git` -
+a fresh clone on a bare box, a container, a CI image that forgot it - this suite
+reports 187 failures that are about the environment and not about the code.
+
+**Why that is worth fixing rather than shrugging at.** `CLAUDE.md`'s fresh-clone
+section tells a new checkout to run `python -m pytest` as its second command. A
+reader who does that without `git` on the PATH sees a wall of red with no
+indication that the cause is a missing tool, and this repository is PUBLIC, so
+that reader may not be the operator. A failure that misattributes its own cause is
+the same defect class as every entry in the anti-patterns list.
+
+**What is NOT being claimed.** These 187 are not vacuous tests and they are not
+wrong. They genuinely exercise `git` and they genuinely cannot run without it. The
+defect is the SHAPE OF THE REPORT when the tool is absent, not the coverage.
+
+**The counter-argument, recorded so it is not re-derived.** A blanket skip is not
+obviously right either: a skip is invisible in a green summary, so converting 187
+failures into 187 skips could let a real regression hide on a machine that has
+quietly lost `git`. Whatever is chosen has to keep "the tool is missing" loud
+while keeping it distinguishable from "the code is broken".
+
+### Acceptance
+
+1. A decision is recorded, with reasoning, on what the suite should do when `git`
+   is absent: clean skips, a single loud collection-time refusal that names the
+   missing tool, or a deliberate and documented decision to leave the failures as
+   they are. All three are defensible; silence is not.
+2. Whatever is chosen, the count of tests that FAIL for a missing tool is measured
+   again with `tools/false_red_probe.py` afterwards and recorded in the ledger with
+   a date. The probe must report its positive control PROVED on that run, or the
+   number is not a result.
+3. If skipping is chosen, the skip is not silent: something in the run states that
+   N tests were skipped because a named tool was absent, so a green summary cannot
+   conceal a machine that has lost it.
+4. The same question is asked for at least one tool other than `git` before the
+   answer is generalised - the probe takes `--tool`, so this costs one run. A
+   policy derived from one tool is a policy tested against one tool.
+5. Every guard above is watched red under mutation, with the anchor asserted
+   before any survivor is believed.
+
+
+## OPS-79. Three gaps in the false-red probe's own instrument, found by refuting it - OPEN
+
+Filed 2026-09-11 by the refutation pass over `OPS-74`, after that item had already
+been marked closed on the strength of a control it reports as PROVED. None of the
+three makes the measurement wrong; all three make it narrower than it reads.
+
+**Gap 1: the positive control has no NEGATIVE control.** All three planted
+specimens are positive - one that should classify `clean_skip`, one `false_red`,
+one `silent_pass` - so the control proves the instrument can SEE, and proves
+nothing about whether it INVENTS. Demonstrated: a mutated classifier that promotes
+every `untouched` test to `silent_pass` still reports the control PROVED, because
+all three specimens still land on their expected kind. A probe that called
+everything a finding would pass its own control. Four other blinding mutations
+were correctly caught and reported UNPROVEN, so the control is real - it is simply
+one-directional, which is the defect `OPS-74` criterion 5 names in tests and did
+not apply to the probe itself.
+
+**Gap 2: `silent_pass` recognition misses the dominant shape, and the docstring is
+wrong about why.** A presence lookup inside a test body is seen; a lookup at MODULE
+level classifies `untouched` instead, and module level is how this repository
+usually writes them. The docstring explains the miss as "a cached lookup performed
+at import time before the plugin loads", which is not the mechanism. The
+consequence is recorded under `OPS-74`: `silent_pass=0` for `git` was structurally
+guaranteed, because no test here performs an in-process lookup for it at all.
+
+**Gap 3: the recursion guard matches one spelling.** After a mutation let the probe
+run the real suite and recurse five processes deep, an `ast`-based guard was added
+requiring every call site in the tests to inject a runner. It walks for attribute
+calls on the name `probe`, so a direct import of the entry point by name,
+followed by a call through that name, is invisible to it. The guard is not vacuous - a runner-less
+attribute call reddens it, and its anchor test notices if the assertions vanish -
+it is simply narrower than the hazard.
+
+### Acceptance
+
+1. The control gains at least one NEGATIVE specimen - a planted test that must NOT
+   be classified as a finding - and a classifier that over-reports fails the control
+   instead of passing it. Watched red by mutating the classifier to over-report.
+2. `silent_pass` either recognises a module-level lookup, or the limitation is
+   stated correctly and prominently in the report itself rather than only in the
+   docstring, so nobody reads a zero as a clean bill. If recognition is chosen, a
+   planted module-level specimen proves it.
+3. The docstring's explanation of the missed case is corrected to the measured
+   mechanism.
+4. The recursion guard catches the direct-import spelling, proved by adding one and
+   watching it redden.
+5. Every guard above is watched red under mutation, with the anchor asserted before
+   any survivor is believed.
 
 
 ## Archive index

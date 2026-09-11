@@ -431,6 +431,14 @@ LANES: tuple[Lane, ...] = (
             "tests/test_doc_archive.py",
             "tools/archive_link_guard.py",
             "tests/test_archive_link_guard.py",
+            # OPS-74. The false-red probe runs the suite twice, once with the
+            # tool absent, and reports the delta by test id and by file. It
+            # belongs beside the merge gate for the same reason the merge gate
+            # belongs to this lane: both refuse to believe a green result
+            # until they have re-probed what produced it, and both reason
+            # PER FILE rather than over a repository total.
+            "tools/false_red_probe.py",
+            "tests/test_false_red_probe.py",
             # The pytest-wide conftest. It is the executable analogue of
             # pytest.ini, which is CROSS_CUTTING, so cross-cutting was the
             # obvious call and it is the wrong one TODAY: the file exists

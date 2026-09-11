@@ -598,6 +598,58 @@ class TestTheParameterisedFormsActuallyWork:
         assert proc.returncode == 0, f"python did not run: {proc.stderr[:200]}"
         assert proc.stdout.strip() == "3"
 
+    def test_the_resolved_pythonw_is_a_working_python(self, tmp_path: Path) -> None:
+        """The PRESENT direction for ``pythonw`` - ``OPS-74`` criterion 5.
+
+        ``test_the_parameterised_interpreter_actually_resolves`` above asks
+        :func:`shutil.which` about BOTH ``python`` and ``pythonw``, and only
+        ``python`` is then proved to execute. Resolution is a negative
+        assertion: it rules out an empty ``PATH`` lookup without pinning down
+        that the thing found does any work. A ``pythonw`` that resolves to a
+        Microsoft Store App Execution Alias stub would satisfy the guard above
+        and still run nothing, and the hook registered under it would be
+        silently dead - which is the precise failure this whole module exists
+        to prevent.
+
+        ``pythonw`` has no console, so its exit code is the only thing a
+        caller normally sees and an exit code is not evidence that the
+        interpreter did anything. The subject therefore writes a MARKER FILE,
+        and that file's presence and content are the observed effect. An
+        interpreter that started and returned without executing the program
+        leaves no marker.
+        """
+        found = shutil.which("pythonw")
+        assert found, (
+            "'pythonw' does not resolve on PATH, so every hook command in "
+            ".claude/settings.json that names it would silently not run"
+        )
+        marker = tmp_path / "pythonw_ran.txt"
+        program = (
+            "import sys, pathlib; "
+            f"pathlib.Path({str(marker)!r}).write_text("
+            "str(sys.version_info[0]), encoding='ascii')"
+        )
+        proc = subprocess.run(
+            [found, "-c", program],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+        assert proc.returncode == 0, (
+            f"pythonw exited {proc.returncode}: {proc.stderr[:200]}"
+        )
+        assert marker.is_file(), (
+            "pythonw resolved on PATH and exited 0 but produced NO effect - "
+            "the marker file it was told to write does not exist, so the "
+            "resolution assertion above was ruling out an empty lookup while "
+            "the interpreter ran nothing"
+        )
+        assert marker.read_text(encoding="ascii").strip() == "3", (
+            "pythonw ran but is not a Python 3: "
+            f"{marker.read_text(encoding='ascii')!r}"
+        )
+
     def test_userprofile_is_available_for_the_wrap_ritual(self):
         """``done.md`` tells the operator to expand ``$env:USERPROFILE``."""
         if os.name != "nt":

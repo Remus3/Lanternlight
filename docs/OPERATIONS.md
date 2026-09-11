@@ -76,6 +76,42 @@ clean machine.
 Every feature starts with a failing test. If you are adding one, write the test,
 watch it fail for the right reason, then implement.
 
+## Bidirectional guard discipline - both directions or neither
+
+**The rule.** Any guard whose job is "skip or bail cleanly when tool X is
+missing" must be paired with an assertion that the guarded path ACTUALLY RAN
+and produced its intended effect when X is present.
+
+**Why one direction is not enough.** Pinning only the absent direction is a
+negative assertion: it rules something out without pinning anything down. A
+guard that skips perfectly while the code it protects has been permanently
+broken is completely invisible to a green suite, because the suite never
+disagrees with a test that was never asked to do anything.
+
+**The three outcomes a missing tool can produce**, which must never be
+collapsed into one another:
+
+1. A **clean skip** - honest, visible in the summary, and the outcome the
+   absent direction is written to produce.
+2. A **false red** - the test fails or errors only because the tool was absent,
+   so the red says nothing about the code.
+3. A **silent pass** - the test goes green while the guarded code never ran at
+   all. This is the one this discipline is aimed at, and it is the only one of
+   the three that leaves no trace anywhere.
+
+**The honest limit.** Asserting "the work happened" is only as good as the
+effect you choose to observe. An effect that would ALSO appear if the tool had
+done nothing is not evidence - an exit code of zero, an unchanged file, an
+absence of output. Pick an effect only the guarded work can produce: a marker
+the tool itself writes, its own diagnostic string, a value it alone computes.
+
+**Discipline here, measurement elsewhere.** This section is the discipline, and
+it is applied by hand at the point each guard is written. `tools/false_red_probe.py`
+is the MEASUREMENT: it runs the suite with and without a tool on `PATH` and
+reports the per-test and per-file delta, which is how this repository finds the
+guards that have only one direction pinned. Neither replaces the other. Filed
+as `OPS-74` criterion 5.
+
 ## Run the pak probe
 
 ```

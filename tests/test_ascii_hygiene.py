@@ -175,6 +175,23 @@ def test_the_hook_survives_a_reader_that_closes_the_pipe():
             "THE BANNED COMMIT LANDED THROUGH A CLOSED PIPE. "
             f"HEAD moved {before[:8]} -> {after[:8]}; shell exit {piped.returncode}"
         )
+        # The PRESENT direction of the shell presence guard above - OPS-74
+        # criterion 5. An unmoved HEAD is a negative assertion: a shell that
+        # never ran the commit at all leaves HEAD in exactly the place a
+        # refused commit does, so the skip branch and a silently inert shell
+        # are indistinguishable from the assertion above alone. The hook's own
+        # refusal, naming the file it refused, is the effect the guarded path
+        # exists to produce, and the first line of the piped output is where
+        # it has to appear. Measured 2026-09-11: that line reads
+        # "BLOCKED bad.py", uncoloured because stderr is a pipe rather than a
+        # terminal.
+        assert "BLOCKED" in piped.stdout and "bad.py" in piped.stdout, (
+            "the shell ran but the hook never spoke, so the unmoved HEAD above "
+            "proves nothing about the hook. The piped first line must carry the "
+            "hook's own refusal naming the offending path. "
+            f"shell exit {piped.returncode}; "
+            f"stdout={piped.stdout!r} stderr={piped.stderr!r}"
+        )
 
 
 def test_walker_actually_reaches_this_test_file():

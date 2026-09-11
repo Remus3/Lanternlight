@@ -498,6 +498,56 @@ def test_exit_is_always_zero_with_a_broken_stderr_pipe(
     assert rc == 0, f"a broken stderr pipe made the hook exit {rc}, not 0"
 
 
+def test_the_bash_transport_really_runs_the_hook_when_bash_is_present(
+    tmp_path: Path,
+) -> None:
+    """The PRESENT direction of the ``BASH`` presence guard - ``OPS-74`` #5.
+
+    ``BASH = shutil.which("bash")`` above is a presence guard, and every
+    closed-stream case in this section asserts one thing about the result: the
+    exit code is zero. That is a negative assertion. A shell that resolved,
+    started, and ran nothing whatsoever also exits zero, and so does a hook
+    that starts and returns without ever compiling the subject. Under a closed
+    stderr there is by construction no output to check either, so nothing in
+    those cases can tell a working transport apart from an inert one.
+
+    This test closes that hole by running the SAME transport - the same
+    ``bash -c`` command line built by :func:`_bash_command` - with both
+    standard streams left open, and asserting the effect the guarded path
+    exists to produce: the hook's own marker, naming the subject it refused,
+    arriving on stderr. If this goes red while the closed-stream cases stay
+    green, the transport is the thing that broke and those cases were passing
+    on nothing.
+
+    The honest limit, recorded because a caveat kept only in chat is a lie in
+    the artifact: this proves the marker travelled back through bash for a
+    BROKEN subject. It does not prove the closed-stream cases exercise the
+    same code path inside the hook, only that the path they share up to the
+    stream redirection is alive.
+    """
+    assert BASH, "bash must resolve on PATH before this transport can be exercised"
+    subject = write_subject(tmp_path, f"{STEM}_bash_transport.py", BROKEN_SOURCE)
+
+    result = run_hook_with_closed_streams(
+        payload_for(subject), tmp_path, close_stdout=False, close_stderr=False
+    )
+
+    assert result.returncode == 0, (
+        f"the hook exited {result.returncode} through an unredirected bash "
+        f"transport: stdout={result.stdout!r} stderr={result.stderr!r}"
+    )
+    assert MARKER in result.stderr, (
+        "bash resolved and the run exited 0, but the hook's own marker never "
+        "came back - so the transport carried nothing and every closed-stream "
+        "case above would be just as green on a hook that never ran: "
+        f"stdout={result.stdout!r} stderr={result.stderr!r}"
+    )
+    assert subject.name in result.stderr, (
+        "the marker arrived but not the subject's name, so the report is not "
+        f"about the file this test wrote: stderr={result.stderr!r}"
+    )
+
+
 # ---------------------------------------------------------------------------
 # OPS-67: BOTH PostToolUse hooks IGNORE an unknown argument, deliberately.
 #
