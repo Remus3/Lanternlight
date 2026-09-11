@@ -24,6 +24,7 @@ What is asserted here, in the order the probe uses it:
 
 from __future__ import annotations
 
+import ast
 import json
 import os
 import subprocess
@@ -443,24 +444,8 @@ class TestTheProbeItself:
     def _runner(self, calls: list[tuple[list[str], dict[str, str]]]):
         def runner(args, env, record_path):
             calls.append((list(args), dict(env)))
-            entries = {
-                "tests/t.py::test_x": ("passed", True, True),
-                f"{probe.CONTROL_MODULE_NAME}::test_control_false_red": (
-                    "passed" if len(calls) == 1 else "failed",
-                    True,
-                    False,
-                ),
-                f"{probe.CONTROL_MODULE_NAME}::test_control_clean_skip": (
-                    "passed" if len(calls) == 1 else "skipped",
-                    len(calls) == 1,
-                    True,
-                ),
-                f"{probe.CONTROL_MODULE_NAME}::test_control_silent_pass": (
-                    "passed",
-                    False,
-                    True,
-                ),
-            }
+            entries = {"tests/t.py::test_x": ("passed", True, True)}
+            entries.update(_control_entries(len(calls) == 1, _plain_control_id))
             Path(record_path).write_text(_record(entries), encoding="ascii")
             return 0
         return runner
@@ -625,27 +610,86 @@ def test_subprocess_is_imported_only_for_the_outermost_runner():
     assert subprocess.run is not None
 
 
+#: Import paths that reach the probe's entry points. Both spellings are real:
+#: this module uses the package one, and a file run with the repository root on
+#: ``sys.path`` can use the bare one.
+PROBE_MODULE_PATHS = frozenset({"tools.false_red_probe", "false_red_probe"})
+
+#: The two entry points that run the suite unless a runner is injected.
+RUNNER_TAKING_CALLABLES = frozenset({"main", "probe"})
+
+
+def probe_import_names(tree: ast.AST) -> tuple[set[str], set[str]]:
+    """Names in ``tree`` that reach the probe, as ``(module_aliases, direct)``.
+
+    DERIVED, never hardcoded - ``OPS-79`` criterion 4. The previous guard
+    assumed the module was always spelled ``probe`` and always reached through
+    an attribute, so ``from tools.false_red_probe import main`` followed by a
+    bare ``main([])`` was invisible to it. Two spellings are collected:
+
+    ``module_aliases``
+        whatever the probe MODULE is bound to here - ``import
+        tools.false_red_probe as x``, ``from tools import false_red_probe as
+        x``, or the plain forms of either.
+    ``direct``
+        entry points imported BY NAME, which are then called with no attribute
+        access at all and which the attribute walk therefore cannot see.
+    """
+    aliases: set[str] = set()
+    direct: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name in PROBE_MODULE_PATHS:
+                    aliases.add(alias.asname or alias.name.split(".")[0])
+        elif isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            for alias in node.names:
+                if module in PROBE_MODULE_PATHS:
+                    if alias.name in RUNNER_TAKING_CALLABLES:
+                        direct.add(alias.asname or alias.name)
+                elif module == "tools" and alias.name == "false_red_probe":
+                    aliases.add(alias.asname or alias.name)
+    return aliases, direct
+
+
+def probe_calls_without_a_runner(source: str) -> list[str]:
+    """Every call into the probe's entry points in ``source`` with no runner.
+
+    A pure function over text so the guard itself can be driven with synthetic
+    sources. A guard exercised only against the file it protects is a guard
+    nobody has seen catch anything.
+    """
+    tree = ast.parse(source)
+    aliases, direct = probe_import_names(tree)
+    offenders: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        spelling = None
+        if isinstance(func, ast.Attribute):
+            if (
+                isinstance(func.value, ast.Name)
+                and func.value.id in aliases
+                and func.attr in RUNNER_TAKING_CALLABLES
+            ):
+                spelling = f"{func.value.id}.{func.attr}"
+        elif isinstance(func, ast.Name) and func.id in direct:
+            spelling = func.id
+        if spelling is None:
+            continue
+        if not any(kw.arg == "runner" for kw in node.keywords):
+            offenders.append(f"line {node.lineno}: {spelling} with no runner=")
+    return offenders
+
+
 class TestThisModuleCanNeverSpawnTheRealSuite:
     """The probe collects this file too, so a stray default runner recurses."""
 
     def test_every_call_into_the_probe_here_injects_a_runner(self):
-        import ast
-
         source = Path(__file__).read_text(encoding="utf-8")
-        tree = ast.parse(source)
-        offenders: list[str] = []
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.Call):
-                continue
-            func = node.func
-            if not isinstance(func, ast.Attribute):
-                continue
-            if not isinstance(func.value, ast.Name) or func.value.id != "probe":
-                continue
-            if func.attr not in ("main", "probe"):
-                continue
-            if not any(kw.arg == "runner" for kw in node.keywords):
-                offenders.append(f"line {node.lineno}: probe.{func.attr} with no runner=")
+        offenders = probe_calls_without_a_runner(source)
         assert offenders == [], (
             "each of these would run the real suite, which runs this file, "
             "which would run the real suite again: " + "; ".join(offenders)
@@ -655,11 +699,88 @@ class TestThisModuleCanNeverSpawnTheRealSuite:
         """A negative assertion pins nothing down without this.
 
         If no ``probe.main``/``probe.probe`` call existed in this module at
-        all, the check above would pass on an empty list and mean nothing.
+        all, the check above would pass on an empty list and mean nothing. The
+        alias set is asserted too: a derivation that silently found no name to
+        watch would also report a clean list.
         """
         source = Path(__file__).read_text(encoding="utf-8")
+        aliases, _ = probe_import_names(ast.parse(source))
+        assert "probe" in aliases, (
+            "the guard derived no alias for the probe module, so its clean "
+            "list is a statement about nothing"
+        )
         assert source.count("probe.main(") >= 4
         assert source.count("probe.probe(") >= 1
+
+
+class TestTheRecursionGuardCatchesEverySpelling:
+    """``OPS-79`` criterion 4 - gap 3.
+
+    The guard used to walk for attribute calls on the literal name ``probe``,
+    so a direct import of an entry point by name followed by a call through
+    that name was invisible. The hazard it exists for is real and measured: a
+    mutation once let the probe reach its default runner from inside its own
+    run, and five nested suite processes were alive within two minutes.
+    """
+
+    ATTRIBUTE_SPELLING = (
+        "from tools import false_red_probe as probe\n"
+        "probe.main([])\n"
+    )
+    DIRECT_SPELLING = (
+        "from tools.false_red_probe import main\n"
+        "main([])\n"
+    )
+    DIRECT_SPELLING_WITH_RUNNER = (
+        "from tools.false_red_probe import main\n"
+        "main([], runner=fake)\n"
+    )
+    RENAMED_DIRECT_SPELLING = (
+        "from tools.false_red_probe import probe as run_the_whole_suite\n"
+        "run_the_whole_suite()\n"
+    )
+    ALIASED_MODULE_SPELLING = (
+        "import tools.false_red_probe as fr\n"
+        "fr.probe()\n"
+    )
+
+    def test_each_fixture_really_parses_and_really_calls_the_probe(self):
+        """The anchor. A fixture that did not parse would flag nothing."""
+        for source in (
+            self.ATTRIBUTE_SPELLING,
+            self.DIRECT_SPELLING,
+            self.DIRECT_SPELLING_WITH_RUNNER,
+            self.RENAMED_DIRECT_SPELLING,
+            self.ALIASED_MODULE_SPELLING,
+        ):
+            tree = ast.parse(source)
+            assert any(isinstance(n, ast.Call) for n in ast.walk(tree))
+
+    def test_the_old_attribute_spelling_is_still_caught(self):
+        assert probe_calls_without_a_runner(self.ATTRIBUTE_SPELLING)
+
+    def test_a_direct_import_called_by_name_is_caught(self):
+        offenders = probe_calls_without_a_runner(self.DIRECT_SPELLING)
+        assert offenders, (
+            "a bare main([]) after a direct import runs the real suite, and "
+            "the attribute-only guard could not see it"
+        )
+        assert "main" in offenders[0]
+
+    def test_a_direct_import_that_injects_a_runner_is_not_flagged(self):
+        assert probe_calls_without_a_runner(self.DIRECT_SPELLING_WITH_RUNNER) == []
+
+    def test_a_direct_import_renamed_on_the_way_in_is_caught(self):
+        assert probe_calls_without_a_runner(self.RENAMED_DIRECT_SPELLING)
+
+    def test_a_module_imported_under_another_alias_is_caught(self):
+        assert probe_calls_without_a_runner(self.ALIASED_MODULE_SPELLING)
+
+    def test_an_unrelated_function_of_the_same_name_is_not_flagged(self):
+        """The guard must not redden on any function that happens to be called
+        ``main``, or it becomes noise and someone weakens it."""
+        unrelated = "from somewhere.other import main\nmain([])\n"
+        assert probe_calls_without_a_runner(unrelated) == []
 
 
 #: The EXACT node id shape pytest produced on this machine for a control file
@@ -761,18 +882,8 @@ class TestTheControlsNeverPolluteTheRepositoryFigures:
                     False,
                 ),
                 "tests/t.py::test_plain": ("passed", False, False),
-                _mangled("test_control_false_red"): (
-                    "passed" if first else "failed",
-                    True,
-                    False,
-                ),
-                _mangled("test_control_clean_skip"): (
-                    "passed" if first else "skipped",
-                    first,
-                    True,
-                ),
-                _mangled("test_control_silent_pass"): ("passed", False, True),
             }
+            entries.update(_control_entries(first, _mangled))
             Path(record_path).write_text(_record(entries), encoding="ascii")
             return 0
 
@@ -808,10 +919,14 @@ class TestTheControlsNeverPolluteTheRepositoryFigures:
         report = probe.probe(
             runner=self._runner(), base_env={"PATH": "", "PATHEXT": ".EXE"}
         )
+        planted = len(probe.control_expectations())
+        assert planted >= 4, (
+            "the anchor: a control with no negative specimen is one-directional"
+        )
         assert report.with_total == 2
         assert report.without_total == 2
-        assert report.with_control_total == 3
-        assert report.without_control_total == 3
+        assert report.with_control_total == planted
+        assert report.without_control_total == planted
 
     def test_the_controls_get_their_own_stanza_in_the_report(self):
         report = probe.probe(
@@ -862,3 +977,254 @@ class TestTheDocstringRecordsTheAccountingDecision:
         collapsed = " ".join(probe.__doc__.split()).lower()
         assert "node id" in collapsed
         assert "first ``::``" in collapsed or "first separator" in collapsed
+
+
+# --------------------------------------------------------------------------
+# ROADMAP ``OPS-79``. Four gaps found by refuting this instrument, each with a
+# guard below. The item's own words: none of them makes the measurement wrong,
+# all of them make it narrower than it reads.
+# --------------------------------------------------------------------------
+
+
+def _plain_control_id(name: str) -> str:
+    """A planted control's node id in the in-tree shape."""
+    return f"{probe.CONTROL_MODULE_NAME}::{name}"
+
+
+def _control_entries(first, control_id):
+    """One run's worth of planted-control records, DERIVED from the expectations.
+
+    Derived rather than hardcoded on purpose. A fixture that lists three
+    specimens by name goes stale the moment a fourth is planted, and it goes
+    stale as a PASS - the new specimen is simply absent from the record, which
+    reads as a control the probe never saw and turns every assertion built on
+    it into a statement about a run that never happened.
+    """
+    entries = {}
+    for name, kind in probe.control_expectations().items():
+        nodeid = control_id(name)
+        if kind == "false_red":
+            entries[nodeid] = ("passed" if first else "failed", True, False)
+        elif kind == "clean_skip":
+            entries[nodeid] = ("passed" if first else "skipped", first, True)
+        elif kind == "silent_pass":
+            entries[nodeid] = ("passed", False, True)
+        else:
+            entries[nodeid] = ("passed", False, False)
+    return entries
+
+
+def _proving_runner(control_id=_plain_control_id, extra=None):
+    """A runner whose two calls prove the instrument and vary by CALL ORDER."""
+    calls = []
+
+    def runner(args, env, record_path):
+        calls.append(1)
+        entries = dict(extra or {})
+        entries.update(_control_entries(len(calls) == 1, control_id))
+        Path(record_path).write_text(_record(entries), encoding="ascii")
+        return 0
+
+    return runner
+
+
+class TestTheControlIsParameterisedByTheToolUnderTest:
+    """``OPS-79`` criterion 0 - gap 4, the largest of the four.
+
+    The planted control used to fix ``git`` in its own source, so every
+    ``--tool`` setting but one planted specimens that could not match: the run
+    reported UNPROVEN BY CONSTRUCTION while still printing a full set of
+    counts, and ``--tool bash`` printed 56 false reds that were an absence of
+    evidence rather than a finding.
+    """
+
+    def test_the_generated_source_names_the_tool_it_was_asked_for(self):
+        source = probe.control_module_source("bash")
+        assert 'TOOL = "bash"' in source
+        assert 'TOOL = "git"' not in source
+
+    def test_the_default_constant_is_the_default_tool(self):
+        default_source = probe.control_module_source(probe.TOOL_DEFAULT)
+        assert default_source == probe.CONTROL_MODULE_SOURCE
+
+    def test_a_parameterised_source_still_compiles_and_is_ascii(self):
+        source = probe.control_module_source("hg")
+        source.encode("ascii")
+        compile(source, "<control>", "exec")
+
+    def test_the_planted_file_on_disk_carries_the_requested_tool(self):
+        with probe.planted_controls(tool="bash") as control_path:
+            planted = control_path.read_text(encoding="ascii")
+        assert 'TOOL = "bash"' in planted
+
+    def test_the_probe_plants_the_tool_it_was_handed(self):
+        seen = []
+
+        def runner(args, env, record_path):
+            control = [a for a in args if a.endswith(probe.CONTROL_MODULE_NAME)]
+            assert control, "the anchor: the control path must be on the command line"
+            seen.append(Path(control[0]).read_text(encoding="ascii"))
+            Path(record_path).write_text(_record({}), encoding="ascii")
+            return 0
+
+        probe.probe(
+            tool="bash", runner=runner, base_env={"PATH": "", "PATHEXT": ".EXE"}
+        )
+        assert seen, "the runner was never called, so nothing was measured"
+        assert all('TOOL = "bash"' in text for text in seen)
+
+    def test_a_tool_name_that_could_inject_source_is_refused(self):
+        with pytest.raises(ValueError):
+            probe.control_module_source(chr(34) + chr(10) + "import os")
+
+    def test_an_unusable_tool_name_is_a_usage_error_not_a_traceback(self):
+        calls = []
+
+        def runner(args, env, record_path):
+            calls.append(1)
+            Path(record_path).write_text(_record({}), encoding="ascii")
+            return 0
+
+        bad = "a" + chr(34) + "b"
+        assert probe.main(["--tool", bad], runner=runner) == probe.USAGE_EXIT_CODE
+        assert calls == [], "a refused tool name must not reach a run"
+
+
+class TestTheControlHasANegativeSpecimen:
+    """``OPS-79`` criterion 1 - gap 1.
+
+    Three positive specimens prove the instrument can SEE and prove nothing
+    about whether it INVENTS. The refutation pass demonstrated it: a classifier
+    mutated to promote every ``untouched`` test to ``silent_pass`` still
+    reported the control PROVED, because all three specimens still landed on
+    their expected kind. A probe that called everything a finding passed its
+    own control.
+    """
+
+    def test_at_least_one_specimen_must_not_be_a_finding(self):
+        expected = probe.control_expectations()
+        assert probe.NEGATIVE_CONTROLS, (
+            "a control with no negative specimen is one-directional"
+        )
+        for name in probe.NEGATIVE_CONTROLS:
+            assert name in expected, f"{name} is named negative but has no expectation"
+            assert expected[name] not in probe.FINDING_KINDS
+
+    def test_the_negative_specimens_are_defined_in_the_planted_source(self):
+        source = probe.CONTROL_MODULE_SOURCE
+        for name in probe.NEGATIVE_CONTROLS:
+            assert f"def {name}(" in source
+
+    def test_the_pure_negative_specimen_touches_no_tool_at_all(self):
+        source = probe.CONTROL_MODULE_SOURCE
+        tree = ast.parse(source)
+        body = None
+        for node in tree.body:
+            if isinstance(node, ast.FunctionDef) and node.name == "test_control_untouched":
+                body = ast.get_source_segment(source, node)
+        assert body is not None, "the anchor: the pure negative specimen must exist"
+        assert "shutil" not in body
+        assert "subprocess" not in body
+
+    def _over_reporting(self):
+        """The refutation pass's mutation: every ``untouched`` becomes a finding."""
+        classified = []
+        with_run = {}
+        for name, kind in probe.control_expectations().items():
+            nodeid = _plain_control_id(name)
+            classified.append(
+                probe.Classification(
+                    nodeid=nodeid,
+                    kind="silent_pass" if kind == "untouched" else kind,
+                    detail="fixture",
+                    with_outcome="passed",
+                    without_outcome="x",
+                )
+            )
+            with_run[nodeid] = probe.TestOutcome(nodeid, "passed", True, True)
+        return tuple(classified), with_run
+
+    def test_an_over_reporting_classifier_fails_the_control(self):
+        classified, with_run = self._over_reporting()
+        promoted = [
+            c
+            for c in classified
+            if probe.control_test_name(c.nodeid) in probe.NEGATIVE_CONTROLS
+            and c.kind in probe.FINDING_KINDS
+        ]
+        assert promoted, "the anchor: the mutation must really have promoted something"
+        result = probe.evaluate_controls(classified, with_run)
+        assert result.proved is False
+        assert any("over-report" in note.lower() for note in result.missing)
+
+    def test_the_same_specimens_unmutated_still_prove_the_instrument(self):
+        classified = tuple(
+            probe.Classification(
+                nodeid=_plain_control_id(name),
+                kind=kind,
+                detail="fixture",
+                with_outcome="passed",
+                without_outcome="x",
+            )
+            for name, kind in probe.control_expectations().items()
+        )
+        with_run = {
+            c.nodeid: probe.TestOutcome(c.nodeid, "passed", True, True)
+            for c in classified
+        }
+        assert probe.evaluate_controls(classified, with_run).proved is True
+
+
+class TestTheReportStatesTheModuleLevelLimitation:
+    """``OPS-79`` criterion 2 - gap 2, the half that is a REPORT change.
+
+    Recognition of a module-level lookup was NOT adopted, so the limitation is
+    stated in the report itself rather than only in the docstring: a reader who
+    never opens the source must not be able to read ``silent_pass=0`` as a
+    clean bill of health.
+    """
+
+    def _rendered(self):
+        report = probe.probe(
+            runner=_proving_runner(), base_env={"PATH": "", "PATHEXT": ".EXE"}
+        )
+        assert report.controls.proved is True, (
+            "the anchor: the fixture must prove the run"
+        )
+        return probe.format_report(report)
+
+    def test_the_report_says_a_module_level_lookup_is_not_counted(self):
+        collapsed = " ".join(self._rendered().split()).lower()
+        assert "silent_pass" in collapsed
+        assert "module-level" in collapsed
+        assert "not a clean bill" in collapsed
+
+    def test_the_limitation_is_printed_even_when_no_silent_pass_was_found(self):
+        rendered = self._rendered()
+        kinds_line = next(
+            line for line in rendered.splitlines() if line.strip().startswith("kinds:")
+        )
+        assert "silent_pass" not in kinds_line, (
+            "the anchor: this fixture must have no repository silent_pass in it"
+        )
+        assert any(
+            line.strip().startswith("[limitation]") for line in rendered.splitlines()
+        )
+
+
+class TestTheDocstringExplainsTheModuleLevelMissCorrectly:
+    """``OPS-79`` criterion 3 - the filed diagnosis was wrong about the cause."""
+
+    def _collapsed(self):
+        return " ".join(probe.__doc__.split()).lower()
+
+    def test_it_names_the_attribution_window_as_the_mechanism(self):
+        collapsed = self._collapsed()
+        assert "pytest_runtest_logstart" in collapsed
+        assert "discarded" in collapsed
+
+    def test_it_records_that_the_earlier_explanation_was_wrong(self):
+        assert "was wrong about the mechanism" in self._collapsed()
+
+    def test_it_does_not_still_assert_the_wrapper_was_not_yet_loaded(self):
+        assert "already wrapped" in self._collapsed()

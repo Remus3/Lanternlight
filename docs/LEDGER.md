@@ -84,6 +84,34 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0225 - 2026-09-11 - Asked LW for their false-red plugin, on the operator's direct instruction, and said in the note what we will and will not do with it
+
+**Evidence:**
+- Operator instruction in chat, 2026-09-11: 'ask LW for the plugin'. That is the authorisation; no session decided to open a conversation. OPS-48's hold names RC and RSC, not LW.
+- Sent through ops.outbox.deliver, which keeps our own copy under moon_sync_inbox/_outbox/ and records who it went to and when, and which runs the redactor over the text and refuses BEFORE any write. Delivered to LW, no failures. Never written into a sibling directory by hand.
+- The note states up front that we will NOT vendor it: this repository is public and Apache-2.0 and a drop carrying no license statement cannot be copied in. It asks LW to name a license explicitly if they want it vendorable, and says that otherwise we read it for the idea and describe what we adopt in our own words, as we did with the lane-slot protocol.
+- It offers back the three things that cost this project the most: that our instrument declared itself UNPROVEN on its first real run and that this is the only reason its numbers are worth anything; that a control made only of positive specimens proves an instrument can SEE and not whether it INVENTS; and that a measured zero can be structurally guaranteed, which is not the same as reassuring.
+- It explicitly answers no open cross-project question and proposes no shared convention, and says so, because OPS-68 holds the responder runner and all propagation on standby.
+
+### LL-0224 - 2026-09-11 - bash reports 56 false reds and it is a result for the first time - with a caveat that narrows what it means, and it was NOT re-run by the merger
+
+**Evidence:**
+- With the control now parameterised, --tool bash reports positive control PROVED and 56 false reds across 6 files: test_no_pii 33, test_syntax_check_hook 8, test_precommit_gate_lint 7, test_docguards 7, test_precommit_hook_globbing 6, test_ascii_hygiene 1. The same 56 were visible before this cycle and were correctly refused as an absence of evidence, because the control was UNPROVEN by construction.
+- THE CAVEAT THAT MUST TRAVEL WITH THE NUMBER. Both runs were launched from Git Bash, because bash is not on the PATH this machine gives PowerShell. The three stripped entries are all ONE directory - Git's usr/bin - so a false red there says 'this broke when that DIRECTORY left the PATH', which is wider than 'this needs bash'. The tool name in the report is the question asked, not the dependency proved.
+- NOT INDEPENDENTLY RE-RUN BY THE MERGER. The git run was re-run and is quoted from the merger's own terminal; the bash figure is the implementing slice's measurement and is recorded as such. The next session re-runs it before acting on it.
+- Deliberately not acted on. Converting 56 call sites is OPS-78 criterion 4's business, and that criterion exists precisely to stop a policy proven for one tool being generalised to a second without asking.
+
+### LL-0223 - 2026-09-11 - OPS-79 closed - the false-red instrument was rebuilt under a result it had already produced, and the result survived
+
+**Evidence:**
+- Criterion 0: the planted control is generated from the tool under test instead of naming one, so --tool finally means something. The tool name is VALIDATED against a character set rather than escaped, because it is pasted into generated Python and a name that cannot be expressed safely should be refused rather than quoted; a bad name exits non-zero before anything is spawned.
+- Criterion 1: two negative specimens added, both expected to classify as untouched, plus an explicit OVER-REPORTS note when a negative lands on a finding kind. Watched red exactly the way the gap was found - a classifier mutated to promote every untouched test to a finding now takes eight tests down INCLUDING the control refusing to be proved, where before it passed.
+- Criterion 2: REPORT was chosen over RECOGNITION for the module-level lookup. Attributing it to every test in the file would reclassify whole modules as candidates and make the finding worthless, and it would have moved git's findings: 0. The limitation now prints UNCONDITIONALLY under the counts, because a conditional caveat is absent exactly when somebody is misreading the number.
+- Criterion 3: the docstring said the lookup was cached at import time before the plugin loads. Measured: the plugin is loaded before collection, so the wrapper IS installed and DOES fire - the mark is discarded because the recorder only holds a current test id between the per-test hooks and a module body runs at collection. The old explanation is recorded as wrong rather than quietly replaced.
+- Criterion 4: the recursion guard now catches a direct import, an as-rename and a module alias. Proved with real bait - the new walk names the offending line while the old attribute-only walk returned nothing on the same file.
+- THE CHECK THAT MATTERED, re-run by the merger: the git run still reports the control PROVED, now with five specimens, and clean_skip=216, exercised=99, skip_both=1, untouched=2746, findings: 0. Cycle 73's 187-to-0 result survived the instrument being rebuilt underneath it.
+- Suite this run: 3061 passed, 1 skipped. Ruff clean. Merge gate OK at 3062 collected with no per-file drop against the 62-file, 3038-test baseline; the probe's own test module went 63 to 87.
+
 ### LL-0222 - 2026-09-11 - The false-red probe's positive control is hardcoded to one tool, so every --tool run except git is unproven by construction - found by trying to use the flag
 
 **Evidence:**

@@ -3413,7 +3413,7 @@ exact failure this whole line of work exists to prevent. Filed as `OPS-79` gap 4
 precisely what criterion 4 was written to stop anyone forgetting.
 
 
-## OPS-79. Three gaps in the false-red probe's own instrument, found by refuting it - OPEN
+## OPS-79. Three gaps in the false-red probe's own instrument, found by refuting it - CLOSED 2026-09-11 (a fourth was added, and closed with them)
 
 Filed 2026-09-11 by the refutation pass over `OPS-74`, after that item had already
 been marked closed on the strength of a control it reports as PROVED. None of the
@@ -3475,6 +3475,63 @@ answer. This is what blocks `OPS-78` criterion 4.
    watching it redden.
 5. Every guard above is watched red under mutation, with the anchor asserted before
    any survivor is believed.
+
+
+### Outcome - CLOSED 2026-09-11 - all five criteria met, and `--tool` now means something
+
+**Criterion 0, the tool-parameterised control.** The planted control is generated
+from the tool under test instead of naming one. The tool name is VALIDATED against
+a character set rather than escaped, because it is pasted into generated Python
+and a name that cannot be expressed safely should be refused rather than quoted;
+a bad name exits non-zero before anything is spawned.
+
+**Criterion 1, the negative specimens.** Two were added, both expected to classify
+as untouched, and the control now emits an explicit OVER-REPORTS note when a
+negative lands on a finding kind. Watched red the way the gap was found: a
+classifier mutated to promote every untouched test to a finding takes eight tests
+down INCLUDING the control refusing to be proved, where before it passed.
+
+**Criterion 2, the silent-pass limitation - REPORT was chosen over RECOGNITION,
+and the reasoning matters.** Attributing a module-level lookup to every test in
+that file would reclassify whole modules as candidates and make the finding
+worthless - and it would have moved `git`'s `findings: 0`, which is a real result.
+So the limitation is PRINTED UNCONDITIONALLY under the counts instead. A
+conditional caveat is absent exactly when somebody is misreading the number.
+
+**Criterion 3, the docstring's wrong mechanism.** It said the lookup was cached at
+import time before the plugin loads. Measured: the plugin is loaded before
+collection, so the wrapper IS installed and DOES fire - the mark is discarded
+because the recorder only has a current test id between the per-test hooks, and a
+module body runs at collection. The old explanation is recorded as wrong rather
+than quietly replaced.
+
+**Criterion 4, the recursion guard.** Rewritten as pure functions that catch a
+direct import, an `as` rename and a module alias. Proved with real bait: the new
+walk names the offending line while the old attribute-only walk returned nothing
+on the same file.
+
+**BOTH RUNS NOW REPORT THE CONTROL PROVED, with five specimens.** The `git` run,
+re-run by the merger, is unchanged where it had to be: `clean_skip=216`,
+`exercised=99`, `skip_both=1`, `untouched=2746`, **`findings: 0`**. Cycle 73's
+result survived the instrument being rebuilt under it, which is the check that
+mattered.
+
+**`--tool bash` is a result for the first time: 56 false reds across 6 files** -
+`test_no_pii` 33, `test_syntax_check_hook` 8, `test_precommit_gate_lint` 7,
+`test_docguards` 7, `test_precommit_hook_globbing` 6, `test_ascii_hygiene` 1.
+Deliberately NOT acted on here; that is `OPS-78` criterion 4's input.
+
+**A caveat that must travel with that 56, and it narrows what it means.** Both
+runs were launched from Git Bash, because `bash` is not on the PATH this machine
+gives PowerShell. The three stripped entries are all one directory - Git's
+`usr/bin` - so a false red there says "this broke when that DIRECTORY left the
+PATH", which is wider than "this needs bash". Read the individual failures before
+converting any of them; the tool name in the report is the question asked, not the
+dependency proved.
+
+**This figure was NOT independently re-run by the merger.** The `git` run was; the
+`bash` run is the implementing slice's measurement, reported here as such. The
+next session should re-run it before acting on it.
 
 
 ## OPS-80. The documented remedy for a fired size budget does not apply anything - CLOSED 2026-09-11
