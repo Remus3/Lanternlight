@@ -5273,6 +5273,56 @@ it is simply narrower than the hazard.
    any survivor is believed.
 
 
+## OPS-80. The documented remedy for a fired size budget does not apply anything - OPEN, and it is the most URGENT item on this list
+
+Filed 2026-09-11. `ROADMAP.md` is at **0.5 sessions of headroom** and
+`docs/LEDGER.md` at 1.8. Neither has FIRED; both are warnings. The per-document
+budget will almost certainly fire during the next session.
+
+**THE TRAP, measured rather than assumed.** `CLAUDE.md` tells a session: "When a
+size budget fires, RE-RUN `tools/doc_archive.py`; do not raise the number." A
+session that does exactly that gets a report and no change. The module's own
+docstring is explicit and the behaviour matches it: "Nothing here opens a file for
+writing, and `main` is a DRY RUN that prints a report." Applying a plan is "a
+separate, deliberate act by whoever owns those documents."
+
+**That separation is correct and is not the defect.** The tool is a library of
+pure text-to-text functions with a conservation contract - it raises rather than
+returning a lossy plan - and the repository has been bitten by tools that did more
+than their name promised. The defect is that the INSTRUCTION describes a remedy
+the tool does not perform, so the one session most likely to read it is a cold one
+under a fired budget with no idea what to do next.
+
+**What the plan currently says it would move**, re-derive it rather than quoting:
+38 ROADMAP sections, 24 kept and 14 archived; 84 ledger entries, 60 kept and 24
+archived. Character counts, not git blob bytes - the budgets are derived from blob
+bytes and must be re-measured after any split is applied.
+
+### Acceptance
+
+1. The split is APPLIED to both documents, and every conservation property the
+   module already enforces is checked against the result rather than trusted: the
+   full-text equality check, not a length comparison and not a spot check. No
+   content deleted, no ledger entry edited, reordered or reflowed.
+2. Both budgets are re-derived from GIT BLOB BYTES afterwards with
+   `python -m tools.doc_size_budget`, and the numbers recorded in the ledger with a
+   date. A character count is not a blob count - `.gitattributes` pins these files
+   to LF, and this repository has already been caught by the difference.
+3. The archive index stubs resolve: every closed section has exactly one stub in
+   the live document pointing at the archived text, and `tools/archive_link_guard.py`
+   passes. A reader must reach every word in one hop.
+4. **`CLAUDE.md`'s instruction is corrected** to name the applying step, whatever
+   it turns out to be, so the next cold session under a fired budget is not sent to
+   a tool that writes nothing. This is the half that stops the trap recurring; the
+   split alone only postpones it.
+5. Whether the applying step becomes a flag on the existing tool, a separate
+   script, or a documented manual procedure is open - but the choice is recorded
+   with its reasoning, and the pure-function separation the module's docstring
+   defends is not quietly discarded to make this convenient.
+6. Every guard above is watched red under mutation, with the anchor asserted
+   before any survivor is believed.
+
+
 ## Archive index
 
 Every closed and refuted item is still here, one hop away, in
