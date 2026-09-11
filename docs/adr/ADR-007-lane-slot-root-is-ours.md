@@ -160,5 +160,24 @@ superseded by a new record, never edited into a different decision.
 
 ## Status
 
-Accepted. The lane-slot decision itself was ruled by the operator on 2026-09-07;
-the root location is this record's own decision and is revisable by a later ADR.
+**SUPERSEDED on 2026-09-10 by
+[ADR-008](ADR-008-join-the-shared-bucket.md).** The operator ruled in chat that
+day - "yes, join the shared bucket" - which is the ruling the "What would
+change this" section above asked for. Per that section, this record is
+superseded by a new one rather than edited into a different decision: everything
+above stands as the reasoning that was correct while it held, and ADR-008
+carries the decision now in force.
+
+Two parts of this record are specifically corrected there rather than merely
+replaced. Its claim that joining is "a CONFIGURATION act - one environment
+variable - and not a code change" was REFUTED by measurement on 2026-09-10:
+the reserved-first order would have written `reserved-ll.lock` into a bucket
+with no reserved names in it and would never have reached a surplus slot, so a
+bare environment-variable join would have rationed with nobody. And its note
+that three of the five payload fields were reconstructed rather than observed
+is now closed - all five were read off a live lock, and the `ts` unit was
+measured.
+
+The original status, kept for the record: Accepted. The lane-slot decision
+itself was ruled by the operator on 2026-09-07; the root location was this
+record's own decision and was revisable by a later ADR, which is what happened.

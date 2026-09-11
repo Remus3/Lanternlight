@@ -59,10 +59,54 @@ defect is not.
 Where the bucket lives
 ----------------------
 
-Deliberately inside this repository by default, and overridable by the
-environment variable named in :data:`ROOT_ENV_VAR`. The reasoning, and what it
-costs, is in ADR-007. Nothing here binds a port and nothing here is acquired at
-import time.
+**The shared machine-wide bucket, by operator ruling of 2026-09-10.** The
+default root is the all-users bucket the sibling loops already ration between
+themselves, resolved from the ``PROGRAMDATA`` environment variable rather than
+written here as an absolute path, and still overridable by the environment
+variable named in :data:`ROOT_ENV_VAR`. ADR-007 put the root inside this
+repository; ADR-008 supersedes it. Nothing here binds a port and nothing here
+is acquired at import time.
+
+Surplus-only until the widening lands
+-------------------------------------
+
+Joining is NOT one environment variable, which is what ADR-007 expected it to
+be. Measured on 2026-09-10, the shared bucket held one lock, ``0.lock``, and no
+reserved name of any kind. Pointing this module at it while keeping the
+reserved-first order of :func:`slot_order` would create ``reserved-ll.lock`` on
+essentially every acquire: a file no other participant's reaper recognises, so
+a leak of ours would sit there until our own stale arm fired, AND we would
+never contend for surplus, so we would not ration with anybody. That is the
+opposite of joining.
+
+So the order is decided by LOOKING at the bucket, in
+:func:`reserved_scheme_state`, and the look has three answers rather than two:
+
+``RESERVED_PRESENT``
+    Some other participant's ``reserved-<key>.lock`` is there, so the widening
+    has landed and our own floor is tried first, exactly as the agreed protocol
+    says. No code change is needed on the day this becomes true, because it
+    will become true in somebody else's tree on a day nobody tells us about.
+``RESERVED_ABSENT``
+    The bucket is readable and holds no reserved name. We contend for surplus
+    slots ONLY, on the same terms as everyone else, and never write a name the
+    others do not recognise.
+``RESERVED_UNKNOWN``
+    We could not look - the bucket is missing, unreadable, or the listing was
+    refused. This is NOT the same fact as ``RESERVED_ABSENT`` and is not
+    collapsed into it, even though both take the same branch. It takes the
+    surplus-only branch because the conservative direction is the one that does
+    not write an unrecognised file into a directory other projects share: a
+    failed look must never be the reason a stray ``reserved-ll.lock`` appears.
+
+Our OWN reserved lock is deliberately not counted as evidence. Evidence the
+observer produced is not evidence about the world, and counting it would latch
+the detector at ``RESERVED_PRESENT`` after a single write.
+
+:func:`acquire_lane` and :func:`hold_lane` are the operational entry points and
+apply all of the above. :func:`try_acquire` keeps its original contract - own
+floor, then surplus - for callers that state an order themselves, and refuses
+any order naming a file outside the scheme or another repository's floor.
 """
 
 from __future__ import annotations
@@ -81,23 +125,38 @@ __all__ = [
     "LaneSlotError",
     "LOCK_SUFFIX",
     "NoSlotAvailable",
+    "PROGRAMDATA_ENV_VAR",
     "REPO_KEY",
     "REPO_KEYS",
+    "RESERVED_ABSENT",
     "RESERVED_PREFIX",
+    "RESERVED_PRESENT",
+    "RESERVED_UNKNOWN",
     "ROOT_ENV_VAR",
+    "SHARED_BUCKET_RELATIVE",
+    "SHARED_SURPLUS_WIDTH",
     "STALE_SECONDS",
+    "SURPLUS_ENV_VAR",
     "SURPLUS_WIDTH",
     "UnknownRepoKey",
+    "acquire_lane",
+    "bucket_slot_order",
     "decode_payload",
     "default_root",
     "encode_payload",
     "hold",
+    "hold_lane",
     "holders",
+    "is_reserved_name",
     "is_slot_name",
     "is_stale",
     "reap",
     "release",
+    "repo_local_root",
     "reserved_name",
+    "reserved_scheme_state",
+    "shared_root",
+    "shared_surplus_width",
     "slot_order",
     "surplus_names",
     "try_acquire",
@@ -113,23 +172,63 @@ REPO_KEYS: tuple[str, ...] = ("rc", "lw", "rsc", "cs", "ll")
 RESERVED_PREFIX = "reserved-"
 LOCK_SUFFIX = ".lock"
 
-#: Surplus width - the free-for-all slots above the five reserved floors.
+#: Surplus width - the free-for-all slots above the five reserved floors, as
+#: the reserved-floor design describes them. This is the width :func:`slot_order`
+#: uses, and it is the PROPOSED scheme's width rather than the deployed one.
 SURPLUS_WIDTH = 2
+
+#: Environment variable that overrides the shared surplus width below, so a
+#: width correction needs no code change.
+SURPLUS_ENV_VAR = "LL_LANE_SLOT_SURPLUS"
+
+#: Surplus width to contend for in the SHARED bucket.
+#:
+#: PROVENANCE, because a number without one becomes a measurement by attrition:
+#: this is NOTE-SOURCED and was never measured here. The cross-project channel
+#: describes the deployed bucket as rationing three first-come slots. The only
+#: first-party look this project has taken at that bucket, on 2026-09-10, found
+#: a single lock in it, and one lock cannot reveal a width - so the channel's
+#: figure is adopted as a working default and not as an observation.
+#:
+#: Getting this wrong is not symmetric. Too small only costs us lanes we could
+#: have taken; too large creates a surplus index the deployed scheme may not
+#: hand out. :func:`is_slot_name` and :func:`reap` accept any digit index for
+#: that reason, so an index above anyone's width is still reclaimable by any
+#: implementation of this scheme rather than being litter forever.
+SHARED_SURPLUS_WIDTH = 3
 
 #: The stale arm, in seconds. Four and a half hours, matching the window the
 #: siblings' governor uses, so a lock this repository leaves behind is reclaimed
 #: on the same schedule a sibling would apply to it.
 STALE_SECONDS = 16200.0
 
-#: Set this to point the governor at a different bucket - for example a shared
-#: machine-wide one, if the operator ever rules that this repository should join
-#: one. Changing buckets is a configuration act, never a code change.
+#: Set this to point the governor at a different bucket - a private one for a
+#: test, or a relocated shared one. It wins over every default below.
 ROOT_ENV_VAR = "LL_LANE_SLOT_ROOT"
+
+#: The Windows all-users application-data root. The shared bucket is resolved
+#: THROUGH this rather than written out as an absolute path: a drive-rooted
+#: literal is both unportable and the shape of a hardcoded dependency, and
+#: ``tests/test_lane_slot.py`` pins that no such literal appears here.
+PROGRAMDATA_ENV_VAR = "PROGRAMDATA"
+
+#: The shared bucket's namespace under the all-users root. This spelling is a
+#: WIRE fact - the namespace every participant computes - and is the one thing
+#: we deliberately hold in common. It is not a dependency on a sibling's tree.
+SHARED_BUCKET_RELATIVE = Path("lw-loop") / "slots"
+
+#: The three answers :func:`reserved_scheme_state` may give. Three, not two:
+#: "I looked and found none" and "I could not look" are different facts, and a
+#: codebase that collapses them eventually acts on the wrong one.
+RESERVED_PRESENT = "present"
+RESERVED_ABSENT = "absent"
+RESERVED_UNKNOWN = "unknown"
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 
 #: Relative to the repository root. ``ops/runtime/`` is gitignored, so the
-#: bucket never reaches a commit.
+#: bucket never reaches a commit. This is the FALLBACK now rather than the
+#: default: it is used only when the all-users root cannot be resolved at all.
 _DEFAULT_RELATIVE = Path("ops") / "runtime" / "lane_slots"
 
 _STILL_ACTIVE = 259
@@ -183,17 +282,63 @@ class Held:
     reserved: bool
 
 
+def repo_local_root() -> Path:
+    """The private in-repository bucket, kept as a fallback.
+
+    ADR-007 made this the default. ADR-008 supersedes that, but the path stays
+    reachable, because a machine with no all-users root would otherwise have no
+    bucket at all and the governor would stop bounding even our own loop.
+    """
+    return _REPO_ROOT / _DEFAULT_RELATIVE
+
+
+def shared_root() -> Path | None:
+    """The shared machine-wide bucket, or ``None`` if it cannot be resolved.
+
+    ``None`` is a real answer rather than a guess. If the all-users root is not
+    in the environment, this function does not invent a drive letter for it.
+    """
+    base = os.environ.get(PROGRAMDATA_ENV_VAR)
+    if not base or not base.strip():
+        return None
+    return Path(base) / SHARED_BUCKET_RELATIVE
+
+
 def default_root() -> Path:
     """The bucket this repository uses, resolved but NOT created.
 
-    Creating it here would make merely importing something that reads the
-    default enough to materialise a bucket, which is the import-time side effect
-    this module refuses to have.
+    Order: the explicit override, then the shared machine-wide bucket, then the
+    in-repository fallback. Creating anything here would make merely importing
+    something that reads the default enough to materialise a bucket, which is
+    the import-time side effect this module refuses to have.
     """
     override = os.environ.get(ROOT_ENV_VAR)
     if override:
         return Path(override)
-    return _REPO_ROOT / _DEFAULT_RELATIVE
+    shared = shared_root()
+    if shared is not None:
+        return shared
+    return repo_local_root()
+
+
+def shared_surplus_width() -> int:
+    """The surplus width to contend for, override first.
+
+    An override that is not a usable width falls back to the documented default
+    rather than propagating. A governor that refuses to start because somebody
+    typed a word into an environment variable turns a typo into an outage, and
+    the fallback is a published number rather than an invented one.
+    """
+    raw = os.environ.get(SURPLUS_ENV_VAR)
+    if raw is None:
+        return SHARED_SURPLUS_WIDTH
+    try:
+        width = int(raw.strip())
+    except (AttributeError, ValueError):
+        return SHARED_SURPLUS_WIDTH
+    if width < 0:
+        return SHARED_SURPLUS_WIDTH
+    return width
 
 
 def reserved_name(key: str) -> str:
@@ -227,7 +372,83 @@ def is_slot_name(name: str) -> bool:
     stem = name[: -len(LOCK_SUFFIX)]
     if stem.startswith(RESERVED_PREFIX):
         return stem[len(RESERVED_PREFIX) :] in REPO_KEYS
+    # Any digit index, deliberately - including one above the width we ourselves
+    # contend for. A shared bucket is wider than our contention window, and a
+    # reaper blind to `2.lock` leaves somebody's leak there forever.
     return stem.isdigit()
+
+
+def is_reserved_name(name: str) -> bool:
+    """True for a reserved lock filename belonging to any agreed key."""
+    if not is_slot_name(name):
+        return False
+    return name.startswith(RESERVED_PREFIX)
+
+
+def reserved_scheme_state(root: Path | str, key: str = REPO_KEY) -> str:
+    """Has the reserved-floor widening landed in this bucket? Three answers.
+
+    Returns :data:`RESERVED_PRESENT`, :data:`RESERVED_ABSENT` or
+    :data:`RESERVED_UNKNOWN`. The third is not a flavour of the second: absent
+    means the bucket was read and held no reserved name, while unknown means the
+    read did not happen - the directory is missing, or the listing was refused.
+    Both take the same branch in :func:`bucket_slot_order`, and they are still
+    reported apart, because an operator debugging a bucket needs to know which
+    of the two they are looking at.
+
+    Two deliberate narrownesses:
+
+    * Only NAMES are examined. No lock is opened, so a half-written or
+      unreadable payload cannot take detection down, and reading cannot hold a
+      handle that blocks its owner's unlink.
+    * ``reserved_name(key)`` - our own floor - does not count. Evidence the
+      observer produced is not evidence about the world; counting it would latch
+      this at ``RESERVED_PRESENT`` after a single write of our own and the check
+      would then be measuring our own footprint.
+
+    Creates nothing. A bucket that is not there stays not there.
+    """
+    bucket = Path(root)
+    ours = reserved_name(key) if key in REPO_KEYS else None
+    try:
+        entries = list(bucket.iterdir())
+    except OSError:
+        # FileNotFoundError, NotADirectoryError and PermissionError all land
+        # here, and all three mean the same thing to a caller: we did not look.
+        return RESERVED_UNKNOWN
+    for entry in entries:
+        if entry.name == ours:
+            continue
+        if is_reserved_name(entry.name):
+            return RESERVED_PRESENT
+    return RESERVED_ABSENT
+
+
+def bucket_slot_order(
+    root: Path | str,
+    key: str = REPO_KEY,
+    surplus: int | None = None,
+    *,
+    state: str | None = None,
+) -> tuple[str, ...]:
+    """Slot names in try order for THIS bucket, decided by looking at it.
+
+    Reserved-first when the widening has landed there, surplus-only otherwise -
+    and surplus-only when we could not look, because the conservative direction
+    is the one that does not write an unrecognised file into a directory other
+    projects share. The transition needs no code change here: it happens when
+    somebody else's tree starts writing reserved names, on a day nobody tells
+    us about.
+
+    ``surplus`` defaults to :func:`shared_surplus_width`. ``state`` is for a
+    caller that already measured it and does not want a second listing.
+    """
+    _require_known_key(key)
+    width = shared_surplus_width() if surplus is None else int(surplus)
+    resolved = reserved_scheme_state(root, key) if state is None else state
+    if resolved == RESERVED_PRESENT:
+        return (reserved_name(key), *surplus_names(width))
+    return surplus_names(width)
 
 
 def encode_payload(*, pid: int, repo: str, run_id: str, cycle: int, ts: float | None = None) -> str:
@@ -452,6 +673,33 @@ def _claim(path: Path, payload: str) -> bool:
     return True
 
 
+def _require_our_slot_names(order, key: str) -> tuple[str, ...]:
+    """Refuse an order that would put a file we do not own into the bucket.
+
+    Two refusals, both about a SHARED directory. A name outside the scheme is
+    litter nobody's reaper will ever recognise, and another repository's
+    reserved name is its floor - the one guarantee the whole design exists to
+    give it. Neither is a thing to write by accident, and the only way to write
+    either is to pass an explicit order, so the check lives here.
+    """
+    names = tuple(order)
+    ours = reserved_name(key)
+    for name in names:
+        if not is_slot_name(name):
+            raise LaneSlotError(
+                f"{name!r} is not a name this scheme owns - refusing to create "
+                "it, because an unrecognised file in a shared bucket is litter "
+                "no participant's reaper will reclaim."
+            )
+        if is_reserved_name(name) and name != ours:
+            raise LaneSlotError(
+                f"{name!r} is another repository's reserved floor - refusing to "
+                f"take it. This repository may only ever take {ours!r} or a "
+                "surplus slot."
+            )
+    return names
+
+
 def try_acquire(
     root: Path | str,
     key: str = REPO_KEY,
@@ -460,20 +708,27 @@ def try_acquire(
     run_id: str,
     cycle: int,
     surplus: int = SURPLUS_WIDTH,
+    order=None,
 ) -> Held | None:
     """Take a lane if one is available. Never blocks; ``None`` means busy.
 
-    Order is own floor, then surplus. The key is validated BEFORE the bucket is
-    created, so a misconfigured caller leaves no trace behind.
+    Order is own floor, then surplus, unless ``order`` states one - which is how
+    :func:`acquire_lane` supplies a surplus-only order for a shared bucket that
+    has no reserved names in it yet. The key is validated BEFORE the bucket is
+    created, so a misconfigured caller leaves no trace behind, and so is the
+    order, so a bad one leaves none either.
     """
     _require_known_key(key)
+    candidates = _require_our_slot_names(
+        slot_order(key, surplus) if order is None else order, key
+    )
     bucket = Path(root)
     try:
         bucket.mkdir(parents=True, exist_ok=True)
     except OSError:
         return None
     payload = encode_payload(pid=os.getpid(), repo=repo, run_id=run_id, cycle=cycle)
-    for name in slot_order(key, surplus):
+    for name in candidates:
         path = bucket / name
         if _claim(path, payload):
             return Held(
@@ -561,6 +816,59 @@ def hold(
     """
     held = try_acquire(
         root, key, repo=repo, run_id=run_id, cycle=cycle, surplus=surplus
+    )
+    try:
+        yield held
+    finally:
+        if held is not None:
+            release(held, log=log)
+
+
+def acquire_lane(
+    *,
+    repo: str,
+    run_id: str,
+    cycle: int,
+    key: str = REPO_KEY,
+    root: Path | str | None = None,
+    surplus: int | None = None,
+) -> Held | None:
+    """Take a lane in the bucket this repository actually uses.
+
+    THE OPERATIONAL ENTRY POINT. It resolves :func:`default_root` - the shared
+    machine-wide bucket, by the operator's ruling of 2026-09-10 - looks at that
+    bucket's shape, and contends on whatever terms the shape implies. Callers
+    that want to bound only their own concurrency pass ``root`` explicitly.
+
+    ``None`` means busy, exactly as :func:`try_acquire` means it.
+    """
+    bucket = default_root() if root is None else Path(root)
+    order = bucket_slot_order(bucket, key, surplus)
+    return try_acquire(
+        bucket, key, repo=repo, run_id=run_id, cycle=cycle, order=order
+    )
+
+
+@contextlib.contextmanager
+def hold_lane(
+    *,
+    repo: str,
+    run_id: str,
+    cycle: int,
+    key: str = REPO_KEY,
+    root: Path | str | None = None,
+    surplus: int | None = None,
+    log=None,
+) -> Iterator[Held | None]:
+    """:func:`acquire_lane` for the duration of a block, released on the way out.
+
+    Yields ``None`` when the bucket is full rather than blocking, for the same
+    reason :func:`hold` does: a governor that blocks by default turns a
+    coordination miss into a hang, and the caller is the one that knows what a
+    busy machine means for it.
+    """
+    held = acquire_lane(
+        repo=repo, run_id=run_id, cycle=cycle, key=key, root=root, surplus=surplus
     )
     try:
         yield held

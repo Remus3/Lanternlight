@@ -532,6 +532,31 @@ KNOWN_NON_HOSTS = frozenset(
         # so cannot be retired that way. It is the durable half of the same
         # defect.
         "slot.STALE",
+        # THE LANE-SLOT WIRE NAMES, added 2026-09-10 when `ADR-008` joined the
+        # shared bucket and had to write the protocol's filenames down. Looked
+        # at, all four: three are LOCK FILENAMES in the cross-project bucket
+        # and one is truncation debris.
+        #
+        # `0.lock`, `1.lock` and `reserved-ll.lock` are files that exist on a
+        # shared machine-wide directory rather than in this repository, so
+        # `is_repo_filename` cannot absorb them no matter what we stage - the
+        # tracked-file oracle only knows OUR files. `.lock` parses as a
+        # TLD-shaped tail. These are the wire and they have to appear verbatim
+        # in a document whose whole job is to let a cold session interoperate.
+        #
+        # `slot.default` is the truncation of `lane_slot.default_root` at its
+        # underscore, the same shape as `slot.STALE` directly above.
+        #
+        # A NOTE ON THE ONE THAT IS NOT HERE. `ADR-008-join-the-shared-bucket.md`
+        # was refused by this same check and is deliberately absent: it is a
+        # real file in this repository, and STAGING it made
+        # `is_repo_filename` cover it. That is the `git.py` sequence from
+        # earlier the same day, applied on purpose rather than learned again -
+        # stage a new file first, then decide what is genuinely left over.
+        "0.lock",
+        "1.lock",
+        "reserved-ll.lock",
+        "slot.default",
         # A git CONFIG KEY, quoted by `LL-0169` and `OPS-49`. `core.filemode`
         # is not a host and not a file; `.filemode` simply parses as a TLD-
         # shaped tail. Looked at before adding, per the regenerating note.
