@@ -25,6 +25,7 @@ the stash, and watches the detector go quiet once the objects are pruned. A
 detector that has only ever been shown hand-built snapshots has not been tested.
 """
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -44,12 +45,31 @@ from ops import store_drift  # noqa: E402
 TEST_IDENTITY = ("Drift Fixture", "drift@example.invalid")
 
 
-def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
+#: A fixed instant for commits whose OBJECT IDENTITY a test depends on -
+#: ``OPS-72``. A git commit object embeds its author and committer timestamps at
+#: WHOLE-SECOND resolution, so two otherwise identical commits hash to one
+#: object only when they are written inside the same second. A test that relies
+#: on that collision is a test that passes on an idle machine and fails on a
+#: loaded one, which is what this constant removes.
+FIXED_COMMIT_DATE = "2026-09-08T00:00:00+00:00"
+
+
+def _git(
+    repo: Path, *args: str, env_extra: dict[str, str] | None = None
+) -> subprocess.CompletedProcess:
     """Run one git command in ``repo``, raising if it fails.
 
     Raising is correct HERE and wrong in the module under test: a broken
     fixture must fail loudly, while a broken probe at merge time must report.
+
+    ``env_extra`` overlays the inherited environment, which is how a caller
+    pins ``GIT_AUTHOR_DATE`` and ``GIT_COMMITTER_DATE``. It is an overlay rather
+    than a replacement because git needs the rest of the environment - PATH
+    above all - to run at all.
     """
+    env = None
+    if env_extra:
+        env = {**os.environ, **env_extra}
     return subprocess.run(
         ["git", *args],
         cwd=repo,
@@ -57,6 +77,19 @@ def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
         text=True,
         check=True,
         timeout=120,
+        env=env,
+    )
+
+
+def _git_at_fixed_time(repo: Path, *args: str) -> subprocess.CompletedProcess:
+    """Run one git command with both commit timestamps pinned - ``OPS-72``."""
+    return _git(
+        repo,
+        *args,
+        env_extra={
+            "GIT_AUTHOR_DATE": FIXED_COMMIT_DATE,
+            "GIT_COMMITTER_DATE": FIXED_COMMIT_DATE,
+        },
     )
 
 
@@ -552,19 +585,30 @@ class TestTheArithmeticThatWasWrong:
         """The deduplication counterexample, built by running the real commands.
 
         The second stash's ``index on `` commit has the same tree, the same
-        parent and the same subject as the first one, so it hashes to the same
-        object and git stores one commit rather than two. N stashes taken from
-        an unchanged index leave N+1 commits, not 2N.
+        parent, the same subject AND THE SAME TIMESTAMPS as the first one, so it
+        hashes to the same object and git stores one commit rather than two. N
+        stashes taken from an unchanged index leave N+1 commits, not 2N.
+
+        **The timestamps are in that list because leaving them out made this
+        test flaky - ``OPS-72``.** A commit object embeds its author and
+        committer times at whole-second resolution, so the collision this test
+        is about happens only when both stashes are written inside the same
+        second. On an idle machine they always were; under a loaded full-suite
+        run they straddled a second boundary, git wrote two distinct ``index
+        on `` commits, and the count came out 4 instead of 3. The failure was
+        real arithmetic about a real pair of objects - not a fluke - and the
+        fix is to pin the instant so the collision is deterministic, NOT to
+        retry until the race is won.
         """
         repo = _new_repo(tmp_path / "dedup")
         before = store_drift.snapshot(repo)
 
         (repo / "a.txt").write_text("one\ntwo\n", encoding="utf-8", newline="\n")
-        _git(repo, "stash", "push", "-q", "-m", "first stash")
+        _git_at_fixed_time(repo, "stash", "push", "-q", "-m", "first stash")
         _git(repo, "stash", "drop", "-q")
 
         (repo / "a.txt").write_text("one\ntwo\nthree\n", encoding="utf-8", newline="\n")
-        _git(repo, "stash", "-q")
+        _git_at_fixed_time(repo, "stash", "-q")
         _git(repo, "stash", "drop", "-q")
 
         report = store_drift.compare(before, store_drift.snapshot(repo))

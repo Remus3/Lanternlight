@@ -6,15 +6,6 @@ forward. It is written by ops/handoff.py, never by an editor tool.
 Resume Lanternlight from disk. Read CLAUDE.md, then this file, then ROADMAP.md
 and docs/LEDGER.md newest-first. Ask nothing; start work.
 
-READ FIRST, IN THIS ORDER
-  CLAUDE.md           - unchanged this session.
-  docs/LEDGER.md      - newest first. LL-0207 and LL-0208 are this session.
-                        Read LL-0207 first if you read only one: the refutation
-                        pass broke BOTH of that item's closures before they
-                        landed, and neither finding was a count.
-  ROADMAP.md          - OPS-69 and OPS-70 CLOSED, OPS-71 filed, OPS-35
-                        criterion 1 met with the item still OPEN.
-
 FIRST ACTION, BEFORE ANY WORK
 Run `python ops/inbox_watch.py` and READ the output. A plain run REPORTS ONLY.
 Acknowledge with `python ops/inbox_watch.py --acknowledge`, and only for notes
@@ -27,255 +18,209 @@ Run `python ops/stop_audit.py --show-last`. A FAIL line is a QUESTION about what
 the last turn wrote, not a verdict - it cannot tell a claim from a QUOTATION of
 one.
 
-HELD BY THE OPERATOR - DO NOT ACT ON ANY OF THESE ALONE
+=== YOUR FIRST SUBSTANTIVE ACT: ARM THE LANE ===
+
+THE OPERATOR INSTRUCTED THIS IN CHAT ON 2026-09-10: "re arm the lane next
+session". NEXT SESSION IS YOU. The lane-slot work landed as CODE and was
+deliberately NOT armed by the session that wrote it, so arming is a first-class
+task rather than something to fold into other work.
+
+WHAT CHANGED, so you know what you are arming. The operator also ruled, the same
+day, "yes, join the shared bucket". ops/lane_slot.py now defaults its lock root
+to the SHARED MACHINE-WIDE BUCKET at %PROGRAMDATA%\lw-loop\slots instead of the
+in-repository bucket ADR-007 chose. Read docs/adr/ADR-008-join-the-shared-bucket.md
+first; ADR-007 is marked superseded rather than rewritten.
+
+  The join is SURPLUS-ONLY while that bucket contains no reserved-*.lock. Our
+  own floor is not a candidate in that state, on purpose: writing reserved-ll.lock
+  into a bucket where no participant's reaper recognises it would leave our leaks
+  there forever while we rationed with nobody.
+
+  ARMING MEANS ACTUALLY TAKING A SLOT. Verify it, do not assume: read the bucket
+  back and confirm a lock carrying OUR payload is present while a lane is held,
+  and confirm it is GONE after release. A join nobody turns on is not a join, and
+  a join nobody verified is a claim.
+
+  NOTHING CURRENTLY CALLS acquire_lane OR hold_lane. The refutation pass checked
+  the whole tree: those names appear only in ops/lane_slot.py, tests, and the
+  ADR. There is no consumer in ops/loop or tools. So arming is a WIRING job, not
+  a flag flip, and you get to choose where the loop acquires - which is a design
+  decision worth making deliberately rather than by the first convenient import.
+
+  RE-MEASURE THESE, DO NOT QUOTE THEM. At the wrap the bucket held exactly one
+  lock, 0.lock, whose holder pid was DEAD and whose ts was 30.5 hours old - stale
+  by both arms, unreclaimed by anyone for over a day. And NO reserved-*.lock
+  existed, so the widening had not landed. Both can change without anyone telling
+  us; that is precisely why detection is conditional on the observed shape.
+
+  OUR REAPER WILL RECLAIM THAT LEAKED LOCK when you arm. That is the protocol
+  working, not us deleting a sibling's file - but know it is going to happen
+  before it happens.
+
+=== HELD BY THE OPERATOR - DO NOT ACT ON THESE ALONE ===
+
 OPS-68. The responder runner and cross-project propagation are on STANDBY by the
 operator's own words on 2026-09-08: "standby on this decision then, i will keep
 it to the test for now", answered to BOTH the authority question and the
-propagation question. NOTHING WAS BUILT AND NOTHING WAS SENT, this session
-included. Do not start building one, and in particular do not build "the safe
-version first" - that is a session choosing a default and calling it modesty.
-The four runner shapes and three propagation shapes are recorded verbatim in
-OPS-68 so the standby resumes from the same menu.
+propagation question. NOTHING HAS BEEN BUILT AND NOTHING HAS BEEN SENT. Do not
+start building one, and in particular do not build "the safe version first" -
+that is a session choosing a default and calling it modesty.
 
-OPS-48 remains HELD on RC's and RSC's results - do not answer its four questions
-and do not solicit RC or RSC.
+OPS-48 remains HELD - do not answer its four questions, do not solicit RC or RSC.
 
-OPS-35 and OPS-36 are OPEN and operator-RULED: the operator ruled ADOPT, so the
-DECISION is settled and the acceptance criteria are ours to meet. That is not
-the same as the two items above, and this session acted on OPS-35 accordingly.
+OPS-36 ROUTES THROUGH THE SAME CLOSED GATE. It was operator-ruled ADOPT, which
+reads as actionable, but its criterion 1 needs RC to say which charter version is
+CURRENT - four arrived inside about four hours, several superseding each other -
+and criteria 2 to 4 all depend on that. Asking RC is soliciting RC.
 
-THREE RSC NOTES WERE READ THIS SESSION AND NONE WANTS A REPLY. All three say so
-explicitly, and one exists purely to correct RSC's own broadcast error. They
-confirm the standby is ORDERED rather than dissent, and ask that nobody later
-cite our silence as a position we did not take. Their one transferable idea -
-build a guard in BOTH directions or it reports clean against the half it cannot
-see - is the same finding as OPS-69 and arrived independently. Nothing was sent.
+=== WHAT HAPPENED THIS SESSION - four items, five commits, all pushed ===
 
-WHAT CLOSED THIS SESSION - two commits, 49dc2a6 and 1e4b4d1, both pushed
   OPS-69  CLOSED. docs/INVENTORY.md was guarded in ONE direction. The reverse
           property now enforces a stated scope. The item predicted three missing
           modules; the guard found 37, and tools/ had no section at all.
   OPS-70  CLOSED. tools/hook_command_guard.py now reads permissions.* as well as
-          hooks.*, and its OK line states its own scope. Criterion 1 was answered
-          with an explicit DECLINE - see OPS-71.
-  OPS-71  FILED. The portable successor to the three absolute permission rules.
-  OPS-35  criterion 1 MET, item still OPEN. Nothing under moon_sync_inbox/ can
-          reach git. THEN the operator lifted the criterion 2 gate, and acting
-          on that revealed criteria 2, 3, 4 and 6 had ALREADY BEEN MET on
-          2026-09-07 - see below, and read it before you touch this item.
+          hooks.*, and its OK line states its own scope.
+  OPS-71  FILED. The portable successor to the three absolute permission rules;
+          needs a session in DEFAULT permission mode, in a clone at another path.
+  OPS-35  criteria 1 to 4 and 6 MET, criterion 5 UNBLOCKED but NOT MET.
+  OPS-72  FILED AND CLOSED - an intermittent store-drift guard, diagnosed as
+          a one-second committer-timestamp race and fixed by construction.
+  OPS-73  FILED - two silent holes in the join, below.
 
-THE REFUTATION PASS EARNED ITS COST TWICE, AND NEITHER FINDING WAS A COUNT.
-This is the change from the last four sessions, where the wrap kept catching
-numbers in prose. Here it caught BEHAVIOUR:
+=== THE THING TO LEARN FROM THIS SESSION, IF YOU READ ONLY ONE PART ===
 
-  1. OPS-70's first closure shipped a WORKING BYPASS of the property it claimed.
-     A permission rule with a TRAILING SPACE was never scanned, because the
-     splitter required a closing parenthesis and returned the rule unsplit when
-     it found none. The UNC backslash spelling was missed because the permission
-     side held a hand-written near-copy of the UNC pattern instead of the
-     pattern itself. Both are the item's own shape - a guard whose green line
-     answers a narrower question than a reader assumes - reappearing INSIDE the
-     fix for it.
-  2. The guard was PRINTING "Measured for OPS-70" in its user-facing finding
-     text when nothing had been measured. That is the worst place in the file
-     for a false provenance, because it is read by someone who has just been
-     told something is wrong. MATCHER_CLAIM_PROVENANCE now says it is an
-     inference, and a test asserts the word "measured" is absent from the detail.
-  3. OPS-69's new guard was TOO LOOSE FOR THE SENTENCE STANDING IN FRONT OF IT.
-     docs/INVENTORY.md claimed every tests/test_*.py appears in one of its two
-     tables; that was FALSE, and the omitted file was tests/test_inventory.py
-     itself. The guard missed it because it asked whether a name appears
-     ANYWHERE while the sentence claimed the TABLES. There is now a test
-     requiring a table row and a second test pinning the sentence to the guard.
+AN ITEM TOLD THIS SESSION ITS OWN STATUS AND THE ITEM WAS WRONG. OPS-35 said
+criteria 2 through 6 were untouched. Four of them had been met on 2026-09-07 and
+nobody had updated the item. The merger then WROTE THAT FALSE CLAIM FORWARD into
+ROADMAP.md, twice, by reading the item rather than the tree - in the very session
+that closed two items about verdicts that are true of a narrower question than a
+reader assumes. Both copies are corrected in place rather than deleted, because
+the operator was asked a question that rested on the premise.
 
-THE MERGER'S OWN REFUTATION WAS REFUTED TWICE, BY THE MERGER. Two independent
-re-probes of the UNC repair reported BYPASS and both were WRONG: the probe's
-escaping lost a backslash, so the string under test was not a UNC path at all.
-Built with chr(92) and verified by its on-disk repr, the guard catches it. An
-earlier probe of the inventory returned "80 of 81 missing" - also the probe, a
-naive backtick regex desynchronizing on fenced ``` blocks. BOTH TIMES THE FIRST
-INSTINCT WAS TO DISBELIEVE THE AGENT RATHER THAN THE PROBE. A result too extreme
-to be plausible is a claim about your pattern.
+  IF AN ITEM TELLS YOU ITS OWN STATUS, MEASURE IT. And a session that asks the
+  operator for a ruling owns the facts in the question - the drop OPS-35 asked
+  about had been swept from the channel three days before the question was put.
 
-THE COMMIT GATE CAUGHT WHAT A GREEN FULL SUITE COULD NOT, and this one is worth
-carrying forward as a technique. "git.py" was added to KNOWN_NON_HOSTS while
-tests/test_no_inbox_in_git.py was still UNTRACKED, and the full suite agreed it
-was needed. STAGING the file made is_repo_filename cover the fragment, the entry
-became redundant, and the pre-commit hook refused the commit. git ls-files
-answers differently before and after staging, so a guard consulting it returns a
-DIFFERENT VERDICT at suite time than at commit time. That is why the hook runs
-the doc-reading subset against the STAGED tree. IF YOU ADD A DENYLIST ENTRY FOR
-A FILE YOU ARE ALSO CREATING, STAGE FIRST AND THEN DECIDE.
+=== OPS-73, YOUR SECOND ITEM - two SILENT failures in the join ===
 
-A WRONG DATE REACHED TWO FILES IN EIGHT PLACES - a repair slice stamped
-2026-09-09 for work done on 2026-09-10. Caught at the merge against the machine
-clock in local AND UTC, so no midnight ambiguity could excuse it. Note for the
-next wrap: this project dates by LOCAL time - the machine is UTC-5, so a session
-working late is already on the next UTC day while its ledger entries are not.
+Neither blocks the join. Both are cases where a wrong answer is quiet.
 
-THE OPERATOR ANSWERED THE OPS-35 GATE ON 2026-09-10: "yes, write it from the
-drop". Acting on that produced a refutation rather than a document, and this is
-the single most important thing in this hand-off.
+  HOLE 1. REPO_KEYS holds five short codes - rc, lw, rsc, cs, ll - but CLAUDE.md's
+  own ports table lists SEVEN projects. Red Moon and Daemon Slayer have no agreed
+  code recorded here. reserved_scheme_state() only recognises a reserved name for
+  a key IN that set, so a bucket whose only reserved name is reserved-ds.lock
+  reads as RESERVED_ABSENT. THE WIDENING COULD LAND AND WE WOULD NEVER NOTICE,
+  and the failure looks exactly like correct pre-widening behaviour. Do NOT fix
+  it by widening is_slot_name - that is deliberately narrow so a reaper never
+  deletes what it does not understand. The question is whether DETECTION should
+  use a wider alphabet than CLAIMING does.
 
-  THE DROP IS GONE. OPS-35 refers to a source drop at
-  moon_sync_inbox/from-RC-verbatim/. That directory does not exist. Measured:
-  132 files, 130 .md plus one .txt and one .json, ZERO .py anywhere, _outbox/
-  the only subdirectory. An RSC note of 2026-09-07 reports its drop "swept
-  clean", so it was deliberately removed. What remains is about 29 notes
-  DESCRIBING the lock in prose, which is a licensing-safer source than code.
+  HOLE 2. A PROGRAMDATA pointing at a FILE gives a permanent silent "busy": the
+  root resolves under the file, mkdir fails, acquire_lane returns None forever,
+  and a caller cannot tell that from a full bucket. That is what UnknownRepoKey's
+  own docstring condemns, one level down in root resolution.
 
-  CRITERION 2 DID NOT NEED WRITING - IT WAS WRITTEN ON 2026-09-07. Four of the
-  six criteria were already met and the item said otherwise:
-    2  docs/adr/ADR-007-lane-slot-root-is-ours.md, section "The protocol,
-       reconstructed in our own words"
-    3  tests/test_lane_slot.py::TestIdentityNotPath
-    4  tests/test_lane_slot.py::TestNothingHappensAtImportTime
-    6  mutation recorded in docs/LEDGER.md, including dropping the
-       exclusive-create in ops/lane_slot.py
-  ops/lane_slot.py is 21,061 bytes; tests/test_lane_slot.py collects 45, all
-  passing, re-measured 2026-09-10.
+=== OPS-72 WAS FILED AND CLOSED IN THE SAME SESSION ===
 
-  THE MERGER WROTE A FALSE CLAIM INTO ROADMAP.md EARLIER THE SAME SESSION -
-  "Criteria 2 through 6 are untouched" - by reading the ITEM rather than the
-  TREE, in the very session that closed two items about guards whose green line
-  answers a narrower question than a reader assumes. Both copies are corrected
-  in place rather than deleted, because the recorded question was asked on the
-  strength of that premise. IF AN ITEM TELLS YOU ITS OWN STATUS, MEASURE IT.
+A store-drift guard failed intermittently. It was filed rather than dismissed,
+then it FAILED AGAIN during the wrap's own final run - and that second failure,
+in isolation on a loaded machine, is what made it fixable.
 
-THE REAL REMAINING GATE ON OPS-35 IS CRITERION 5, AND IT IS AN OPERATOR RULING
-RATHER THAN WORK. ADR-007 deliberately put our lock root INSIDE this repository
-at ops/runtime/lane_slots/, overridable by LL_LANE_SLOT_ROOT, instead of joining
-the machine-wide bucket several siblings ration between themselves. Its reasons
-are recorded there: the reserved-floor widening has not landed, so a reserved
-lock in today's deployed bucket is a file no sibling's reaper recognises, and a
-surplus lock is a slot taken from trees already rationing three. Either is a
-unilateral change to another project's concurrency - the same class of act as
-using a neighbour's port block.
+  THE MECHANISM. The test asserts that two stashes from an unchanged index leave
+  THREE commits, because the second stash's `index on ` commit has the same tree,
+  parent and subject as the first and so hashes to the same object. Incomplete: a
+  commit object ALSO embeds author and committer timestamps at WHOLE-SECOND
+  resolution. The collision happens only when both stashes are written inside the
+  same second. Under load they straddled a boundary, git wrote two distinct
+  objects, and the count came out 4. The two `index on master` entries in the
+  failure report carried DIFFERENT SHAs, which is what settles it - a dedup
+  failure and a miscount look identical in the number alone.
 
-  So the question is: DOES LANTERNLIGHT JOIN THE SHARED BUCKET? It is one
-  environment variable rather than a code change, which makes it look small and
-  is exactly why it needs the ruling. ADR-007 asks that it be taken in a round
-  with the other carriers so the width and the reserved names land in the same
-  window. Until then criterion 5 stays open and so does the item, which is what
-  that criterion instructs.
+  FIXED BY CONSTRUCTION. GIT_AUTHOR_DATE and GIT_COMMITTER_DATE are pinned for
+  the commands whose object identity the test depends on. No retry, no sleep, no
+  widened assertion. Proved both ways with a deliberately forced 2 second gap:
+  pinned it passes, unpinned it fails.
 
-ONE NUMBER IN OUR IMPLEMENTATION IS OURS RATHER THAN THE CHANNEL'S.
-lane_slot.STALE_SECONDS is 16200.0. The corpus says "4.5 hours" in four separate
-notes and NEVER states a seconds value or a constant name, so 16200 is our own
-arithmetic. It is correct, and ADR-007 writes both forms - but a sibling that
-spells the window differently would not be caught by comparing constants.
+  THE DOCSTRING WAS THE REAL BUG and is corrected - it listed tree, parent and
+  subject and omitted the timestamps, which is why the test was written in a way
+  that could race at all.
 
-A FACTUAL ERROR IN OPS-35'S PREAMBLE IS CORRECTED IN THE ITEM: it called the
-lock "slots.py over a Windows named mutex in winmutex.py", conflating two
-unrelated mechanisms. The slot lock is a DIRECTORY OF LOCK FILES claimed by
-atomic exclusive create, with no mutex in it; the named-mutex module guards a
-different resource. Nothing we built depended on the error.
+=== HOW THE VERIFICATION WAS DONE, worth copying ===
 
-IF THE GATE IS STILL UNANSWERED, the actionable queue is EMPTY of anything that
-does not need the operator or the game:
-  OPS-36  ROUTES THROUGH THE SAME CLOSED GATE, so do not pick it up expecting
-          different weather. It was operator-ruled ADOPT, but its criterion 1
-          requires RC to identify which charter version is CURRENT - four
-          versions arrived on the channel inside about four hours, several
-          superseding each other - and criteria 2 through 4 all depend on
-          knowing that. Asking RC is soliciting RC. Checked this session and
-          left untouched for exactly that reason.
-  OPS-71  needs a session in DEFAULT permission mode, in a clone at another
-          path. It CANNOT be settled in bypass permissions mode by any probe -
-          that is the whole reason it exists as an item.
-  OPS-72  FILED THIS SESSION AND IS THE ONE ACTIONABLE ITEM LEFT. A
-          store-drift guard failed ONCE in a full run and would not reproduce -
-          five green runs after one red, including three of that module alone.
-          Recorded rather than dismissed because an intermittent guard failure
-          is what a later green run quietly buries. Do NOT fix it with a retry,
-          a sleep, or a widened tolerance: a guard that passes on the second
-          attempt reports clean about a different attempt, which is the exact
-          defect OPS-69 and OPS-70 were both about. "Could not reproduce in N
-          runs" is an acceptable result; "probably a flake" is not.
-  5, 6, 7 blocked on the game. NO NEW GAME DATA SINCE 2026-08-30. Do not
-          schedule a capture session; fold those into whichever session next has
-          the game running.
-Ask, do not guess:
-    python -c "from ops.loop import watch; print(watch.check_watcher().reason)"
-and read it as an UPPER BOUND.
+The safety-critical claim was that nothing in this repository can write to a
+SHARED directory other projects' live loops depend on. It was INSTRUMENTED rather
+than asserted: the refuter wrapped the standard library's file-creating, writing
+and removing entry points, filtered to the shared prefix, and ran the suite under
+it. ITS POSITIVE CONTROL FIRED FIRST, proving the instrument could see a write
+before the zero result was believed. Zero hits across 676 tests. The merger
+separately snapshotted the bucket - names, sizes, mtimes, sha256, directory mtime
+- before and after a full run and it was byte-identical.
 
-STATE AT THE WRAP - RE-DERIVE RATHER THAN QUOTING
-  suite             2835 passed, 1 skipped on the working tree; 2836 collected.
-                    Run it bare - pytest.ini already carries -q, so a second one
-                    prints NO summary line at all and still exits 0.
-  baseline          2828 at this session's last dispatch. Measure your own with
-                    `python -m pytest --collect-only -q` before dispatching; a
-                    count checked into a file goes stale and becomes a confident
-                    lie.
+  A NEGATIVE RESULT FROM AN UNPROVEN INSTRUMENT IS NOT A RESULT. That is the same
+  rule as the crashed grep, the taskkill that killed nothing, and the two BYPASS
+  readings this session produced from its own escaping losing a backslash.
+
+=== A NEW TEST MODULE COSTS THREE EDITS, NOT ONE ===
+
+Row in docs/INVENTORY.md (OPS-69, or tests/test_inventory.py reddens), an owner
+in ops/lanes.py (or tests/test_lanes.py reddens), and a regenerated contract via
+`python scripts/write_lane_contracts.py` (or tests/test_lane_contract.py
+reddens). All three fired on this session's new file, in that order, all correct.
+
+ALSO: IF YOU ADD A KNOWN_NON_HOSTS ENTRY FOR A FILE YOU ARE ALSO CREATING, STAGE
+FIRST AND THEN DECIDE. git ls-files answers differently before and after staging,
+so the tracked-file oracle may absorb the token and make your entry redundant -
+and a redundant entry there is the hiding place that module's docstring warns
+about. The commit gate caught exactly this, on a green suite, twice this session.
+
+=== STATE AT THE WRAP - RE-DERIVE RATHER THAN QUOTING ===
+
+  suite             re-derive it. The last clean observation before the wrap
+                    commit is quoted in the commit message; OPS-72's timestamp
+                    race, which made counts here non-reproducible, is CLOSED.
+                    Run it bare - pytest.ini already carries -q, and a second one
+                    prints NO summary line at all while still exiting 0.
   ruff              All checks passed.
-  origin/main       1e4b4d1 at the last push, plus whatever this wrap commits.
-                    NOTE main has NO UPSTREAM in .git/config, so a bare
-                    `git push` FAILS and its advice text reads like success when
-                    piped to tail. Use `git push origin main`, then re-derive
-                    with `git rev-parse HEAD origin/main`.
-  loop              in_flight empty; all slices retired.
+  origin/main       confirm with `git rev-parse HEAD origin/main`. NOTE main has
+                    NO UPSTREAM in .git/config, so a bare `git push` FAILS and its
+                    advice text reads like success when piped to tail. Use
+                    `git push origin main`.
+  loop              cycle 70, item OPS-35, in_flight empty.
   capture watcher   ARMED, identity confirmed, heartbeat inside its threshold.
-                    ARCHIVE state UNKNOWN, which is correct and is a THIRD
-                    answer: the live process was armed by a build older than
-                    OPS-59 and writes no archive map. Not a report that nothing
-                    was copied.
-  budgets           ROADMAP.md IS NOW IN LOW HEADROOM AND THAT IS NEW. Measured
-                    at this wrap: ROADMAP.md 282,036 bytes, 1.8 sessions of
-                    headroom, which trips the checker's LOW HEADROOM warning
-                    (under 2.0). docs/LEDGER.md 352,699 bytes, 2.4 sessions.
-                    The last wrap read 2.9 and 3.3, so both moved a full session
-                    in one sitting - three items and three ledger entries is
-                    what that costs.
-                    THE WARNING IS NOT THE FAILURE. The checker still reports
-                    OK, and the documented trigger is the budget FIRING, so this
-                    wrap did NOT restructure the documents on its own. YOU
-                    probably will: expect ROADMAP.md to fire early in your
-                    session. When it does, RE-RUN `python tools/doc_archive.py`
+                    ARCHIVE state UNKNOWN, which is a THIRD answer and correct:
+                    the live process was armed by a build older than OPS-59 and
+                    writes no archive map. NOT a report that nothing was copied.
+  budgets           ROADMAP.md IS IN LOW HEADROOM and moved a long way today.
+                    Re-measure with `python -m tools.doc_size_budget`. When the
+                    per-document budget FIRES, RE-RUN `python tools/doc_archive.py`
                     and do NOT raise the number. The closed OPS-69 and OPS-70
-                    blocks are the obvious mass to move.
-                    The OPS-62 PAIR channel reads about 10.9 and is a DIFFERENT
-                    event with NO MECHANICAL REMEDY, because the pair total is
-                    exactly what a split does not change. It is an OPERATOR
+                    blocks are the obvious mass to move. The OPS-62 PAIR channel
+                    is a DIFFERENT event with NO MECHANICAL REMEDY - a pair total
+                    is exactly what a split does not change - and is an OPERATOR
                     DECISION GATE. NOBODY RAISES A PAIR BUDGET SILENTLY.
-  KNOWN_NON_HOSTS   five net new entries this session after one was added and
-                    withdrawn, against four in the previous session. The RATE is
-                    the finding, and it has a cause: OPS-69 and OPS-70 made this
-                    project write more prose about its own files and config keys
-                    than it ever has, and every dotted fragment parses as
-                    host-shaped. OPS-63 refuted the pattern-level fix two
-                    sessions ago at 45 retired against 52 introduced - that
-                    measurement is stale and the input has changed.
 
-BEFORE DISPATCHING PARALLEL WORK
+=== BEFORE DISPATCHING PARALLEL WORK ===
+
 Read SHARED_WORKTREE_BAN in ops/store_drift.py and put it in every slice brief -
 it is ADVISORY and nothing enforces it. Record dispatches with state.dispatch(),
 read state.in_flight_summary(state.load()) FIRST, and capture a per-file baseline
 AT DISPATCH to hand the merge gate as per_file_baseline. A repository TOTAL is
 safe for one worker and unsafe for several.
 
-  DO NOT RUN TWO PYTEST PROCESSES AT ONCE. Give every slice a targeted run over
-  its OWN test files and keep the full suite for the merge. Three pairs ran that
-  way this session with no spurious red.
+  DO NOT RUN TWO PYTEST PROCESSES AT ONCE. Targeted runs per slice; full suite at
+  the merge only. RETIRE YOUR SLICES - state.retire() is ITEM-scoped.
 
-  RETIRE YOUR SLICES. state.retire() is ITEM-scoped, not lane-scoped.
+  A SLICE'S REPORT IS A HYPOTHESIS. Every implementation slice this session told
+  the merger something that was not true: a module documenting its own
+  vacuousness when it did not, a bypass "fixed" by a mechanism that was not the
+  mechanism, and an ADR claiming test isolation it did not have. All were caught
+  by re-probing. None were caught by the suite.
 
-  A NEW TEST MODULE NOW COSTS THREE EDITS, NOT ONE. It needs a row in
-  docs/INVENTORY.md (OPS-69, or tests/test_inventory.py goes red), an owner in
-  ops/lanes.py (or tests/test_lanes.py goes red), and a regenerated contract via
-  `python scripts/write_lane_contracts.py` (or tests/test_lane_contract.py goes
-  red). All three fired on this session's one new file, in that order, and all
-  three were correct. Tell your slices this up front.
+=== HOW TO WRITE THE NEXT HAND-OFF ===
 
-  A SLICE'S REPORT IS A HYPOTHESIS. Both implementation slices this session
-  reported something to the merger that was not true - one said a module
-  documented its own vacuousness when it did not, one claimed a bypass was fixed
-  by a mechanism that was not the mechanism. Re-derive before writing anything
-  into a closed section.
-
-HOW TO WRITE THE NEXT HAND-OFF
     python ops/handoff.py --from-file <draft>
+
 OMIT --target - OPS-65. The writer resolves its own root from its own file
 location, so a wrap writes the hand-off of THE TREE IT IS WRAPPING. It runs the
 redactor over the STRING and refuses BEFORE anything is written, so a refusal
-leaves the previous hand-off byte-unchanged. --check-only reports without
-writing.
+leaves the previous hand-off byte-unchanged. --check-only reports without writing.

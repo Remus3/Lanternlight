@@ -555,7 +555,21 @@ KNOWN_NON_HOSTS = frozenset(
         # stage a new file first, then decide what is genuinely left over.
         "0.lock",
         "1.lock",
+        "2.lock",
         "reserved-ll.lock",
+        # `reserved-ds.lock` is the same family, quoted in `OPS-73` as the
+        # example of a widening this project's key set cannot currently see.
+        "reserved-ds.lock",
+        # `slot.REPO` is the truncation of `lane_slot.REPO_KEYS`, the third in
+        # this module's `lane_slot.*` set after `slot.STALE` and `slot.default`.
+        "slot.REPO",
+        # `tools.doc` is the truncation of the module path in the command
+        # `python -m tools.doc_size_budget`, cut at the underscore. Looked at:
+        # not a host. It is registered rather than reworded because the string
+        # is a COMMAND a reader types - CLAUDE.md's terseness rule explicitly
+        # exempts byte-exact content, and paraphrasing a command to satisfy a
+        # guard would break the thing the guard is protecting.
+        "tools.doc",
         "slot.default",
         # A git CONFIG KEY, quoted by `LL-0169` and `OPS-49`. `core.filemode`
         # is not a host and not a file; `.filemode` simply parses as a TLD-

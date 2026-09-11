@@ -1164,7 +1164,7 @@ It was written on 2026-09-07**, and the work is on disk:
 | 2. Protocol written down in our own words first | **MET 2026-09-07** | `docs/adr/ADR-007-lane-slot-root-is-ours.md`, section "The protocol, reconstructed in our own words" |
 | 3. Keys on IDENTITY, not on the filesystem path | **MET 2026-09-07** | `tests/test_lane_slot.py::TestIdentityNotPath::test_a_renamed_root_still_holds_the_same_reservation` |
 | 4. Never acquired at import time | **MET 2026-09-07** | `tests/test_lane_slot.py::TestNothingHappensAtImportTime` |
-| 5. Interoperation proven against a REAL sibling holder | **NOT MET, deferred by decision** | `ADR-007` says so in its own Consequences section rather than hedging it out |
+| 5. Interoperation proven against a REAL sibling holder | **NOT MET - UNBLOCKED 2026-09-10, awaiting the arm** | joined by operator ruling, see `ADR-008`; the proof needs this project to actually HOLD a slot in the shared bucket, which is next session's first act |
 | 6. Every guard watched red under mutation | **MET 2026-09-07** | recorded in `docs/LEDGER.md`, including an independent mutation of `ops/lane_slot.py` dropping the exclusive-create |
 
 `ops/lane_slot.py` is 21,061 bytes and `tests/test_lane_slot.py` collects 45
@@ -1213,6 +1213,64 @@ create - there is no mutex in it - while the named-mutex module guards a
 different resource entirely. Nothing in our implementation depended on the
 error, because the protocol section was reconstructed from behaviour rather than
 from the preamble.
+
+### Criterion 5 UNBLOCKED by operator ruling - 2026-09-10 - still NOT MET
+
+**The operator ruled in chat: "yes, join the shared bucket".** That answers the
+question the section above left open. `ADR-008` records the decision and
+supersedes `ADR-007`, which is marked superseded rather than rewritten because
+`ADR-007` itself instructed exactly that.
+
+**`ADR-007`'s claim that joining is one environment variable was REFUTED by
+measurement**, and this is the substance of the change. The shared bucket holds
+NO `reserved-*.lock` of any kind, so the reserved-floor widening has not landed.
+`slot_order` tries our own floor FIRST, so a bare env-var join would have created
+`reserved-ll.lock` on nearly every acquire - a file no sibling's reaper
+recognises, so any leak of ours would sit there indefinitely - and we would never
+have contended for surplus, which means we would not have rationed with anybody.
+That is the opposite of joining.
+
+**What landed instead is conditional on the bucket's OBSERVED SHAPE.**
+`reserved_scheme_state()` answers three ways - present, absent, or could-not-look
+- and the third is a distinct value rather than a dressed-up "absent", which is
+the distinction this repository keeps having to re-learn. Could-not-look takes
+the surplus-only branch, because the conservative direction is the one that never
+writes an unrecognised file into a shared directory. When reserved names appear -
+in somebody else's tree, on a day nobody tells us about - our own floor is tried
+first again with no code change here.
+
+Verified read-only against the live bucket: the join order is `0.lock`, `1.lock`,
+`2.lock` with no reserved name, while `slot_order("ll")` still returns
+`reserved-ll.lock` first. The agreed protocol is untouched; only the DEPLOYMENT
+POLICY is conditional.
+
+**First first-party evidence for the wire.** The live lock's payload carries
+exactly `cycle`, `pid`, `repo`, `run_id` and `ts`, and `ts` is unix epoch seconds
+as a float. `ADR-007` had recorded that only `pid` and `repo` were ever seen
+verbatim and that the other three were reconstructed from a quoted call
+signature. All five are now OBSERVED, and the `ts` unit that was an open gap is
+measured. The reconstruction written from prose alone was correct.
+
+**A leaked slot has been sitting in that bucket unreclaimed.** The single lock
+present belongs to a holder whose pid is DEAD, with a `ts` 30.5 hours old - stale
+by both arms and unreclaimed by anyone for over a day. If the deployed bucket
+really rations three slots, one of them has been dark that whole time. Our reaper
+handles both naming schemes, so arming will reclaim it.
+
+**WHY THIS CRITERION IS STILL NOT MET.** The operator asked for the lane to be
+re-armed NEXT session, so this session landed the code and deliberately did NOT
+take a slot. Joining by configuration is not the same fact as interoperating: the
+criterion asks for interoperation PROVEN against a real sibling holder, and that
+needs this project to actually hold a slot in the shared bucket while another
+project is using it. Until that is observed, this stays open - and a mock proving
+we agree with ourselves is the two-agents-agreeing failure in a new costume,
+which is what the criterion says in its own words.
+
+**The costs, stated rather than hedged out.** We now consume a slot the siblings
+were rationing between themselves; that is what the operator ruled and it is not
+free. Our leaks now land in a shared directory where our own stale arm remains
+the only thing that reclaims them, because a repository-local reaper is the only
+one that knows our keys.
 
 ## OPS-36. Adopt CONVERGENCE CHARTER v4 as written - OPEN, operator-ruled 2026-09-07
 
@@ -4441,7 +4499,7 @@ is why nothing is urgent about this item.
 4. A DECLINE remains acceptable if the observation says the current rules are
    correct, provided the decline carries the observation behind it.
 
-## OPS-72. A store-drift guard FAILED ONCE in a full run and will not reproduce - OPEN
+## OPS-72. A store-drift guard failed intermittently - a one-second committer-timestamp race - CLOSED 2026-09-10
 
 Filed 2026-09-10. Recorded rather than dismissed, because an intermittent
 failure in a guard is the one kind this project cannot afford to forget: the
@@ -4470,6 +4528,81 @@ is recorded as one.
 None of that explains the failure. Five green runs after one red is consistent
 with a flake AND with an order-dependence that the second full run happened not
 to hit, and this item exists because those two are different facts.
+
+**A CAUSE WAS NAMED LATER THE SAME DAY, by the wrap's refutation pass, and it
+reproduced the failure rather than reasoning about it.** The assertion that
+failed is `assert 4 == 3`, and the diagnosis is a ONE-SECOND COMMITTER-TIMESTAMP
+RACE: git stamps commits at whole-second resolution, so two stashes taken inside
+the same second produce a different object count from two taken across a second
+boundary. That is why it fails rarely and why every deliberate re-run passes -
+a re-run is slower than the path that loses the race.
+
+**This downgrades the mystery but not the item.** What remains is criterion 4's
+question rather than criterion 1's: the guard as written is timing-dependent,
+and a guard that is right 99 times in 100 is a guard that will be believed on the
+hundredth. The fix is to make the arithmetic independent of commit timestamps,
+NOT to retry it.
+
+**It also costs this session a number.** Any "2863 passed" quoted from a single
+run of this suite is not strictly reproducible while this stands, which is worth
+knowing before anyone treats a pass count here as a fingerprint.
+
+### Outcome - CLOSED 2026-09-10
+
+**It reproduced, in the same session, and that is what made the fix possible.**
+The wrap's final full run failed it a SECOND time, and this time it failed in
+ISOLATION too - where it had passed three times out of three a few hours
+earlier. The difference was machine load: that full run took 20 minutes against
+a normal 4.
+
+**The mechanism, at the level of the objects rather than "git was busy".** The
+test asserts that two stashes taken from an unchanged index leave THREE commits,
+not four, because the second stash's `index on ` commit has the same tree, the
+same parent and the same subject as the first and therefore hashes to the same
+object. That reasoning was incomplete. A git commit object ALSO embeds its
+author and committer timestamps, at WHOLE-SECOND resolution. The two `index on `
+commits collide only when both stashes are written inside the same second. On an
+idle machine they always were; under load they straddled a boundary, git wrote
+two distinct objects, and the count was 4.
+
+The failing report named all four commits, and the two `index on master` entries
+carried DIFFERENT SHAs - which is the observation that settles it, because a
+dedup failure and a miscount look identical in the number alone.
+
+**The fix is by construction, not by tolerance.** `GIT_AUTHOR_DATE` and
+`GIT_COMMITTER_DATE` are pinned to a fixed instant for the two stash commands
+whose object identity the test depends on. The collision is now deterministic.
+No retry, no sleep, no widened assertion - criterion 4 forbade all three, and the
+reason it forbade them is that a guard which passes on the second attempt is
+reporting clean about a different attempt.
+
+**Proved in BOTH directions, with a deliberately forced race.** A 2 second gap
+was inserted between the two stashes, guaranteeing a second-boundary crossing:
+
+    with the timestamps pinned, and a 2 s gap      1 passed
+    with the pinning removed, and the same gap     1 failed
+
+so the pinning is load-bearing rather than decoration. Each probe asserted its
+anchor was present before mutating, asserted the mutation was on disk, and
+restored the file byte-identically afterwards.
+
+**The docstring was wrong and is corrected, which is the durable half.** It
+listed tree, parent and subject as the reasons two commits hash alike and omitted
+the timestamps. That omission is why the test was written in a way that could
+race at all, so the fix is not complete until the sentence that misled its author
+is fixed too.
+
+### Acceptance, met
+
+1. **Met.** Reproduced twice, the second time in isolation, and then forced on
+   demand rather than waited for.
+2. **Met.** Named at the mechanism: whole-second timestamps inside the commit
+   object, with the two differing SHAs as the evidence.
+3. **Met.** It was environmental - machine load - and the module now says so in
+   the test's own docstring and beside the new constant.
+4. **Met.** No retry, sleep or widened tolerance was added. The only sleep used
+   was in a throwaway probe that was restored.
+
 
 **Why it is plausible rather than obviously spurious.** That module builds real
 throwaway git repositories and counts objects in the store, and the class under
@@ -4500,6 +4633,62 @@ be found.
 4. No retry, sleep, or widened tolerance is added to make it green. If the
    assertion is genuinely too strict, that is a separate finding and is argued
    on its own evidence.
+
+
+## OPS-73. Two holes in the lane-slot join, both found by the wrap that shipped it - OPEN
+
+Filed 2026-09-10 by the refutation pass over `ADR-008`. Neither blocks the join
+and neither is a reason to revert it; both are cases where a wrong answer is
+SILENT, which is this repository's standing definition of the dangerous kind.
+
+**Hole 1: the key set cannot see two of the machine's projects, so the
+transition that is supposed to fire automatically might never fire.**
+`ops.lane_slot.REPO_KEYS` is `("rc", "lw", "rsc", "cs", "ll")` - the five short
+codes the channel agreed. But `CLAUDE.md`'s own ports table lists SEVEN projects
+on this machine: Red Moon and Daemon Slayer are not in that set and have no
+agreed short code recorded here.
+
+That matters because of how the join decides its order.
+`reserved_scheme_state()` recognises a reserved name only for a key in
+`REPO_KEYS`, so a bucket containing `reserved-ds.lock` and nothing else reads as
+`RESERVED_ABSENT` - not as unknown, and not as present. **The reserved-floor
+widening could land and we would not notice**, and we would keep taking surplus
+slots while every other participant had moved to floors. The failure is silent
+and looks exactly like the correct pre-widening behaviour.
+
+Note what this is NOT: it is not an argument for accepting any `reserved-*.lock`
+whatsoever. `is_slot_name` is deliberately narrow so that a reaper never deletes
+a file it does not understand, and widening that is how a reaper eventually
+eats somebody's notes. The question is narrower - whether DETECTION should use a
+wider alphabet than CLAIMING does.
+
+**Hole 2: a `PROGRAMDATA` pointing at a FILE produces a permanent, silent
+"busy".** Measured: the root resolves to a path underneath the file, `mkdir`
+then fails, and `acquire_lane` returns `None` on every call forever. A caller
+cannot distinguish that from a genuinely full bucket. It is precisely the shape
+`UnknownRepoKey`'s own docstring condemns - "a silent fallback presents as a busy
+bucket and gets debugged as one" - reappearing one level down, in the root
+resolution rather than in the key. Relatedly, `shared_root()` strips whitespace
+from its input while the `LL_LANE_SLOT_ROOT` override branch does not, so an
+override of `"   "` yields `Path("   ")` rather than being ignored.
+
+### Acceptance
+
+1. A bucket whose only reserved name belongs to a project outside `REPO_KEYS` is
+   distinguishable from a bucket with no reserved names at all. Whether that is
+   a wider detection alphabet, a third state, or a recorded decision to accept
+   the blindness is open - but if it is accepted, the ACCEPTANCE is written down
+   and tested, because an undisclosed blind spot is the defect `OPS-70` closed.
+2. The short codes for Red Moon and Daemon Slayer are either recorded here with
+   their provenance, or recorded as NOT KNOWN TO US. A guess is not permitted:
+   inventing a key for another project is exactly the kind of unilateral act
+   `ADR-008` was careful to avoid.
+3. An unusable lock root - a file, a path under a file, an unwritable directory -
+   is reported as UNUSABLE rather than as a bucket that is merely busy. A caller
+   that cannot start must be able to say why.
+4. The override branch and `shared_root()` agree about whitespace.
+5. Every guard above is watched red under mutation, with the anchor asserted
+   before any survivor is believed.
 
 
 ## Archive index

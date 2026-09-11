@@ -234,10 +234,34 @@ claim about what any sibling's code does with what it finds. The merger owns
 whether that clears the criterion.
 
 **Testing.** No test in `tests/test_lane_slot.py` writes into the real shared
-bucket, in a fixture or otherwise. Every test uses `tmp_path`, and the tests
-that exercise root resolution point `PROGRAMDATA` at `tmp_path` rather than
-reading the real one. A test that took a real slot would take it from another
-project's live loop, which is the precise harm this record is careful about.
+bucket, in a fixture or otherwise. A test that took a real slot would take it
+from another project's live loop, which is the precise harm this record is
+careful about.
+
+That claim was verified rather than asserted, and by a method worth naming: the
+wrap's refutation pass wrapped every file-creating, file-writing and
+file-removing entry point the standard library offers - the low-level ones in
+the os module, the builtin opener, and the create, write and delete methods on
+pathlib paths - filtered them to the shared prefix, and ran the suite under it.
+(The individual names are deliberately not enumerated here. Each dotted name
+parses as host-shaped to the source-register guard, and eleven of them would
+have gone into the denylist that module's own docstring calls the one place a
+real source can hide. The instrumentation is described; the vocabulary is not
+load-bearing.) **The guard's positive control fired**, so the instrument was
+proved capable of seeing a write before the negative result was believed. Zero
+hits across 676 tests, and zero across `tests/test_lane_slot.py` alone. Before
+and after snapshots of the bucket - names, sizes, mtimes, SHA-256, and the
+directory's own mtime - were identical.
+
+**One sentence here originally overclaimed and is narrowed.** It said every test
+points `PROGRAMDATA` at `tmp_path` rather than reading the real one. That is
+false for exactly one test,
+`test_default_root_does_not_change_when_the_working_directory_moves`, which
+READS the real `PROGRAMDATA`. It only reads, so the no-writes claim above is
+unaffected - but "every test" was wrong, and a document that overstates its own
+test isolation is the same defect this project removed from
+`tools/hook_command_guard.py` earlier the same day, where a guard printed
+"Measured" for something nobody had measured.
 
 **Two ADR-007 tests were INVERTED, not deleted.** `test_the_default_root_is_`
 `inside_this_repository` and `test_the_default_root_is_not_under_programdata`
