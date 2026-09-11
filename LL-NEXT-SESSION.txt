@@ -219,11 +219,20 @@ STATE AT THE WRAP - RE-DERIVE RATHER THAN QUOTING
                     answer: the live process was armed by a build older than
                     OPS-59 and writes no archive map. Not a report that nothing
                     was copied.
-  budgets           TWO CHANNELS, neither fired. Per-document: ROADMAP.md 2.1
-                    sessions of headroom, docs/LEDGER.md 2.6 - both LOWER than
-                    the 2.9 and 3.3 the last wrap recorded, and the next split is
-                    close. When the per-document budget FIRES, RE-RUN
-                    `python tools/doc_archive.py` and do NOT raise the number.
+  budgets           ROADMAP.md IS NOW IN LOW HEADROOM AND THAT IS NEW. Measured
+                    at this wrap: ROADMAP.md 282,036 bytes, 1.8 sessions of
+                    headroom, which trips the checker's LOW HEADROOM warning
+                    (under 2.0). docs/LEDGER.md 352,699 bytes, 2.4 sessions.
+                    The last wrap read 2.9 and 3.3, so both moved a full session
+                    in one sitting - three items and three ledger entries is
+                    what that costs.
+                    THE WARNING IS NOT THE FAILURE. The checker still reports
+                    OK, and the documented trigger is the budget FIRING, so this
+                    wrap did NOT restructure the documents on its own. YOU
+                    probably will: expect ROADMAP.md to fire early in your
+                    session. When it does, RE-RUN `python tools/doc_archive.py`
+                    and do NOT raise the number. The closed OPS-69 and OPS-70
+                    blocks are the obvious mass to move.
                     The OPS-62 PAIR channel reads about 10.9 and is a DIFFERENT
                     event with NO MECHANICAL REMEDY, because the pair total is
                     exactly what a split does not change. It is an OPERATOR
