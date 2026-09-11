@@ -3881,7 +3881,9 @@ one, and the same applies to a confident wrong severity.
 
 ### Outcome - 2026-09-11 - fixed, and the window is ACCEPTED with the reasoning written down
 
-**Criteria 1 to 5 are MET. Criterion 6 is as far as this session may take it.**
+**ALL SIX CRITERIA ARE MET.** Criterion 6 was held pending an operator ruling
+when this outcome was first written, and the ruling came the same day - see 6
+below, which is the only part that changed.
 
 **1 and 2.** `tests/test_inbox_watch.py::_restore_live_record` writes through a
 temporary in the target's own directory and `replace`s it, and removes the
@@ -3894,7 +3896,7 @@ not. The absent-record branch stays an `unlink`, also with its reason recorded -
 removing a directory entry has no partially-written state to leave behind, which
 is the property the write branch had to be given.
 
-**3 and 5.** The regression arm compares file IDENTITY rather than bytes, because
+**3 and 4.** The regression arm compares file IDENTITY rather than bytes, because
 comparing bytes at the end cannot fail for a truncating restore. Probed on this
 filesystem before the arm was written: `write_bytes` preserved `st_ino` and
 `replace` changed it. Watched red under mutation with the anchor asserted first -
@@ -3903,7 +3905,7 @@ mutation localises. The identity arm carries its own anchor and refuses to pass
 where `st_ino` is 0, which would make the comparison true of every
 implementation.
 
-**4 - THE WINDOW IS ACCEPTED, not closed, and this is the reasoning rather than a
+**5 - THE WINDOW IS ACCEPTED, not closed, and this is the reasoning rather than a
 silence.** Between the hook subprocess's write and the restore, the live records
 hold values a test produced. MEASURED: the hook command completes in 0.12 to 0.13
 seconds across three runs, so the window is roughly an eighth of a second, and

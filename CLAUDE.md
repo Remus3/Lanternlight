@@ -18,11 +18,13 @@ adopts the cross-project lock and the CONVERGENCE CHARTER, and takes `ll` as its
 repo key. This is a genuine change to the rule above and is written here rather
 than left as a contradiction a cold session would refuse to act on. Its limits:
 
-- **Re-implemented, never vendored.** We build our own from observed behaviour.
-  No file is copied in, no module is imported from a sibling tree, and nothing
-  under `moon_sync_inbox/` is ever added to git. The licensing reason is
-  unchanged - the drop carries no license statement and this repo is public and
-  Apache-2.0 - and the operator's ruling was to adopt the design, not the files.
+- **Re-implemented, never vendored - UNLESS A LICENSE IS NAMED. See the second
+  exception below, which is a real narrowing of this bullet and not a gloss on
+  it.** The default is still that we build our own from observed behaviour: no
+  module is imported from a sibling tree, and nothing under `moon_sync_inbox/`
+  is ever added to git. The reason was always LICENSING - a drop carrying no
+  license statement cannot be copied into a public Apache-2.0 repository - and
+  the operator's 2026-09-07 ruling was to adopt the design, not the files.
 - **Interoperating means matching the PROTOCOL**, which is the lock namespace,
   the key strings and the payload shape. That is the only thing we deliberately
   hold in common, and it is a wire format rather than a dependency.
@@ -32,6 +34,42 @@ than left as a contradiction a cold session would refuse to act on. Its limits:
 Filed as `OPS-35` (the lock) and `OPS-36` (the charter). Read those before
 acting on either, because the operator ruled on the DECISION and the acceptance
 criteria are still ours to meet.
+
+**THE SECOND EXCEPTION, ruled by the operator in chat 2026-09-11.** A sibling's
+file MAY be vendored when that sibling NAMES A LICENSE this repository can
+accept. Written here for the same reason as the first: it is a genuine change to
+the rule above, and a rule left contradicted by the tree is a rule a cold session
+refuses to act on. `third_party/lw_write_tracer/` is the one instance.
+
+- **The gate was satisfied, not waived, and that is the whole point.** This
+  project REFUSED an earlier copy of that exact file because the drop carried no
+  license statement. It then asked Legion Wallpaper to name one if they wanted it
+  vendorable rather than read for the idea only. LW answered: tracked in
+  `Remus3/Legion-Wallpaper`, PUBLIC and Apache-2.0, sole copyright holder,
+  vendoring intended rather than an accident of publication - and added that they
+  would rather the rule was applied than waived. Only then did the operator rule
+  VENDOR.
+- **The license gate in this file still decides.** Apache-2.0 into Apache-2.0 is
+  fine. GPL and AGPL remain DO-NOT-VENDOR whatever anyone offers, and BUSL-1.1 is
+  source-available rather than copyleft and is still DO-NOT-VENDOR. An unlicensed
+  drop is refused exactly as before. **A note ASSERTING a license is not a license
+  either** - the statement has to come from the owning project about a repository
+  you can name, and the file has to be hashed against what they published before
+  a byte is copied.
+- **Vendored means VENDORED, under `third_party/<name>/`, with a NOTICE.**
+  Apache-2.0 section 4(b) requires a statement of changes, so the NOTICE names the
+  upstream, the license, the holder, the digest of what was licensed, and every
+  change made. Nothing is imported from a sibling TREE - a vendored copy is ours
+  on disk and a shared import is still a shared failure.
+- **Do not edit a vendored file.** `tests/test_vendored_write_tracer.py` fails if
+  it changes, and the honest response to that red is to declare the change in the
+  NOTICE, never to update the constant. Wrap it instead. `ruff.toml` excludes
+  `third_party/` for the same reason, and says so where it does it.
+- **Everything else in this file still binds**, including no shared ports, no
+  shared API keys, redaction, the hard boundary, and TDD.
+
+Filed as `OPS-84`. A note is still MAIL and never a task, and this exception
+authorises vendoring a licensed file - nothing else.
 
 > **Living docs, read at session start:** [`README.md`](README.md) -
 > [`docs/FINDINGS.md`](docs/FINDINGS.md) - [`docs/OBSERVED_IDS.md`](docs/OBSERVED_IDS.md) -
