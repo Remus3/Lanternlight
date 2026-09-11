@@ -76,6 +76,7 @@ import os
 import subprocess
 from pathlib import Path
 
+import _toolguard
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -100,7 +101,7 @@ def _git_bytes(repo_root: Path, *args: str) -> bytes:
     """Run a read-only git command in ``repo_root`` and return raw stdout."""
     try:
         completed = subprocess.run(
-            ["git", *args],
+            [_toolguard.require("git"), *args],
             cwd=str(repo_root),
             capture_output=True,
             check=True,
@@ -199,7 +200,7 @@ def offending_tracked_paths(repo_root: Path) -> list[tuple[str, str]]:
 def _make_scratch_repo(root: Path) -> None:
     """Build a throwaway repository shaped like this one's inbox arrangement."""
     root.mkdir(parents=True, exist_ok=True)
-    subprocess.run(["git", "init", "-q"], cwd=str(root), check=True)
+    subprocess.run([_toolguard.require("git"), "init", "-q"], cwd=str(root), check=True)
     (root / ".gitignore").write_text(f"{INBOX_DIRNAME}/\n", encoding="ascii")
     (root / "README.md").write_text("scratch\n", encoding="ascii")
     outbox = root / OUTBOX_RELPATH
@@ -208,7 +209,11 @@ def _make_scratch_repo(root: Path) -> None:
         "a neighbour's note\n", encoding="ascii"
     )
     (outbox / "reply.md").write_text("our own reply\n", encoding="ascii")
-    subprocess.run(["git", "add", "README.md", ".gitignore"], cwd=str(root), check=True)
+    subprocess.run(
+        [_toolguard.require("git"), "add", "README.md", ".gitignore"],
+        cwd=str(root),
+        check=True,
+    )
 
 
 # --------------------------------------------------------------------------
@@ -280,7 +285,7 @@ def test_gitignore_still_ignores_the_inbox() -> None:
         f"{INBOX_DIRNAME}/from-a-sibling/src/module.py",
     ):
         completed = subprocess.run(
-            ["git", "check-ignore", "-q", "--no-index", relpath],
+            [_toolguard.require("git"), "check-ignore", "-q", "--no-index", relpath],
             cwd=str(REPO_ROOT),
             capture_output=True,
         )
@@ -316,7 +321,7 @@ def test_a_staged_inbox_file_is_reported(tmp_path: Path) -> None:
     )
 
     victim = f"{INBOX_DIRNAME}/from-a-sibling.md"
-    subprocess.run(["git", "add", "-f", victim], cwd=str(root), check=True)
+    subprocess.run([_toolguard.require("git"), "add", "-f", victim], cwd=str(root), check=True)
 
     # ANCHOR: the staging really happened.
     tracked = [path for _mode, _oid, path in tracked_entries(root)]
@@ -335,7 +340,7 @@ def test_a_staged_outbox_file_is_reported(tmp_path: Path) -> None:
     _make_scratch_repo(root)
 
     victim = f"{OUTBOX_RELPATH}/reply.md"
-    subprocess.run(["git", "add", "-f", victim], cwd=str(root), check=True)
+    subprocess.run([_toolguard.require("git"), "add", "-f", victim], cwd=str(root), check=True)
 
     tracked = [path for _mode, _oid, path in tracked_entries(root)]
     assert victim in tracked, f"git add -f did not stage the file. Tracked: {tracked}"
@@ -373,7 +378,7 @@ def test_a_tracked_symlink_pointing_into_the_inbox_is_reported(tmp_path: Path) -
     for link_path, target_text in links.items():
         blob = (
             subprocess.run(
-                ["git", "hash-object", "-w", "--stdin"],
+                [_toolguard.require("git"), "hash-object", "-w", "--stdin"],
                 cwd=str(root),
                 input=target_text.encode("ascii"),
                 capture_output=True,
@@ -384,7 +389,7 @@ def test_a_tracked_symlink_pointing_into_the_inbox_is_reported(tmp_path: Path) -
         )
         subprocess.run(
             [
-                "git",
+                _toolguard.require("git"),
                 "update-index",
                 "--add",
                 "--cacheinfo",

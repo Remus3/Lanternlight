@@ -3368,6 +3368,51 @@ while keeping it distinguishable from "the code is broken".
    before any survivor is believed.
 
 
+### Outcome - 2026-09-11 - 187 to 0 for `git`; criterion 4 BLOCKED on `OPS-79`
+
+**Criteria 1, 2, 3 and 5 are MET. Criterion 4 is NOT, and the item stays OPEN
+because of it.**
+
+**The decision, criterion 1.** Clean skips PLUS a loud end-of-run statement. A
+collection-time refusal was rejected: it would make a missing `git` block the
+entire suite including the roughly 2,800 tests that do not need it, so a
+contributor without `git` could run nothing at all - worse than the problem being
+fixed. A bare skip was rejected on its own, because a skip is invisible in a green
+summary and 187 silent ones would let a real regression hide on a machine that had
+quietly lost the tool. So the tests skip, and the run says so.
+
+**What was built.** A shared presence guard that returns the tool's RESOLVED
+ABSOLUTE PATH rather than a boolean - which makes the present direction
+STRUCTURAL, because a test that got a path holds something only a real lookup
+could have given it - and that skips with a reason naming the tool. A
+terminal-summary hook counts those skips per tool and prints a banner, and says
+NOTHING when none happened, because a line that always prints is a line nobody
+reads.
+
+**Granularity, stated because a cheap version of this item would have cheated
+here.** 27 argv-head swaps inside local helpers and 52 single-line guards on named
+tests. NO class-level or module-level mark anywhere: the affected modules contain
+mixed classes, and blanket-marking a module to make a number fall would have given
+a `git` guard to tests that do not need one.
+
+**MEASURED AFTER, re-run by the merger with the control PROVED on the same run:**
+`clean_skip=216, exercised=99, skip_both=1, untouched=2722`, and **`findings: 0`**.
+The `false_red` kind is gone from the tally entirely. Directly corroborated by
+running the suite under the probe's own PATH stripping: `2821 passed, 217 skipped`,
+with the banner reporting 216 skipped for a named absent tool. The one unannounced
+skip is the Windows execute-bit test, which correctly names no tool. 216 matches
+the probe's `clean_skip` exactly.
+
+**WHY CRITERION 4 CANNOT BE MET YET.** It asks the same question of a second tool
+before the answer is generalised. `--tool bash` reports its positive control
+UNPROVEN, because the planted control hardcodes `git`. Its 56 false reds across 6
+files are therefore an absence of evidence, and were deliberately NOT acted on -
+converting call sites on the strength of an instrument just measured blind is the
+exact failure this whole line of work exists to prevent. Filed as `OPS-79` gap 4.
+**The policy is proven for one tool and is UNTESTED as a general policy**, which is
+precisely what criterion 4 was written to stop anyone forgetting.
+
+
 ## OPS-79. Three gaps in the false-red probe's own instrument, found by refuting it - OPEN
 
 Filed 2026-09-11 by the refutation pass over `OPS-74`, after that item had already
@@ -3401,8 +3446,22 @@ followed by a call through that name, is invisible to it. The guard is not vacuo
 attribute call reddens it, and its anchor test notices if the assertions vanish -
 it is simply narrower than the hazard.
 
+**Gap 4, added 2026-09-11 and the largest of the four: the positive control is
+HARDCODED TO ONE TOOL, so every `--tool` run except `git` is UNPROVEN BY
+CONSTRUCTION.** The planted control module's source fixes the tool it looks up,
+so pointing the probe at any other executable plants three specimens that cannot
+match, and the run reports all three as untouched. Measured: `--tool bash` reports
+`positive control UNPROVEN` and, alongside it, 56 false reds across 6 files -
+numbers which are therefore an absence of evidence and were correctly NOT acted
+on. The `--tool` flag is advertised in the entry point's own help text, so the
+probe currently offers a switch whose every setting but one produces an unprovable
+answer. This is what blocks `OPS-78` criterion 4.
+
 ### Acceptance
 
+0. The planted control is parameterised by the tool under test, so a `--tool` run
+   other than `git` can report its control PROVED. Watched red by running a second
+   tool and seeing the control fire, where today it cannot.
 1. The control gains at least one NEGATIVE specimen - a planted test that must NOT
    be classified as a finding - and a classifier that over-reports fails the control
    instead of passing it. Watched red by mutating the classifier to over-report.

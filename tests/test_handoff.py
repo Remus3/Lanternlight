@@ -45,6 +45,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+import _toolguard  # noqa: E402
+
 from lanternlight.redact import RedactionError  # noqa: E402
 from ops import handoff  # noqa: E402
 
@@ -141,6 +143,11 @@ def test_an_operator_git_identity_is_refused(tmp_path):
     test cannot become the place the value gets published. If this machine has
     no git identity to derive, the test says so rather than passing vacuously.
     """
+    # OPS-78. Two different facts, kept apart on purpose. "git is not on PATH"
+    # is announced by the end-of-run statement and names the tool; "git is
+    # here and this machine has no identity configured" is a fact about the
+    # machine, not about a missing program, and keeps its own reason.
+    _toolguard.require("git")
     identities = handoff.operator_identities()
     if not identities:
         pytest.skip("no git identity derivable here; nothing to plant")

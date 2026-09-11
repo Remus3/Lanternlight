@@ -33,6 +33,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+import _toolguard  # noqa: E402
+
 from ops import lane_state, lanes  # noqa: E402
 from ops.loop import ledger  # noqa: E402
 
@@ -823,6 +825,7 @@ class TestALaneCanClaimAPathItIsAdding:
         so the orphan guard reported green with a genuinely orphaned file on
         disk. The sanctioned pressure valve opened all the way.
         """
+        _toolguard.require("git")
         for greedy in ("**", "**/*", "**/*.py"):
             with pytest.raises(ValueError, match="may not claim"):
                 lane_state.claim_path("ops", greedy, path=tmp_path / "s.json")
@@ -832,6 +835,7 @@ class TestALaneCanClaimAPathItIsAdding:
         # lanternlight/redact.py, which safety owns and holds a veto over.
         # The message truncates its list, so the FULL reach is asserted on
         # overreach() and the message only has to name the fault.
+        _toolguard.require("git")
         with pytest.raises(ValueError, match="already owns"):
             lane_state.claim_path("capture", "lanternlight/*.py", path=tmp_path / "s.json")
         reached = lane_state.overreach("lanternlight/*.py", "capture")
@@ -848,6 +852,7 @@ class TestALaneCanClaimAPathItIsAdding:
 
     def test_the_overreach_check_is_not_vacuous(self):
         # It must actually find something, or every refusal above is theatre.
+        _toolguard.require("git")
         assert lane_state.overreach("**", "ops"), "the probe found nothing to protect"
         assert lane_state.overreach("lanternlight/*.py", "capture")
         assert lane_state.overreach("lanternlight/brand_new_unowned.py", "ingest") == []
@@ -855,6 +860,7 @@ class TestALaneCanClaimAPathItIsAdding:
     def test_an_overreaching_claim_already_on_disk_is_reported_stale(self, tmp_path):
         # A claim written before this rule existed, or smuggled in by hand,
         # must still be caught by the live guard rather than only at write time.
+        _toolguard.require("git")
         state = lane_state.load("capture", tmp_path / "s.json")
         state.claimed_paths = ("lanternlight/*.py",)
         assert lane_state.stale_claims(states={"capture": state}) == [
@@ -1397,9 +1403,9 @@ def _skip_unless_git_is_installed() -> None:
             ["git", "--version"], capture_output=True, text=True, check=False
         )
     except OSError:  # pragma: no cover - git is present on this machine
-        pytest.skip("git is not installed")
+        pytest.skip(_toolguard.skip_reason("git"))
     if proc.returncode != 0:  # pragma: no cover - same
-        pytest.skip("git is not installed")
+        pytest.skip(_toolguard.skip_reason("git"))
 
 
 class TestLaneStateIsVisibleToGit:
@@ -1433,8 +1439,9 @@ class TestLaneStateIsVisibleToGit:
     """
 
     def _git_lines(self, *args: str) -> list[str] | None:
+        git = _toolguard.require("git")
         proc = subprocess.run(
-            ["git", *args], cwd=REPO_ROOT, capture_output=True, text=True, check=False
+            [git, *args], cwd=REPO_ROOT, capture_output=True, text=True, check=False
         )
         if proc.returncode != 0:
             return None
@@ -1450,9 +1457,10 @@ class TestLaneStateIsVisibleToGit:
     def test_the_probe_itself_can_tell_an_ignored_path_from_a_kept_one(self):
         # Without this, both tests below would pass vacuously on any machine
         # where git declines to answer.
+        _toolguard.require("git")
         acceptable = self._acceptable()
         if acceptable is None:
-            pytest.skip("git unavailable")
+            pytest.skip(_toolguard.skip_reason("git"))
         assert "ops/lanes.py" in acceptable, "git is not listing a file it tracks"
         assert not any(p.endswith(".pyc") for p in acceptable), (
             "compiled bytecode is excluded, so this probe should never see it - "
@@ -1585,7 +1593,7 @@ class TestVisibilityIsCheckedForPathsThatDoNotExistYET:
 
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
     return subprocess.run(
-        ["git", *args], cwd=repo, capture_output=True, text=True, check=False
+        [_toolguard.require("git"), *args], cwd=repo, capture_output=True, text=True, check=False
     )
 
 

@@ -49,6 +49,7 @@ import json
 import re
 from pathlib import Path
 
+import _toolguard
 import pytest
 
 from lanternlight import redact
@@ -678,6 +679,7 @@ class TestAnOutgoingNoteCarryingAnOperatorIdentifierIsRefused:
         criterion 1: the value is redactable because of WHAT IT IS, not because
         of which command printed it.
         """
+        _toolguard.require("git")
         identities = redact.operator_git_identities()
         assert identities, "no git identity derived - this test would be inert"
         root, inboxes = _tree(tmp_path)

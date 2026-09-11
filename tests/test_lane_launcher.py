@@ -29,12 +29,14 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+import _toolguard  # noqa: E402
+
 from ops import lane_launcher, lanes  # noqa: E402
 
 
 def _git(*args: str, cwd: Path) -> subprocess.CompletedProcess:
     return subprocess.run(
-        ["git", *args], cwd=cwd, capture_output=True, text=True, check=True
+        [_toolguard.require("git"), *args], cwd=cwd, capture_output=True, text=True, check=True
     )
 
 
@@ -183,7 +185,7 @@ class TestAgainstARealRepo:
         assert created.is_dir()
         assert (created / ".git").exists()
         head = subprocess.run(
-            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            [_toolguard.require("git"), "rev-parse", "--abbrev-ref", "HEAD"],
             cwd=created,
             capture_output=True,
             text=True,
@@ -212,7 +214,7 @@ class TestAgainstARealRepo:
              "commit", "-m", "lane work", cwd=wt)
         assert not (scratch_repo / "lane_only.txt").exists()
         status = subprocess.run(
-            ["git", "status", "--short"],
+            [_toolguard.require("git"), "status", "--short"],
             cwd=scratch_repo,
             capture_output=True,
             text=True,

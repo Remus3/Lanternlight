@@ -84,6 +84,29 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0222 - 2026-09-11 - The false-red probe's positive control is hardcoded to one tool, so every --tool run except git is unproven by construction - found by trying to use the flag
+
+**Evidence:**
+- The planted control module's source fixes the tool it looks up. Pointing the probe at any other executable plants three specimens that cannot match, and the run reports all three as untouched.
+- MEASURED: --tool bash reports 'positive control UNPROVEN' and, alongside it, 56 false reds across 6 files. Those 56 are an absence of evidence and were deliberately NOT acted on. Converting call sites on the strength of an instrument just measured blind is the exact failure this whole line of work exists to prevent.
+- The --tool flag is advertised in the entry point's own help text, so the probe currently offers a switch whose every setting but one produces an unprovable answer.
+- Filed as OPS-79 gap 4, alongside the three gaps the refutation pass found earlier the same day: the positive control has no NEGATIVE specimen so a classifier that over-reports still passes it; silent_pass misses the module-level lookup shape and the docstring mis-states why; and the recursion guard matches only one import spelling.
+
+Worth keeping because of the order it happened in. The instrument was built, believed, used to produce a real 187-to-0 result, and only then discovered to be single-purpose - by someone trying to use a documented flag. A working measurement and a general instrument are different claims, and this repository had quietly merged them.
+
+### LL-0221 - 2026-09-11 - 187 false reds to ZERO for git - the suite now skips cleanly when the tool is absent and says so out loud, and the policy is proven for exactly one tool
+
+**Evidence:**
+- THE DECISION, recorded with its rejected alternatives. Clean skips PLUS a loud end-of-run statement. A collection-time refusal was rejected because a missing git would then block the whole suite including the roughly 2,800 tests that do not need it, leaving a contributor without git able to run nothing at all. A bare skip was rejected on its own because a skip is invisible in a green summary, and 187 silent ones would let a real regression hide on a machine that had quietly lost the tool.
+- The shared guard returns the tool's RESOLVED ABSOLUTE PATH rather than a boolean. That makes the present direction structural rather than asserted: a test holding a path holds something only a real lookup could have produced. The skip reason names the tool, so it stays machine readable.
+- The terminal-summary hook counts those skips per tool and prints a banner, and says NOTHING when none happened - a line that always prints is a line nobody reads. Proved both ways under mutation: made to always speak, two tests redden.
+- GRANULARITY, stated because a cheap version of this would have cheated here: 27 argv-head swaps inside local helpers and 52 single-line guards on named tests, with NO class-level or module-level mark anywhere. The affected modules contain mixed classes, so blanket-marking a module to make the number fall would have given a git guard to tests that do not need one.
+- MEASURED AFTER, re-run by the merger rather than quoted, with the probe's positive control PROVED on that same run: clean_skip=216, exercised=99, skip_both=1, untouched=2722, and findings: 0. The false_red kind is gone from the tally.
+- Corroborated independently of the probe's classification by running the suite under its PATH stripping: 2821 passed, 217 skipped, with the banner reporting 216 skipped for a named absent tool. The single unannounced skip is the Windows execute-bit test, which correctly names no tool. 216 matches the probe's clean_skip exactly.
+- Suite this run: 3037 passed, 1 skipped. Ruff clean. Merge gate OK at 3038 collected with no per-file drop against the 61-file, 3022-test baseline.
+
+OPS-78 stays OPEN. Its criterion 4 asks the same question of a second tool before the answer is generalised, and that cannot be answered yet - see the next entry. The policy is proven for one tool and is UNTESTED as a general policy, which is exactly what that criterion was written to stop anyone forgetting.
+
 ### LL-0220 - 2026-09-11 - OPS-80 closed - the documented remedy for a fired size budget now has a step that actually writes, and the split it describes has been applied
 
 **Evidence:**

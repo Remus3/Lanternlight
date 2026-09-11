@@ -119,6 +119,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import _toolguard
 import _tracked
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -514,6 +515,7 @@ class TestTheCorpusCoversProseNotJustCode:
 
 class TestNoLiveSurfaceCarriesAHomePath:
     def test_every_tracked_file_outside_the_frozen_set_is_clean(self):
+        _toolguard.require("git")
         offenders = []
         for rel in tracked_text_files():
             if rel in FROZEN_HISTORICAL or rel in CONTROL_FIXTURES:

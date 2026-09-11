@@ -59,6 +59,8 @@ Touch these paths and nothing else. Every other path in the repository belongs t
 - `tools/false_red_probe.py`
 - `tests/test_false_red_probe.py`
 - `tests/conftest.py`
+- `tests/_toolguard.py`
+- `tests/test_toolguard.py`
 - `ROADMAP.md`
 - `docs/LEDGER.md`
 - `docs/ROADMAP_ARCHIVE.md`

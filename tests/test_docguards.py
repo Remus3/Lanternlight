@@ -50,6 +50,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+import _toolguard  # noqa: E402
+
 from ops import docguards  # noqa: E402
 
 PY = sys.executable
@@ -57,7 +59,7 @@ PY = sys.executable
 
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
     return subprocess.run(
-        ["git", *args],
+        [_toolguard.require("git"), *args],
         cwd=str(repo),
         capture_output=True,
         text=True,
@@ -138,7 +140,7 @@ class TestTheDocSetIsDerivedAtRunTime:
 
     def test_the_real_repository_docs_match_git_right_now(self):
         proc = subprocess.run(
-            ["git", "ls-files", "-z", "*.md"],
+            [_toolguard.require("git"), "ls-files", "-z", "*.md"],
             cwd=str(REPO_ROOT),
             capture_output=True,
             timeout=60,
@@ -248,6 +250,7 @@ class TestTheAuditRecorderIsNotDecoration:
     ):
         """Non-vacuity proof for the hook itself: open a tracked doc HERE and
         require the recorder to have noticed."""
+        _toolguard.require("git")
         (REPO_ROOT / "README.md").read_text(encoding="utf-8")
         seen = docguard_recorder.observed_for("tests/test_docguards.py")
         assert "README.md" in seen, (
@@ -288,6 +291,7 @@ class TestTheSelectorCoversWhatWasObserved:
         )
 
     def test_no_module_in_the_persisted_map_was_missed(self):
+        _toolguard.require("git")
         observed = docguards.load_observed(REPO_ROOT)
         if observed is None:
             pytest.skip(

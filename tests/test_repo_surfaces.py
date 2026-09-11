@@ -18,6 +18,7 @@ import re
 import subprocess
 from pathlib import Path
 
+import _toolguard
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -96,7 +97,7 @@ class TestTheCitationPointsAtSomethingReal:
                 timeout=30,
             )
         except (OSError, subprocess.SubprocessError):  # pragma: no cover
-            pytest.skip("git unavailable")
+            pytest.skip(_toolguard.skip_reason("git"))
         if tags.returncode != 0:
             pytest.skip("git tag failed")
         names = set(tags.stdout.split())
@@ -134,7 +135,7 @@ class TestTheCrossProjectInboxStaysIgnored:
                 timeout=30,
             )
         except (OSError, subprocess.SubprocessError):  # pragma: no cover
-            pytest.skip("git unavailable")
+            pytest.skip(_toolguard.skip_reason("git"))
         assert proc.returncode == 0, (
             "git does not consider moon_sync_inbox/ ignored, whatever "
             ".gitignore appears to say"

@@ -126,6 +126,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+import _toolguard  # noqa: E402
 import pytest  # noqa: E402  (path bootstrap must run first)
 
 from lanternlight import paths  # noqa: E402
@@ -459,7 +460,7 @@ def test_no_fixture_is_gitignored(name: str):
             check=False,
         )
     except (OSError, subprocess.SubprocessError):
-        pytest.skip("git unavailable")
+        pytest.skip(_toolguard.skip_reason("git"))
     # 0 means "this path is ignored", 1 means "it is not".
     assert proc.returncode == 1, f"{name} is gitignored and would vanish from a clone"
 

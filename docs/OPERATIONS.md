@@ -112,6 +112,75 @@ reports the per-test and per-file delta, which is how this repository finds the
 guards that have only one direction pinned. Neither replaces the other. Filed
 as `OPS-74` criterion 5.
 
+## What this suite does when an external tool is missing - `OPS-78`
+
+**The rule.** A test that cannot run without an external tool SKIPS, with a
+reason naming the tool, and the run STATES at the end how many tests were
+skipped and for which tool. Both halves are required. The skipping half is
+`tests/_toolguard.py`; the announcing half is its `pytest_terminal_summary`,
+which `tests/conftest.py` imports so pytest registers it.
+
+**Why this shape, and what was rejected.** Measured 2026-09-11 by
+`tools/false_red_probe.py` with its positive control PROVED: with `git`
+stripped from every `PATH` entry carrying it, 187 tests across 17 files failed
+or errored that otherwise pass, and only 22 skipped cleanly. `CLAUDE.md` tells
+a fresh clone to run `python -m pytest` as its second command and this
+repository is public, so the reader meeting those 187 failures may not be the
+operator, and a failure that misattributes its own cause is the defect class
+every entry in the anti-patterns list belongs to.
+
+Three shapes were available and all three were defensible:
+
+- A **collection-time refusal** naming the missing tool and stopping the run.
+  Rejected: it makes one absent tool block the entire suite, including the
+  roughly 2800 tests that never touch it. A contributor without `git` could
+  then run nothing at all, which is worse than the problem being fixed.
+- A **bare skip**. Rejected on its own: a skip is invisible in a green summary,
+  so 187 silent skips would let a real regression hide on a machine that had
+  quietly lost the tool.
+- **Clean skips plus a loud end-of-run statement**, which is what shipped. A
+  reader who sees green must also see the line saying what green did not cover.
+
+**How to write one.** Call `_toolguard.require("<tool>")` and USE WHAT IT
+RETURNS - it hands back the resolved absolute path, and invoking that path is
+what pins the present direction as well as the absent one. That is the
+bidirectional discipline above, made structural: a guard that returned a
+boolean would let a call site skip correctly while never running the tool at
+all.
+
+```python
+import _toolguard
+
+def test_something_that_needs_git():
+    git = _toolguard.require("git")
+    completed = subprocess.run([git, "--version"], capture_output=True, text=True)
+    assert "git version" in completed.stdout
+```
+
+`_toolguard.requires("<tool>")` exists for a class or module where EVERY test
+under it genuinely reaches the tool, and it is the weaker option on purpose: a
+marker cannot return a path, so it pins only the absent direction. Never apply
+it to a module to make a failure count go down - a test that does not need the
+tool must not gain a guard for it, because that trades a visible false red for
+an invisible coverage loss.
+
+**The reason string is machine-readable and that is load-bearing.** Every skip
+`_toolguard` produces begins with `external tool absent on PATH: ` and names
+the tool immediately after. The end-of-run statement counts skips per tool by
+reading those reasons back off the reports, so a reason written freehand at a
+call site is prose to a human and noise to the counter. A skip for any other
+cause - no game installed, a checkout with no `.git` - deliberately names no
+tool and is not counted.
+
+**The statement says nothing when nothing was skipped.** A line that prints on
+every run is a line nobody reads. Silence there means the question did not
+arise on this machine, which is the normal case on the operator's.
+
+**Re-measuring.** `tools/false_red_probe.py` is the instrument, and it takes
+`--tool`, so the same question can be asked of any executable. A number from a
+run whose positive control was not PROVED is not a result and must not be
+recorded as one.
+
 ## Run the pak probe
 
 ```

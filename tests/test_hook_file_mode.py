@@ -74,6 +74,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+import _toolguard  # noqa: E402
+
 from scripts import install_hooks  # noqa: E402
 
 #: The directory ``core.hooksPath`` points at. Not imported from the installer
@@ -201,6 +203,11 @@ def repair_command(entries: list[IndexEntry]) -> str:
 def _entries_or_skip(
     pathspec: str = HOOKS_DIRNAME, root: Path = REPO_ROOT
 ) -> list[IndexEntry]:
+    # OPS-78. Asked FIRST and separately, because "git is not on PATH" and
+    # "git ran and could not list this index" are different facts. The first
+    # is announced by the end-of-run statement and names the tool; the second
+    # is about this repository and keeps the reason below.
+    _toolguard.require("git")
     entries = tracked_index_entries(pathspec, root)
     if entries is None:
         pytest.skip(
@@ -264,7 +271,7 @@ class TestTheFloorIsNotVacuous:
         """
         entries = tracked_index_entries(".githooks-no-such-directory")
         if entries is None:
-            pytest.skip("git could not answer at all; nothing to prove here")
+            pytest.skip(_toolguard.skip_reason("git"))
         assert entries == []
         assert floor_problem(entries) is not None
 
@@ -275,7 +282,7 @@ class TestTheFloorIsNotVacuous:
         _git_init(tmp_path)
         entries = tracked_index_entries(HOOKS_DIRNAME, tmp_path)
         if entries is None:
-            pytest.skip("git could not answer at all; nothing to prove here")
+            pytest.skip(_toolguard.skip_reason("git"))
         assert entries == []
         assert floor_problem(entries) is not None
 
@@ -325,7 +332,7 @@ class TestTheModeCheckCanDistinguish:
 
         before = tracked_index_entries(HOOKS_DIRNAME, tmp_path)
         if before is None:
-            pytest.skip("git could not answer at all; nothing to prove here")
+            pytest.skip(_toolguard.skip_reason("git"))
         # Assert the setup landed BEFORE trusting anything built on it. A
         # staging step that silently added nothing looks exactly like a clean
         # bill of health once the floor is removed from the picture.
@@ -522,5 +529,5 @@ def _git_init(root: Path) -> None:
             check=True,
         )
     except (OSError, subprocess.SubprocessError):
-        pytest.skip("git is not runnable here, so no temporary repository is possible")
+        pytest.skip(_toolguard.skip_reason("git"))
     assert (root / ".git").is_dir(), "git init reported success but made no .git"

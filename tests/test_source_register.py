@@ -177,6 +177,8 @@ import subprocess
 from collections.abc import Iterable
 from pathlib import Path
 
+import _toolguard
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DOCS = REPO_ROOT / "docs"
 ECOSYSTEM = DOCS / "ECOSYSTEM.md"
@@ -215,7 +217,7 @@ def _tracked_paths_for(root: str) -> tuple[str, ...]:
     """
     try:
         done = subprocess.run(
-            ["git", "ls-files"],
+            [_toolguard.require("git"), "ls-files"],
             cwd=root,
             capture_output=True,
             text=True,
@@ -363,6 +365,27 @@ KNOWN_NON_HOSTS = frozenset(
         "DELIVERIES.json",
         "ops.outbox.deliver",
         "outbox.replies",
+        # OPS-78, 2026-09-11. Four tokens the host-shaped pattern lifts out of
+        # the new "What this suite does when an external tool is missing"
+        # section of `docs/OPERATIONS.md`. Each was looked at before being
+        # added, per the regenerating note above, and none is a source:
+        # `toolguard.require` and `toolguard.requires` are the tails the
+        # extractor emits for `_toolguard.require` and `_toolguard.requires`,
+        # two functions in this repository's own `tests/_toolguard.py`;
+        # `subprocess.run` is a Python standard-library call and
+        # `completed.stdout` an attribute of what it returns, both quoted in
+        # that section's worked example.
+        #
+        # The FILENAME `toolguard.py` is deliberately NOT in this set. It is
+        # resolved against `git ls-files` at test time by `is_repo_filename`,
+        # which is the whole point of `OPS-44`, and it stops being reported the
+        # moment the file is staged. Adding it here by hand would put a
+        # filename back in the denylist that the live listing already answers
+        # for, which is the growth `OPS-44` was filed to stop.
+        "toolguard.require",
+        "toolguard.requires",
+        "subprocess.run",
+        "completed.stdout",
         # The SIXTH trip, on `LL-0168` itself - the entry recording the fifth.
         # Same shape as the `OPS-31` sequence noted above: the entry that
         # closes an item is refused by this guard, which is the defect being

@@ -61,6 +61,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+import _toolguard  # noqa: E402
+
 from ops import docguards  # noqa: E402
 
 HOOK = REPO_ROOT / ".githooks" / "pre-commit"
@@ -76,7 +78,7 @@ NEIGHBOUR_DOC = "docs/NOTE.md"
 
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
     return subprocess.run(
-        ["git", *args],
+        [_toolguard.require("git"), *args],
         cwd=str(repo),
         capture_output=True,
         text=True,

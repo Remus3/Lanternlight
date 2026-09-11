@@ -46,6 +46,16 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+# ROADMAP OPS-78. Imported for its SIDE EFFECT on pytest's plugin manager: a
+# conftest is registered as a plugin, so a hook function present in this
+# module's namespace is a hook pytest will call. That is what makes the
+# end-of-run statement about tool-absence skips fire for this directory. It is
+# re-exported rather than reimplemented here so the same function can also be
+# loaded directly with "-p _toolguard", which is how tests/test_toolguard.py
+# proves the banner appears in a real run instead of only that a formatter
+# returns a list of strings.
+from _toolguard import pytest_terminal_summary  # noqa: E402,F401
+
 from ops import docguards  # noqa: E402
 
 

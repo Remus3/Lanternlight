@@ -50,6 +50,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+import _toolguard  # noqa: E402
 import _tracked  # noqa: E402  (sits beside this file in tests/)
 
 from lanternlight.redact import (  # noqa: E402  (path bootstrap must run first)
@@ -163,6 +164,7 @@ def _assert_scanned_enough(scanned: int) -> None:
 
 
 def test_no_identifiers_anywhere_in_the_repository():
+    _toolguard.require("git")
     findings, scanned = _scan_tree(_scan)
     _assert_scanned_enough(scanned)
 
@@ -413,6 +415,7 @@ def test_the_email_rule_declines_a_reserved_documentation_domain():
 
 def test_the_operator_git_identity_is_derived_at_runtime_and_is_address_shaped():
     # The identity is DERIVED, never stored. A literal here would be the leak.
+    _toolguard.require("git")
     identities = operator_git_identities()
     assert identities, (
         "no git identity could be derived, so the value half of this guard is "
@@ -626,6 +629,7 @@ def test_the_repository_carries_no_operator_identifier_once_literals_are_joined(
 
 
 def test_the_repository_carries_no_operator_identifier():
+    _toolguard.require("git")
     findings, scanned = _scan_tree(_scan_operator)
     _assert_scanned_enough(scanned)
 
@@ -735,7 +739,7 @@ PERMITTED_FIXTURES = (
 
 def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess:
     return subprocess.run(
-        ["git", *args],
+        [_toolguard.require("git"), *args],
         cwd=str(cwd),
         capture_output=True,
         text=True,

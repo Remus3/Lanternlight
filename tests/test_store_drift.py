@@ -36,6 +36,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+import _toolguard  # noqa: E402
+
 from ops import store_drift  # noqa: E402
 
 #: A synthetic identity for every throwaway repository built here. Never the
@@ -71,7 +73,7 @@ def _git(
     if env_extra:
         env = {**os.environ, **env_extra}
     return subprocess.run(
-        ["git", *args],
+        [_toolguard.require("git"), *args],
         cwd=repo,
         capture_output=True,
         text=True,
@@ -348,6 +350,7 @@ class TestTheProbeNeverRaises:
         assert report.usable is False
 
     def test_this_repository_snapshots_cleanly(self) -> None:
+        _toolguard.require("git")
         snap = store_drift.snapshot(REPO_ROOT)
         assert snap.usable, snap.errors
         histogram = snap.histogram()
@@ -539,7 +542,7 @@ class TestEveryFormOfStashGitCanWrite:
         """
         repo = _new_repo(tmp_path / "branch-names")
         refused = subprocess.run(
-            ["git", "branch", "a name with spaces"],
+            [_toolguard.require("git"), "branch", "a name with spaces"],
             cwd=repo,
             capture_output=True,
             text=True,

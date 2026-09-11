@@ -31,6 +31,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+import _toolguard  # noqa: E402
+
 from ops import lane_state, lanes  # noqa: E402
 
 
@@ -267,14 +269,14 @@ class TestPrimaryCheckoutIsStableFromEveryWorktree:
 
     def test_primary_checkout_matches_gits_own_answer(self):
         proc = subprocess.run(
-            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            [_toolguard.require("git"), "rev-parse", "--path-format=absolute", "--git-common-dir"],
             cwd=REPO_ROOT,
             capture_output=True,
             text=True,
             check=False,
         )
         if proc.returncode != 0:
-            pytest.skip("git unavailable")
+            pytest.skip(_toolguard.skip_reason("git"))
         expected = Path(proc.stdout.strip()).parent.resolve()
         assert lanes.primary_checkout().resolve() == expected
 
@@ -399,6 +401,7 @@ class TestOwnsPath:
         # A lane whose globs match nothing is a lane that will silently never
         # do any work - and it would look identical to a lane that is simply
         # idle. Emberforge and surface are allowed to be empty for now.
+        _toolguard.require("git")
         tracked = list(lanes.tracked_files(REPO_ROOT))
         for lane in lanes.LANES:
             if not lane.owns or lane.lane_id in lanes.MAY_BE_EMPTY:

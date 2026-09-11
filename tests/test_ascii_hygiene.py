@@ -21,6 +21,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
+import _toolguard  # noqa: E402
 import _tracked  # noqa: E402  (sits beside this file in tests/)
 
 MIN_EXPECTED_FILES = _tracked.MIN_EXPECTED_FILES
@@ -112,7 +113,7 @@ def _git(args, cwd):
     import subprocess
 
     return subprocess.run(
-        ["git", *args], cwd=cwd, capture_output=True, text=True, timeout=120
+        [_toolguard.require("git"), *args], cwd=cwd, capture_output=True, text=True, timeout=120
     )
 
 

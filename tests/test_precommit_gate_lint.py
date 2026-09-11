@@ -57,6 +57,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+import _toolguard  # noqa: E402
+
 from tools import precommit_gate  # noqa: E402
 
 HOOKS_DIR = REPO_ROOT / ".githooks"
@@ -91,7 +93,7 @@ def _clean_env() -> dict[str, str]:
 
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        ["git", *args],
+        [_toolguard.require("git"), *args],
         cwd=repo,
         capture_output=True,
         text=True,
@@ -1395,6 +1397,7 @@ class TestUnrecognisedArgvIsRefused:
 
     def test_both_spellings_of_the_real_entry_point_still_dispatch(self, tmp_path) -> None:
         """The positive control. Without it, refusing EVERYTHING would pass."""
+        _toolguard.require("git")
         for spelling in sorted(precommit_gate._LINT_ARGV):
             result = subprocess.run(
                 [sys.executable, str(GATE_SOURCE), spelling],

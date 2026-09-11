@@ -27,6 +27,7 @@ if str(REPO_ROOT) not in sys.path:
 
 sys.path.insert(0, str(REPO_ROOT / "tests"))
 
+import _toolguard  # noqa: E402
 import _tracked  # noqa: E402
 
 
@@ -51,7 +52,7 @@ class TestUntrackedFilesAreScanned:
 
     def test_every_currently_untracked_authored_file_is_scanned(self):
         proc = subprocess.run(
-            ["git", "ls-files", "--others", "--exclude-standard", "-z"],
+            [_toolguard.require("git"), "ls-files", "--others", "--exclude-standard", "-z"],
             cwd=REPO_ROOT,
             capture_output=True,
             timeout=30,
@@ -60,7 +61,7 @@ class TestUntrackedFilesAreScanned:
         if proc.returncode != 0:
             import pytest
 
-            pytest.skip("git unavailable")
+            pytest.skip(_toolguard.skip_reason("git"))
         names = [n for n in proc.stdout.decode("utf-8", "replace").split("\0") if n]
         walked = _walked()
         missed = []
@@ -199,13 +200,15 @@ class TestTheProbeFilterCannotHideATrackedFile:
         repo = tmp_path / "repo"
         repo.mkdir()
 
+        git_exe = _toolguard.require("git")
+
         def git(*args):
             return subprocess.run(
-                ["git", *args], cwd=repo, capture_output=True, text=True, check=False
+                [git_exe, *args], cwd=repo, capture_output=True, text=True, check=False
             )
 
         if git("init", "-q", ".").returncode != 0:
-            pytest.skip("git unavailable")
+            pytest.skip(_toolguard.skip_reason("git"))
         git("config", "user.email", "probe@example.invalid")
         git("config", "user.name", "probe")
 

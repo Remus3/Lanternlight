@@ -19,6 +19,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+import _toolguard  # noqa: E402
+
 from ops import store_drift  # noqa: E402
 from ops.loop import state as state_mod  # noqa: E402
 from ops.loop.state import LoopState  # noqa: E402
@@ -1018,7 +1020,7 @@ def _git(repo: Path, *args: str) -> None:
     """
     subprocess.run(
         [
-            "git",
+            _toolguard.require("git"),
             "-c",
             "user.name=Lanternlight Test",
             "-c",

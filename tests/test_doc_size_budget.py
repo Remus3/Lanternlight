@@ -89,6 +89,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+import _toolguard  # noqa: E402
+
 from tools import doc_size_budget  # noqa: E402
 
 
@@ -107,6 +109,7 @@ class TestOverBudgetFixtureIsFlagged:
     """A fixture past its budget must produce an over_budget Finding."""
 
     def test_over_budget_file_is_flagged(self, tmp_path: Path) -> None:
+        _toolguard.require("git")
         _write(tmp_path / "over.txt", 150)
         report = doc_size_budget.check_budgets(
             {"over.txt": 100}, repo_root=tmp_path
@@ -126,6 +129,7 @@ class TestUnderBudgetFixtureIsNotFlagged:
     """A fixture comfortably below its budget must produce no finding."""
 
     def test_under_budget_file_is_not_flagged(self, tmp_path: Path) -> None:
+        _toolguard.require("git")
         _write(tmp_path / "under.txt", 50)
         report = doc_size_budget.check_budgets(
             {"under.txt": 100}, repo_root=tmp_path
@@ -142,6 +146,7 @@ class TestExactlyAtBudgetIsFlagged:
     def test_exact_boundary_is_flagged_not_waved_through(
         self, tmp_path: Path
     ) -> None:
+        _toolguard.require("git")
         _write(tmp_path / "exact.txt", 100)
         report = doc_size_budget.check_budgets(
             {"exact.txt": 100}, repo_root=tmp_path
@@ -162,6 +167,7 @@ class TestExactlyAtBudgetIsFlagged:
         """Companion to the exact-boundary test - proves the edge is a point,
         not a fuzzy band, by checking the byte immediately on the other side.
         """
+        _toolguard.require("git")
         _write(tmp_path / "one_under.txt", 99)
         report = doc_size_budget.check_budgets(
             {"one_under.txt": 100}, repo_root=tmp_path
@@ -197,6 +203,7 @@ class TestMissingWatchedPathFailsTheCheck:
         over-budget sibling declared later in the same mapping would never
         be seen.
         """
+        _toolguard.require("git")
         _write(tmp_path / "also_over.txt", 999)
         report = doc_size_budget.check_budgets(
             {
@@ -218,6 +225,7 @@ class TestMultipleOverBudgetFilesAreAllReported:
     """Every over-budget document must be reported, not just the first."""
 
     def test_three_over_budget_files_are_all_reported(self, tmp_path: Path) -> None:
+        _toolguard.require("git")
         _write(tmp_path / "first.txt", 101)
         _write(tmp_path / "second.txt", 500)
         _write(tmp_path / "third.txt", 1000)
@@ -251,6 +259,7 @@ class TestRealDeclaredBudgetsCurrentlyPass:
     """
 
     def test_declared_budgets_are_not_exceeded_right_now(self) -> None:
+        _toolguard.require("git")
         assert doc_size_budget.BUDGETS, "no budgets declared - nothing is guarded"
 
         report = doc_size_budget.check_budgets()  # real BUDGETS, real REPO_ROOT
@@ -289,6 +298,7 @@ class TestGitBlobSizeMeasuresBlobBytesNotWorkingBytes:
     def test_crlf_content_is_measured_as_its_lf_normalized_blob_size(
         self, tmp_path: Path
     ) -> None:
+        _toolguard.require("git")
         target = tmp_path / "crlf_sample.md"  # .md is eol=lf in .gitattributes
         raw = b"line one\r\nline two\r\nline three\r\n"
         target.write_bytes(raw)
@@ -307,6 +317,7 @@ class TestFindingAndReportShapes:
     """
 
     def test_ok_report_format_mentions_ok(self, tmp_path: Path) -> None:
+        _toolguard.require("git")
         _write(tmp_path / "under.txt", 1)
         report = doc_size_budget.check_budgets(
             {"under.txt": 100}, repo_root=tmp_path
@@ -317,6 +328,7 @@ class TestFindingAndReportShapes:
     def test_failing_report_format_mentions_every_finding(
         self, tmp_path: Path
     ) -> None:
+        _toolguard.require("git")
         _write(tmp_path / "over.txt", 200)
         report = doc_size_budget.check_budgets(
             {
@@ -331,6 +343,7 @@ class TestFindingAndReportShapes:
 
     def test_check_budgets_defaults_to_the_module_level_budgets(self) -> None:
         # No explicit `budgets=` argument - must fall back to BUDGETS/REPO_ROOT.
+        _toolguard.require("git")
         report = doc_size_budget.check_budgets()
         assert set(report.measured) | {f.path for f in report.findings} == set(
             doc_size_budget.BUDGETS
@@ -445,6 +458,7 @@ class TestReportStatesHeadroomInSessions:
     def test_format_states_sessions_and_keeps_the_byte_figures(
         self, tmp_path: Path
     ) -> None:
+        _toolguard.require("git")
         _write(tmp_path / "doc.md", 700)
         rates = {"doc.md": doc_size_budget.GrowthRate(100, 100, (100, 100, 100))}
         report = doc_size_budget.check_budgets(
@@ -461,6 +475,7 @@ class TestReportStatesHeadroomInSessions:
     def test_low_headroom_is_visibly_flagged_while_still_under_budget(
         self, tmp_path: Path
     ) -> None:
+        _toolguard.require("git")
         _write(tmp_path / "doc.md", 950)
         rates = {"doc.md": doc_size_budget.GrowthRate(100, 100, (100, 100, 100))}
         report = doc_size_budget.check_budgets(
@@ -473,6 +488,7 @@ class TestReportStatesHeadroomInSessions:
         assert "LOW HEADROOM" in rendered
 
     def test_comfortable_headroom_is_not_flagged(self, tmp_path: Path) -> None:
+        _toolguard.require("git")
         _write(tmp_path / "doc.md", 100)
         rates = {"doc.md": doc_size_budget.GrowthRate(100, 100, (100, 100, 100))}
         report = doc_size_budget.check_budgets(
@@ -484,6 +500,7 @@ class TestReportStatesHeadroomInSessions:
     def test_a_document_with_no_rate_says_so_rather_than_inventing_a_figure(
         self, tmp_path: Path
     ) -> None:
+        _toolguard.require("git")
         _write(tmp_path / "doc.md", 100)
         report = doc_size_budget.check_budgets(
             {"doc.md": 1000}, repo_root=tmp_path, rates={}
@@ -501,6 +518,7 @@ class TestLowHeadroomIsNotAFailureState:
     def test_low_headroom_alone_does_not_make_the_report_fail(
         self, tmp_path: Path
     ) -> None:
+        _toolguard.require("git")
         _write(tmp_path / "doc.md", 999)  # one byte under, ~0.01 sessions left
         rates = {"doc.md": doc_size_budget.GrowthRate(100, 100, (100, 100, 100))}
         report = doc_size_budget.check_budgets(
@@ -513,6 +531,7 @@ class TestLowHeadroomIsNotAFailureState:
 
     def test_over_budget_still_fails_exactly_as_before(self, tmp_path: Path) -> None:
         """The failure condition is unchanged by anything added for OPS-57."""
+        _toolguard.require("git")
         _write(tmp_path / "doc.md", 1000)
         rates = {"doc.md": doc_size_budget.GrowthRate(100, 100, (100, 100, 100))}
         report = doc_size_budget.check_budgets(
@@ -538,6 +557,7 @@ class TestRealDeclaredHeadroomInSessionsIsReported:
     def test_every_real_budgeted_document_reports_sessions_of_headroom(
         self,
     ) -> None:
+        _toolguard.require("git")
         report = doc_size_budget.check_budgets()
 
         for path in doc_size_budget.BUDGETS:
@@ -645,6 +665,7 @@ class TestTheProvisionalCaveatIsInTheCodeNotOnlyInAReport:
     def test_the_rendered_pair_report_repeats_the_provisional_caveat(
         self, tmp_path: Path
     ) -> None:
+        _toolguard.require("git")
         _write(tmp_path / "live.md", 100)
         _write(tmp_path / "arch.md", 100)
         pairs = {"P": doc_size_budget.DocumentPair("live.md", "arch.md")}
@@ -743,6 +764,7 @@ class TestPairTotalIsMeasuredAcrossBothHalves:
     """The measured figure is the sum, and both halves stay visible."""
 
     def test_the_pair_total_is_the_sum_of_both_halves(self, tmp_path: Path) -> None:
+        _toolguard.require("git")
         _write(tmp_path / "live.md", 100)
         _write(tmp_path / "arch.md", 200)
         pairs = {"P": doc_size_budget.DocumentPair("live.md", "arch.md")}
@@ -758,6 +780,7 @@ class TestPairTotalIsMeasuredAcrossBothHalves:
     ) -> None:
         # A pair total that cannot be attributed is a number nobody can act
         # on, so the halves are printed beside it.
+        _toolguard.require("git")
         _write(tmp_path / "live.md", 100)
         _write(tmp_path / "arch.md", 200)
         pairs = {"P": doc_size_budget.DocumentPair("live.md", "arch.md")}
@@ -782,6 +805,7 @@ class TestArchiveGrowthAloneFiresThePairBudget:
     """
 
     def test_a_large_archive_fires_the_pair_budget(self, tmp_path: Path) -> None:
+        _toolguard.require("git")
         _write(tmp_path / "live.md", 100)
         _write(tmp_path / "arch.md", 900)
         pairs = {"P": doc_size_budget.DocumentPair("live.md", "arch.md")}
@@ -805,6 +829,7 @@ class TestArchiveGrowthAloneFiresThePairBudget:
     def test_the_live_only_check_is_green_on_the_very_same_tree(
         self, tmp_path: Path
     ) -> None:
+        _toolguard.require("git")
         _write(tmp_path / "live.md", 100)
         _write(tmp_path / "arch.md", 900)
 
@@ -827,6 +852,7 @@ class TestArchiveGrowthAloneFiresThePairBudget:
     def test_growth_in_the_archive_alone_moves_the_pair_total(
         self, tmp_path: Path
     ) -> None:
+        _toolguard.require("git")
         _write(tmp_path / "live.md", 100)
         _write(tmp_path / "arch.md", 100)
         pairs = {"P": doc_size_budget.DocumentPair("live.md", "arch.md")}
@@ -847,6 +873,7 @@ class TestArchiveGrowthAloneFiresThePairBudget:
     def test_the_pair_boundary_is_at_or_over_like_the_live_one(
         self, tmp_path: Path
     ) -> None:
+        _toolguard.require("git")
         _write(tmp_path / "live.md", 100)
         _write(tmp_path / "arch.md", 900)
         pairs = {"P": doc_size_budget.DocumentPair("live.md", "arch.md")}
@@ -869,6 +896,7 @@ class TestPairMissingHalfFailsTheCheck:
     def test_a_missing_archive_is_a_finding_not_a_small_pair(
         self, tmp_path: Path
     ) -> None:
+        _toolguard.require("git")
         _write(tmp_path / "live.md", 100)
         pairs = {"P": doc_size_budget.DocumentPair("live.md", "arch.md")}
         report = doc_size_budget.check_pair_budgets(
@@ -886,6 +914,7 @@ class TestPairMissingHalfFailsTheCheck:
     def test_a_missing_half_does_not_stop_a_later_pair_being_reported(
         self, tmp_path: Path
     ) -> None:
+        _toolguard.require("git")
         _write(tmp_path / "live_a.md", 100)
         _write(tmp_path / "live_b.md", 100)
         _write(tmp_path / "arch_b.md", 900)
@@ -954,6 +983,7 @@ class TestPairHeadroomInSessions:
     def test_a_pair_report_states_sessions_and_keeps_the_bytes(
         self, tmp_path: Path
     ) -> None:
+        _toolguard.require("git")
         _write(tmp_path / "live.md", 300)
         _write(tmp_path / "arch.md", 400)
         pairs = {"P": doc_size_budget.DocumentPair("live.md", "arch.md")}
@@ -994,6 +1024,7 @@ class TestPairLowHeadroomWarnsEarlierThanTheLiveBudget:
     ) -> None:
         # 700 bytes left at 100 a session is 7.0 sessions; set the budget so
         # the figure lands just inside the pair threshold.
+        _toolguard.require("git")
         _write(tmp_path / "live.md", 100)
         _write(tmp_path / "arch.md", 100)
         pairs = {"P": doc_size_budget.DocumentPair("live.md", "arch.md")}
@@ -1015,6 +1046,7 @@ class TestPairLowHeadroomWarnsEarlierThanTheLiveBudget:
         assert "LOW HEADROOM" in report.format()
 
     def test_comfortable_pair_headroom_is_not_flagged(self, tmp_path: Path) -> None:
+        _toolguard.require("git")
         _write(tmp_path / "live.md", 100)
         _write(tmp_path / "arch.md", 100)
         pairs = {"P": doc_size_budget.DocumentPair("live.md", "arch.md")}
@@ -1036,6 +1068,7 @@ class TestPairLowHeadroomWarnsEarlierThanTheLiveBudget:
     def test_the_rendered_threshold_is_the_pair_threshold_not_the_doc_one(
         self, tmp_path: Path
     ) -> None:
+        _toolguard.require("git")
         _write(tmp_path / "live.md", 100)
         _write(tmp_path / "arch.md", 100)
         pairs = {"P": doc_size_budget.DocumentPair("live.md", "arch.md")}
@@ -1064,6 +1097,7 @@ class TestRealDeclaredPairBudgetsCurrentlyPass:
     """
 
     def test_declared_pair_budgets_are_not_exceeded_right_now(self) -> None:
+        _toolguard.require("git")
         assert doc_size_budget.PAIR_BUDGETS, "no pair budgets declared"
 
         report = doc_size_budget.check_pair_budgets()
@@ -1088,6 +1122,7 @@ class TestRealDeclaredPairBudgetsCurrentlyPass:
         assert report.ok is True
 
     def test_every_real_pair_reports_sessions_of_headroom(self) -> None:
+        _toolguard.require("git")
         report = doc_size_budget.check_pair_budgets()
 
         for name in doc_size_budget.PAIR_BUDGETS:
@@ -1121,6 +1156,7 @@ class TestMainReportsBothChannels:
         ``TestCommandLineRefusesUnknownArguments.test_argv_none_reads_sys_argv``,
         so nothing was lost by making the scope explicit here.
         """
+        _toolguard.require("git")
         code = doc_size_budget.main([])
         out = capsys.readouterr().out
 
@@ -1273,6 +1309,7 @@ class TestRepoRootOptionIsReal:
     """
 
     def test_both_channels_report_the_scratch_sizes(self, tmp_path, capsys) -> None:
+        _toolguard.require("git")
         sizes = _write_scratch_tree(tmp_path)
         code = doc_size_budget.main(["--repo-root", str(tmp_path)])
         out = capsys.readouterr().out
@@ -1297,6 +1334,7 @@ class TestRepoRootOptionIsReal:
         happened to be that size. Measuring the real tree in the same test and
         asserting the two runs disagree is the claim that actually matters.
         """
+        _toolguard.require("git")
         _write_scratch_tree(tmp_path)
         doc_size_budget.main(["--repo-root", str(tmp_path)])
         scratch_out = capsys.readouterr().out
@@ -1314,6 +1352,7 @@ class TestRepoRootOptionIsReal:
         )
 
     def test_every_run_prints_the_root_it_read(self, tmp_path, capsys) -> None:
+        _toolguard.require("git")
         _write_scratch_tree(tmp_path)
         doc_size_budget.main(["--repo-root", str(tmp_path)])
         out = capsys.readouterr().out

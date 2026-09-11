@@ -455,6 +455,17 @@ LANES: tuple[Lane, ...] = (
             # CROSS_CUTTING the day it carries fixtures more than one lane
             # depends on; until then a real owner beats a shared veto.
             "tests/conftest.py",
+            # OPS-78. The shared external-tool presence guard and its own
+            # tests. It belongs here for two reasons that point the same way:
+            # tests/conftest.py above is what registers its end-of-run
+            # statement with pytest, and tools/false_red_probe.py above is the
+            # instrument that measured the 187 tests it was written to convert
+            # from unexplained failures into announced skips. It is test
+            # INFRASTRUCTURE shared across lanes rather than a guard over any
+            # one lane's subject, which is the same argument that put the
+            # conftest here rather than in CROSS_CUTTING.
+            "tests/_toolguard.py",
+            "tests/test_toolguard.py",
             "ROADMAP.md",
             "docs/LEDGER.md",
             # OPS-57. The archives are the same two documents' closed history,
