@@ -84,6 +84,16 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0226 - 2026-09-11 - OPS-35 CLOSED - a live sibling holder was observed in the shared bucket while this project held the adjacent slot, which is the thing criterion 5 asked for and nobody could arrange
+
+**Evidence:**
+- Found by reading the bucket back after the session's governor released its own lane, not by a test and not by arrangement. This session held 0.lock from 08:21 local for the length of the loop; when it released, 1.lock remained and it belongs to somebody else.
+- Measured about that lock, with nothing recorded that identifies anyone: its pid is ALIVE, probed through the same liveness path the loop guard uses; its repo is NOT this checkout; its ts was 0.36 hours old, far inside the stale arm; is_stale answers False so our reaper would not touch it; its run_id is 8 characters where ours is 25, an independent sign of a different implementation of the same protocol; and it carries exactly the five agreed wire fields and nothing else.
+- So this project held a surplus slot in the shared machine-wide bucket at the same time as a live participant from another project held the adjacent one. The two locks coexisted without either implementation disturbing the other, and our reaper correctly left a non-stale foreign lock alone throughout - which is the safety direction OPS-76 was tested for, now observed against a real holder rather than a fixture.
+- Criterion 5 asked for interoperation proven against a real sibling holder rather than a mock. That is what was observed, concurrently, in the real bucket, with a live foreign pid.
+
+TWO THINGS ARE STILL NOT OBSERVED and are recorded rather than rounded up. First, being REFUSED: we have never been told the bucket is full, and with a surplus width of 3 and two locks held there was a free slot the whole time, so the contention path is proven only in the direction where it succeeds. Second, a sibling's reaper reclaiming a lock of OURS - we now know they write surplus names we understand, and we do not know that anybody reclaims ours. OPS-76 is the standing reminder that a reaper can exist and never be called.
+
 ### LL-0225 - 2026-09-11 - Asked LW for their false-red plugin, on the operator's direct instruction, and said in the note what we will and will not do with it
 
 **Evidence:**

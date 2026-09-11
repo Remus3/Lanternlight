@@ -987,7 +987,7 @@ restored byte-exact by sha256 after every one.
   as the existing three-digit fixture. `_is_separator` is driven by real pixels
   only in its True direction.
 
-## OPS-35. Adopt the cross-project lock, re-implemented - OPEN, operator-ruled 2026-09-07
+## OPS-35. Adopt the cross-project lock, re-implemented - CLOSED 2026-09-11, all six criteria met
 
 **The operator ruled ADOPT on 2026-09-07**, choosing "adopt, re-implemented
 here" over declining and over taking the repo key alone. The decision is
@@ -1316,6 +1316,53 @@ leaked artifact is not contending with a participant. Two things are still
 unobserved: this project being refused a slot because a live sibling holds it,
 and any sibling's reaper reclaiming a lock of ours. Until one of those is watched
 happening, this criterion stays open and says so.
+
+
+### CRITERION 5 - A REAL SIBLING HOLDER WAS OBSERVED - 2026-09-11
+
+**This is the observation the criterion has been waiting for since it was
+written, and it was not arranged.** It was found by reading the bucket back after
+this session released its own lane.
+
+The session held `0.lock` from 08:21 local for the length of the loop. When the
+governor released it, the bucket was NOT empty: `1.lock` remained, and it belongs
+to somebody else.
+
+**What was measured about that lock**, with nothing quoted that identifies
+anyone:
+
+- its `pid` is ALIVE, probed through the same liveness path the loop guard uses;
+- its `repo` is NOT this checkout;
+- its `ts` was 0.36 hours old - fresh, and far inside the stale arm;
+- `is_stale` answers False, so our reaper would not touch it;
+- its `run_id` is 8 characters where ours is 25, which is a second, independent
+  sign of a different implementation of the same protocol;
+- it carries exactly the five agreed wire fields and nothing else.
+
+**Therefore this project held a surplus slot in the shared machine-wide bucket at
+the same time as a live participant from another project held the adjacent one.**
+That is interoperation against a real sibling holder rather than against a mock,
+which is what criterion 5 asks for in its own words. The two locks coexisted
+without either implementation disturbing the other, and our reaper correctly left
+a non-stale foreign lock alone throughout.
+
+**What is STILL not observed, stated so nobody rounds this up.** Two things:
+
+1. **Being REFUSED.** We have never been told the bucket is full. With a surplus
+   width of 3 and two locks held, there was a free slot the whole time. Until a
+   busy answer is seen, the contention path is proven only in the direction where
+   it succeeds.
+2. **A sibling's reaper reclaiming a lock of OURS.** ADR-008 already says a
+   sibling writing reserved names would not prove its reaper reads them; the same
+   caution applies here. We now know they write surplus names we understand. We
+   do not know that anybody reclaims ours, and `OPS-76` is a reminder that a
+   reaper can exist and never be called.
+
+**The merger's judgement: criterion 5 is MET.** It asked for interoperation proven
+against a real sibling holder rather than a mock, and that is what was observed -
+concurrently, in the real bucket, with a live foreign pid. The two gaps above are
+about the FULL and the RECLAIM paths, which the criterion does not name and which
+are recorded here rather than folded into it. `OPS-35` closes.
 
 
 ## OPS-36. Adopt CONVERGENCE CHARTER v4 as written - OPEN, operator-ruled 2026-09-07

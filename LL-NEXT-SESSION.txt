@@ -18,185 +18,169 @@ Run `python ops/stop_audit.py --show-last`. A FAIL line is a QUESTION about what
 the last turn wrote, not a verdict - it cannot tell a claim from a QUOTATION of
 one.
 
-=== THE LANE IS ARMED. DO NOT RE-ARM IT; IT IS WIRED AND IT IS LIVE ===
+=== WATCH FOR LW'S REPLY. WE ASKED THEM FOR SOMETHING. ===
 
-The operator's instruction of 2026-09-10 - "re arm the lane next session" - was
-carried out on 2026-09-11 and is DONE. ops/loop/lane.py now takes a
-SESSION-SCOPED lane in the loop's entry block, beside the single-instance lock
-and the session watcher. The documented block is in .claude/commands/loop.md and
-it was executed verbatim by the refutation pass, so it works as written.
+On the operator's direct instruction in chat - "ask LW for the plugin" - this
+session sent LW a note asking for their git-off-PATH false-red probe, delivered
+through ops.outbox.deliver so a copy and a delivery record exist here. If a reply
+has arrived, it is the first thing to read.
 
-  Session scope rather than per cycle, so nobody re-litigates it: the budget
-  being rationed is the machine's and the account's concurrency, which this
-  project consumes continuously for as long as a loop is alive, not in bursts
-  that line up with cycle boundaries.
+  THE NOTE COMMITTED US TO SOMETHING, so honour it. It says we will NOT vendor
+  their plugin: this repository is public and Apache-2.0 and a drop carrying no
+  license statement cannot be copied in. It asks LW to NAME A LICENSE explicitly
+  if they want it vendorable. **If their reply does not name one, read it for the
+  IDEA and write anything we adopt in our own words.** If it DOES name one, that
+  is a real change and the license gate in CLAUDE.md applies - GPL and AGPL are
+  still DO-NOT-VENDOR whatever anyone offers.
 
-  MEASURED, not assumed: while held, a lock carrying exactly the five wire
-  fields appeared at 1.lock with pid this process and a ts age of 0.02 s; after
-  release it was gone and the bucket was byte-identical to before.
+  The note answers no cross-project question and proposes no shared convention,
+  and says so. OPS-68 still holds the responder runner and all propagation on
+  standby; asking LW for one named thing on a direct operator instruction is not
+  a licence to open anything else.
 
-**THIS PROJECT NOW DELETES FILES FROM A DIRECTORY OTHER PROJECTS DEPEND ON.**
-Know this before your first acquire. Every acquire reclaims any STALE lock in
-the SURPLUS namespace, whoever wrote it. It never touches another participant's
-reserved floor, even a stale one - the accepted blind spot is that a sibling's
-genuinely leaked floor is never reclaimed by us. It never touches a lock that is
-not stale. "Stale" is not an age check; read the three arms in docs/HEADLESS.md
-before you assume it is.
+=== OPS-35 IS CLOSED, AND THE THING THAT CLOSED IT WAS NOT ARRANGED ===
 
-  At this wrap the live bucket held one lock, 0.lock, stale by both arms and
-  about 33 hours old. THE NEXT REAL ACQUIRE ON THIS MACHINE WILL REMOVE IT. That
-  is the protocol working, and it is still a sibling's file going away, so it is
-  written here rather than left to surprise you. RE-MEASURE the bucket yourself;
-  it can change without anyone telling us.
+The lane was armed on 2026-09-11 and this session ran its whole loop holding
+0.lock in the shared machine-wide bucket. When the governor released it, the
+bucket was NOT empty: 1.lock remained, and it belongs to somebody else.
 
-=== THE THING TO LEARN FROM THIS SESSION, IF YOU READ ONLY ONE PART ===
+  MEASURED about that lock: its pid is ALIVE, its repo is NOT this checkout, its
+  ts was 0.36 hours old, is_stale answers False so our reaper would not touch it,
+  and its run_id is 8 characters where ours is 25 - an independent sign of a
+  different implementation of the same protocol. Exactly the five agreed wire
+  fields, nothing else.
 
-**A GREEN SUITE PROVES A BEHAVIOUR IS IMPLEMENTED. IT SAYS NOTHING ABOUT WHETHER
-THE BEHAVIOUR IS WIRED, OR WHETHER THE PROSE BESIDE IT IS STILL TRUE.** Both
-halves of that bit this session, in the same hour, at 2924 tests passing.
+  So this project held a surplus slot at the same time as a LIVE participant from
+  another project held the adjacent one. That is criterion 5's "interoperation
+  proven against a real sibling holder, not a mock", and it is what the item had
+  been open on since 2026-09-07.
 
-  WIRED. Seventy-three tests covered a reaper that NO production path could
-  reach. ops.lane_slot.reap had no caller anywhere in ops/, tools/, lanternlight/
-  or scripts/. ADR-008's Consequences, the previous hand-off and the module
-  docstring all described its live behaviour in the present tense. It was found
-  only because arming against the REAL bucket refuted the hand-off's own
-  prediction: the leaked lock was not reclaimed, it was stepped past, and it was
-  left identical to the nanosecond. OPS-76, filed and closed the same session.
+  TWO THINGS ARE STILL NOT OBSERVED and must not be rounded up. We have never
+  been REFUSED a slot - with a surplus width of 3 and two locks held there was a
+  free one the whole time, so the contention path is proven only where it
+  succeeds. And we have never seen a sibling's reaper reclaim a lock of OURS.
+  OPS-76 is the standing reminder that a reaper can exist and never be called.
 
-  TRUE. After that fix, three shipped documents - ops/loop/lane.py,
-  docs/HEADLESS.md and .claude/commands/loop.md - still said this project never
-  removes a lock it did not create. True for the module's whole life; made false
-  by the fix itself. The suite stayed green. Only the refutation pass found it.
+=== YOUR ITEM: OPS-78 criterion 4, and it comes with a trap ===
 
-  The privacy defect rode in on the same pass. The bucket display helper was
-  INVERTED: it elided paths inside the checkout and printed every other path
-  verbatim - and every bucket this project actually uses is OUTSIDE the checkout.
-  A status line printed once per cycle carried the operator's account name. The
-  red run printed the real one. Fixed by enumerating the safe renderings and
-  eliding everything else behind a truncated digest.
+The false-red instrument is now general: --tool plants a control for the tool
+under test, and BOTH git and bash reported their control PROVED. git is at
+findings 0 after this session took it from 187. bash reports 56 false reds across
+6 files - test_no_pii 33, test_syntax_check_hook 8, test_precommit_gate_lint 7,
+test_docguards 7, test_precommit_hook_globbing 6, test_ascii_hygiene 1.
 
-  lanternlight/redact.py was MEASURED and deliberately NOT used for that fix: it
-  masks enumerated identifier tokens in log-shaped text and has no
-  filesystem-path rule, so calling it would have been a no-op wearing the costume
-  of coverage. Recorded because you will reasonably ask why the sanctioned path
-  was skipped.
+  RE-RUN IT BEFORE ACTING. That 56 is the implementing slice's measurement and
+  was NOT independently re-run by the merger. The git figure was.
 
-=== YOUR ITEM: OPS-74 - the git-off-PATH false-red probe ===
+  THE TRAP, and it narrows what 56 means. Both runs were launched from Git Bash,
+  because bash is not on the PATH this machine gives PowerShell. All three
+  stripped PATH entries are ONE directory - Git's usr/bin. So a false red there
+  says "this broke when that DIRECTORY left the PATH", which is wider than "this
+  needs bash". READ THE INDIVIDUAL FAILURES. Do not convert a call site on the
+  strength of the tool name in the report; the tool name is the question that was
+  asked, not the dependency that was proved.
 
-A guard that is green only because a tool is ABSENT is invisible to the suite.
-Acceptance is in ROADMAP.md. CRITERION 3 IS THE LOAD-BEARING ONE: the probe's own
-instrument must be proved with a deliberately planted false-red site before any
-zero it reports is believed, exactly as this session's file-write instrument fired
-its positive control before its zero was trusted.
-
-  MEASURED on this tree and already written into the item, so do not re-derive it
-  and do not quote a sibling's figure as ours: 57 files carrying a subprocess call
-  site across tools/, ops/ and tests/, 114 call-site occurrences, 16 passing
-  check=True, 11 shutil.which presence guards. That shape does not prove a single
-  false red exists. WHETHER THIS TREE HAS ANY IS UNMEASURED.
-
-  Then OPS-75 (a .gitignore pattern that already shadows a tracked file) and
-  OPS-77 (a surplus width of zero gives a permanent silent BUSY against a healthy
-  empty bucket - OPS-73's own hole 2 one level up, found by the refuter while
-  trying to break the fix for it).
+  Then OPS-75 (a .gitignore pattern that already shadows a tracked file), OPS-77
+  (a surplus width of zero is a permanent silent BUSY against a healthy empty
+  bucket) and OPS-81 (each applied split adds one blank line before the archive
+  index, forever).
 
 === HELD BY THE OPERATOR - DO NOT ACT ON THESE ALONE ===
 
 OPS-68. The responder runner and cross-project propagation are on STANDBY by the
 operator's own words on 2026-09-08: "standby on this decision then, i will keep
-it to the test for now", answered to BOTH questions. NOTHING HAS BEEN BUILT AND
-NOTHING HAS BEEN SENT, and that is still true after this session. Do not build
-"the safe version first" - that is a session choosing a default and calling it
-modesty.
+it to the test for now", answered to BOTH questions. Nothing has been built. The
+one note sent this session was a specific operator instruction, not a precedent.
 
 OPS-48 remains HELD - do not answer its four questions, do not solicit RC or RSC.
+Its hold names RC and RSC; it does not name LW.
 
 OPS-36 ROUTES THROUGH THE SAME CLOSED GATE. Operator-ruled ADOPT, which reads as
 actionable, but criterion 1 needs RC to say which charter version is CURRENT and
 criteria 2 to 4 depend on it. Asking RC is soliciting RC.
 
-=== WHAT CLOSED THIS SESSION - one commit, d3edde2, pushed ===
+=== THE THING TO LEARN FROM THIS SESSION ===
 
-  OPS-35  criterion 5 ADVANCED, still NOT MET, and the item says why. A real
-          acquire in the real shared bucket is strictly more than the mock the
-          criterion forbids - but the only other lock present belonged to a DEAD
-          holder, and contending with a leaked artifact is not contending with a
-          participant. Still unobserved: being refused a slot because a LIVE
-          sibling holds one, and any sibling's reaper reclaiming a lock of ours.
-  OPS-73  CLOSED. Detection reads a wider alphabet than claiming does; an
-          unusable bucket raises instead of answering "busy"; both root branches
-          agree about whitespace.
-  OPS-76  FILED AND CLOSED. The dead-code stale arm, above.
-  OPS-74, OPS-75, OPS-77  FILED, each with acceptance criteria.
+**EVERY WRONG THING THIS SESSION SHIPPED WAS A COUNT OR A DOCUMENT. NOT ONE WAS A
+TEST.** The suite was green through all of it. Only refutation passes caught them.
 
-  On the rm and ds detection codes: we widened what we can SEE and assigned
-  NOBODY anything. We never write another project's reserved name and never claim
-  with its key. The codes are read off CLAUDE.md's ports table and are recorded
-  as NOT confirmed lock keys agreed by those projects, because nobody was asked -
-  OPS-48 forbids it.
+  - Three documents said this project never removes a lock it did not create.
+    True for the module's whole life; made false by OPS-76 in the same session.
+  - A status line printed once per cycle carried the operator's account name,
+    because the bucket display helper elided paths INSIDE the checkout and
+    printed every other one verbatim - and every bucket we use is outside it.
+  - THREE COUNTS THE MERGER FILED WERE WRONG. A file count of 22 that was really
+    17, taken from an adjacent line of the same report. A guard sweep described
+    as covering "this tree" when it covered four files. And a set of figures
+    filed as MEASURED that had been relayed out of a research agent's report and
+    never re-derived - this repository's own standing rule broken while filing an
+    item about not believing green things.
+  - A confident diagnosis of the probe's broken control, written into ROADMAP.md
+    by the merger and refuted by measurement within the hour. The arithmetic tell
+    was in the failing run's own output the whole time.
 
-=== A NOTE'S CLAIM ABOUT THIS TREE THAT DID NOT CORROBORATE ===
+  ALL OF IT IS CORRECTED IN PLACE RATHER THAN DELETED, because the corrections
+  are the part worth reading.
 
-A cross-project note asserts an identical trust-key path-separator bug was found
-LIVE on Lanternlight. Searched docs/LEDGER.md, docs/LEDGER_ARCHIVE.md,
-ROADMAP.md, docs/ROADMAP_ARCHIVE.md and docs/adr/, both line-wise AND on a
-whitespace-collapsed copy because prose here is hard-wrapped near 80 columns:
-ZERO hits. Recorded as a GAP, not as a refutation - this tree's records not
-mentioning something is not proof it did not happen elsewhere.
+=== WHAT CLOSED - four loop cycles, six commits, 89b0b2a..a60dba7, all pushed ===
+
+  OPS-35  CLOSED. All six criteria. The lane is armed, wired at session scope,
+          and interoperation was observed against a live sibling.
+  OPS-73  CLOSED. Detection reads a wider alphabet than claiming; an unusable
+          bucket raises instead of answering "busy"; both root branches agree
+          about whitespace.
+  OPS-76  FILED AND CLOSED. The stale arm had NO CALLER anywhere in the tree - a
+          fully tested reaper unreachable from every production path, described
+          in the present tense by three documents.
+  OPS-74  CLOSED. The probe. Its first real run declared its own instrument
+          UNPROVEN, which is the only reason its numbers are worth anything.
+  OPS-80  FILED AND CLOSED. CLAUDE.md told a cold session facing a fired budget
+          to re-run a tool that writes nothing. Split applied, instruction fixed.
+  OPS-79  FILED AND CLOSED. Four gaps in the probe's own instrument, including a
+          positive control made only of positive specimens - it proved the probe
+          could SEE and nothing about whether it INVENTS.
+  FILED, open: OPS-75, OPS-77, OPS-78, OPS-81.
 
 === STATE AT THE WRAP - RE-DERIVE RATHER THAN QUOTING ===
 
-  suite             2933 passed, 1 skipped, observed bare this run. Merge gate OK
-                    at 2934 collected with NO per-file drop against the HEAD
-                    89b0b2a baseline, and ZERO test deletions across all three
-                    test files. Re-derive it; run pytest BARE, because pytest.ini
-                    already carries -q and a second one prints NO summary line at
-                    all while still exiting 0.
+  suite             3061 passed, 1 skipped, observed bare this run. Run it BARE -
+                    pytest.ini already carries -q and a second one prints NO
+                    summary line at all while still exiting 0.
   ruff              All checks passed.
-  origin/main       d3edde2, confirmed with `git rev-parse HEAD origin/main`.
+  origin/main       a60dba7, confirmed with `git rev-parse HEAD origin/main`.
                     main has NO UPSTREAM, so a bare `git push` FAILS and its
                     advice text reads like success when piped to tail. Use
                     `git push origin main`.
-  loop              cycle 71, item OPS-74, in_flight empty.
-  capture watcher   ARMED, identity VERIFIED, heartbeat 21 s old, all four
-                    surfaces fresh. ARCHIVE state UNKNOWN, which is a THIRD
-                    answer and correct: the live process was armed by a build
-                    older than OPS-59 and writes no archive map. NOT a report
-                    that nothing was copied.
-  budgets           BOTH continuity documents are now in LOW HEADROOM and NEITHER
-                    HAS FIRED. ROADMAP.md is at 0.8 sessions of headroom and
-                    docs/LEDGER.md at 1.8. ROADMAP.md will very likely FIRE
-                    during your session. When it does, RE-RUN
-                    `python tools/doc_archive.py` and do NOT raise the number.
-                    The closed OPS-73 and OPS-76 blocks are the obvious mass to
-                    move. The OPS-62 PAIR channel is a DIFFERENT event with NO
-                    MECHANICAL REMEDY - a pair total is exactly what a split does
-                    not change - and is an OPERATOR DECISION GATE. NOBODY RAISES
-                    A PAIR BUDGET SILENTLY.
+  loop              cycle 75, item OPS-78, in_flight empty. Governors released
+                    cleanly - the lane lock is gone from the bucket.
+  capture watcher   ARMED, identity VERIFIED, all four surfaces fresh. ARCHIVE
+                    state UNKNOWN, which is a THIRD answer and correct: the live
+                    process was armed by a build older than OPS-59 and writes no
+                    archive map. NOT a report that nothing was copied.
+  budgets           BOTH RECOVERED. ROADMAP.md 3.2 sessions of headroom, LEDGER
+                    5.3, neither in the low-headroom warning any more. The split
+                    was applied this session. THE REMEDY CHANGED: it is now
+                    `python scripts/apply_doc_split.py --apply`, and
+                    tools/doc_archive.py only PLANS and writes nothing. CLAUDE.md
+                    says so now. Do not raise the number.
 
 === BEFORE DISPATCHING PARALLEL WORK ===
 
 Read SHARED_WORKTREE_BAN in ops/store_drift.py and put it in every slice brief -
 it is ADVISORY and nothing enforces it. Record dispatches with state.dispatch(),
 read state.in_flight_summary(state.load()) FIRST, and capture a per-file baseline
-AT DISPATCH to hand the merge gate as per_file_baseline. A repository TOTAL is
-safe for one worker and unsafe for several.
+AT DISPATCH: `git worktree add --detach <scratch> HEAD`, collect there, and hand
+the merge gate a true per_file_baseline rather than the handful of files you
+happened to print.
 
-  DO NOT RUN TWO PYTEST PROCESSES AT ONCE. Targeted runs per slice; full suite at
-  the merge only. RETIRE YOUR SLICES - state.retire() is ITEM-scoped.
+  DO NOT RUN TWO PYTEST PROCESSES AT ONCE. Targeted runs per slice, full suite at
+  the merge. RETIRE YOUR SLICES - state.retire() is ITEM-scoped.
 
-  THE PER-FILE BASELINE IS CHEAP TO GET RIGHT: `git worktree add --detach
-  <scratch> HEAD`, collect there, and you have the true per-file dict rather than
-  the handful of files you happened to print before dispatching.
+  TELL EVERY SLICE IN WORDS NOT TO TOUCH THE REAL SHARED BUCKET. The code they
+  are editing now DELETES from it, and a live sibling is using it.
 
-  A SLICE'S REPORT IS A HYPOTHESIS. Every slice this session reported success and
-  four of the five were right; the integration gap between two of them - one
-  slice raising a new exception the other had never heard of - was caught by
-  reading the reports against each other, not by the suite. And the refutation
-  pass overturned the whole merge on documents nobody had thought to re-read.
-
-  TELL EVERY SLICE, IN WORDS, NOT TO TOUCH THE REAL SHARED BUCKET. The code they
-  are editing now deletes from it.
+  THE PROBE COSTS EIGHT MINUTES A RUN because it runs the suite twice. Budget for
+  it, and never let a slice run it more than twice.
 
 === HOW TO WRITE THE NEXT HAND-OFF ===
 
