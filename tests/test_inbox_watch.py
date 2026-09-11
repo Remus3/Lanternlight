@@ -21,6 +21,7 @@ asserted to PARSE, by a parser, not by eye.
 from __future__ import annotations
 
 import json
+import os
 import shlex
 import shutil
 import subprocess
@@ -520,6 +521,42 @@ def test_the_existing_hooks_were_not_disturbed() -> None:
     assert "tools/ascii_check.py" in joined
 
 
+
+def _restore_live_record(path: Path, snapshot: bytes | None) -> None:
+    """Put one of the operator's live records back, the way production writes it.
+
+    ``OPS-82``. The obvious restore is ``path.write_bytes(snapshot)``, and that
+    is what this file did until 2026-09-11. It is wrong for the same reason
+    ``ops/inbox_watch.py`` does not write these files that way:
+    :meth:`pathlib.Path.write_bytes` TRUNCATES the target and then fills it, so
+    a crash, an interrupt or a full disk between the two leaves a zero-length or
+    half-written record on disk. For these two paths that failure is the worst
+    one this repository has - a lost seen set re-reports every note as new, and a
+    half-written one can mark mail as seen that nobody has read.
+
+    ``save_seen`` and ``save_reported`` both route through ``_write_json_atomic``
+    for exactly this reason, and its docstring says so. That helper is not reused
+    here because it takes a JSON payload and builds its own envelope, while a
+    restore must put back the EXACT bytes that were there - including bytes
+    written by a schema this test knows nothing about. So the discipline is
+    copied and the payload is not.
+
+    The absent-record branch stays an ``unlink``: removing a directory entry has
+    no partially-written state to leave behind, which is the property the write
+    branch had to be given. The temporary is removed in a ``finally`` so a failed
+    ``replace`` does not leave one beside the operator's live records either; on
+    success ``replace`` has already consumed it and the unlink is a no-op.
+    """
+    if snapshot is None:
+        path.unlink(missing_ok=True)
+        return
+    tmp = path.with_name(f".{path.name}.restore.{os.getpid()}.tmp")
+    try:
+        tmp.write_bytes(snapshot)
+        tmp.replace(path)
+    finally:
+        tmp.unlink(missing_ok=True)
+
 @pytest.mark.slow
 def test_the_sessionstart_hook_command_really_runs_and_prints_the_report() -> None:
     """End to end through the command string, expanded the way the harness does.
@@ -559,16 +596,106 @@ def test_the_sessionstart_hook_command_really_runs_and_prints_the_report() -> No
         )
     finally:
         for path, snapshot in zip(live, before, strict=True):
-            if snapshot is None:
-                path.unlink(missing_ok=True)
-            else:
-                path.write_bytes(snapshot)
+            _restore_live_record(path, snapshot)
 
     stdout = proc.stdout.decode("utf-8", "replace")
     assert proc.returncode == 0, proc.stderr.decode("utf-8", "replace")
     assert "moon_sync_inbox" in stdout, stdout
     after = [path.read_bytes() if path.is_file() else None for path in live]
     assert after == before
+
+
+class TestTheLiveRecordRestoreIsAtomic:
+    """``OPS-82``. The guard over the operator's live mail records, guarded.
+
+    Legion Wallpaper reported on 2026-09-11 that this suite writes bytes into
+    ``ops/runtime/inbox_seen.json`` and ``ops/runtime/inbox_reported.json``. It
+    does, and the records come out BYTE-IDENTICAL - measured before and after,
+    both files unchanged - because the write LW's tracer saw was this restore
+    putting them back. LW's tracer cannot see subprocess writes, which is its
+    stated limit, and the hook under test runs in a subprocess; so the only
+    in-process writes to those paths were the restore's own.
+
+    What survived that refutation is one level down and is what this class
+    pins. The restore was the only writer of those two records anywhere in this
+    tree that did NOT write atomically, while the production module they belong
+    to is careful to. A guard weaker than the thing it guards is worth a test.
+
+    These arms assert the MECHANISM, not the result. Comparing bytes at the end
+    cannot fail for a truncating restore - ``write_bytes`` gets the bytes right
+    too. The distinguishing observation is file IDENTITY: truncate-and-fill
+    keeps it, rename-onto-target replaces it.
+    """
+
+    def test_the_restore_replaces_the_target_rather_than_truncating_it(
+        self, tmp_path: Path
+    ) -> None:
+        """Mutation target. Reverting the helper to ``write_bytes`` reddens this."""
+        target = tmp_path / "inbox_seen.json"
+        target.write_bytes(b'{"schema": 1, "seen": []}')
+        before = target.stat().st_ino
+        # The anchor. On a filesystem that reports no inode this comparison
+        # would pass for every implementation, so the arm would be decoration.
+        assert before != 0, (
+            "this filesystem reports st_ino 0, so file identity cannot "
+            "distinguish a replace from a truncate and this arm proves nothing"
+        )
+
+        restored = b'{"schema": 1, "seen": ["a-real-note.md"]}'
+        _restore_live_record(target, restored)
+
+        assert target.read_bytes() == restored
+        assert target.stat().st_ino != before, (
+            "the restore kept the target's file identity, so it truncated the "
+            "operator's live record in place instead of replacing it - the "
+            "exact window OPS-82 exists to close"
+        )
+
+    def test_no_temporary_is_left_beside_the_live_record(
+        self, tmp_path: Path
+    ) -> None:
+        """A stray dotfile beside the real records is its own small defect."""
+        target = tmp_path / "inbox_reported.json"
+        target.write_bytes(b'{"schema": 1}')
+        _restore_live_record(target, b'{"schema": 1, "reported": []}')
+        assert sorted(p.name for p in tmp_path.iterdir()) == ["inbox_reported.json"]
+
+    def test_a_failed_replace_leaves_no_temporary_behind(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The ``finally`` is load-bearing, so it is watched failing.
+
+        Without it a restore that cannot complete leaves a partial temporary
+        sitting in ``ops/runtime/`` next to the records it was protecting.
+        """
+        target = tmp_path / "inbox_seen.json"
+        target.write_bytes(b'{"schema": 1}')
+
+        def _boom(self: Path, other: object) -> None:
+            raise OSError("disk full")
+
+        monkeypatch.setattr(Path, "replace", _boom)
+        with pytest.raises(OSError):
+            _restore_live_record(target, b'{"schema": 1, "seen": []}')
+
+        assert sorted(p.name for p in tmp_path.iterdir()) == ["inbox_seen.json"]
+        assert target.read_bytes() == b'{"schema": 1}', (
+            "the target was damaged by a restore that never completed"
+        )
+
+    def test_an_absent_record_is_restored_to_absent(self, tmp_path: Path) -> None:
+        """``None`` means the file did not exist, and must not become one."""
+        target = tmp_path / "inbox_seen.json"
+        target.write_bytes(b'{"schema": 1}')
+        _restore_live_record(target, None)
+        assert not target.exists()
+        assert list(tmp_path.iterdir()) == []
+
+    def test_restoring_an_absent_record_that_is_already_absent_is_quiet(
+        self, tmp_path: Path
+    ) -> None:
+        _restore_live_record(tmp_path / "never_existed.json", None)
+        assert list(tmp_path.iterdir()) == []
 
 
 def test_the_module_runs_as_a_script_under_this_interpreter(tmp_path: Path) -> None:

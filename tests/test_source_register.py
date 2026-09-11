@@ -310,6 +310,17 @@ KNOWN_NON_HOSTS = frozenset(
         "slots.py",
         "sys.addaudithook",
         "GateReport.notes",
+        # STANDARD LIBRARY CALLABLES quoted by `OPS-82`, which describes which
+        # write routes an external write tracer patched and which route this
+        # repository's own atomic writers take. Each is a dotted Python name
+        # the extractor reads as a domain; none is a host and none resolves
+        # anywhere. `path.write` is the truncated tail the extractor emits for
+        # `Path.write_bytes`, lowercased, and is listed in the form the failure
+        # message actually names rather than the form the prose uses.
+        "builtins.open",
+        "os.rename",
+        "os.replace",
+        "path.write",
         # TEST MODULE FILENAMES quoted by `LL-0159`, the entry closing the
         # `OPS-33` follow-up. Each is a file in THIS tree - `git ls-files`
         # matches `tests/test_inbox_acknowledge.py` and its three siblings -

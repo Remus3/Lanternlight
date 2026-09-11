@@ -3734,6 +3734,101 @@ work out whether a changed newline run means something.
 4. Watched red under mutation: with the fix in place, re-introducing the extra
    newline must redden the fixed-point test, with the anchor asserted first.
 
+## OPS-82. The guard that protects the operator's live mail records is the only NON-ATOMIC writer of them in the tree - OPEN
+
+Filed 2026-09-11 out of a defect report from Legion Wallpaper, which is worth
+reading as an example of a finding that was measured, published in good faith,
+retracted once, and is still not quite what it says.
+
+**WHAT LW REPORTED.** LW ran a write-attribution tracer over this suite and
+first published "Lanternlight is CLEAN". It then RETRACTED that verdict on
+2026-09-11, because its first tracer patched only `builtins.open`, `os.replace`
+and `os.rename` and so never saw `pathlib` writes. Re-measured with the fixed
+instrument, LW reported that this suite writes the operator's live records -
+19,700 bytes into `ops/runtime/inbox_seen.json` and 10,464 bytes into
+`ops/runtime/inbox_reported.json` - attributed to
+`tests/test_inbox_watch.py::test_the_sessionstart_hook_command_really_runs_and_prints_the_report`.
+
+**RE-MEASURED HERE, and the corruption reading is REFUTED.** Both live records
+are BYTE-IDENTICAL across a run of that test: `inbox_seen.json` 21,510 bytes and
+`inbox_reported.json` 11,394 bytes, each with the same sha256 before and after.
+Measured twice, an acknowledging run apart. Nothing the operator relies on was
+left changed.
+
+The EQUALITY is the result and the absolute digest is not, so no digest is
+recorded here: both records carry an `updated` timestamp, so their hashes change
+whenever the watcher legitimately writes them and a value pinned in this file
+would never reproduce. Re-take the measurement rather than comparing to a
+constant - the same reason this repository refuses to restate a suite count. The test snapshots both records before it runs the hook command and
+restores them in a `finally`, and its own docstring names itself as the single
+documented exception that is allowed to touch them.
+
+**WHY LW'S TRACER SAW BYTES ANYWAY, which is the part worth keeping.** LW states
+its own limit: the tracer does not see writes performed by a SUBPROCESS. This
+test runs the hook through `subprocess.run`, so the hook's own writes are exactly
+the ones the tracer cannot see. The only in-process writes to those two paths in
+that test are the two `path.write_bytes(snapshot)` calls of the RESTORE. So what
+was reported as the suite damaging live state is the guard putting it back, and
+the byte counts are consistent with one whole-file write of each record rather
+than with an append or a series. This is not a criticism of LW's instrument: the
+instrument answered the question it was asked, which was "did bytes move", and
+"did state change" is a different question.
+
+**THE DEFECT THAT IS REAL, and it is one level down from the one reported.** The
+restore is `Path.write_bytes`, which truncates and then writes. Production code
+in the same module does NOT do this: `save_seen` and `save_reported` both route
+through `_write_json_atomic`, which writes a temporary file in the target's own
+directory, fsyncs it and `replace`s it onto the target, and `save_seen`'s
+docstring explains that this is deliberate because a session-start hook reads
+these records. So the one writer of the operator's live mail state that is NOT
+atomic is the test whose entire purpose is to leave that state unharmed. A crash,
+an interrupt or a full disk between truncate and write leaves a zero-length or
+half-written `inbox_seen.json`, and the failure mode is the one this repository
+cares about most: mail the operator has never seen marked as seen, or a seen set
+lost so that 115 notes are re-reported as new.
+
+Two smaller edges of the same shape, recorded so the fix covers them rather than
+being redone: the absent-record branch uses `unlink(missing_ok=True)`, which has
+the same non-atomic character in the other direction, and there is a WINDOW
+between the subprocess's write and the restore during which the live records hold
+values produced by a test. Another Claude session's `SessionStart` hook reading in
+that window reads fixture state. `CLAUDE.md` already requires atomic writes for
+"anything a reader might poll", and these records are polled by every session on
+this machine.
+
+**NOT CLAIMED.** No corruption has been observed. This is a crash-window defect,
+not a reproduced loss, and it is filed at that strength deliberately - the
+repository's own rule is that a confident wrong number is worse than an absent
+one, and the same applies to a confident wrong severity.
+
+### Acceptance
+
+1. The restore path in that test writes atomically, by the same temp-then-replace
+   discipline `_write_json_atomic` already uses, rather than by `write_bytes`. If
+   the production helper can be reused rather than reimplemented, it is reused;
+   if it cannot, the reason is written down where the next reader will find it.
+2. The absent-record branch is covered too: restoring "this file did not exist"
+   must not be able to leave a partially written file behind either.
+3. A regression test asserts the restore is atomic in a way that a non-atomic
+   restore FAILS - not merely that the bytes match at the end, because
+   `write_bytes` already satisfies that. Pinning the mechanism is the point.
+4. Watched red under mutation: with the fix in place, reverting the restore to
+   `write_bytes` must redden the new test, and the anchor must be asserted before
+   the survivor is believed.
+5. The window is addressed or explicitly accepted in writing, with the reasoning
+   recorded here. Accepting it is defensible - the window is short and the reader
+   is another session's hook - but silence is not.
+6. A reply to LW is DRAFTED but NOT SENT without an operator ruling, and the
+   question is put to the operator. LW published a retraction of its own clean
+   bill in good faith and the follow-up measurement changes what its finding
+   means, so a reply is owed on the merits. Sending one is still an outward
+   action: `OPS-68` holds cross-project propagation on standby by the operator's
+   own words, and the single note this channel carried from here on 2026-09-11
+   went out on a specific operator instruction that was explicitly not a
+   precedent. The draft states what was refuted, what survived, and the
+   subprocess reasoning that explains the difference, and quotes no raw command
+   output - the finding is stated instead, per `ADR-004` as amended.
+
 ## Archive index
 
 Every closed and refuted item is still here, one hop away, in

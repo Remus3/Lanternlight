@@ -406,6 +406,13 @@ LANES: tuple[Lane, ...] = (
             # thing a cold session was found re-deriving by listing the disk.
             "tests/test_outbox.py",
             "docs/REPLY_PATHS.md",
+            # OPS-82. Replies that are WRITTEN but HELD pending an operator
+            # ruling, because OPS-68 put cross-project propagation on standby.
+            # They are tracked rather than left in the gitignored outbox on
+            # purpose: a draft nobody can find is the same failure as a
+            # suggestion filed outside ROADMAP.md, and the outbox holds sent
+            # copies rather than unsent ones.
+            "docs/drafts/**",
             # OPS-45, the Stop-hook claim auditor. ops/** already covers
             # ops/stop_audit.py; the test module matches no glob here. It is
             # this lane's work for the same reason the merge gate is: both
