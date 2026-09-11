@@ -287,6 +287,16 @@ LANES: tuple[Lane, ...] = (
             # which is repository hygiene applied to what gets PUBLISHED -
             # the same mandate as ascii_check and the PII backstop.
             "tests/test_no_hardcoded_home_path.py",
+            # OPS-35 criterion 1. Refuses any tracked path resolving inside
+            # "moon_sync_inbox/", the gitignored channel where siblings drop
+            # notes AND whole directories of their own unlicensed source.
+            # This repository is public and Apache-2.0, so committing one of
+            # those files is a licensing failure that survives being deleted.
+            # It sits in SAFETY rather than in ops beside the other
+            # "tests/test_inbox_*.py" modules on purpose: those read the
+            # channel, and this one guards what gets PUBLISHED, which is the
+            # same mandate as the PII backstop and the home-path guard above.
+            "tests/test_no_inbox_in_git.py",
             # OPS-61. The sibling of the guard above, one axis over: that one
             # forbids a tracked path through a user HOME, this one forbids a
             # hook command naming an absolute repository ROOT. C:/Lanternlight

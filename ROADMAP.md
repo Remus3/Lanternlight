@@ -1035,6 +1035,85 @@ copyrightable; source is.
    agree with ourselves is the two-agents-agreeing failure in a new costume.
 6. Every guard above is watched red under mutation before it is believed.
 
+### Criterion 1 MET - 2026-09-10, the item stays OPEN
+
+`tests/test_no_inbox_in_git.py` refuses any tracked path resolving inside
+`moon_sync_inbox/`. It reports three mechanisms rather than one, because the
+lexical check alone is the weakest of the three: a path lexically inside the
+directory at any depth, which covers `_outbox/` where our OWN outgoing notes
+live; a path whose fully RESOLVED on-disk location lands inside the resolved
+inbox, which catches a symlink or a `..` route; and an index entry with mode
+`120000`, read as a link target out of the index BLOB, which is needed because a
+Windows checkout materialises a symlink as an ordinary text file and
+`Path.is_symlink` answers False.
+
+**`.gitignore` is checked SEPARATELY**, by asking `git check-ignore` rather than
+by matching the file's text, so losing the ignore line and gaining a tracked file
+are two distinguishable failures. The guard exists because `.gitignore` is not
+the property: `git add -f` overrides it, and a future edit could drop the line
+without anything noticing.
+
+**Disclosed blind spots, in the module's own docstring:** one index state only -
+not history, other branches, stashes or other worktrees - untracked files, and
+NTFS directory junctions and other non-symlink reparse points, which were not
+examined and are not covered.
+
+**Watched red without staging anything here.** The logic takes a repository root
+as a parameter, so the red state is reachable in a throwaway repository under the
+session scratchpad instead of in this tree. Staging a sibling's unlicensed source
+into this repository's index, even briefly, is the accident the guard exists to
+prevent, so it was not done. Confirmed twice independently: a scratch repo with a
+`.gitignore` that a plain `git add` correctly refuses, then `git add -f`, the
+anchor asserted by reading the path back out of `git ls-files`, and the guard
+naming exactly that path - for a top-level note and for an `_outbox/` note. The
+live tree reports nothing, and the guard is silent after the file is unstaged.
+
+**Two other guards fired on this change, both correctly, and both are recorded
+because they are the system working rather than noise.** The inventory guard
+closed this same day under `OPS-69` went RED the moment the new module existed
+without a row in `docs/INVENTORY.md` - its first real-world catch, on a file no
+human had noticed was missing. `tests/test_lanes.py` then went red because the
+new module was owned by no lane; it is assigned to SAFETY, beside the PII
+backstop and the home-path guard, because it guards what gets PUBLISHED rather
+than reading the channel the way the `tests/test_inbox_*.py` modules do.
+
+**Criteria 2 through 6 are untouched**, and criterion 5 cannot be met by any
+session that cannot arrange a real sibling holder. See the recorded question
+below for why criterion 2 was not started.
+
+### Recorded question - 2026-09-10, NOT answered by this session
+
+**Criterion 2 asks for the protocol in our own words, and does not say where the
+words may come from.** It says a cold session must be able to re-implement
+"without opening a sibling's file", and that a detail which cannot be established
+from observed behaviour should be obtained by ASKING RC for a description
+"rather than reading their source for it". Both available routes are currently
+closed, which is why this is a question rather than a task:
+
+* **Deriving it from the drop.** `moon_sync_inbox/from-RC-verbatim/` contains
+  RC's actual source. `CLAUDE.md` permits reading a drop FOR THE IDEA and
+  re-implementing from observed behaviour, so this is not forbidden - but a
+  document written by reading that source and paraphrasing it is not obviously
+  what criterion 2 means by observed behaviour, and the criterion's own second
+  sentence reads as steering away from it.
+* **Asking RC.** That is soliciting a sibling. `OPS-48` is HELD with an explicit
+  instruction not to solicit RC or RSC, and `OPS-68` put the operator's
+  cross-project propagation directive on STANDBY on 2026-09-08. A session cannot
+  lift either on its own.
+
+**What this session did instead.** Criterion 1 was implemented, because it is
+entirely ours, needs no sibling, and its value does not depend on how criterion 2
+is resolved: it stops an unlicensed sibling file reaching a public repository.
+Criteria 2 through 6 are untouched.
+
+**The narrow ruling needed.** May the protocol document be written from the drop
+already sitting in `moon_sync_inbox/`, describing observed behaviour in our own
+words - or should it wait for a description from RC, which requires lifting the
+standby on soliciting? Criterion 5 is a separate matter and is not being asked
+here: proving interoperation against a REAL sibling holder cannot be arranged by
+this session under either answer, so `OPS-35` stays open regardless, exactly as
+that criterion instructs.
+
 ## OPS-36. Adopt CONVERGENCE CHARTER v4 as written - OPEN, operator-ruled 2026-09-07
 
 **The operator ruled ADOPT AS WRITTEN on 2026-09-07**, over adopting with

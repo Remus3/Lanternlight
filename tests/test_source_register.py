@@ -485,6 +485,43 @@ KNOWN_NON_HOSTS = frozenset(
         # filename this project describes in prose lands here for the same reason -
         # `OPS-44` bought the tracked listing's trust, and this is the edge of it.
         "settings.local.json",
+        # `git.py` WAS ADDED HERE AND THEN REMOVED IN THE SAME HOUR, and the
+        # sequence is worth more than the entry would have been.
+        #
+        # It is the truncation of `tests/test_no_inbox_in_git.py`, cut at the
+        # underscore. It was registered while that file was still UNTRACKED,
+        # and a full green suite agreed it was needed. The moment the file was
+        # STAGED, `test_the_filename_check_covers_our_own_files_and_the_denylist_does_not`
+        # refused the commit: `is_repo_filename` had begun covering the
+        # fragment, so the denylist entry was now redundant, and a redundant
+        # entry in this set is exactly the hiding place this module's docstring
+        # warns about.
+        #
+        # THE LESSON IS ABOUT WHEN A MEASUREMENT IS TAKEN, NOT ABOUT THIS
+        # TOKEN. `git ls-files` answers differently before and after staging,
+        # so a guard that consults it gives a different verdict at suite time
+        # than at commit time. The pre-commit hook caught what a green full
+        # suite could not, which is the reason that hook runs the doc-reading
+        # subset against the STAGED tree rather than the working one.
+        # `Path.is`, added 2026-09-10 in the same hour as `git.py` above and
+        # for the same reason one level over: it is the truncation of
+        # `Path.is_symlink`, cut at the underscore, and `.is` is Iceland's
+        # TLD. Looked at: a `pathlib` method name, not a host and not a file.
+        #
+        # SIX ENTRIES WENT INTO THIS SET IN ONE SESSION - three
+        # `permissions.*` keys, `settings.local.json`, `git.py` and this one -
+        # against the four the previous session added. The rate is now the
+        # finding rather than any single entry, and it has an identifiable
+        # cause: `OPS-69` widened `docs/INVENTORY.md` to name every module in
+        # the repository and `OPS-70` widened a guard to name configuration
+        # keys, so this project now writes more prose ABOUT ITS OWN FILES than
+        # it ever has, and every dotted fragment in that prose parses as
+        # host-shaped. The denylist is absorbing an extractor defect, which is
+        # exactly what this module's docstring warns is the one place a real
+        # source can hide. `OPS-63` measured the pattern-level fix and refuted
+        # it at 45 retired against 52 introduced; that measurement is two
+        # sessions old and the input has changed since.
+        "Path.is",
         # A git CONFIG KEY, quoted by `LL-0169` and `OPS-49`. `core.filemode`
         # is not a host and not a file; `.filemode` simply parses as a TLD-
         # shaped tail. Looked at before adding, per the regenerating note.
