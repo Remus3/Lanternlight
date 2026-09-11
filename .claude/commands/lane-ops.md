@@ -54,6 +54,8 @@ Touch these paths and nothing else. Every other path in the repository belongs t
 - `tests/test_doc_archive.py`
 - `tools/archive_link_guard.py`
 - `tests/test_archive_link_guard.py`
+- `scripts/apply_doc_split.py`
+- `tests/test_apply_doc_split.py`
 - `tools/false_red_probe.py`
 - `tests/test_false_red_probe.py`
 - `tests/conftest.py`

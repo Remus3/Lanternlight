@@ -9,7 +9,7 @@ the original text, verbatim, in its original order, and the live roadmap
 carries a one-line stub linking to each one. If an item here turns out to
 matter again, move the section back rather than rewriting it.
 
-Sections in this archive: 65.
+Sections in this archive: 79.
 
 ---
 
@@ -7991,4 +7991,1859 @@ by the wall-clock join the acceptance asks for. The item records in the log
 carry `"durability":<int>`, and the tooltip renders that as a percentage of a
 per-tier maximum, so **durability is a join key that needs no wall-clock
 coincidence at all**.
+
+## OPS-57. Both continuity documents will outgrow their budgets within days, and raising the numbers is not the fix - CLOSED 2026-09-08
+
+Filed 2026-09-08, the moment the roadmap's size budget fired for real and the
+pre-commit hook refused a commit over it. The guard did exactly what it was
+built to do. What it revealed is not "one file is large".
+
+**The measured curve, all in git BLOB bytes, which is the only figure a fresh
+clone can reproduce.** This document was 424,019 bytes on 2026-09-07 when the
+budget was set at 600,000, leaving 175,981 bytes of headroom described at the
+time as sized for ordinary future growth plus the uncertainty of two lanes
+appending concurrently. By the START of the 2026-09-08 session it was already
+569,870. That session added 30,685 more and hit 600,555, and the hook refused
+the commit.
+
+So the headroom sized for future growth was consumed in about a day, and the
+rate to plan against is roughly 30 KB per session rather than whatever the
+original budget assumed.
+
+**The ledger is on the same curve, one step behind.** It measured 813,780 at the
+start of that session and 842,387 at the end, against a 900,000 budget: 57,613
+bytes, under two sessions at the observed rate. It has NOT been raised, because
+it has not fired and a budget moved before it fires is a budget nobody trusts.
+Expect it to fire next and do not treat that as a surprise.
+
+**The roadmap budget WAS raised, to 700,000, and that raise is a DEFERRAL rather
+than a fix.** It is recorded here rather than absorbed silently, because raising
+a limit to make a red run green is precisely the antipattern this repository has
+already written down about pins. The raise is deliberately small - about three
+sessions of headroom at the measured rate - since a budget that buys a year
+stops being a tripwire and becomes a rubber stamp.
+
+**Why this matters beyond disk.** These two documents exist to be READ by a cold
+session that has no other context. That is their whole function. A 600 KB
+roadmap is not read; it is grepped, and grepping is exactly the access pattern
+this repository has repeatedly measured returning false clean bills - an empty
+grep is a claim about the pattern, a line-oriented grep is a claim about the
+line breaks, and prose here is hard-wrapped near 80 columns so a quoted
+sentence routinely spans two lines. The larger these files get, the more the
+continuity design depends on the one tool that keeps lying to it.
+
+**What is NOT the answer, so nobody re-litigates it.** Deleting closed items is
+ruled out: `CLAUDE.md` and this document both keep closed items deliberately,
+because the shape of a bug is the useful part, and the ledger is append-only by
+a rule that exists for good reasons. Whatever is done here preserves every word
+somewhere a cold session can still find it.
+
+**MEASURED 2026-09-08, so the structural decision has a basis rather than a
+hunch.** Counting top-level `## ` sections and the characters between them -
+CHARACTERS, not git blob bytes, so it is a shape measurement rather than a
+budget one:
+
+**SUPERSEDED - the three figures below were STALE by the time the work started.
+Re-measured at HEAD: 84 sections, 65 closed or refuted, 633,871 characters. See
+the Outcome block. They are left here unedited because they are what the item
+was FILED on, and because a filed count being wrong is this item's own lesson.**
+
+- 83 sections, 612,780 characters.
+- **61 sections carry CLOSED or REFUTED in their heading, and they are 445,307
+  characters - 72% of the document.**
+- The remaining 22 sections are 166,553 characters, 27%.
+
+So moving closed and refuted items out would leave a roadmap of roughly 167 KB,
+which is a document a cold session can actually read, and it would do it without
+deleting a word. That is the strongest single argument for the archive option in
+criterion 2, and it is worth knowing before anyone spends effort compressing
+prose that is only 27% of the problem.
+
+The five largest sections, for scale: one is 45,120 characters on its own, and
+three of the top ten are still OPEN, so an archive of closed items is not by
+itself a complete answer to length - it is the large, easy, non-destructive
+majority of it.
+
+### Acceptance
+
+1. The growth rate is re-derived at the time the work is done rather than taken
+   from this item. Both figures above are hypotheses like any other count, and
+   two sessions of data is a slope through two points.
+2. A structural answer is chosen and its cost is stated: splitting closed items
+   into a dated archive document that the roadmap links to; or moving the long
+   outcome sections to the ledger, which already carries that kind of evidence,
+   and leaving the roadmap holding acceptance criteria and status only; or
+   something better. "We chose X and accepted Y" is the deliverable, not a
+   preference.
+3. Whatever moves, a cold session can still reach it from `ROADMAP.md` in one
+   hop, and the entry point says where the rest went. The failure this whole
+   design exists to prevent is work that is invisible to the next cold session;
+   an archive nobody is told about is that failure wearing a tidy filename.
+4. No content is deleted, and no ledger entry is edited, reordered or reflowed -
+   the append-only rule is not suspended for a reorganisation.
+5. The budgets are re-derived AFTER the split and set from the new measurements,
+   with headroom stated in SESSIONS at the measured rate rather than in bytes or
+   in a percentage. Bytes and percentages are what made the last budget look
+   generous while it had about a day left in it.
+6. A test proves the entry point actually resolves - that every archived item is
+   reachable from the roadmap - rather than asserting only that the archive file
+   exists. A file that exists and is unreferenced is the invisible-work failure.
+
+### Outcome - CLOSED 2026-09-08
+
+**Criterion 1, the growth rate, re-derived from 18 points rather than 2.** The
+method is git blob size at every commit whose subject begins `Wrap ` or
+`Hand off` - session boundaries rather than calendar days, because two sessions
+ran on 2026-09-08 alone and a per-day figure would have halved the rate. The
+last six session deltas:
+
+    ROADMAP.md      95785 8129 19885 23548 32421 64001   median-high 32421, mean 40628
+    docs/LEDGER.md  81272 14235 24688 27589 21907 54053  median-high 27589, mean 37290
+
+At the session's start that left ROADMAP.md with 2.0 sessions of headroom and
+docs/LEDGER.md with 1.2. The item's own estimate of "roughly 30 KB per session"
+was close to the median and well under the mean, so it was right about the
+order of magnitude and would have understated the risk.
+
+**The item's own filed figures were stale and are corrected here.** It recorded
+83 sections, 61 closed, 612,780 characters. Measured at the moment the work
+started: **84 sections, 65 closed or refuted, 633,871 characters.** Separately,
+`docs/LEDGER.md` carries 196 `### LL-` headings and only **195 entries** -
+`LL-0000` is the format template in the preamble, above the insertion marker.
+That is the third count this project has filed and had to re-derive, and it is
+why criterion 1 asked for a re-derivation rather than trusting the filing.
+
+**Criterion 2, the structural answer and its cost.** Chosen: a dated archive
+document per continuity file, with a one-line stub left behind in the original.
+Rejected alternatives are named below with the reason, so nobody re-litigates
+them.
+
+- `ROADMAP.md` keeps its preamble, the 19 sections that are not closed, and a
+  new `## Archive index` carrying one stub per archived item - the id, the
+  heading's own outcome text, and a link to that heading in
+  [`docs/ROADMAP_ARCHIVE.md`](docs/ROADMAP_ARCHIVE.md). 65 sections moved.
+- `docs/LEDGER.md` keeps its preamble, its insertion marker and the 60 newest
+  entries; the oldest 135 moved verbatim to
+  [`docs/LEDGER_ARCHIVE.md`](docs/LEDGER_ARCHIVE.md).
+
+Measured result, in git blob bytes: ROADMAP.md 633,871 -> **175,390** and
+docs/LEDGER.md 867,833 -> **281,778**, both measured at the instant the split
+was applied. Nothing was deleted, summarised or reflowed.
+
+**Those two figures are NOT what the tree measures at the commit that closed
+this item, and the difference is not an error.** By then ROADMAP.md was 194,174
+and docs/LEDGER.md 295,174, because this session then wrote its own closure into
+them: this Outcome block, the `## Archive index`, three newly filed items
+(`OPS-61`, `OPS-62`, `OPS-63`) and four ledger entries. The split moved 458,481
+bytes out of the roadmap; recording that it had done so put 18,784 back.
+
+The wrap's refutation pass caught this stated as a flat "633,871 -> 175,390 git
+blob bytes" with no instant attached, which is a filed count that does not
+reproduce against the tree it shipped with - this item's own lesson, repeated
+inside this item's own closure. **Date a size, or do not quote one.**
+
+**What it costs, stated rather than implied:**
+
+1. **Two files to read instead of one for any closed item.** A cold session
+   asking "was this already tried" now follows a link. That is the one hop
+   criterion 3 allows, and it is still one hop more than before.
+2. **A new failure mode: the index and the archive can drift apart.** An
+   archived item whose stub is missing is invisible, which is the failure this
+   whole design exists to prevent, wearing a tidy filename.
+   `tools/archive_link_guard.py` checks BOTH directions - an archived heading
+   with no stub, and a stub whose anchor resolves to no heading - and reports
+   DID NOT RUN, distinctly from a pass, when the archive is absent.
+3. **The archives are deliberately UNBUDGETED, and that is a gap.** No
+   per-session growth rate has been measured for them, and this repository
+   omits rather than guesses. Filed as `OPS-62`.
+4. **The split is a large one-time diff across the two documents whose value is
+   that they are trustworthy.** The mitigation is that no byte was authored
+   during the move: `tools/doc_archive.py` plans it and asserts conservation,
+   and it is re-runnable rather than hand-edited.
+
+**Rejected: moving the long outcome sections into the ledger.** It would grow
+the document with LESS headroom - 1.2 sessions against the roadmap's 2.0 - and
+would mean authoring new ledger text for old items, which the append-only rule
+exists to prevent. **Rejected: compressing prose.** The item's own measurement
+says the OPEN sections are 27% of the document, so compression works the small
+end of the problem.
+
+**Criterion 3, one hop, and criterion 6, a test that the hop RESOLVES.** The
+`## Archive index` section carries 65 stubs and the guard reports
+`OK (65 archived heading(s), 65 stub link(s))`. `tests/test_archive_link_guard.py`
+pins both directions with a positive control, a removed-stub negative control,
+and a wrong-anchor negative control - because without the positive control a
+reader that silently fell back to something permissive would pass green on the
+exact tree that motivated this item.
+
+**Criterion 4, nothing deleted and no ledger entry touched.** Verified against
+`git HEAD` rather than against the planner that produced the split - a planner
+asserting its own conservation is one witness. Every one of the 85 roadmap
+chunks and 197 ledger chunks in HEAD was found verbatim in the live file plus
+its archive, and the ledger's preamble through its insertion marker is
+byte-identical, so `ops/loop/ledger.py` appends exactly where it always did.
+The ledger cut is a contiguous TAIL, which is how criterion 4 is met
+structurally rather than by an entry-by-entry judgement.
+
+**Criterion 5, budgets re-derived after the split and LOWERED.** Against the
+old numbers the split had bought 16.2 and 22.4 sessions of headroom, which is
+precisely the rubber stamp this item warned about, so:
+
+    ROADMAP.md      700,000 -> 340,000   5.1 sessions at the split, 4.5 at the commit
+    docs/LEDGER.md  900,000 -> 420,000   5.0 sessions at the split, 4.5 at the commit
+
+The two figures differ for the reason above: the budgets were set from the sizes
+at the split, and the documents then grew by this session's own closure prose.
+**Do not read the 4.5 as the budget being mis-set.** Ask the guard rather than
+either number - `python tools/doc_size_budget.py` states headroom in sessions
+and is the only figure that cannot go stale.
+
+**The rates were deliberately NOT re-measured, and that is a decision rather
+than an omission.** The merger slot left in `tools/doc_size_budget.py` asked
+for a post-split re-measurement; there is exactly one post-split session, and a
+slope through one point is not a measurement. The split reset the LEVEL, not
+the SLOPE - new sections and entries land at the same pace whatever the file's
+current size - so the pre-split rates remain the right planning figures. Both
+budget comments now say that when the budget fires the answer is to RE-RUN the
+split, not to move the number.
+
+**Two defects the merge found that neither slice could see, and both are the
+same shape.** Each slice was internally consistent and green.
+
+1. **The splitter and the guard named DIFFERENT FILES.** The splitter defaulted
+   to `docs/ROADMAP-ARCHIVE.md`, the guard to `docs/ROADMAP_ARCHIVE.md`. The
+   adjudication that ran one against the other passed the path in EXPLICITLY,
+   so the two defaults never met and it reported OK. Left alone it would have
+   written the hyphen file and had the guard report DID NOT RUN against the
+   underscore one - which reads as "no problems" while every archived item is
+   unreachable through the name actually being checked. Fixed to the underscore
+   form, which is the `docs/` convention (`OBSERVED_IDS.md`, `REPLY_PATHS.md`,
+   `CLASS_RESEARCH.md`), and pinned by
+   `TestTheSplitterAndTheGuardNameTheSAMEFile`.
+2. **The split makes spent `OPS-` ids invisible to the allocator.** This is the
+   `OPS-12` bug with a new way in. The obvious reasoning about it is wrong:
+   archiving a roadmap section does NOT hide its id, because `spent_ids` matches
+   any mention rather than only headings and every archived section leaves a
+   stub naming its id. The LEDGER half leaves no stub, so an id discussed in an
+   entry but never given a roadmap heading goes out with the tail. Measured on
+   the real split before the fix: the spent set fell from 60 ids to 55, losing
+   `OPS-1`, `OPS-3`, `OPS-4`, `OPS-5` and `OPS-9`. `next_free_id` was 61 both
+   before and after, because it takes the MAXIMUM and the maximum was recent -
+   so it was a live hole in `spent_ids`, whose docstring promises it "can only
+   ever SKIP an id, never reissue one", and a dormant one in the allocator.
+   `ops.ops_ids` now reads the archives by default. After the fix, 0 ids lost.
+
+   **That 60-to-55 figure is NOT REPRODUCIBLE ANY MORE, and the reason is worth
+   more than the number.** Re-measured after this closure was written, the spent
+   set is 63 with the archives and 63 without. Writing down WHICH ids the split
+   had made invisible put all five back into the live documents - this section
+   names them, and so does `LL-0197`. The act of recording the measurement
+   destroyed the condition it measured.
+
+   So the archive read is currently DORMANT in `spent_ids` and LIVE in
+   `over_allocated`, which is the one that would have gone on reporting a clean
+   repository. Do not read a green `spent_ids` as evidence the archive read is
+   unnecessary; it is evidence that this item's own prose is doing the work, and
+   it will stop the moment this section is itself archived.
+
+   **The first repair was applied to two readers out of five and the suite
+   stayed green.** `spent_ids` and `next_free_id` learned about the archives;
+   `roadmap_items`, `ledger_closures` and `over_allocated` did not, and
+   `over_allocated` then returned `{}` for a repository carrying two known
+   collisions. Changing WHERE a module reads from is a change to every reader in
+   it, not to the ones whose tests happened to be red -
+   `TestEveryDocumentReaderReadsTheArchives` now enumerates the public readers
+   by signature so a sixth added later goes red on its own.
+
+**What the parallel dispatch actually bought.** Three slices on disjoint file
+sets, each writing its own tests and proving its own guards non-vacuous by
+mutation. Every slice came back green, and BOTH defects above were found only
+when the merger ran one slice's output through another slice's guard. Agreement
+between two agents is not evidence; running one against the other is closer,
+and even that passed until the DEFAULTS were compared rather than the
+explicitly-passed arguments.
+
+## OPS-61. Every hook command names an ABSOLUTE repo root, so a worktree's hook reports the WRONG TREE - CLOSED 2026-09-08
+
+Filed 2026-09-08, measured while answering two inbox notes that asked every
+adopter of the inbox-watcher design the same two questions. Our answers are
+`TRACKED` and `IGNORED`, and the second question's YES is what made the defect
+invisible.
+
+**What was measured, in this order.**
+
+1. `.claude/settings.json` is TRACKED - git index mode `100644`, committed. A
+   fresh clone therefore HAS the `SessionStart` hook declaration, unlike the
+   two siblings that raised the question.
+2. `moon_sync_inbox/` is GITIGNORED - `.gitignore` line 196. A clone has no
+   channel for the watcher to read.
+3. A real `git clone` into a temp directory, running the CLONE'S OWN script,
+   printed `moon_sync_inbox: CANNOT READ - <clone>\moon_sync_inbox does not
+   exist. This is a FAILURE to look, NOT "nothing new".` and exited 0. So the
+   "fires, fails and says nothing" failure the notes described does not apply
+   here: the tool already distinguishes a failure to look from an empty inbox,
+   and its exit code keeps it on the normal stdout path.
+
+**The defect the two questions cannot reach.** The tracked command is an
+absolute path:
+
+    "command": "python C:/Lanternlight/ops/inbox_watch.py"
+
+`ops/inbox_watch.py` resolves its repo root from its own file location, not
+from the working directory - measured, invoked from an unrelated directory it
+still reported the original tree's 99 notes. So in a clone at any other path,
+and in every git WORKTREE, the hook does not run that tree's script at all. It
+runs the original tree's, and answers a question about a different repository
+without saying so.
+
+That is worse than not firing. A hook that does not fire reports nothing; this
+one FIRES, SUCCEEDS, and looks like coverage. Worktrees are the case that
+bites, because that is where lane sessions run.
+
+**Why no existing guard catches it, which is the part worth keeping.**
+`tests/test_no_hardcoded_home_path.py` exists for exactly this class and does
+not reach this instance. `OPS-38` generalised it once already - from this
+machine's literal account name to the SHAPE of any user home directory under
+any account - and stopped there. `C:/Lanternlight` carries no account name, so
+it passes cleanly. A guard hardened against one value, then against one family
+of values, is still scoped to a value; the property wanted is "no hook command
+names a root the tree cannot verify is its own".
+
+### Acceptance
+
+1. The hook commands resolve the tree they are RUNNING IN. Whatever mechanism
+   is chosen, it is demonstrated in a real clone at a different path and in a
+   real `git worktree`, not reasoned about.
+2. The demonstration is END-TO-END. Presence, registration and a green exit are
+   three different facts and none of them is the fact that the hook read the
+   right tree - that is `OPS-56`'s lesson and it applies here unchanged.
+3. A guard fails when a tracked hook command names any absolute repository
+   root, generalising past the single string `C:/Lanternlight` for the reason
+   `OPS-38` had to generalise twice. It is proved non-vacuous by embedding a
+   different absolute root and watching it go red.
+4. If the answer is that the absolute path is unavoidable on this harness, that
+   is written down as a DECLINE with the measurement behind it, and the claim
+   "a fresh clone watches its own inbox" is corrected wherever it is published
+   rather than left standing. Correcting the claim is an acceptable outcome;
+   leaving a claim the wiring does not deliver is not.
+
+### Outcome - CLOSED 2026-09-08
+
+**Criterion 1, the mechanism, chosen by measurement rather than by reading a
+document.** All six hook commands now reach their script through the harness
+variable, with the path QUOTED:
+
+    "command": "python \"$CLAUDE_PROJECT_DIR/ops/inbox_watch.py\""
+
+Measured on Claude Code 2.1.251, in a real `git clone` at a foreign path and in
+a real `git worktree`, with a probe hook that recorded `argv`, its own resolved
+`__file__`, its `cwd` and the environment variable into a witness file per
+event. Twelve witnesses, each read back independently by the merger rather than
+accepted from the slice that produced them:
+
+- **The harness expands the variable itself.** `argv[0]` arrived already
+  expanded, so the mechanism does not depend on whether the hook is dispatched
+  through `cmd.exe` or a POSIX shell. This is not a shell feature and does not
+  need one.
+- **It resolves to the RUNNING tree for all five events this repository
+  registers** - `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`
+  and `Stop`. Ten of the twelve witnesses are the worktree case, two per event.
+- **The path is quoted because a clone can live under a path with a space.** At
+  a spaced clone path the quoted form ran the clone's own script with the space
+  intact in `argv[0]`; the unquoted form produced no witness at all.
+  `C:/Lanternlight` has no space, so nothing in the primary tree would ever have
+  exposed this.
+
+**One overreach in the measurement slice's own document, corrected here rather
+than carried.** It wrote that the unquoted form is "proven UNSAFE at a spaced
+path (fails silently, all five ...)". One probe fired and the evidence is a
+MISSING witness. Absence of a witness is not a captured failure, and one event
+is not five. What is measured is enough to choose the quoted form and not enough
+to describe how the unquoted form fails.
+
+**The relative form works too, and was not chosen.** `python ops/inbox_watch.py`
+resolved correctly for all five events, because the hook's `cwd` is the project
+root. It is rejected as the primary mechanism for one reason: it makes the
+command depend on a `cwd` this repository does not control, where the variable
+form states the root explicitly. Recorded so nobody re-derives it as a
+discovery.
+
+**Criterion 2, END-TO-END with the real wiring, in both directions.** A probe
+hook proves the mechanism; it does not prove this repository's own hooks. So the
+committed `.claude/settings.json` was run in a real clone at a foreign path and
+in a real worktree, in a real headless session, and the witness is the
+FILESYSTEM rather than any report: `ops/inbox_watch.py` writes its records under
+the tree it reads. Each tree was given a `moon_sync_inbox/` containing exactly
+ONE note, so a report of 99 could only mean the primary tree.
+
+    clone, fixed wiring      the clone's own ops/runtime/inbox_reported.json
+                             lists the one probe note, inbox_seen.json
+                             acknowledges it, and the PRIMARY tree's two records
+                             are byte-identical to the pre-experiment snapshot
+    worktree, fixed wiring   the same result in the worktree's own ops/runtime/
+    worktree, PRE-FIX        the worktree's own records were NEVER WRITTEN, and
+      wiring, the control    the PRIMARY tree's inbox_reported.json was
+                             rewritten - mtime moved, 99 notes, the probe note
+                             absent - as was inbox_seen.json. Both hashes
+                             differed from the snapshot and both were restored
+                             from it afterwards.
+
+**The control is the part that upgrades this item's own description.** The filed
+text said the hook "answers a question about a different repository". Measured,
+it also WRITES that repository's state: a session in a worktree silently mutated
+the primary checkout's acknowledged-mail record, which is the record that
+decides whether a note is ever surfaced again. A wrong answer is recoverable by
+looking again; an acknowledgement written into the wrong tree eats mail in a tree
+nobody was working in.
+
+**Criterion 3, the guard, generalised past one string.**
+`tools/hook_command_guard.py` reports any hook command naming an absolute path in
+three spellings - drive root, UNC and POSIX root - because no string can say
+which absolute path was MEANT as a repository root, and `OPS-38` had to
+generalise twice for exactly that reason. `tests/test_hook_command_roots.py`
+carries a positive control on clean synthetic settings, foreign-root negative
+controls, and the live-tree assertion. Proved non-vacuous by six mutations, each
+with its anchor count asserted before the edit because a mutation that fails to
+apply looks exactly like a passing test: neutering the drive-root pattern turned
+the LIVE test green, which is precisely what the foreign-root controls exist to
+catch. `main()` takes no argv and exits 2 on any argument rather than accepting
+and ignoring one - the `OPS-64` defect, not repeated.
+
+**THREE EXISTING GUARDS WERE GREEN BECAUSE OF THE DEFECT. This is the finding
+worth keeping.** None of them was weakened; each was measuring a proxy that only
+held while the commands named an absolute root.
+
+1. `tests/test_no_hardcoded_home_path.py::test_every_hook_command_names_a_script_that_exists`
+   split each command on whitespace and required every `.py` token to be a file
+   on THIS machine. That can only pass while the token is an absolute literal
+   path. It now resolves the token against the running tree, which is strictly
+   stronger - the old form silently SKIPPED anything that did not look like a
+   path to it, so a typo was clean - and it gained a fabricated-path control.
+2. The same file's no-backslash assertion banned a backslash anywhere in the raw
+   settings text. `CLAUDE.md`'s rule is narrower: a single-backslash WINDOWS PATH
+   makes the file invalid JSON. Shell quoting needs `\"`, which cannot break a
+   parse that is asserted on the line above. Narrowed to the path shape, with the
+   cost of narrowing written into the docstring.
+3. `tests/test_inbox_watch.py` ran the `SessionStart` command through
+   `subprocess` and its own name said end-to-end. It was executing a command line
+   that resolved the PRIMARY checkout no matter which tree the harness was in. It
+   now expands the variable the way the harness does, through a helper whose
+   docstring states plainly that expanding it in-process is a MODEL of the
+   harness rather than the harness, and points at the out-of-process measurement
+   for the real claim.
+
+**The defect had already been OBSERVED, in a real worktree, and was misread.**
+`lanes/safety.LEDGER.md` records that the registered hook points at
+`C:/Lanternlight/tools/precommit_gate.py`, the PRIMARY checkout, not at the lane
+worktree. That session measured this exact behaviour and read it as a
+MERGE-TIMING fact - the fix is not live until the lane merges - rather than as a
+PATH fact that would still be true after any merge. Nothing was filed, and the
+observation sat in a lane fragment for weeks. A correct measurement filed under
+the wrong cause is invisible to the search that would find it.
+
+**Criterion 4 does not apply.** The absolute path was avoidable, so there is no
+DECLINE to write and no published claim to correct. The claim that a fresh clone
+watches its own inbox is now true, and its evidence is the clone experiment above
+rather than a reading of the code.
+
+**Not fixed here, and named rather than absorbed.** `.claude/commands/done.md`
+tells the wrap to write `--target C:/Lanternlight/LL-NEXT-SESSION.txt`. That is
+the same class one layer up - a session wrapping from a worktree would overwrite
+the primary tree's hand-off - but it is a command a session TYPES rather than a
+hook the harness dispatches, so `$CLAUDE_PROJECT_DIR` is not defined for it and
+the fix is a different one. Filed as `OPS-65` rather than guessed at here.
+
+## OPS-62. The two archives OPS-57 created are UNBUDGETED, and nothing measures their growth - CLOSED 2026-09-08
+
+Filed 2026-09-08 out of `OPS-57`'s own cost list, where it is stated rather
+than implied.
+
+`OPS-57` split both continuity documents and re-derived the budgets for the two
+LIVE files. `docs/ROADMAP_ARCHIVE.md` (475,473 blob bytes at the split) and
+`docs/LEDGER_ARCHIVE.md` (586,771) have no budget at all, so the guard that
+exists to notice unbounded growth is now blind to the two largest documents in
+the repository.
+
+**Why they were left unbudgeted rather than given a guessed number.** A budget
+here is only meaningful next to a growth rate, and the archives do not grow the
+way the live documents do: they gain nothing between splits and then take a
+large step when one runs. There is exactly ONE data point. This repository omits
+rather than guesses, and a budget with an invented rate beside it would be a
+number that looks measured.
+
+**Why it still matters.** The archives are where the live documents' growth
+GOES. Re-running the split is now the documented response to a budget firing,
+which means every future firing moves bytes into a file nothing watches. The
+live budgets stay green forever while the repository grows without limit, and
+the guard reports OK - the instrument reporting on itself again.
+
+### Acceptance
+
+1. A growth model for a step-wise document is chosen and named. Per-session
+   bytes is the wrong shape; per-SPLIT bytes, or total repository bytes across
+   the live document and its archive together, are two candidates and there may
+   be better. State which and why.
+2. It rests on at least two splits, or it says in writing that it rests on one
+   and is provisional. One point is not a slope - `OPS-57` refused a
+   re-measurement on that ground and this item does not get an exemption.
+3. Whatever is chosen fails, non-vacuously, on a tree where an archive has
+   grown past it. Proved by mutation, not by inspection.
+4. The answer may legitimately be that archives are never budgeted and the
+   guard measures the PAIR instead. If so, that is recorded as the decision
+   with its cost, and `tools/doc_size_budget.py` says so where a reader looking
+   for the missing archive budget will find it.
+
+### Outcome - CLOSED 2026-09-08
+
+**Criterion 1 and criterion 4 are answered together, because criterion 4's option
+is what the measurement chose.** The archives are NOT budgeted individually, by
+decision. The model is a PAIR TOTAL: `PAIR_BUDGETS` bounds each live document and
+its archive together as one sum, `ROADMAP` at 1,180,000 and `LEDGER` at
+1,270,000 blob bytes.
+
+Three reasons, and the first is the hole this item was filed about:
+
+- **A split cannot game a pair total.** Splitting moves bytes from the live half
+  to the archive half and leaves the sum almost untouched. With only live
+  budgets, the documented response to a firing - re-run `tools/doc_archive.py` -
+  moves bytes into a file nothing watches and the guard reports OK forever. The
+  sum measures the thing that actually grows, which is total continuity prose in
+  the repository.
+- **Its rate was already measured over six sessions, not over one split.** Before
+  `OPS-57` the live document WAS the whole pair, because the archive did not
+  exist, so the six per-session append rates in `SESSION_GROWTH_RATES` are pair
+  rates as they stand. The pair model reuses them rather than declaring a second
+  copy that could drift.
+- **Both halves stay visible.** The report prints each half's own byte count
+  beside the total, so a reader can see WHERE the bytes are even though only the
+  sum is bounded.
+
+**Criterion 2, and this is the term that is provisional.** The append half rests
+on six sessions. The `split_overhead_bytes` term rests on ONE split and is
+labelled provisional in three places in the code rather than only in a report: a
+named section of the module docstring, `PairGrowthModel.splits_measured` and
+`.provisional`, and the rendered output itself, which prints
+`[model provisional: its split-overhead term rests on 1 split]` next to every
+pair figure it qualifies. That is the written admission criterion 2 allows in
+place of a second split, and it is in the artifact because a caveat stated only
+in chat is a lie in the artifact.
+
+The overhead is measured from history rather than estimated - across the split
+commit, the ROADMAP pair went 633,871 to 669,327 (+35,456) and the LEDGER pair
+867,833 to 881,945 (+14,112) - and is labelled an UPPER bound, because that
+commit also carried the session's own prose. It is amortized over the derived
+split interval and ADDED to the append rate, which SHORTENS reported headroom.
+The conservative direction, the same reasoning that made `SESSION_GROWTH_RATES`
+use the high median rather than the mean.
+
+**The 12-session horizon is a judgement and says so; the rate under it is
+measured.** That distinction is the whole of criterion 1: "per-session bytes is
+the wrong shape" was the item's complaint, and the answer is a measured rate for
+the half that appends every session plus a labelled-provisional term for the half
+that steps.
+
+**Criterion 3, non-vacuity, eight mutations plus a direct grown-archive tree.**
+Counting the pair as the live half only killed 8 tests; weakening the comparison
+killed 4; dropping the overhead term from the effective rate killed 2; silently
+skipping a missing half killed 2; lowering the pair threshold to the per-document
+one killed 1; deleting the `LEDGER_ARCHIVE` decision note killed 3; never
+rendering the provisional caveat killed 1; and lowering the real ROADMAP pair
+budget below the live total killed 2 while the module exited 1 and the
+PER-DOCUMENT channel still said OK - which is exactly the blindness this item
+described. A synthetic tree with a 1,000,000-byte archive beside a 200,000-byte
+live document, measured against the REAL budget, passed the live channel and
+failed the pair channel at -0.5 sessions.
+
+**Re-verified by the merger in-process rather than accepted from the slice.**
+`check_pair_budgets()` on the live tree returns ok with zero findings; tightening
+`ROADMAP` to 700,000 - 2,038 bytes under the measured 702,038 - returns not-ok
+with one `pair_over_budget` finding naming both halves and the total. The guard
+refuses a real over-budget tree, which is the claim, and it was not taken on
+trust.
+
+**THE COST, and one part of it needs the operator rather than a session.** Two
+things, both written into the module where a reader will meet them:
+
+1. No individual archive is bounded, so an archive growing on its own - somebody
+   appending to it directly rather than through a split - consumes pair headroom
+   indistinguishably from ordinary growth in the live half. The per-half
+   components in the report are the only mitigation and nothing guards it.
+2. **A pair-budget firing has NO mechanical remedy.** A live-budget firing is
+   answered by re-running the splitter; a pair firing cannot be, because the pair
+   total is precisely what a split does not change. The only answers are a real
+   reduction in content - which this repository's own rules forbid for the
+   ledger, where an entry is written in full for a cold session - or an operator
+   ruling: move the archives out of this repository, or accept a higher bound. So
+   a pair firing is a DECISION GATE FOR THE OPERATOR rather than a chore, which
+   is why `PAIR_LOW_HEADROOM_SESSIONS` warns further out than the per-document
+   threshold does. **Nobody should silently raise a pair budget when it fires.**
+
+**What it reported at TWO instants, and the difference is the point rather than
+an error.** A size with no instant attached is a filed count that cannot
+reproduce - `LL-0201` is that lesson, learned by this item's neighbour `OPS-57`
+one item over - so both readings are here:
+
+    at the merge, before this outcome was written
+      ROADMAP pair   702,038  (ROADMAP.md 226,565 + archive 475,473)   11.9 sessions
+      LEDGER pair    901,698  (docs/LEDGER.md 314,927 + archive 586,771)  12.0 sessions
+
+    after this outcome was written into ROADMAP.md
+      ROADMAP pair   711,879  (ROADMAP.md 236,406 + archive 475,473)   11.6 sessions
+      LEDGER pair    901,698  unchanged, nothing was appended to it yet
+
+Writing the closure moved the number the closure quotes - `LL-0199`'s shape, and
+the third time this session that recording a measurement changed the thing
+measured. **Ask `python tools/doc_size_budget.py` rather than quoting any of
+these six figures.**
+`tests/test_doc_size_budget.py` went 29 tests to 65 and every one of the original
+29 still passes unchanged.
+
+## OPS-63. The source register never reads `ROADMAP.md`, and the OPS-57 split made that visible rather than new - CLOSED 2026-09-08
+
+Filed 2026-09-08, out of `OPS-57`'s merge. Not caused by the split - the split
+walked into it.
+
+`tests/test_source_register.py` guards that every external source cited in this
+project's documents is registered in `docs/ECOSYSTEM.md` with its provenance,
+tier and basis. It reads `docs/**/*.md` and nothing else. Its own module
+docstring says so and names `README.md` as an example of a file it does not
+cover. `ROADMAP.md` lives at the repository ROOT, so it has never been read
+either, and neither has `CLAUDE.md`, `BACKLOG.md` or `LL-NEXT-SESSION.txt`.
+
+**How it surfaced.** `OPS-57` moved 475,473 bytes of closed roadmap sections
+into `docs/ROADMAP_ARCHIVE.md`, and 57 previously-unread tokens landed in
+scope at once. All 57 were checked by hand and all 57 are false positives -
+Python attributes, our own filenames, toy names from worked examples, and two
+host-shaped fragments (`x.com`, `t.co`) that appear inside a passage about a
+SUBSTRING-matching defect, quoted as the pieces hiding inside
+`gamingpromax.com` and `grindnstrat.com`. So no real source was found, and none
+was hidden by excluding the archive again.
+
+**Why the archive was excluded rather than absorbed.** Archiving a document
+must not silently change which guards apply to it: the words did not change,
+only their path did. The alternative was 57 entries in `KNOWN_NON_HOSTS`, which
+that module's own docstring calls the one place a real source can hide.
+
+**What is actually wrong, and it predates the split by weeks.** A real source
+cited in `ROADMAP.md` is invisible to the register guard today, was invisible
+yesterday, and this item exists so that fact is written down somewhere a cold
+session will find it rather than living only in a constant's comment.
+
+### Acceptance
+
+1. The scan's scope is decided deliberately and stated: either it covers every
+   tracked Markdown document in the repository, or the set it covers is
+   enumerated with a reason per exclusion. "It happens to read `docs/`" is not
+   a scope.
+2. If the scope widens to `ROADMAP.md`, the false positives it brings are
+   counted BEFORE the change and reported, because that count is the real cost
+   and the last measurement of it was 57 for a document three times smaller.
+3. The extractor's false-positive rate is addressed rather than absorbed. Every
+   token added to `KNOWN_NON_HOSTS` in this item's course is a truncation the
+   host-shaped pattern makes at an underscore - `ARCHIVE.md` from
+   `ROADMAP_ARCHIVE.md`, `ids.default` from `ops_ids.default_archive_paths`.
+   A pattern that stopped truncating at underscores would remove a whole class
+   of them. Measure how many of the existing entries that would retire; if the
+   answer is most of them, the denylist is treating a pattern defect.
+
+   **A sub-case found 2026-09-08 during `OPS-61`, which the count above must
+   include.** `reported.json` is the underscore truncation of
+   `inbox_reported.json`, a RUNTIME record under gitignored `ops/runtime/`.
+   `is_repo_filename` asks `git ls-files`, so a file this project legitimately
+   writes prose about but deliberately does not track can NEVER be
+   auto-excused: it lands in the denylist by construction, not by anyone's
+   oversight, and the "stage it and re-run" escape that retired `ARCHIVE.md`
+   does not apply because the whole point of the file is that it is not
+   committed. Any answer to this item has to say what happens to the names of
+   untracked-by-design files, which this project writes about constantly.
+4. The guard is proved non-vacuous against the widened scope: a fabricated
+   unregistered host is placed in a newly-covered file, the guard goes red, and
+   it is removed. A scope that widens without a control is a scope that might
+   not have widened at all.
+
+### Outcome - CLOSED 2026-09-08
+
+**Criterion 2 first, because it asked for a count taken BEFORE the change.**
+Measured with the scan unchanged, per document, counting host-shaped tokens that
+would redden the guard:
+
+    ROADMAP.md 8   CLAUDE.md 12   WAKEUP_NOTES.md 4   README.md 2
+    LL-NEXT-SESSION.txt 4   CONTRIBUTING.md 3   CODE_OF_CONDUCT.md 2
+    SECURITY.md 1   BACKLOG.md 0   .github/PULL_REQUEST_TEMPLATE.md 0
+    the four lane ledgers 0 each   .claude/** 23 across 13 files
+    UNION 52
+
+Confirmed live afterwards rather than left as an estimate: with the scope widened
+and the denylist untouched the guard reported `1 failed, 12 passed` and named
+exactly 52 tokens. The last measurement of this cost was 57 for `docs/` alone, so
+52 for everything else is the same order and the item's expectation was right.
+
+**FOUR OF THE 52 ARE REAL HOSTS AND TWO WERE UNREGISTERED, which is the payoff
+and it is not a formality.** `docs.github.com`, cited by `CODE_OF_CONDUCT.md` and
+`SECURITY.md` for GitHub's abuse-reporting and private-vulnerability-reporting
+instructions, and `contributor-covenant.org`, cited as attribution in
+`CODE_OF_CONDUCT.md`. Both were invisible to the register for as long as those
+documents have existed, which is since `LL-0200` two days ago. Both now carry a
+row in `docs/ECOSYSTEM.md` saying REPOSITORY GOVERNANCE ONLY, never evidence
+about this game - the distinction the register exists to keep. The other two,
+`x.com` and `t.co`, are the fragments the `OPS-57` passage quotes as the pieces
+hiding inside two launch-window wiki hosts; they are registered rather than
+denylisted, because a real host must never hide in `KNOWN_NON_HOSTS`, and their
+row says plainly that nobody has fetched either.
+
+**Criterion 1, the scope, stated instead of inherited.** Every tracked `*.md` and
+`*.txt` in the repository, plus the original `docs/**/*.md` walk kept verbatim so
+the new rule is a strict SUPERSET and no coverage was traded for coverage. One
+enumerated exclusion with its reason: `docs/ROADMAP_ARCHIVE.md`, whose 57
+previously-unread tokens were checked by hand under `OPS-57` and were all false
+positives; a document must not gain guards by being archived any more than it
+loses them.
+
+- **Rejected: "everything except `.claude/**`",** which would have cost 29 tokens
+  instead of 52. It requires storing a directory list in this file, and a
+  committed list of paths goes stale the moment one is added - the same doctrine
+  that made `tracked_paths` ask `git` on every run rather than carry a list.
+- **Code is deliberately out of scope**, stated rather than left as an accident
+  of the glob. A host in a `.py` file is nearly always a test fixture or a
+  pattern, and the register is about what this project CITES.
+
+**Criterion 3 is REFUTED, with numbers, and that is a real result rather than a
+failure to deliver.** The item's hypothesis was that a pattern which stopped
+truncating at underscores would retire a whole class of denylist entries, and
+that if it retired most of them the denylist was treating a pattern defect.
+Measured against the pre-widening denylist:
+
+    retires 45 of 266 load-bearing entries   16.9%, not most
+    introduces 52 brand-new red tokens       net 267 -> 274, WORSE
+
+Zero of the 52 long forms are covered by `is_repo_filename`, because `OPS-44`
+already harvested that win when it started asking `git ls-files` at test time.
+So the underscore truncation is not the denylist's cause; it is a cosmetic detail
+of tokens that would need vetting either way.
+
+**And the sub-case this item recorded from `OPS-61` behaves differently than the
+hypothesis predicted.** `reported.json` does not retire - it is RENAMED to
+`inbox_reported.json` and still needs an entry, because the file is a runtime
+record under gitignored `ops/runtime/` and `is_repo_filename` asks `git ls-files`.
+Names of untracked-by-design files land in the denylist by construction. The
+alternative, resolving tokens against `.gitignore`, is `LL-0079`'s
+auto-exemption failure with a new input.
+
+**Also measured and rejected: skipping fenced code blocks.** It would cut the new
+tokens from 52 to 34 at zero coverage cost measured TODAY, and it buys that by
+never reading a region of every document again. An unbounded, unreviewed blind
+spot is the wrong trade for 18 tokens, and this project has already been bitten
+by a source hiding in a region a guard had stopped reading.
+
+**What it cost, stated rather than implied.** `KNOWN_NON_HOSTS` grew from 267 to
+**317** at the commit that closed this item, and to 319 by the end of the session
+as three more closure-prose tokens landed. It is the set's largest single
+addition, and that set is the one place this module's own
+docstring says a real source can hide. Every added token was looked at; the
+merger re-read the additions and they are dotted code identifiers, our own
+filenames, and two Windows program names. The cost is real and it is the price of
+reading the documents where this project actually writes.
+
+**Criterion 4, non-vacuity against the NEW scope, proved by four mutations with
+each anchor asserted before the edit.** A fabricated host planted in
+`.github/PULL_REQUEST_TEMPLATE.md` produced `1 failed, 15 passed` naming that
+file; the same in `LL-NEXT-SESSION.txt` did likewise - both documents the old
+scan never read. Narrowing `SCAN_SUFFIXES` back to `("md",)` produced
+`2 failed, 14 passed`, and an empty tracked listing also `2 failed, 14 passed`,
+so the guard still gets NOISIER when its input disappears rather than quieter.
+
+## OPS-64. `tools/archive_link_guard.py` accepts any argv and silently ignores it - CLOSED 2026-09-08
+
+Filed 2026-09-08 by the wrap's own refutation pass, which hit it while trying to
+break the guard: it passed flags naming scratch files, and `main()` printed an
+identical green line having read the REAL documents. The verdict was true and
+was an answer to a different question than the one asked.
+
+`main()` takes no arguments and calls `check_repo()` on the live paths. There is
+no `argparse`, so an unknown flag is not rejected - it is not seen at all.
+
+**Why this is worth an item rather than a shrug.** The whole point of that guard
+is to refuse to say OK about something it did not check, and it already does the
+hard half of that well: a missing archive reports DID NOT RUN rather than
+passing. This is the same failure at the other end - a caller who believes they
+scoped the check somewhere gets a confident verdict about somewhere else. It is
+the shape this repository keeps meeting, most recently in the pre-commit hook
+that ran the wrong test module and reported that the guard had run.
+
+Compare `tools/doc_archive.py`, which does use `argparse` and would reject the
+same flag. The inconsistency is the tell.
+
+### Acceptance
+
+1. `main()` rejects an argument it does not understand, with a non-zero exit and
+   a message naming the argument. Proved by invoking it with a made-up flag.
+2. If it grows real options - pointing the check at a different roadmap or
+   archive - they are REAL, in the sense that passing them changes what is read.
+   A flag that is accepted and ignored is worse than one that is refused.
+3. A test invokes `main()` with a bad argument and asserts the refusal. It is
+   proved non-vacuous by removing the rejection and watching the test go red.
+4. The other entry points in `tools/` are swept for the same defect and the
+   result is reported as a COUNT of modules checked, not as "none found" - an
+   empty sweep is a claim about the sweep. `tools/precommit_gate.py`,
+   `tools/doc_size_budget.py` and `tools/syntax_check_hook.py` are the obvious
+   neighbours.
+
+## OPS-65. The wrap ritual writes the hand-off to an ABSOLUTE target, so a wrap from a worktree overwrites the primary tree's hand-off - CLOSED 2026-09-08
+
+Filed 2026-09-08 out of `OPS-61`'s merge. `OPS-61` fixed every command the
+HARNESS dispatches; this is the same defect in a command a SESSION types, and it
+is not fixed by the same mechanism.
+
+`.claude/commands/done.md` instructs the wrap to run:
+
+    python ops/handoff.py --from-file <draft> --target C:/Lanternlight/LL-NEXT-SESSION.txt
+
+`LL-NEXT-SESSION.txt` is TRACKED and is the first file a cold session reads, so
+the target matters more than most. A session wrapping from a git worktree - which
+is where lane sessions run - writes the PRIMARY checkout's hand-off, and
+`ops/handoff.py` will do it without complaint because the path exists and is
+writable. The primary tree then carries a hand-off describing work that is not in
+it, and `git status` in the primary shows a modified tracked file that nobody
+working there touched.
+
+**Why `OPS-61`'s answer does not transfer.** `$CLAUDE_PROJECT_DIR` is set by the
+harness for HOOK dispatch. It is not defined for a command a session or the
+operator types into a shell, so pasting the variable into `done.md` would produce
+a literal directory named `$CLAUDE_PROJECT_DIR` on Windows, or an empty path, and
+either way `--target` would land somewhere nobody looks. Measured for hooks, NOT
+measured for typed commands - and the difference is the whole item.
+
+**Why it was not simply fixed during `OPS-61`.** Three candidate answers exist -
+make `--target` default to the repository root `ops/handoff.py` resolves from its
+own location and drop the flag from the ritual; keep the flag but reject a target
+outside the tree the script lives in; or leave it absolute deliberately because
+the hand-off belongs to the primary checkout by design and a lane wrap should
+NOT write one. The third is a real possibility and it is a decision about the
+wrap's contract, not a typo. Guessing between them inside another item's merge is
+how a fix becomes a surprise.
+
+### Acceptance
+
+1. The decision is stated: does a wrap from a non-primary tree write that tree's
+   hand-off, refuse, or write the primary's on purpose? Whichever it is, the
+   reason is written down, because all three are defensible and only one is true
+   of the ritual as it stands.
+2. The demonstration is END-TO-END in a real worktree, the way `OPS-61`'s was:
+   run the wrap's own command from a worktree and read which file changed on
+   disk. `ops/handoff.py --check-only` reports without writing and is the safe
+   half; the writing half is the one that has to be observed.
+3. A guard fails on a tracked instruction naming an absolute repository root in a
+   `--target`-shaped position, or the decision in 1 says absolute is correct and
+   the guard pins THAT instead. `tools/hook_command_guard.py` reads
+   `.claude/settings.json` only, so it does not reach `.claude/commands/*.md`;
+   widening it is one option and a separate check is another.
+4. Whatever is chosen, `python ops/handoff.py --from-file <draft> --target ...`
+   as written in `.claude/commands/done.md`, in `CLAUDE.md`'s wrap guidance and
+   in `LL-NEXT-SESSION.txt`'s own hand-off instructions agree with it. Three
+   copies of an instruction are two stale copies waiting to happen, and this
+   session found the third copy only by grepping for the absolute root.
+
+### Outcome - CLOSED 2026-09-08
+
+**Criterion 1, the decision: (a). A wrap writes the hand-off of THE TREE IT IS
+WRAPPING, by OMITTING `--target`.** `ops/handoff.py` resolves `DEFAULT_TARGET`
+from its own file location, so a worktree's wrap writes that worktree's
+hand-off. The flag stays supported for a caller that genuinely means another
+path; the RITUAL no longer passes it.
+
+**Criterion 2, end-to-end in two real detached worktrees, reading which file
+changed on disk rather than reasoning about it.** From `wt_lane`:
+
+    ritual form, --target <wt_primary>/LL-NEXT-SESSION.txt
+        exit 0, SILENT. wt_primary's hand-off CHANGED, wt_lane's did not,
+        and git status in wt_lane stayed CLEAN
+    flagless
+        wt_lane's own hand-off changed, wt_primary untouched,
+        git add LL-NEXT-SESSION.txt exit 0
+    --check-only against the primary's real path
+        reported clean and wrote nothing
+
+**(c) IS REFUTED BY THE RITUAL'S OWN STEP 9, which is why this is a decision
+rather than a preference.** `.claude/commands/done.md` requires the hand-off be
+"rewritten in place, staged, and committed with the session's other work". The
+absolute form cannot do that from a worktree: `git add` of a path belonging to
+another worktree exits 128, `fatal: ... is outside repository`. So the reading
+that the hand-off belongs to the primary checkout on purpose contradicts a
+requirement already written into the ritual - measured, not argued.
+
+**(b) was rejected as a REFUSAL and kept as a REPORT.** Refusing any target
+outside the resolving tree would need an exemption for the test suite's own
+`tmp_path` targets, and an exemption list is exactly what `OPS-32` forbade for
+this writer - "there is no exemption list and no override flag". So an
+out-of-tree target now prints a stderr report naming itself as out-of-tree and
+still writes, which keeps the writer honest without giving it a bypass.
+
+**Criterion 3, the guard.** `tests/test_handoff.py` grew a detector over the
+tracked instruction corpus - the documents that TELL a session what to run - and
+it fails on any absolute root passed to a `--target`-shaped flag. It reuses
+`tools/hook_command_guard.py`'s engine rather than declaring a second pattern,
+which is pinned by its own test: two independent absolute-path detectors would
+drift, and `OPS-38` needed two generalisations because a guard scoped to one
+value stays scoped to one value.
+
+**Criterion 4, the three copies made to agree.** `.claude/commands/done.md`
+line 84 and `LL-NEXT-SESSION.txt` line 200 both carried the absolute form; both
+are corrected, the second by REGENERATING the hand-off through
+`ops/handoff.py`, because that file must never be written with an editor tool -
+`OPS-32`. `CLAUDE.md` carries no `--target` line, so there were three sites and
+not four. The prose mentions of the path at `done.md` lines 77 and 183 are
+deliberately KEPT: they say where the hand-off lives, which is still true, and
+`tests/test_loop_watch.py::TestTheWrapOutputShapeIsPinned` requires them.
+
+**A vacuous test was exposed by mutation and replaced.** Hardcoding the default
+target killed two tests but did NOT kill
+`test_the_default_target_follows_the_tree` - because in the primary checkout the
+hardcoded value and the resolved value are the same string, so the test could
+not tell them apart in the tree it runs in. It now loads the module from a copy
+inside a temporary tree, where the two answers differ, and the same mutation
+kills it. That is the `OPS-61` lesson again in a new place: a guard measured only
+in the primary tree cannot see a defect that only appears elsewhere.
+
+**The slice also refuted its own first driver.** Its initial mutation harness
+reported per-run summary lines that hid swapped identities between the before and
+after runs, so a mutation could appear to kill the wrong test. Rebuilt per-test
+before believing any of the eleven results.
+
+`tests/test_handoff.py` went **26 tests to 37**, with 243 lines added and 0
+removed. The 243/0 half was correct as filed; the two test counts were not, and
+neither 28 nor 36 reproduces at any commit this session under either metric -
+collected tests or `def test_` count, which agree with each other. Corrected by
+the wrap's refutation pass, which re-derived them per commit rather than reading
+the slice's report.
+
+## OPS-66. `tools/precommit_gate.py` read an unknown argument as a PASS, so a typo in `.githooks/pre-commit` would switch the lint gate off silently - CLOSED 2026-09-08
+
+Filed and closed 2026-09-08, out of `OPS-64`'s criterion-4 sweep. Filed rather
+than folded into that item because it is a FAIL-OPEN in a safety gate and belongs
+where someone searching for one will find it.
+
+**What was measured before the fix.** The `__main__` block recognised only
+`lint-staged` and `--lint-staged` as `argv[1]`. Anything else fell through to the
+PreToolUse path, which read stdin, found no JSON, and returned 0.
+
+    python tools/precommit_gate.py --lintstaged   exit 0, no output
+    python tools/precommit_gate.py lint-staged    exit 0 on a clean repository
+
+Those two are INDISTINGUISHABLE by the only thing a git hook reads. And
+`.githooks/pre-commit` invokes the module as
+`"$lint_py" "$repo_top/tools/precommit_gate.py" lint-staged`, so a one-character
+slip in that line - the kind a reflow or a rename makes - would have turned the
+lint gate off while reporting success on every commit thereafter.
+
+**The shape, because it is the third instance in three sessions.** A true verdict
+answering a different question than the one asked. `OPS-56` was the pre-commit
+hook that ran the WRONG test module and reported that the guard had run. `OPS-64`
+was the archive link guard printing an identical green line having read the real
+documents while flags named scratch ones. This is the same defect in the one place
+where the failure direction is a permitted commit.
+
+### Acceptance
+
+1. An argument this module does not understand exits non-zero and says which
+   argument it was. Both entry points that DO exist keep working: no argv at all
+   for the PreToolUse hook, and the lint entry point under both spellings.
+2. Proved non-vacuous by mutation - remove the refusal, watch the guard-tests go
+   red, restore.
+3. The end-to-end exit code is measured in a real process, not inferred from a
+   function's return value, because the exit code IS the verdict.
+
+### Outcome - CLOSED 2026-09-08
+
+`dispatch(argv)` is a new named function and `__main__` is now three lines around
+it. Two contracts, spelled out - empty argv is the PreToolUse stdin path, the lint
+spellings are the git-hook helper - and everything else returns
+`USAGE_EXIT_CODE = 2`. Two is chosen because it refuses on BOTH of this file's
+contracts at once: a PreToolUse hook blocks on exactly 2, and git reads any
+non-zero exit from a hook helper as a refusal. One code, both callers, no branch
+that could pick wrongly. `lint-staged` followed by junk is refused as well; it was
+previously accepted with the junk ignored.
+
+**Deliberately NOT argparse, where `OPS-64` chose argparse one file over.** That
+guard grew real options and needed a parser. This module's exit codes ARE its
+verdicts, and adding a parser would put an argparse `SystemExit` and a `--help`
+path inside that. Two contracts do not need a parser; they need to be named.
+
+**The refusal survives the soft-fail on purpose.** `__main__` still returns 0 on an
+unexpected EXCEPTION, because a crashing gate that blocks every command is worse
+than no gate - `OPS-15`. A usage error is a RETURN VALUE, not an exception, so it
+passes through that handler untouched. This was checked rather than assumed.
+
+**TDD, and the failing step is worth recording.** Six tests were written first and
+observed red at `4 failed, 63 passed`; two of the six - both spellings still
+dispatch, and no-argv still reaches the stdin path - were GREEN from the start,
+which is what makes them positive controls: without them, refusing EVERYTHING
+would have passed.
+
+After the fix, `102 passed` across `tests/test_precommit_gate_lint.py` and
+`tests/test_precommit_gate.py`.
+
+**Criterion 2, and the mutation attempt that failed first, which is the part worth
+keeping.** The first mutation DID NOT APPLY - the anchor did not match - and the
+suite then printed `67 passed`. Read without the anchor assertion, that green is
+exactly the false comfort `CLAUDE.md` warns about: it looks like a mutation that
+killed nothing. The assertion fired and said so. The line endings were checked and
+ruled out as the cause; the anchor was rebuilt programmatically and verified to
+match once before being used.
+
+The mutation that did apply was chosen to be informative: it left the `_say`
+message in place and changed only the return, so the gate still PRINTS its refusal
+while no longer refusing. That killed exactly three tests - `3 failed, 64 passed` -
+and left the trailing-extra-argument test green, because that is a separate branch.
+Two tests guarding independent halves, which is the same result the `OPS-15` work
+recorded for `_block`. Restored from a pristine copy and verified sha256-identical
+rather than by `git checkout`, because the tree carried other slices' uncommitted
+work.
+
+## OPS-67. Four `tools/` entry points still read an unknown argument as a pass, and the four are not one decision - CLOSED 2026-09-08
+
+Filed 2026-09-08 out of `OPS-64`'s criterion-4 sweep, and re-probed by the merger:
+`tools/ascii_check.py`, `tools/syntax_check_hook.py`, `tools/probe_paks.py` and
+`tools/doc_size_budget.py` each exit 0 on an unknown flag. `OPS-64` fixed
+`archive_link_guard.py` and `OPS-66` fixed `precommit_gate.py`; these four are
+what is left of the nine.
+
+**Why they are filed together and answered separately.** The stakes differ, and one
+uniform change would be a guess dressed as consistency:
+
+- `ascii_check.py` and `syntax_check_hook.py` are `PostToolUse` hooks. The wiring
+  in `.claude/settings.json` passes them NO arguments, and both exit 0 on every
+  path by design because a `PostToolUse` hook that exits non-zero breaks the
+  session it runs in. An unknown argv is not reachable from the only caller they
+  have, so the fix may be worth nothing here and the honest answer may be a
+  comment saying so.
+- `doc_size_budget.py` is the one that worries. Its numbers get QUOTED - this
+  repository's own hand-off tells the next session to ask it for headroom in
+  sessions rather than repeat a byte figure - so a caller who believed they had
+  scoped it at a scratch document and got a confident verdict about the live ones
+  is the `OPS-64` failure exactly. It also writes real git objects via
+  `git hash-object -w`, which is why `OPS-8`'s concurrency question keeps
+  resurfacing around it.
+- `probe_paks.py` is an analysis script whose output nobody gates on. It is
+  probably the cheapest to fix and the least valuable.
+
+### Acceptance
+
+1. Each of the four gets a decision, not a batch: refuse unknown argv, grow real
+   options, or document why argv can never reach it. A file whose only caller
+   passes no arguments may legitimately keep its current behaviour, and if so the
+   REASON is written in the module.
+2. `doc_size_budget.py` is treated as the load-bearing one. If it grows options
+   they are real, in the sense that passing them changes which documents are
+   measured, and that is proved by pointing it at a scratch pair and watching the
+   numbers change.
+3. Whatever changes is proved non-vacuous by mutation, and whatever does not
+   changes carries a test pinning the current behaviour so a later reader cannot
+   mistake an unexamined default for a decision.
+4. The count is restated at the end: how many `tools/` entry points exist, how
+   many refuse, how many accept real options, and how many are documented as
+   argv-unreachable. The sweep in `OPS-64` said nine; re-derive it rather than
+   quoting it, because a filed count is a hypothesis.
+
+### Outcome - CLOSED 2026-09-08
+
+**Criterion 1, four decisions and they differ, which is the whole point of the
+item.** Each reason is written in the module it governs, not here:
+
+1. **`tools/ascii_check.py` - NO CHANGE, argv ignored on purpose.** Its only
+   caller is the `PostToolUse` wiring, which passes no arguments; its subject
+   arrives on stdin; and a non-zero exit from a `PostToolUse` hook breaks the
+   session it runs in. Adding argparse would import a SECOND exit channel into a
+   module that is deliberately fail-soft. Recorded in the docstring under a
+   heading a reader will find - `ARGV IS NOT A CONTRACT HERE, AND THAT IS A
+   DECISION`.
+2. **`tools/syntax_check_hook.py` - NO CHANGE, same reason plus one of its
+   own.** Its `finally: os._exit(0)` is the single decider of this process's
+   exit status, and an argparse `SystemExit(2)` would be a second decider inside
+   a module whose whole design is that exactly one thing decides.
+3. **`tools/probe_paks.py` - CHANGED, because it has no automated caller at
+   all.** It is typed by a person and nothing reads its exit code that a
+   non-zero could break, so refusing costs nothing. Unknown argv now returns
+   `USAGE_EXIT_CODE = 2` quoting the argument back. No argparse and no invented
+   options: it has no scope to take.
+4. **`tools/doc_size_budget.py` - CHANGED, argparse, and it is the load-bearing
+   one.** Its numbers get QUOTED, including by this repository's own hand-off,
+   so it needs a real way to be scoped; and its exit codes are a verdict channel
+   that a usage error must not borrow. `--repo-root`, `allow_abbrev=False`,
+   `USAGE_EXIT_CODE = 2`, and `SystemExit` caught and returned so `main` always
+   returns an int.
+
+**Criterion 2, the options are REAL, measured against a scratch pair rather than
+inspected.** Default run: `ROADMAP.md 236,909`, `docs/LEDGER.md 322,447`, pairs
+712,382 and 909,218. Same command with `--repo-root <scratch>`: 16 and 15, pairs
+40 and 38, exit 0. Against an EMPTY directory: exit 1 with six missing-path
+Findings, because a missing document stays a Finding and never becomes a silent
+pass. `--repo-roo` exits 2 rather than being accepted as an abbreviation.
+
+**One option, scoping BOTH channels, and the reason is this item one level up.**
+`--repo-root` moves the per-document channel and the `OPS-62` pair channel
+together. No `--documents-only` or `--pairs-only`, because a run that measures
+one channel and prints one confident OK line is precisely the defect `OPS-64`
+and this item exist to remove. Also refused: a `--budget` override, which is
+"raise the budget to go green" with a command-line spelling.
+
+**What `--repo-root` does NOT move, written into the docstring because it would
+otherwise be a trap.** It moves only where the watched paths resolve, never
+git's working directory, so blobs are always hashed into THIS repository's
+object database. A non-git root works; a git failure propagates loudly instead
+of returning a zero that would read as a very small document.
+
+**Criterion 3, non-vacuity, proved both ways.** For what changed: seven
+mutations on the budget module - `allow_abbrev=True`, ignoring `--repo-root` in
+the document channel, ignoring it in the pair channel only, `parse_known_args`,
+a silent pass on a missing path, `argv=None` ignoring `sys.argv`, and dropping
+the root from the scope line - killing 1, 3, 2, 5, 4, 1 and 1 tests
+respectively. On the probe: pinning against `HEAD`'s copy gave 5 failed of 6,
+deleting the scope line killed 1, and refusing in WORDS while continuing to run
+killed 2.
+
+**For what deliberately did NOT change, the pin is non-vacuous too**, which is
+the half criterion 3 asks for and the half that is usually skipped: making
+`ascii_check.py` refuse argv turned 2 tests red, making the syntax hook
+`os._exit(2)` on argv turned 1 red, and deleting the decision sentence turned 1
+red PER DOCSTRING - two mutations of one test each, not one mutation of two,
+which is how the slice's report read and is corrected here. So the decision is
+held by tests rather than by
+an unexamined default. The premise underneath it - that the wiring passes no
+arguments - is pinned against a SCRATCH copy of `.claude/settings.json`:
+appending an argument to a hook command turns it red, and unwiring the hook
+turns it red.
+
+**Criterion 4, the count, RE-DERIVED by the merger rather than quoted from the
+sweep that filed this item.** Nine modules in `tools/` carry a `__main__` block,
+each invoked here with an unknown flag:
+
+    refuse, exit 2   probe_paks, doc_size_budget, archive_link_guard,
+                     doc_archive, frame_poller, hook_command_guard,
+                     precommit_gate                                    7 of 9
+    ignore argv,     ascii_check, syntax_check_hook                    2 of 9
+      exit 0, BY DECISION, reason in the module, pinned by a test
+
+Nine was also the sweep's figure, so this is one filed count that reproduced.
+The two remaining zeros are the answer rather than an omission: they are the
+only two entry points whose caller is a hook that a non-zero exit would break.
+
+`tests/test_doc_size_budget.py` went 65 to 76, `tests/test_syntax_check_hook.py`
+34 to 41, and `tests/test_probe_paks.py` is new at 6 - the pak probe had no test
+module before this item, so it shipped unpinned. It is owned by the capture lane
+beside the tool it pins.
+
+## OPS-69. `docs/INVENTORY.md` is guarded in ONE direction, so a module missing from it is invisible - CLOSED 2026-09-10
+
+Filed 2026-09-08 at the wrap, found while syncing the living docs after `OPS-61`
+and `OPS-67` added two test modules and one tool.
+
+`tests/test_inventory.py` holds four properties and every one of them runs the
+same way: it takes something the DOCUMENT names and asks whether it exists. Every
+backtick-quoted path must be a real file; every command in the commands table
+must exist; every agent in the agents table must exist; the declared directories
+must exist. Nothing anywhere asks the opposite question - whether something that
+exists is NAMED.
+
+**So the document cannot be caught being incomplete.** `tools/hook_command_guard.py`,
+`tests/test_hook_command_roots.py` and `tests/test_probe_paks.py` were all
+created this session and the inventory guard stayed green with none of them
+listed. They were added by hand at the wrap because a human noticed, which is
+exactly the mechanism this project does not rely on anywhere else.
+
+**Why it matters more here than it would in an ordinary doc.** This file is
+Lanternlight's OUTBOUND half of the cross-project inventory exchange the operator
+authorised in chat 2026-09-07. A sibling reading it is reading a claim about what
+this project has. An inventory that is silently short does not read as short - it
+reads as complete, which is the failure mode of every one-direction guard this
+repository has met: `OPS-57`'s archive index needed BOTH directions for the same
+reason, and got them.
+
+**The tension that makes this an item rather than a chore.** The document's own
+preamble says NO STALE COUNTS - it deliberately names no test count, because a
+number written there rots the moment a test is added. A completeness check is the
+same rot in a different spelling if it is written as a number, so the answer has
+to be a derived comparison rather than a filed total, and it has to say what is
+deliberately EXCLUDED without that exclusion list becoming the place a module
+hides. `tests/test_source_register.py`'s `KNOWN_NON_HOSTS` is the cautionary
+example: its own docstring calls it the one place a real source can hide, and it
+has grown by four entries in this session alone.
+
+### Acceptance
+
+1. A test fails when a tracked module that the document's own scope covers is
+   absent from it. The scope is stated rather than assumed - "every tracked
+   `tests/test_*.py` and `tools/*.py`" is a scope; "the important ones" is not.
+2. Whatever is excluded is enumerated WITH A REASON PER EXCLUSION, in the module,
+   and the exclusion list is small enough to read. If it grows past a dozen the
+   scope was wrong, not the list.
+3. Proved non-vacuous by mutation: delete a row from `docs/INVENTORY.md` and
+   watch the test go red; restore and watch it go green. Assert the anchor
+   matched before believing a survivor - a mutation that failed to apply printed
+   a green suite twice in this repository on 2026-09-08.
+4. The existing four properties are kept. This item ADDS the reverse direction;
+   it does not trade one direction for the other, which is what `OPS-57`'s link
+   guard would have done had it only checked stubs.
+5. The count is not written into the document. Per its own preamble, a
+   completeness check states a COMMAND or a derived comparison, never a total
+   that rots.
+
+### Outcome - CLOSED 2026-09-10
+
+`tests/test_inventory.py` went from 8 tests to 13. The reverse direction is
+`test_every_file_the_scope_covers_is_named_in_the_inventory`, and the scope it
+enforces is stated rather than assumed: `.claude/commands/*.md`,
+`.claude/agents/*.md`, `.githooks/*`, `tools/*.py`, `tests/*.py` and
+`scripts/*.py`. Enumeration reuses `tests/_tracked.iter_authored_files` rather
+than inventing a second way to list tracked files.
+
+**The gap was twelve times the size the item predicted.** This item was filed
+because three modules had gone missing. The guard found 37 - 33 test modules and
+four tools - and `tools/` had no section in the document at all, so the miss was
+a whole CATEGORY rather than a few stragglers. Two new sections were added, each
+description taken from the module's own docstring.
+
+**The refutation pass found three things the closure had wrong, and that is the
+part worth keeping.** An independent agent confirmed the property was
+non-vacuous - 81 of 81 scope files turn it red when their naming line is cut -
+and then found:
+
+1. The document asserted, in its own voice, "Between the two tables, every
+   `tests/test_*.py` in the repository is named". That was FALSE, and the file it
+   omitted was `tests/test_inventory.py` itself - the module doing the checking.
+   The new guard did not catch it, because the guard asks whether a name appears
+   ANYWHERE in the document while the sentence claims it appears IN THE TABLES.
+   A looser guard standing behind a stricter sentence reads as enforcement and is
+   not. Both were fixed: the row was added, and
+   `test_every_test_module_is_named_in_one_of_the_two_tables` now requires a
+   TABLE ROW. `test_the_two_table_claim_is_still_the_sentence_this_guard_enforces`
+   pins the sentence to the guard so the two cannot drift apart again.
+2. `tests/_tracked.py` - the shared walker the new guard itself runs on - was
+   tracked, uninventoried, and OUTSIDE the stated scope, along with
+   `tests/conftest.py` and `scripts/write_lane_contracts.py`. The scope was
+   widened to `tests/*.py` and `scripts/*.py`. `scripts/` was the worst of the
+   three states: half-covered by luck, with `scripts/install_hooks.py` named only
+   because CLAUDE.md's fresh-clone instructions happen to cite it. Directories
+   that stay out - `tests/fixtures/`, `lanternlight/`, `ops/`, `docs/` - are now
+   NAMED as out, because an unmentioned directory is indistinguishable from an
+   overlooked one.
+3. The slice reported to the merger that its exclusion-cap test "is vacuous while
+   the dict is empty and the module says so". The module said no such thing.
+   `EXCLUDED_FROM_INVENTORY` is empty, its per-entry checks were watched failing
+   against injected entries, and the module now records exactly that - which of
+   its checks execute on an ordinary run and which were verified by measurement
+   instead.
+
+**A wrong DATE, caught at the merge.** The repair stamped `2026-09-09` into eight
+places across the two files. The work happened on 2026-09-10, confirmed against
+the machine clock in local and UTC - both read 2026-09-10, so no midnight
+ambiguity was available to excuse it. This is the same defect class as the three
+numbers the 2026-09-08 wrap had to refute: prose in a committed artifact, stated
+flat, that nothing mechanical reads.
+
+### Acceptance, met
+
+1. **Met.** The scope is stated in `_SCOPE` and restated in the document.
+2. **Met.** `EXCLUDED_FROM_INVENTORY` is EMPTY - nothing needed excusing once the
+   document was completed - and a test caps growth at 12, requires each entry to
+   be in scope, to exist on disk, and to carry a reason.
+3. **Met.** Proved by mutation twice independently, each time asserting the anchor
+   was present before the cut and absent after it, re-reading from disk, and
+   restoring under a SHA-256 equality check.
+4. **Met.** All four original properties are kept; the count moved 8 to 13.
+5. **Met.** No total is written into the document; its Test count section states
+   commands only.
+
+## OPS-70. `.claude/settings.json` still hardcodes an absolute repo root in `permissions.allow` - the OPS-61 defect surviving in the file OPS-61 cleaned - CLOSED 2026-09-10
+
+Filed 2026-09-08 by the wrap's refutation pass, which found it while checking
+something else. `OPS-61` rewrote all six hook COMMANDS to reach their scripts
+through `$CLAUDE_PROJECT_DIR`. Three entries in the same file were never in that
+item's scope and still read:
+
+    "Read(//C/Lanternlight/**)",
+    "Write(//C/Lanternlight/**)",
+    "Edit(//C/Lanternlight/**)"
+
+**Why no guard catches it, which is the part worth keeping.**
+`tools/hook_command_guard.py` walks `hooks.*` and reads command strings. These
+live under `permissions.allow`, which it never visits, so the guard's green line
+is true and answers a narrower question than a reader of that green line would
+assume. That is this session's own recurring shape - a true verdict about
+something other than what was asked - found for the fourth time, in the file the
+first three were about.
+
+**What it costs, and it is smaller than `OPS-61`'s.** These entries pre-approve
+tool calls; they do not dispatch anything. In a clone or a worktree at another
+path they simply never match, so the session prompts for permission where it
+would otherwise not have. That is a nuisance rather than a wrong answer, and it
+is why this is a separate item rather than a reopening: `OPS-61`'s hooks FIRED
+and reported about the wrong tree, which is a different order of defect.
+
+**Do not assume the fix is the same.** Whether the permission matcher expands
+`$CLAUDE_PROJECT_DIR` is NOT MEASURED. `OPS-61` measured the expansion for hook
+COMMANDS only, and the two are different code paths in the harness - the same
+mistake `OPS-65` had to avoid when `$CLAUDE_PROJECT_DIR` turned out to be
+undefined for a command a session types. Measure before writing.
+
+### Acceptance
+
+1. Whether the permission matcher expands the harness variable is MEASURED, in a
+   real clone at a different path, by observing whether a matching tool call is
+   pre-approved or prompts. Presence in the file is not the fact; a matched
+   permission is.
+2. If it expands, the three entries use it and the demonstration is end-to-end.
+   If it does not, the entries are either removed as dead weight in every tree
+   but this one, or kept with a comment saying they are primary-checkout-only and
+   why - a DECLINE with the measurement behind it, which `OPS-61` criterion 4
+   already establishes as an acceptable outcome.
+3. The guard reaches the rest of the file, or says in its own docstring which
+   parts it does not read. `tools/hook_command_guard.py` reporting `OK` while an
+   absolute root sits twenty lines away in the same document is the defect this
+   item is about, one level up.
+4. Proved non-vacuous by embedding a different absolute root in whatever section
+   the guard newly reads, and watching it go red.
+
+### Outcome - CLOSED 2026-09-10
+
+**Criterion 1 was answered with a DECLINE, and the decline is the result.**
+Whether the permission matcher expands `$CLAUDE_PROJECT_DIR` was NOT observed on
+this machine, and the reason is recorded rather than glossed: the session ran in
+BYPASS PERMISSIONS MODE, where every tool call is pre-approved regardless of the
+allow list, so a did-it-prompt probe cannot distinguish a MATCHED rule from a
+BYPASSED one and returns a false green either way. What was established instead
+rests on two non-observational sources that agree with each other - the published
+permissions documentation, and the shipped client's own rule-anchoring code read
+on this machine - and says a rule's content is gitignore syntax with four anchors
+into none of which any environment variable is substituted. `OPS-61`'s fix does
+not carry across. The observation that would settle it is filed as `OPS-71`.
+
+**The three rules were KEPT**, with the reason in the file's own `$comment`: they
+work in this checkout, no measurement says to drop a working pre-approval, and
+the documented portable successor (`Edit(/**)`, anchored at the settings source)
+is a live change to what this machine pre-approves resting on exactly the claim
+that could not be observed.
+
+**`tools/hook_command_guard.py` now reads `permissions.allow`, `permissions.deny`,
+`permissions.ask` and `permissions.additionalDirectories` as well as `hooks.*`,**
+and pins the three existing rules by exact string so a fourth absolute rule turns
+the suite red. It uses a SEPARATE pattern set from the hook side, because the two
+grammars disagree about a single leading slash - in a permission rule it anchors
+at the settings source - and reusing the hook patterns reported the recommended
+fix as the defect. Its OK line now names its own scope: `6 hook command(s), 12
+permission rule(s)`, so the green line no longer answers a narrower question than
+a reader assumes. That was this item's whole complaint, and the fix is that the
+verdict states what it covered.
+
+**The refutation pass broke the first closure in three places.** All three were
+reproduced before being repaired:
+
+1. A trailing space - `Read(//C/Evil/**) ` - bypassed the guard entirely, because
+   the splitter required a closing parenthesis and returned the rule unsplit when
+   it found none, after which the root pattern never matched. Its docstring
+   promised a "safer default ... still scanned", which was therefore false as
+   written. The BEHAVIOUR was fixed rather than the docstring; an unterminated
+   `Read(//C/Evil/**` now reports too.
+2. The UNC backslash spelling was missed, because the permission pattern set held
+   a hand-written near-copy of the UNC pattern rather than the pattern itself.
+   The two are now one object and cannot drift.
+3. `Bash(cd //C/Evil && ls)` was missed while `Bash(cd C:/Evil && ls)` was caught
+   - an inconsistency nothing disclosed. Resolved deliberately by WIDENING: a
+   path in a rule's argument is in scope wherever it appears.
+
+**A claim was being SHIPPED as measured when nothing had been measured.** The
+module asserted "Measured for `OPS-70`" in three places, one of them inside the
+user-facing finding text, so the guard PRINTED false provenance at the moment it
+fired - the worst place in the file for it, because that string is read by
+someone who has just been told something is wrong. It hedged nowhere: a search
+for "observ", "bypass permission" or "not measured" returned nothing.
+`MATCHER_CLAIM_PROVENANCE` now states the claim is an INFERENCE from two named
+documentary sources, names bypass-permissions mode as the reason it is not an
+observation, and says what would settle it. A test asserts the word "measured"
+does not appear in the detail text. Two sentences in the `$comment` that were
+stated FLAT - that the POSIX spelling is "therefore the correct absolute form",
+and that the rules "match in this checkout and nowhere else" - were attributed to
+their sources instead.
+
+**The merger's own refutation was itself refuted, twice, by the merger.** Two
+independent re-probes of the UNC repair reported BYPASS. Both were the probe's
+own escaping losing a backslash, so the string tested was not a UNC path at all;
+built unambiguously with `chr(92)` and verified by its on-disk repr, the guard
+catches it. This is the repository's "an empty grep is a claim about your
+pattern" rule landing on the person applying it, and it is recorded because the
+first instinct on seeing BYPASS was to disbelieve the agent rather than the probe.
+
+### Acceptance, met
+
+1. **Met by an explicit DECLINE**, with the confound named and the settling
+   measurement specified. Successor filed as `OPS-71`.
+2. **Met.** Kept, with the reason and its provenance in the `$comment`.
+3. **Met.** The guard reaches `permissions.*`, states its scope in its OK line,
+   and names its remaining blind spots in its own docstring:
+   `settings.local.json`, user settings, and the other keys of the tracked file.
+4. **Met.** Proved non-vacuous against the LIVE file under an
+   assert-anchor / verify-on-disk / restore-and-compare-SHA-256 discipline, with
+   six spellings: `//D/Elsewhere/**`, `D:/Elsewhere/**`, `//E/Somewhere/**`, a
+   lower-case drive letter, a rule in `permissions.deny`, and the UNC form. The
+   count moved 20 to 60.
+
+## OPS-72. A store-drift guard failed intermittently - a one-second committer-timestamp race - CLOSED 2026-09-10
+
+Filed 2026-09-10. Recorded rather than dismissed, because an intermittent
+failure in a guard is the one kind this project cannot afford to forget: the
+next session sees green, assumes the observation was noise, and the guard is
+quietly unreliable in exactly the situation it exists for.
+
+**What was observed, once.**
+
+    FAILED tests/test_store_drift.py::TestTheArithmeticThatWasWrong::
+        test_two_stashes_from_an_unchanged_index_leave_THREE_commits_not_four
+
+in a full `python -m pytest` run that otherwise reported 2833 passed, 1 skipped.
+No assertion text was captured, because the summary line was read and the run
+was not repeated before the next edit - that is a mistake in the observation and
+is recorded as one.
+
+**What was measured afterwards, and what it does NOT establish.**
+
+- `python -m pytest tests/test_store_drift.py` three times in a row: 46 passed
+  each time.
+- `python -m pytest tests/test_store_drift.py::TestTheArithmeticThatWasWrong`
+  alone: 2 passed.
+- The next full `python -m pytest`: 2835 passed, 1 skipped. The failure did not
+  recur.
+
+None of that explains the failure. Five green runs after one red is consistent
+with a flake AND with an order-dependence that the second full run happened not
+to hit, and this item exists because those two are different facts.
+
+**A CAUSE WAS NAMED LATER THE SAME DAY, by the wrap's refutation pass, and it
+reproduced the failure rather than reasoning about it.** The assertion that
+failed is `assert 4 == 3`, and the diagnosis is a ONE-SECOND COMMITTER-TIMESTAMP
+RACE: git stamps commits at whole-second resolution, so two stashes taken inside
+the same second produce a different object count from two taken across a second
+boundary. That is why it fails rarely and why every deliberate re-run passes -
+a re-run is slower than the path that loses the race.
+
+**This downgrades the mystery but not the item.** What remains is criterion 4's
+question rather than criterion 1's: the guard as written is timing-dependent,
+and a guard that is right 99 times in 100 is a guard that will be believed on the
+hundredth. The fix is to make the arithmetic independent of commit timestamps,
+NOT to retry it.
+
+**It also costs this session a number.** Any "2863 passed" quoted from a single
+run of this suite is not strictly reproducible while this stands, which is worth
+knowing before anyone treats a pass count here as a fingerprint.
+
+### Outcome - CLOSED 2026-09-10
+
+**It reproduced, in the same session, and that is what made the fix possible.**
+The wrap's final full run failed it a SECOND time, and this time it failed in
+ISOLATION too - where it had passed three times out of three a few hours
+earlier. The difference was machine load: that full run took 20 minutes against
+a normal 4.
+
+**The mechanism, at the level of the objects rather than "git was busy".** The
+test asserts that two stashes taken from an unchanged index leave THREE commits,
+not four, because the second stash's `index on ` commit has the same tree, the
+same parent and the same subject as the first and therefore hashes to the same
+object. That reasoning was incomplete. A git commit object ALSO embeds its
+author and committer timestamps, at WHOLE-SECOND resolution. The two `index on `
+commits collide only when both stashes are written inside the same second. On an
+idle machine they always were; under load they straddled a boundary, git wrote
+two distinct objects, and the count was 4.
+
+The failing report named all four commits, and the two `index on master` entries
+carried DIFFERENT SHAs - which is the observation that settles it, because a
+dedup failure and a miscount look identical in the number alone.
+
+**The fix is by construction, not by tolerance.** `GIT_AUTHOR_DATE` and
+`GIT_COMMITTER_DATE` are pinned to a fixed instant for the two stash commands
+whose object identity the test depends on. The collision is now deterministic.
+No retry, no sleep, no widened assertion - criterion 4 forbade all three, and the
+reason it forbade them is that a guard which passes on the second attempt is
+reporting clean about a different attempt.
+
+**Proved in BOTH directions, with a deliberately forced race.** A 2 second gap
+was inserted between the two stashes, guaranteeing a second-boundary crossing:
+
+    with the timestamps pinned, and a 2 s gap      1 passed
+    with the pinning removed, and the same gap     1 failed
+
+so the pinning is load-bearing rather than decoration. Each probe asserted its
+anchor was present before mutating, asserted the mutation was on disk, and
+restored the file byte-identically afterwards.
+
+**The docstring was wrong and is corrected, which is the durable half.** It
+listed tree, parent and subject as the reasons two commits hash alike and omitted
+the timestamps. That omission is why the test was written in a way that could
+race at all, so the fix is not complete until the sentence that misled its author
+is fixed too.
+
+### Acceptance, met
+
+1. **Met.** Reproduced twice, the second time in isolation, and then forced on
+   demand rather than waited for.
+2. **Met.** Named at the mechanism: whole-second timestamps inside the commit
+   object, with the two differing SHAs as the evidence.
+3. **Met.** It was environmental - machine load - and the module now says so in
+   the test's own docstring and beside the new constant.
+4. **Met.** No retry, sleep or widened tolerance was added. The only sleep used
+   was in a throwaway probe that was restored.
+
+
+**Why it is plausible rather than obviously spurious.** That module builds real
+throwaway git repositories and counts objects in the store, and the class under
+test is named for arithmetic that was already wrong once. It runs `git stash` in
+its fixtures, which is the operation `SHARED_WORKTREE_BAN` in `ops/store_drift.py`
+warns is whole-tree in reach. A test that shells out to `git` is also exposed to
+whatever else on the machine touches a repository at the same moment - and this
+session had background agents running, though none of them should have been
+inside a scratch repository belonging to this module.
+
+**The trap to avoid when picking this up.** Do not "fix" it by adding a retry, a
+sleep, or a tolerance to the assertion. A guard that passes on the second attempt
+is a guard that reports clean about a different attempt, which is the defect
+`OPS-69` and `OPS-70` were both about. Find the cause or record that it could not
+be found.
+
+### Acceptance
+
+1. The failure is REPRODUCED, or a bounded attempt to reproduce it is recorded
+   with what was tried - run count, ordering, and whether anything else was
+   touching a git repository concurrently. "Could not reproduce in N runs" is an
+   acceptable outcome and is a measurement; "probably a flake" is not.
+2. If it reproduces, the cause is named at the level of the mechanism - which
+   object count moved, and why - not at the level of "git was busy".
+3. If the cause is concurrency with other processes on this machine, the module
+   says so in its own docstring, because an environmental dependency nobody has
+   written down is indistinguishable from an intermittent bug.
+4. No retry, sleep, or widened tolerance is added to make it green. If the
+   assertion is genuinely too strict, that is a separate finding and is argued
+   on its own evidence.
+
+
+## OPS-73. Two holes in the lane-slot join, both found by the wrap that shipped it - CLOSED 2026-09-11
+
+Filed 2026-09-10 by the refutation pass over `ADR-008`. Neither blocks the join
+and neither is a reason to revert it; both are cases where a wrong answer is
+SILENT, which is this repository's standing definition of the dangerous kind.
+
+**Hole 1: the key set cannot see two of the machine's projects, so the
+transition that is supposed to fire automatically might never fire.**
+`ops.lane_slot.REPO_KEYS` is `("rc", "lw", "rsc", "cs", "ll")` - the five short
+codes the channel agreed. But `CLAUDE.md`'s own ports table lists SEVEN projects
+on this machine: Red Moon and Daemon Slayer are not in that set and have no
+agreed short code recorded here.
+
+That matters because of how the join decides its order.
+`reserved_scheme_state()` recognises a reserved name only for a key in
+`REPO_KEYS`, so a bucket containing `reserved-ds.lock` and nothing else reads as
+`RESERVED_ABSENT` - not as unknown, and not as present. **The reserved-floor
+widening could land and we would not notice**, and we would keep taking surplus
+slots while every other participant had moved to floors. The failure is silent
+and looks exactly like the correct pre-widening behaviour.
+
+Note what this is NOT: it is not an argument for accepting any `reserved-*.lock`
+whatsoever. `is_slot_name` is deliberately narrow so that a reaper never deletes
+a file it does not understand, and widening that is how a reaper eventually
+eats somebody's notes. The question is narrower - whether DETECTION should use a
+wider alphabet than CLAIMING does.
+
+**Hole 2: a `PROGRAMDATA` pointing at a FILE produces a permanent, silent
+"busy".** Measured: the root resolves to a path underneath the file, `mkdir`
+then fails, and `acquire_lane` returns `None` on every call forever. A caller
+cannot distinguish that from a genuinely full bucket. It is precisely the shape
+`UnknownRepoKey`'s own docstring condemns - "a silent fallback presents as a busy
+bucket and gets debugged as one" - reappearing one level down, in the root
+resolution rather than in the key. Relatedly, `shared_root()` strips whitespace
+from its input while the `LL_LANE_SLOT_ROOT` override branch does not, so an
+override of `"   "` yields `Path("   ")` rather than being ignored.
+
+### Acceptance
+
+1. A bucket whose only reserved name belongs to a project outside `REPO_KEYS` is
+   distinguishable from a bucket with no reserved names at all. Whether that is
+   a wider detection alphabet, a third state, or a recorded decision to accept
+   the blindness is open - but if it is accepted, the ACCEPTANCE is written down
+   and tested, because an undisclosed blind spot is the defect `OPS-70` closed.
+2. The short codes for Red Moon and Daemon Slayer are either recorded here with
+   their provenance, or recorded as NOT KNOWN TO US. A guess is not permitted:
+   inventing a key for another project is exactly the kind of unilateral act
+   `ADR-008` was careful to avoid.
+3. An unusable lock root - a file, a path under a file, an unwritable directory -
+   is reported as UNUSABLE rather than as a bucket that is merely busy. A caller
+   that cannot start must be able to say why.
+4. The override branch and `shared_root()` agree about whitespace.
+5. Every guard above is watched red under mutation, with the anchor asserted
+   before any survivor is believed.
+
+
+## OPS-74. Nothing here measures whether a guard is GREEN only because a tool is absent - CLOSED 2026-09-11
+
+Filed 2026-09-11 from a cross-project note read on the `moon_sync_inbox/`
+channel. The IDEA is adopted and nothing is vendored: no file was copied in, no
+module is imported from a sibling tree, and the method below is re-implemented
+from the described behaviour in this project's own words.
+
+**The failure class.** A test that shells out to an external tool and guards
+itself with a presence check has two behaviours, and a green suite only ever
+exercises one of them. When the tool is present the guard is invisible; when it
+is absent the test skips, errors, or - worst - passes trivially because the
+thing it was supposed to check never ran. That last shape is a FALSE RED's
+mirror image and this repository has no measurement of how much of it it has.
+It is the same defect as every entry in `CLAUDE.md`'s anti-patterns list: a
+claim about the TOOL wearing the costume of a claim about the world. The
+crashed `grep -iF`, the `taskkill` that killed nothing and the `-q` that printed
+no summary are all this failure in other clothes.
+
+**THE FIGURES THIS ITEM WAS FILED WITH ARE WITHDRAWN.** It said, marked Measured:
+57 files carrying a subprocess call site across `tools/`, `ops/` and `tests/`, 114
+call-site occurrences, 16 passing `check=True`, and 11 `shutil.which` presence
+guards. The refutation pass could not reproduce them under six different patterns
+- `HEAD` over those three directories gives 40 files, 98 occurrences and 6 guards;
+the whole repository gives 42, 100 and 6; the current tree counted by matching
+lines gives 46, 108 and 9. **Only the 16 `check=True` reproduces.**
+
+They are withdrawn rather than corrected, because their provenance is the defect:
+they were relayed out of a research agent's report and written down here as
+MEASURED by a merger who did not re-derive them. That is this repository's own
+rule - never quote a subagent's count - broken in the act of filing an item about
+not believing green things. The exact replacement figure does not matter, because
+the item no longer rests on it: the measurement below was taken by running the
+probe, not by counting call sites.
+
+### Acceptance
+
+1. A `tools/` entry point, re-implemented here, that runs the suite twice - once
+   normally and once with every `PATH` entry carrying a `git` executable removed
+   - and reports the DELTA by test id and by file, not merely a total. A total
+   hides a file that lost five tests while another gained five, which is the
+   per-file lesson `ops/merge_gate.py` already learned.
+2. The probe distinguishes three outcomes and never collapses them: a test that
+   SKIPPED cleanly, a test that FAILED or errored only because the tool was
+   absent, and a test that PASSED in both directions without the guarded code
+   ever running. The third is the one this item exists for.
+3. The probe's own instrument is proved before any zero it reports is believed.
+   A deliberately planted false-red site must be SEEN by it, and the positive
+   control is run and reported every time, exactly as the ADR-008 refutation
+   pass proved its file-write instrument before trusting its zero. A negative
+   result from an unproven instrument is not a result.
+4. The delta measured on this tree is recorded in the ledger as a number with a
+   date, whatever it turns out to be - including zero. A measured zero and an
+   unmeasured absence are different facts and this project keeps them apart.
+5. **Bidirectional guard discipline is written down and applied.** Any guard
+   whose job is "skip cleanly when tool X is missing" also asserts that the
+   guarded path actually RUNS when X is present. One direction alone is a
+   negative assertion, which rules something out without pinning anything down.
+6. Every guard above is watched red under mutation, with the anchor asserted
+   before any survivor is believed.
+
+### Run against the real tree - 2026-09-11 - the instrument reported itself UNPROVEN, was fixed, and then MEASURED
+
+`tools/false_red_probe.py` exists, runs, and its FIRST act against this tree was
+to refuse to let its own numbers be believed. That is criterion 3 working, and it
+is the most useful thing it could have done.
+
+```
+false red probe: positive control UNPROVEN - every count below is an absence of
+evidence, not evidence of absence
+```
+
+**The numbers it printed are therefore NOT A RESULT and are not recorded here as
+one.** They are written down only so the next session can tell whether the fix
+changed them: `clean_skip=23, exercised=103, false_red=188, silent_pass=1,
+skip_both=1, untouched=2672`, 189 findings across 22 files, 2988 tests collected
+with the tool and 2988 without. **Do not quote any of those as a measurement of
+this tree.** An unproven instrument reporting 188 and an unproven instrument
+reporting 0 are the same epistemic object, which is the whole reason criterion 3
+was written the way it was.
+
+**THE FIRST DIAGNOSIS WRITTEN HERE WAS WRONG, AND IS CORRECTED IN PLACE RATHER
+THAN DELETED.** It said the probe plants its controls OUTSIDE the tree it
+measures, so the measured invocation never collects them. That was the merger's
+reading of the symptom and it was refuted by measurement within the hour, which
+is the third time this session a confident cause was written down before it was
+checked.
+
+**THE MEASURED CAUSE.** The controls WERE collected. `pytest --collect-only tests`
+gives 2985 and adding the planted control path gives 2988, and the first run's own
+tally - 23 + 103 + 188 + 1 + 1 + 2672 - sums to exactly 2988, which is only
+possible if all three controls were collected and counted. The defect was node-id
+RECOGNITION, not collection: pytest builds an out-of-tree file's node id by
+joining its collector chain with `::`, so the id begins with the separator, the
+file attribution split at the first `::` and returned an empty string, and the
+control matcher matched nothing.
+
+**That one cause explains BOTH symptoms**, including the empty-filename bucket
+noted at the end of this section, which was filed here as separately unexplained.
+A single parsing assumption produced an unproven instrument and a nonsense row in
+its own report, and the two looked like unrelated defects.
+
+**What this does NOT cast doubt on.** The probe's own unit tests pass against
+recorded fixture output, and the classification, PATH stripping, parsing and
+report formatting are exercised there. What is unproven is the end-to-end claim
+that the instrument can SEE a false red in a real run - which is exactly the claim
+criterion 3 demands be proved before a count is believed.
+
+**Criterion 5 IS met, and its SCOPE is narrower than this section first said.**
+Six presence guards were found IN THE FOUR FILES THAT WERE SWEPT - not six in the
+tree, which is what the sentence originally implied and which the same section's
+own report of 22 clean skips already contradicted. Three of the six were already
+bidirectional and were correctly left alone; three were missing the present
+direction and now have it. **At least fifteen more tool-absence guards exist
+elsewhere in the suite and were NOT audited** - in the GVAS, hook-file-mode,
+lane-state, lanes, precommit-gate, repo-surfaces and tracked-walker test modules.
+The discipline is written down in `docs/OPERATIONS.md` and applies to them; it has
+simply not been applied to them yet, and that is `OPS-78` criterion 1's business
+rather than a silent gap.
+
+One of the three mutations found a real instance of the failure this item is
+about: every closed-stream case in the syntax-check hook's tests stayed GREEN
+against a transport that ran nothing.
+
+### THE MEASUREMENT, taken after the control was fixed - criterion 4
+
+Re-run by the merger rather than quoted from the slice that fixed it. Headline,
+verbatim:
+
+```
+false red probe: positive control PROVED - test_control_clean_skip=clean_skip,
+test_control_false_red=false_red, test_control_silent_pass=silent_pass
+  stripped 4 PATH entry(ies) carrying the tool; collected 2999 repository test(s)
+  with it and 2999 without, alongside 3 planted control(s) with it and 3 without
+  kinds: clean_skip=22, exercised=103, false_red=187, skip_both=1, untouched=2686
+  findings: 187
+```
+
+**187 FALSE REDS ACROSS 17 FILES.** A test in that set passes with `git` on the
+PATH and FAILS without it. (The file count was first written here as 22, which is
+the probe's `files with any change` line - that row also counts files whose only
+change was a clean SKIP. Re-derived from the findings themselves: 17.) On a machine with no `git` - a fresh clone on a bare
+box, a container, a CI image that forgot it - 187 of this suite's tests report a
+failure that is about the environment and not about the code. The correct
+behaviour for all of them is a clean skip, and only 22 tests do that today.
+
+**ZERO SILENT PASSES, and this is the number worth reading carefully.** The first
+run reported one, and the fix proved it was the probe's OWN planted control being
+counted as a repository test. So the measured figure for the outcome this whole
+item was built to find is ZERO - and it is a MEASURED zero rather than an
+unmeasured absence, which are different facts this project keeps apart.
+
+It is a zero with named limits rather than a clean bill. The detector wraps the
+presence lookup and the subprocess entry points; it is blind to the `system` and
+`popen` helpers in the `os` module, to `ctypes`, to import-time lookups, and to a
+`which` imported by name before the wrap. Those limits are in the module docstring
+rather than only here.
+
+**AND THE ZERO IS WEAKER THAN IT LOOKS, established by the refutation pass rather
+than claimed by the implementation.** A silent pass is recognised only when the
+lookup happens INSIDE the test, while the plugin is loaded. A lookup performed at
+MODULE level classifies as `untouched` instead - and module level is this
+repository's dominant shape, `tests/test_syntax_check_hook.py` among them. More
+bluntly: no test in this tree performs an in-process presence lookup for `git` at
+all, so `silent_pass=0` for that tool was STRUCTURALLY GUARANTEED before the probe
+ran. It is a true zero and it is not the reassurance it reads as. The module
+docstring also mis-described the mechanism as a cached import-time lookup
+performed before the plugin loads, which is wrong about why the case is missed.
+Both are `OPS-79`.
+
+**The deltas, old against new, and why the new set is believable:** clean_skip
+23 to 22, false_red 188 to 187, silent_pass 1 to 0, untouched 2672 to 2686,
+findings 189 to 187. Each of the three kinds falls by exactly its one control;
+untouched rises by exactly the 14 tests the fix added; and the tally now sums to
+2999, the repository total. The pre-fix figures summed to 2988 against a 2985-test
+repository, which is the arithmetic tell that the controls were being counted as
+repository tests.
+
+**Status: ALL SIX CRITERIA MET. OPS-74 is CLOSED.** Criterion 3 was met the hard
+way: the instrument was built, it declared itself unproven on its first real run,
+the cause was diagnosed WRONGLY by the merger and correctly by measurement, and
+the control now fires every run and is reported alongside the finding. A probe
+that had simply printed 188 on its first run would have been believed.
+
+**The 187 are NOT closed by this item** and are not a defect this item promised to
+fix - `OPS-74` asked for the measurement, and the measurement is what it produced.
+Deciding what to do about them is `OPS-78`.
+
+**The empty-filename bucket, filed here as unexplained, has the SAME cause.** The
+per-file report carried a row with an empty filename - three tests with the tool,
+three without, two changed - and those three are the controls themselves. The id
+parser returned an empty file for an id beginning with the separator. Recorded
+because the pair is instructive: the same wrong assumption produced a broken
+instrument and a visibly nonsensical row, and they were filed as two problems.
+
+
+## OPS-76. The stale arm is DEAD CODE on the live path - nothing calls `reap()`, so a leaked lock holds a shared slot forever - CLOSED 2026-09-11
+
+Filed 2026-09-11, by the session that armed the lane. **Found by measurement,
+and it refutes a prediction the previous hand-off made in good faith.**
+
+**What was predicted.** The 2026-09-10 hand-off said, of the single leaked lock
+sitting in the shared bucket: "OUR REAPER WILL RECLAIM THAT LEAKED LOCK when you
+arm; that is the protocol working, not us deleting a sibling's file."
+
+**What was MEASURED when the lane was armed, 2026-09-11.** The bucket held one
+lock, `0.lock`, stale by both arms - its holder pid dead and its timestamp about
+33 hours old. On a real acquire this project took `1.lock` and left `0.lock`
+exactly as it found it: same size, same mtime to the nanosecond, same SHA-256.
+It was not reclaimed, and it was never going to be.
+
+**The mechanism.** `try_acquire` creates the bucket, lists it once to prove it is
+readable, and then walks its candidate names calling `_claim` on each. It never
+calls `reap`. And `reap` has NO CALLER ANYWHERE IN THIS TREE - the name appears
+only in its own definition, in `tests/test_lane_slot.py` and in prose. The stale
+arm, `STALE_SECONDS`, the two-scheme reaper and every test that exercises them
+are all correct and all unreachable from the operational entry points.
+
+**Why this is worse than an unused function.** It makes two written claims false:
+
+- `docs/adr/ADR-008-join-the-shared-bucket.md` states as a consequence that "our
+  leaks now land in a shared directory, and our own stale arm is still the only
+  thing that reclaims them". As deployed, NOTHING reclaims them. A lock this
+  project leaks into a directory other projects share stays there permanently.
+- The surplus width we contend for is a claim about how many slots exist, not
+  about how many are reachable. Every permanently-leaked lock silently lowers our
+  real concurrency by one, and the symptom is an ordinary "busy" answer - the
+  exact silent shape `OPS-73` hole 2 just removed one layer down.
+
+**This is the repository's own lesson in a new costume.** A test suite that is
+green about a behaviour proves the behaviour is implemented, never that it is
+WIRED. Seventy-three tests covered a reaper that no production path could reach,
+and the previous session, this session's hand-off and `ADR-008` all described its
+live behaviour in the present tense. It took an acquire against the real bucket
+to find out. Compare `OPS-35`, where an item reported its own status and was
+wrong: here a MODULE reported its own behaviour and was wrong.
+
+**Deliberately NOT decided here.** Whether reaping should fire on every acquire,
+and whether this project should ever remove another participant's stale
+`reserved-<key>.lock` as opposed to a surplus one, are design questions with a
+cost in a shared directory. Removing a surplus lock is the scheme working as
+`ADR-008` describes it. Removing somebody's guaranteed FLOOR is a larger act and
+is not the same decision.
+
+### Acceptance
+
+1. A test proves that an acquire against a bucket containing a STALE lock in an
+   earlier candidate position reclaims it and takes that slot, rather than
+   stepping past it. The test must fail against the code as it stands today -
+   watch it red before believing it.
+2. A test proves the reverse direction with equal strength: an acquire NEVER
+   removes a lock that is not stale, whoever owns it. A reaper wired into the
+   hot path is the single most dangerous thing this repository does to a
+   directory other projects depend on, and one-directional evidence is what
+   `OPS-74` criterion 5 forbids.
+3. The decision about another participant's stale RESERVED floor is made
+   explicitly, written down in the ADR with its reasoning, and tested in
+   whichever direction is chosen. Silence is not an answer here: an undisclosed
+   blind spot is the defect `OPS-70` closed.
+4. `ADR-008`'s consequence paragraph is corrected, because it is currently a
+   claim the code does not support. The correction is an amendment, never a
+   rewrite of the original decision.
+5. Whatever is built has a caller. A follow-up probe asserts that the reaping
+   path is reachable from `acquire_lane`, so this item's own defect cannot recur
+   silently - an implemented-but-unwired behaviour must fail a test, not a
+   reading.
+6. Every guard above is watched red under mutation, with the anchor asserted
+   before any survivor is believed.
+
 

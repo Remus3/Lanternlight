@@ -431,6 +431,13 @@ LANES: tuple[Lane, ...] = (
             "tests/test_doc_archive.py",
             "tools/archive_link_guard.py",
             "tests/test_archive_link_guard.py",
+            # OPS-80. The splitter PLANS and writes nothing, which left the
+            # documented remedy for a fired size budget unable to change a
+            # file. This is the applying half, kept in a separate script so
+            # the planner stays a pure library; it acts on the same two
+            # documents and belongs to the same lane as they do.
+            "scripts/apply_doc_split.py",
+            "tests/test_apply_doc_split.py",
             # OPS-74. The false-red probe runs the suite twice, once with the
             # tool absent, and reports the delta by test id and by file. It
             # belongs beside the merge gate for the same reason the merge gate

@@ -49,8 +49,10 @@ criteria are still ours to meet.
 > the newest entries and the oldest are in
 > [`docs/LEDGER_ARCHIVE.md`](docs/LEDGER_ARCHIVE.md). **Nothing was deleted, so
 > an empty grep of the live file is not a claim about the project** - it is a
-> claim about which half you searched. When a size budget fires, RE-RUN
-> `tools/doc_archive.py`; do not raise the number.
+> claim about which half you searched. When a size budget fires, RE-RUN the
+> split with `python scripts/apply_doc_split.py --apply`; do not raise the
+> number. `tools/doc_archive.py` only PLANS the split and writes nothing, so
+> running it alone leaves the budget exactly where it was (`OPS-80`).
 
 ## THE HARD BOUNDARY - read first, it defines the project
 
