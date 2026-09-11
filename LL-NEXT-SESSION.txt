@@ -123,6 +123,13 @@ REAL sibling holder; that criterion already says the item stays open if so.
 
 IF THE GATE IS STILL UNANSWERED, the actionable queue is EMPTY of anything that
 does not need the operator or the game:
+  OPS-36  ROUTES THROUGH THE SAME CLOSED GATE, so do not pick it up expecting
+          different weather. It was operator-ruled ADOPT, but its criterion 1
+          requires RC to identify which charter version is CURRENT - four
+          versions arrived on the channel inside about four hours, several
+          superseding each other - and criteria 2 through 4 all depend on
+          knowing that. Asking RC is soliciting RC. Checked this session and
+          left untouched for exactly that reason.
   OPS-71  needs a session in DEFAULT permission mode, in a clone at another
           path. It CANNOT be settled in bypass permissions mode by any probe -
           that is the whole reason it exists as an item.
