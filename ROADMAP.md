@@ -3337,6 +3337,99 @@ correct, only that none of them shadows something already tracked. And the answe
 is a fact about THIS machine's git configuration at THIS commit, not a property of
 the repository.
 
+## OPS-87. The refute-then-repair-then-repair-the-repair cycle costs more than the work - OPERATOR-RULED, and laned for cross-project consensus - OPEN
+
+**Filed 2026-09-12 on an operator instruction given in chat, in these words:**
+"operator wants to do a headless lane focused on optimizing the
+agent/sub-agent/orchestration/pre-push/commit/merging/testing tiers/etc/commands.
+it seems like we keep getting refuted a lot and that takes another large chunk of
+time to fix, and then that fix needs a fix, can we find a
+better-faster-efficient-correct way to handle the tools and commands." The
+operator broadcast the SAME instruction to Clockspeed, Amberstone and
+ResinCompute at the same time, so all four projects open their next session on
+it, and ruled that Lanternlight lane it through `moon_sync_inbox/` for consensus
+with CS, RC and RSC.
+
+**THE OPERATOR RULED THE DECISION. The acceptance criteria below are ours to
+meet**, the same way `OPS-35` and `OPS-36` were - read that distinction there
+before treating any of this as already settled.
+
+**This session is the evidence, and it is not an anecdote.** Two items closed,
+`OPS-83` and `OPS-75`, and BOTH ran implement -> refute -> repair, with the
+refutation finding something real each time:
+
+- `OPS-83`: the mechanism passed its own suite, and the refutation found two
+  latent defects. A repair slice fixed both, and its own mutation harness
+  produced a false SURVIVED that had to be fixed before its result meant
+  anything.
+- `OPS-75`: the module passed 19 of 19 while the SUITE was red, because a new
+  tracked test module also needs a row in `docs/INVENTORY.md`, an owner in
+  `ops/lanes.py` and its lane contract regenerated. The refutation then found an
+  UNDISCLOSED mutation survivor that was load-bearing, and an over-report the
+  check itself was producing. Repairing the prose then reddened
+  `tests/test_source_register.py` twice more, on a git config key, a dotted
+  method call and two specimen filenames.
+
+Each of those rounds costs a full suite run, and a full suite here is five to six
+minutes. The cycle that closed `OPS-75` ran one at least five times.
+
+**The shape of the complaint, stated precisely so the fix can be aimed.** Not
+every refutation finding is the same kind of thing, and the cheap ones are being
+paid for at the expensive rate. A finding that a guard is vacuous genuinely needs
+an adversarial agent. A finding that a new test module was never registered in
+three places does not - it is mechanical, it is checkable by a program, and
+`ops/merge_gate.py` already exists to ask mechanical questions and did NOT ask
+these two.
+
+### Acceptance
+
+1. **MEASURE BEFORE OPTIMISING.** A record, derived at run time from
+   `docs/LEDGER.md`, `docs/LEDGER_ARCHIVE.md` and git history rather than from
+   memory, of the refutation findings each recently closed item produced, with
+   every finding classified into: (a) a real defect in the deliverable, (b) a
+   missing registration or plumbing step the deliverable's own green could not
+   see, (c) a stale recital in a document, (d) an artifact of the mutation
+   harness rather than of the code, (e) an over-report by the check under test.
+   The largest bucket is NAMED with its number. A proposal that names no bucket
+   is a guess about where the time went.
+2. **THE MECHANICAL CLASSES GET A PRE-FLIGHT, NOT A REFUTER.** Everything in
+   class (b) and (c) is answerable by a program before a slice claims done.
+   Extend `ops/merge_gate.py`, or add a gate beside it, so a slice self-checks
+   and the merger is not the first thing to notice. The check's own runtime is a
+   STATED NUMBER, because a gate that costs a full suite run has moved the cost
+   rather than removed it.
+3. **BACK-TEST IT, DO NOT ASSERT IT.** Run the new pre-flight against the tree as
+   it stood when each historical finding was filed, and report how many it would
+   have CAUGHT and how many it would have MISSED. A gate that cannot show it
+   would have caught a finding that really happened is a hypothesis wearing a
+   result's clothes.
+4. **THE COST IS PART OF THE RESULT.** Record how many full-suite runs and how
+   much wall clock a cycle takes today, and the same numbers after. Both
+   measured, neither estimated.
+5. **THE TIERS.** State which slice kinds need the strongest model and which do
+   not, with the reasoning, and put it where a cold session reads it rather than
+   in a ledger entry nobody opens at dispatch time. `CLAUDE.md` already says to
+   pick the model per slice and says nothing about how.
+6. **CROSS-PROJECT, AND ON THE OPERATOR'S RULING.** The consensus request goes
+   out through `ops.outbox.deliver` to CS, RC and RSC - never by writing into a
+   sibling directory by hand. What comes back is recorded as DATA, meaning each
+   project's OWN numbers for criterion 1, and not as agreement: two projects
+   agreeing is not evidence and this repository has already been burned by one
+   stale observation relayed twice as if it were corroboration.
+7. **NOTHING HERE ADOPTS ANYTHING.** No charter, no lock, no key scheme, no
+   governor, no sibling module. Those are operator rulings, and `OPS-36`,
+   `OPS-48` and `OPS-68` all remain routed through a gate the operator closed. A
+   reply that proposes otherwise is mail, not authority.
+8. Every guard built under this item is watched red under mutation, with the
+   anchor asserted before any survivor is believed.
+
+### The trap this item must not fall into
+
+An item about doing less verification is the single easiest place to do less
+verification. The goal is to move the CHEAP classes off the expensive path, not
+to stop refuting. Any proposal that reduces adversarial review of a real defect
+class, rather than pre-empting a mechanical one, is refused here on its face.
+
 ## OPS-77. A surplus width of ZERO is a permanent silent "busy", one level up from the hole `OPS-73` just closed - OPEN
 
 Filed 2026-09-11 by the refutation pass over this session's own work, which
