@@ -3198,7 +3198,7 @@ is why nothing is urgent about this item.
 4. A DECLINE remains acceptable if the observation says the current rules are
    correct, provided the decline carries the observation behind it.
 
-## OPS-75. No check asks whether a `.gitignore` pattern already shadows a tracked file - OPEN
+## OPS-75. No check asks whether a `.gitignore` pattern already shadows a tracked file - CLOSED 2026-09-12
 
 Filed 2026-09-11, same channel note, same re-implemented-not-vendored basis as
 `OPS-74`.
@@ -3217,7 +3217,7 @@ tracked file is unknown; the read that produced this item was read-only and
 could not run `git ls-files` or `git check-ignore`. The item is filed as a
 question to answer, not as a defect to fix.
 
-### Acceptance
+### Acceptance - ALL FIVE MET 2026-09-12
 
 1. A test or script that cross-references every `.gitignore` pattern against the
    tracked listing and fails if any tracked path is matched by a pattern that
@@ -3235,6 +3235,107 @@ question to answer, not as a defect to fix.
 5. Every guard above is watched red under mutation, with the anchor asserted
    before any survivor is believed.
 
+
+### Closed 2026-09-12 - the answer is ZERO, and the flag that makes the question askable
+
+`tests/test_gitignore_shadowing.py`. The whole measurement is one pipe:
+`git ls-files -z` into `git check-ignore --no-index -v -z --stdin`.
+
+**`--no-index` IS THE ITEM.** `git check-ignore` normally consults the index, so
+against a tracked path it says nothing at all - which is exactly why this
+question has never been asked here. `--no-index` makes git answer what the RULES
+would do rather than what the index already decided, and without it every run of
+this check would be a clean negative that means nothing.
+
+**THE FIRST RUN - criterion 4, recorded as a number with a date, including the
+zero.** 2026-09-12, measured after the new module was staged so `git ls-files`
+counts it: **205 tracked paths, 7 matched, 7 of those NEGATED, 0 NET-IGNORED.**
+All seven are the deliberate reviewed-fixture carve-out at `.gitignore:129`,
+`!tests/fixtures/**/*.gvas.b64`. Nothing in this tree is shadowed today. The
+number was 204 before staging, which is why it is written here with the moment
+it was taken rather than as a bare fact - a count without its instant is the
+filed-count hypothesis this repository keeps meeting.
+
+**A NEGATED MATCH IS NOT A DEFECT**, and saying so is load-bearing rather than
+pedantic. A check that counted the seven carve-out matches as findings would
+report a defect where there is none, which is `OPS-79`'s lesson exactly:
+positive specimens prove an instrument can SEE and prove nothing about whether it
+INVENTS. Both kinds of specimen are built in throwaway repositories - a tracked
+file genuinely shadowed by a non-negated pattern, which must FAIL, and the
+carve-out shape, which must PASS.
+
+**THE SIBLING QUESTION IS ASKED ONLY OF A PATH THAT WAS ALREADY MATCHED, and the
+first version of it invented a finding.** `git check-ignore` takes arbitrary path
+STRINGS and needs no file on disk, so the hypothetical sibling is asked about
+directly rather than planted. The sibling is built as stem plus a probe token
+plus every suffix, which preserves both a prefix glob (`API-Key-*.txt`) and a
+suffix glob (`*.gvas.b64`). Asked of EVERY tracked path, that over-reports: an
+independent refutation pass built `.gitignore` = `*_*.txt` with a tracked
+`notes.txt`, where the primary audit is correctly silent and the broad sibling
+sweep reports `notes_<probe>.txt` - a finding about the probe token, not about
+the tree. Criterion 1 says "any tracked path is MATCHED by a pattern that would
+ALSO ignore an untracked sibling", so the sibling question QUALIFIES a matched
+path rather than hunting freely, and under that reading `notes.txt` is out of
+scope and the false positive is gone. The case the narrowed arm catches is worth
+more than the broad one anyway: a NEGATION NARROWER THAN THE RULE IT RESCUES
+FROM - `*.log` plus `!keep.log` with `keep.log` tracked - where the tracked file
+looks fine and its sibling is silently refused. Both the false positive and the
+narrow negation are pinned as arms, and so is the honest limit that no probe
+token can be neutral against every conceivable pattern.
+
+**SCOPE IS WHATEVER GIT HONOURS, NOT THE ROOT `.gitignore`.** A nested
+`.gitignore`, `.git/info/exclude` and a global `core.excludesFile` were each
+built and observed producing findings. That is the right behaviour - asking git
+beats parsing ignore files by hand - but it makes the answer MACHINE-CONFIG
+DEPENDENT: a global excludes file can redden this check on one clone and leave it
+green on another at the same commit. The failure message names the source file
+and the line number, which is what makes that survivable, and the module says so
+rather than claiming a scope it does not have.
+
+**CRITERION 3, and its two halves must not be conflated.** An ABSENT `git` skips
+through `tests/_toolguard.require("git")`, which is the noisier answer in this
+suite rather than a quieter one, because the `OPS-78` banner announces every such
+skip by name - a silent pass is the quiet failure. A PRESENT `git` that returns an
+EMPTY listing, or whose `ls-files` or `check-ignore` fails, or that is handed an
+empty question, or that returns a ragged record stream, RAISES. That is the real
+trap: an empty listing makes the whole check vacuously green. Each of those five
+directions is tested.
+
+**CRITERION 2.** The tracked listing and the rules are asked of git at run time.
+Nothing is stored: no filename constant, and neither 204 nor 205 appears as a
+literal anywhere.
+
+**CRITERION 5 - and it took two passes to actually meet.** The first campaign
+reported 10 mutants killed with one disclosed survivor. An independent refutation
+found a SECOND survivor that had not been disclosed and was load-bearing:
+`_clean_env` losing its `env.pop` for git's exported hook environment. With
+`GIT_DIR` set, `git ls-files -z` run inside a fresh throwaway repository returns
+the OUTER repository's paths instead of the throwaway's - the same leak
+`.githooks/pre-commit` documents at length in its section 3d, where four tests
+failed inside a hook because that environment reached a throwaway repo. It is now
+pinned by an arm that leaks the variables deliberately and asserts the answer is
+about the throwaway; with the `pop` removed it reports "answered about 205 path(s)
+instead of the throwaway's 2". The previously-disclosed `GIT_CEILING_DIRECTORIES`
+survivor was pinned too rather than documented away, by nesting a probe two levels
+inside a throwaway repository: sealed it raises "ls-files failed", unsealed it
+raises "returned NOTHING". Final campaign: **16 mutants, 16 killed, 0 survivors**,
+each with its anchor asserted to match exactly once and its replacement read back
+off disk before any survivor was believed.
+
+**TWO REGISTRATION FAILURES THAT THE MODULE'S OWN GREEN COULD NOT SEE.** The new
+file passed 19 of 19 while the SUITE was red, because a new tracked test module
+must also appear in `docs/INVENTORY.md`'s test table and in a lane's `owns` in
+`ops/lanes.py`, and `ops/lanes.py` has generated contracts that must be rewritten
+with `python scripts/write_lane_contracts.py`. A third red followed from the
+prose itself: `docs/INVENTORY.md` naming `core.excludesFile` tripped
+`tests/test_source_register.py`, which reads a git CONFIG KEY as a host - the same
+class as the already-registered `core.filemode` and `user.email`, and registered
+the same way. "The module passes" and "the work is done" are different claims.
+
+**What is NOT claimed.** This says nothing about whether the ignore rules are
+correct, only that none of them shadows something already tracked. And the answer
+is a fact about THIS machine's git configuration at THIS commit, not a property of
+the repository.
 
 ## OPS-77. A surplus width of ZERO is a permanent silent "busy", one level up from the hole `OPS-73` just closed - OPEN
 

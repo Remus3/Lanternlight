@@ -723,6 +723,32 @@ KNOWN_NON_HOSTS = frozenset(
         # `core.filemode` above. It is the key's NAME, never a value.
         "lanternlight.redact.iter",
         "user.email",
+        # A GIT CONFIG KEY quoted by `OPS-75` and `LL-0236`, naming the third
+        # source of ignore rules that `git check-ignore` honours beside a
+        # `.gitignore` and `.git/info/exclude`. Same class as `core.filemode`
+        # and `user.email` above: it is the key's NAME, it is not a host, and
+        # `.excludesFile` simply parses as a TLD-shaped tail. Looked at before
+        # adding, per the regenerating note. The PATH such a key points at is
+        # machine-local and is deliberately never quoted anywhere in this tree.
+        "core.excludesFile",
+        # THREE MORE FROM `OPS-75` AND `LL-0236`, all looked at in context.
+        #
+        # `env.pop` is a PYTHON METHOD CALL on a dict, quoted while recording
+        # that `_clean_env` losing it lets git's exported hook environment leak
+        # into a throwaway repository. Same class as `builtins.open` and
+        # `os.replace` above: a dotted attribute chain the extractor reads as a
+        # domain. It resolves nowhere.
+        #
+        # `keep.log` and `notes.txt` are SPECIMEN FILENAMES inside throwaway
+        # repositories the tests build in `tmp_path`. Neither is a file in this
+        # tree - `git ls-files` matches zero paths for either - and neither is a
+        # host; `.log` and `.txt` merely parse as TLD-shaped tails. They are
+        # quoted because naming the specimen is what makes the reasoning
+        # checkable, and paraphrasing them to satisfy this guard would remove
+        # the only detail that lets a reader rebuild the case.
+        "env.pop",
+        "keep.log",
+        "notes.txt",
         # The EIGHTH trip, on `LL-0171` and `LL-0172`. `json.loads` is a
         # PYTHON STDLIB CALL, not a host; `.loads` merely parses as a TLD-shaped
         # tail. `trigger.json` is the tail of

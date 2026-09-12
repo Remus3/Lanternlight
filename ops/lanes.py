@@ -259,6 +259,7 @@ LANES: tuple[Lane, ...] = (
             "tests/test_precommit_gate.py",
             "tests/test_process_capability.py",
             "tests/test_source_register.py",
+            "tests/test_gitignore_shadowing.py",
             "tests/test_repo_surfaces.py",
             "tests/test_tracked_walker.py",
             # Guards the INDEX MODE of the tracked hooks this lane already
