@@ -761,6 +761,15 @@ def hooked_repo(tmp_path_factory) -> Path:
     slipped through would land in real history, which is the one accident this
     whole module exists to prevent.
     """
+    # OPS-83. Everything below wires this throwaway repository to this
+    # repository's REAL `.githooks/pre-commit`, whose shebang is `#!/bin/sh`
+    # and whose body calls grep, head, tr and wc. Without that POSIX userland
+    # on PATH git cannot even spawn the hook, and every test taking this
+    # fixture errors for a reason the output never names. Skip here instead,
+    # naming the missing members. The PRESENT direction is pinned by the seed
+    # commit below, which runs the real hook and fails outright if the userland
+    # is not really there.
+    _toolguard.require_posix_userland()
     repo = tmp_path_factory.mktemp("hookprobe")
     assert _git(repo, "init", "-q").returncode == 0, "git init failed"
     for key, value in (

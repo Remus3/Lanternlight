@@ -343,6 +343,25 @@ KNOWN_NON_HOSTS = frozenset(
         # and resolves nowhere; the host-shaped pattern cannot tell a dotted
         # field path from a domain. Not an external source.
         "control.proved",
+        # WINDOWS EXECUTABLE BASENAMES quoted by `OPS-83` and `LL-0235`, which
+        # record where each program resolved when Git for Windows' POSIX
+        # userland was stripped from `PATH`. `.EXE` is not a TLD, but the
+        # host-shaped pattern reads `find.EXE` exactly as it reads a domain.
+        # Each was looked at before being added, per the regenerating note
+        # above, and each is listed in the CASE the failure message names
+        # rather than the case the prose uses - the same reason `path.write` is
+        # listed lowercased.
+        #
+        # None is an external source and none is a file in this tree.
+        # `git.exe` and `sh.exe` ship with Git for Windows, `find.EXE` and
+        # `sort.EXE` are the Windows programs in `%SystemRoot%\system32` that
+        # wear POSIX names - which is the measured trap `OPS-83` exists to
+        # defend against, not a citation of anything. The same class as
+        # `python.exe`, `pythonw.exe` and `cmd.exe` already registered below.
+        "find.EXE",
+        "git.exe",
+        "sh.exe",
+        "sort.EXE",
         # GITIGNORED RUNTIME FILENAMES quoted by the hand-off, naming where the
         # capture watcher's arming record and heartbeat were moved when the
         # operator had the headless lane disarmed on 2026-09-11. Both live under

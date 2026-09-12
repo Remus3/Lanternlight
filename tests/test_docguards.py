@@ -327,6 +327,13 @@ def _probe_repo(tmp_path: Path) -> Path:
     real history. Only the pieces the doc guard needs are copied, which is also
     what keeps this fast enough to live in the suite.
     """
+    # OPS-83. This helper copies the REAL `.githooks` in and points
+    # `core.hooksPath` at it below, so every caller runs a `#!/bin/sh` hook
+    # whose body calls grep, head, tr and wc. Without that POSIX userland on
+    # PATH git cannot spawn the hook and these cases go red naming nothing.
+    # Skip here, naming the missing members. The PRESENT direction is pinned by
+    # the seed commit at the end of this function, which runs the real hook.
+    _toolguard.require_posix_userland()
     repo = tmp_path / "probe"
     (repo / "ops").mkdir(parents=True)
     (repo / "tests").mkdir()

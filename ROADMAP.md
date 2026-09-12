@@ -3943,7 +3943,7 @@ and asked. A held draft plus a recorded question cost one turn; sending on our
 own judgement would have set the precedent the hold exists to prevent.
 
 
-## OPS-83. 49 tests need a POSIX userland, not `bash`, and no guard names what they actually need - OPEN
+## OPS-83. 49 tests need a POSIX userland, not `bash`, and no guard names what they actually need - CLOSED 2026-09-12
 
 Filed 2026-09-11 out of `OPS-78` criterion 4. It is the remainder of that item's
 56, split off because the seven that really were `bash` are fixed and these are a
@@ -3996,7 +3996,7 @@ hook run at all here - which names the real dependency but reports a tool name
 the banner cannot count. None is obviously right, which is why this is an item
 rather than an edit.
 
-### Acceptance
+### Acceptance - ALL FIVE MET 2026-09-12
 
 1. A decision is recorded, with reasoning, on what these 49 should name when the
    POSIX userland is absent. Silence is not an option; neither is copying
@@ -4012,6 +4012,173 @@ rather than an edit.
    wrong generalisation would come from.
 5. Every guard is watched red under mutation, with the anchor asserted before any
    survivor is believed.
+
+### Closed 2026-09-12 - what was decided, and what this item filed that did not reproduce
+
+**THE DECISION, criterion 1.** These 49 name a CAPABILITY - a requirement that
+is a SET - rather than one tool. `tests/_toolguard.py` gains a second guard
+beside the OPS-78 single-tool one: `POSIX_USERLAND = "posix-userland"` with
+members `POSIX_USERLAND_TOOLS = ("sh", "grep", "head", "tr", "wc")`, reached
+through `require_posix_userland()`. OPS-78's single-tool answer does not
+transfer because the dependency is not one executable, and each of the three
+shapes this item recorded was rejected for a stated reason:
+
+- **`sh` alone** is honest about the entry point and silent about the utilities
+  the hook body calls. A box carrying `sh` but not `tr` still produces an
+  unexplained red, which is the defect rather than the fix.
+- **A hand-written full set** is precise and goes stale the moment a hook gains
+  a `sed`. This repository's own `ops/docguards.py` says a list in a file is
+  silently green over everything added after it was written.
+- **WHAT WAS CHOSEN** keeps the precision and removes the staleness by pairing
+  the declared set with a DRIFT TEST that re-derives the utilities from the hook
+  text at run time. Staleness then presents as a RED TEST on a machine that HAS
+  the userland - where it is checkable and fixable - instead of as a false red
+  on a bare box where nobody can diagnose it.
+
+**THE FILED UTILITY LIST WAS WRONG TWICE, and both errors are the same error.**
+This item said the hook body calls "find, grep, head, mv, printf, tr and wc".
+Measured over both hooks' non-comment lines: `mv` appears ZERO times and is
+prose only, and `find` appears ONCE, inside `git diff --find-renames`. A hyphen
+is a word boundary, so a bare `\bfind\b` scan reads a git FLAG as a utility.
+That list was itself produced by a naive word scan, which is why the drift test
+matches COMMAND POSITION instead - the same narrowing `OPS-22` applied to
+`tools/precommit_gate.py::_forbidden_cmdlet_reason` for the same class of false
+positive. `printf` is invoked but is a POSIX shell BUILTIN, so it is subtracted
+rather than required on PATH; `SHELL_BUILTIN_UTILITIES` names the subtraction so
+it is visible rather than hidden in a condition.
+
+**`sh` IS THE GATE, and that is not what the filed reconstruction predicted.**
+Restoring `find grep head mv printf tr wc` while withholding `sh` recovers ZERO
+of the 49 - byte-identical to restoring nothing - because git cannot spawn the
+hook at all: `error: cannot spawn <repo>/.githooks/pre-commit: No such file or
+directory`. `git.exe` itself survives the strip in `mingw64\bin`. The 38/11
+split reproduces only once `sh` is restored, so the earlier session's "partial
+POSIX set" must have carried `sh` without recording it.
+
+**A NAME-ONLY PRESENCE PROBE LIES ON WINDOWS, measured.** With Git's `usr\bin`
+stripped, `shutil.which("find")` returns `C:\Windows\system32\find.EXE` and
+`which("sort")` returns `system32\sort.EXE` - Windows programs wearing POSIX
+names on a box with no POSIX userland at all. Neither is in the declared set
+today, so this is defence against the next addition rather than a live bug, and
+it is the reason the guard is not simply `which()` over a list.
+`WINDOWS_HOMONYMS` plus `_under_system_root` treat such a resolution as ABSENT.
+Case, separator, dot-dot, trailing-separator, 8.3 short-name and
+extended-length (`\\?\C:\...`) spellings are all covered; the UNC
+administrative-share form is NOT, is documented as a known limit, and is pinned
+by an arm rather than papered over - deciding whether `\\host\C$\Windows` is
+THIS machine cannot be settled without guessing which of NetBIOS name, FQDN,
+`localhost`, `.` or a loopback literal denotes self, and a wrong guess fails in
+both directions.
+
+**CRITERION 4 - the 11, each diagnosed by its own observed pass rather than
+inferred from the union.** All in `.githooks/pre-commit`: line 155's `tr` is the
+non-ASCII detector, lines 223-224's `grep` selects the staged `.md` and `.py`.
+
+- needs `sh` + `grep` (3):
+  `tests/test_docguards.py::TestTheHookRefusesFailClosed::test_a_staged_doc_differing_from_the_worktree_is_refused`;
+  `tests/test_precommit_hook_globbing.py::test_the_glob_neighbour_never_runs_in_place_of_the_selected_module`
+  and `::test_the_same_input_without_a_neighbour_is_refused_too`
+- needs `sh` + `tr` (1):
+  `tests/test_no_pii.py::test_the_hook_still_refuses_non_ascii_in_authored_text`
+- needs `sh` + `grep` + `tr`, neither utility alone (7): `tests/test_docguards.py`'s
+  `..._no_observed_map_is_refused` and `test_prose_that_reddens_the_subset_is_refused`;
+  `tests/test_precommit_gate_lint.py`'s `..._names_the_bracketed_file_and_not_its_neighbour`,
+  `..._rename_with_a_violating_added_line_is_refused` and `..._violating_added_line_is_refused`;
+  `tests/test_precommit_hook_globbing.py`'s `test_a_bracket_doc_that_really_differs_is_still_refused`
+  and `test_several_selected_modules_still_reach_pytest_as_several_arguments`
+
+The minimal set that takes all 184 tests in the four files green is `sh grep tr`,
+with no second residue. `head` and `wc` are invoked by the hook and are NOT
+exercised by these tests; they are declared anyway because the guard names the
+USERLAND rather than a snapshot of which hook branch one run happened to take.
+
+**There is no binary named `bash` involved** - `which("bash")` answers `None`
+while all 184 pass. But `usr/bin/sh.exe` IS bash (`$BASH_VERSION` 5.2.37), so
+the accurate sentence is "no binary named bash", never "no bash".
+
+**CRITERION 2, measured rather than asserted.** Under a shim carrying the 73
+`*.dll` and no executable at all, the four files report `135 passed, 49 skipped`
+with ZERO failed and ZERO errored, and the skipped set equals the previously-red
+set BY NODE ID in both directions rather than by count. The banner reads:
+
+```
+============= REQUIRED CAPABILITY INCOMPLETE - TESTS WERE SKIPPED =============
+49 test(s) were SKIPPED because the capability 'posix-userland' is incomplete on PATH. Missing: grep, head, sh, tr, wc.
+```
+
+**CRITERION 3, re-measured 2026-09-12 with the positive control PROVED.**
+`python tools/false_red_probe.py --tool sh` over `C:\Lanternlight`: control
+PROVED on all five planted specimens, 3136 repository tests collected in both
+directions alongside 5 planted controls, `false_red=0`, `clean_skip=58`,
+`skip_both=1`. `--tool sh` is the honest question: the probe strips a PATH ENTRY
+and `usr\bin` carries 244 other executables, so `--tool sh` and `--tool bash`
+build a byte-identical stripped PATH by construction.
+
+**A PROBE LIMITATION FOUND ON THE WAY, and recorded so nobody files it as a
+result.** The same probe run from a git worktree that sits INSIDE the system
+temp tree reported `positive control UNPROVEN` with all five specimens
+unclassified, counted the 5 control tests as repository tests, and still printed
+a full set of counts including `false_red=50`. The control module is planted in
+a temp directory, and when the rootdir is also under that tree pytest produced
+node ids of the shape `::test_control_false_red` with no file segment at all, so
+`is_control` could not see them. The probe's own rule saved it - an UNPROVEN run
+is an absence of evidence - but the numbers looked exactly like findings. Run
+the probe from the real tree. Filed as `OPS-86`.
+
+**CRITERION 5.** 19 mutants on the mechanism, 8 on the repair, and the wiring's
+vacuity watched on all four files rather than the two asked for: guard removed
+gives 32 errors / 6 / 6 / 5 red, restored gives 32 / 6 / 6 / 5 skipped. Every
+mutation asserted its anchor matched exactly once and read the replacement back
+off disk before a survivor was believed. Two decorations were found and replaced
+rather than shipped: an arm that survived its own mutation because stripping
+comments changed the derived set by nothing over these particular hooks, and a
+mutation harness that produced a false SURVIVED because two mutants of equal
+byte length written in the same second let pytest replay a cached `.pyc` - fixed
+by purging `__pycache__` and running `-B`.
+
+**What is NOT claimed.** The whole suite was never run under a shim, so a test
+outside these four that also needs a POSIX utility is invisible here. Only
+`.githooks/pre-commit` was exercised; `commit-msg` has utility dependencies
+nobody has measured. `sh.exe` here is bash in `sh` mode, so "needs `sh`" means
+"needs this `sh`" and says nothing about dash or busybox ash. And
+`C:\Program Files\Git\bin` is absent from this machine's PATH - on a machine
+where it IS present, `sh` resolves there too, the strip fails to strip, and the
+measurement would silently report nothing.
+
+## OPS-86. `tools/false_red_probe.py` cannot recognise its own control when the rootdir sits inside the system temp tree - OPEN
+
+Filed 2026-09-12 out of `OPS-83`. Measured, not inferred: the probe was run from
+a detached git worktree created under the session scratchpad, which is itself
+under `%TEMP%`. It reported `positive control UNPROVEN` with all five planted
+specimens "never classified", reported `0 planted control(s)` in both directions
+while counting those same 5 tests as REPOSITORY tests, and printed a complete set
+of counts including `false_red=50`. Re-run from `C:\Lanternlight` against the
+same question the control PROVED and `false_red` was 0.
+
+The mechanism is visible in the findings list: the control's node id came back as
+`::test_control_false_red`, with NO file segment at all. `file_of` already
+documents the out-of-tree shape whose segments are the collector chain, and
+`is_control` matches the module BASENAME in any segment - but here there is no
+segment carrying a `.py` name for it to match, because the control is planted in
+a temp directory and the rootdir is under that same tree.
+
+**The probe's own doctrine saved it and that is the point** - an UNPROVEN run is
+declared an absence of evidence, so nothing false was filed. But the counts were
+still printed and they read exactly like findings, which is how a reader files
+one anyway.
+
+### Acceptance
+
+1. The mechanism is confirmed by construction rather than by this one
+   observation: plant the control under a rootdir inside `%TEMP%` deliberately
+   and show the node id shape, then show the same run from a rootdir outside it.
+2. `is_control` recognises the control in both shapes, or the probe REFUSES to
+   report counts it cannot attribute. Either is acceptable; silently printing a
+   full count table for a run whose control was never seen is not.
+3. Watched red under mutation, with the anchor asserted before any survivor is
+   believed.
+4. Re-measured afterwards with the positive control PROVED on that run, and
+   recorded in the ledger with a date.
 
 ## OPS-84. Vendor Legion Wallpaper's write tracer under the license it named - CLOSED 2026-09-11, operator-ruled
 

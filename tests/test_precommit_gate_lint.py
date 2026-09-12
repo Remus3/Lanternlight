@@ -123,6 +123,14 @@ def _make_repo(root: Path, *, hooked: bool) -> Path:
         ("commit.gpgsign", "false"),
     ]
     if hooked:
+        # OPS-83. This next line IS the wire: from here the throwaway
+        # repository runs this repository's REAL `.githooks/pre-commit`, whose
+        # shebang is `#!/bin/sh` and whose body calls grep, head, tr and wc.
+        # Without that POSIX userland on PATH git cannot spawn the hook at all
+        # and the end-to-end cases go red for a reason nothing names. The
+        # unhooked branch below reaches no hook and is deliberately NOT guarded
+        # - skipping tests that never needed the tool is a coverage loss.
+        _toolguard.require_posix_userland()
         settings.append(("core.hooksPath", HOOKS_DIR.as_posix()))
     else:
         # An empty but existing directory, rather than an unset key: this

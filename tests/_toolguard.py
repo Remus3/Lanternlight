@@ -56,23 +56,125 @@ session to record which tests looked a tool up. A module that had bound
 ``from shutil import which`` at import time would hold the original function
 and be invisible to that instrument, so the lookup here is written as an
 attribute access on every call.
+
+----------------------------------------------------------------------------
+
+ROADMAP ``OPS-83`` - THE SECOND SHAPE, FOR A DEPENDENCY THAT IS A SET.
+
+``OPS-78`` above solves a dependency that is ONE executable. 49 tests in four
+files have a dependency that is not: they run a real ``git commit`` against
+this repository's own ``.githooks/pre-commit``, whose shebang is ``#!/bin/sh``
+and whose body calls ``grep``, ``head``, ``printf``, ``tr`` and ``wc``. Naming
+one tool cannot describe that, so a second guard is added here rather than the
+first one being stretched. Three shapes were available and the reasoning is
+written down so it is not re-derived:
+
+* GUARD ON ``sh`` ALONE was rejected. It is honest about the entry point and
+  silent about every utility the hook body calls, so a machine carrying ``sh``
+  and no ``tr`` still produces an unexplained red - which is the exact defect
+  ``OPS-78`` exists to remove, relocated rather than fixed.
+* GUARD ON A HAND-WRITTEN FULL SET was rejected on its own. It is precise the
+  day it is written and stale the moment a hook gains a ``sed``. This
+  repository already says so about itself: ``ops/docguards.py`` derives its
+  selection at run time precisely because a list in a file is silently green
+  over everything added after it was written.
+* WHAT WAS CHOSEN: a NAMED CAPABILITY whose member set is DECLARED in one place
+  - :data:`POSIX_USERLAND_TOOLS` - and whose completeness is CHECKED BY
+  DERIVATION from the hook sources. ``tests/test_toolguard.py`` re-reads both
+  hooks, extracts the utility names actually invoked in them, and fails in both
+  directions: an invoked utility that is not declared, and a declared utility
+  nothing invokes. The declaration keeps the precision; the drift test removes
+  the staleness. Staleness then presents as a RED TEST on a machine that HAS
+  the userland, where a reader can diagnose and fix it, instead of as a false
+  red on a bare box where nobody can.
+
+WHY THE CAPABILITY SKIP REASON IS A SEPARATE PREFIX, NOT A LONGER TOOL REASON.
+:func:`tool_from_reason` searches for :data:`SKIP_REASON_PREFIX` ANYWHERE in
+the text. A capability reason that contained that prefix - or was contained by
+it - would be counted by BOTH counters, and the end-of-run statement would
+report a missing tool that is sitting on ``PATH`` while doubling the total.
+:data:`CAPABILITY_SKIP_REASON_PREFIX` is therefore chosen so that neither
+string contains the other, and ``tests/test_toolguard.py`` asserts exactly that
+rather than leaving it to whoever edits the text next.
+
+AND THE REASON ENUMERATES THE MISSING MEMBERS. "posix-userland absent" tells a
+reader that something is wrong and sends them hunting for which something. The
+members are named in the reason, carried through the counter, and printed in
+the banner, because the whole point of the banner is that the reader does not
+have to go looking.
+
+WHAT THE OPS-83 MEASUREMENT SLICE ESTABLISHED, measured in an isolated
+worktree with 184 tests across the four files passing at baseline:
+
+* ``sh`` IS THE GATE, not one member among equals. With ``sh`` off ``PATH``
+  git cannot spawn the hook at all - it reports ``error: cannot spawn
+  <repo>/.githooks/pre-commit: No such file or directory`` - and ZERO of the 49
+  recover no matter which utilities are restored alongside it. Restoring ``sh``
+  alone recovers 38 and leaves 11.
+* THE MINIMAL SET that takes all four files green is ``sh`` + ``grep`` + ``tr``.
+  ``head`` and ``wc`` are invoked by the hook but are not exercised by these
+  particular tests, and they are declared anyway: this guard names the
+  USERLAND the hooks require, not a snapshot of which hook branch one test run
+  happened to take. A guard trimmed to the branches one run reached would go
+  wrong the first time a test covered a different branch.
+* THERE IS NO BINARY NAMED ``bash`` INVOLVED. ``shutil.which("bash")`` answers
+  ``None`` on this machine while all 184 pass. That is a statement about a
+  FILENAME and nothing more: ``usr/bin/sh.exe`` here IS bash, reporting
+  ``BASH_VERSION`` 5.2.37. So "no binary named bash", never "no bash".
+
+WHY ``printf`` IS NOT A MEMBER, even though both hooks call it constantly. It
+is a POSIX shell BUILTIN, so the interpreter named in the shebang provides it
+and it is not a ``PATH`` dependency at all. The same goes for ``test``,
+``echo`` and the other names in :data:`SHELL_BUILTIN_UTILITIES`, which exists
+as a named constant precisely so the drift test can SUBTRACT it and say so,
+rather than hiding the exclusion inside a condition nobody reads.
+
+WHY A NAME-ONLY PRESENCE PROBE IS NOT ENOUGH ON WINDOWS, measured. With Git's
+``usr/bin`` stripped from ``PATH``, ``shutil.which("find")`` still answers
+``C:\\Windows\\system32\\find.EXE`` - a Windows program wearing a POSIX name,
+on a box with no POSIX userland on it at all. A guard that only asked whether
+the name resolved would report the capability COMPLETE there and then hand the
+tests 49 unexplained reds, which is the whole defect restated. So
+:func:`resolve_member` treats a resolution under ``%SystemRoot%`` as ABSENT for
+any member listed in :data:`WINDOWS_HOMONYMS`. None of the five declared
+members is such a homonym today; this is armour for the next one added, and it
+is why the capability cannot simply be ``which()`` over the tuple.
 """
 
 from __future__ import annotations
 
+import os
+import re
 import shutil
 from collections.abc import Iterable, Mapping
+from pathlib import Path
+from typing import NamedTuple
 
 import pytest
 
 __all__ = [
     "BANNER_TITLE",
+    "CAPABILITY_BANNER_TITLE",
+    "CAPABILITY_SKIP_REASON_PREFIX",
+    "CapabilitySkips",
+    "POSIX_USERLAND",
+    "POSIX_USERLAND_TOOLS",
+    "SHELL_BUILTIN_UTILITIES",
     "SKIP_REASON_PREFIX",
+    "WINDOWS_HOMONYMS",
+    "capability_from_reason",
+    "capability_skip_reason",
+    "count_absent_capability_skips",
     "count_absent_tool_skips",
     "find",
+    "missing_tools",
     "reason_text",
     "require",
+    "require_capability",
+    "require_posix_userland",
     "requires",
+    "resolve_member",
+    "requires_capability",
     "skip_reason",
     "summary_lines",
     "tool_from_reason",
@@ -86,6 +188,89 @@ SKIP_REASON_PREFIX = "external tool absent on PATH: "
 #: Heading of the end-of-run banner. A constant so the test asserting the
 #: banner appears is matching on the same text the banner is built from.
 BANNER_TITLE = "EXTERNAL TOOL ABSENT - TESTS WERE SKIPPED"
+
+#: Every CAPABILITY skip starts with exactly this text. It deliberately shares
+#: no substring relationship with :data:`SKIP_REASON_PREFIX` in either
+#: direction - see the module docstring on why that is load-bearing and not a
+#: matter of taste. ``tests/test_toolguard.py`` asserts the disjointness.
+CAPABILITY_SKIP_REASON_PREFIX = "required capability incomplete: "
+
+#: Heading of the capability section of the end-of-run banner.
+CAPABILITY_BANNER_TITLE = "REQUIRED CAPABILITY INCOMPLETE - TESTS WERE SKIPPED"
+
+#: The capability name. One whitespace-free token, because it is parsed back
+#: out of a skip reason by taking the first token after the prefix.
+POSIX_USERLAND = "posix-userland"
+
+#: POSIX utilities that are SHELL BUILTINS, so the interpreter provides them
+#: and their presence in a hook says nothing about ``PATH``. Subtracted by the
+#: drift test in ``tests/test_toolguard.py``, which is why this is a named
+#: constant and not a condition buried in that test: an exclusion nobody can
+#: see is an exclusion nobody re-checks. ``printf`` is the one that matters
+#: here - both hooks call it on nearly every line and it is deliberately NOT a
+#: member of the capability.
+SHELL_BUILTIN_UTILITIES = frozenset({"echo", "printf", "pwd", "test", "true", "false"})
+
+#: Names that a POSIX utility and a Windows system program SHARE. Measured
+#: 2026-09-12: every one of these exists under ``%SystemRoot%\\System32`` on
+#: this machine, so ``shutil.which`` answers a path for all of them on a box
+#: carrying no POSIX userland whatsoever. See the module docstring and
+#: :func:`resolve_member`.
+WINDOWS_HOMONYMS = frozenset(
+    {"comp", "fc", "find", "forfiles", "more", "print", "sort", "timeout", "tree", "where"}
+)
+
+#: The declared members of :data:`POSIX_USERLAND`, settled by the OPS-83
+#: measurement slice rather than by reading the ROADMAP entry's prose.
+#:
+#: The entry's own list said the hook body calls ``find``, ``mv`` and
+#: ``printf`` as well. All three are wrong, and the entry's list was itself
+#: produced by a naive word scan:
+#:
+#: * ``mv`` occurs ZERO times in either hook. It appears once as PROSE inside a
+#:   pre-commit comment, ``git mv a.py b.py``.
+#: * ``find`` occurs once, inside the git option ``--find-renames``. A hyphen
+#:   is a word boundary, so a bare ``\\bfind\\b`` scan reads a git FLAG as a
+#:   utility. The same scan also reports ``diff`` (from ``git diff``), ``tar``
+#:   (from a ``*.tar`` filename glob) and ``sh`` (from a ``*.sh`` one).
+#: * ``printf`` really is invoked, everywhere, and is excluded on purpose
+#:   because it is a shell BUILTIN - see :data:`SHELL_BUILTIN_UTILITIES`.
+#:
+#: ``sh`` is a member because it is the interpreter every hook shebang names,
+#: and because it is the GATE: without it git cannot spawn the hook at all. It
+#: is derived from the shebang line rather than from the hook body, and the
+#: drift test exempts it from the body check for that reason.
+#:
+#: The drift test in ``tests/test_toolguard.py`` re-derives the utilities that
+#: sit in COMMAND POSITION in ``.githooks/pre-commit`` and
+#: ``.githooks/commit-msg`` and fails in BOTH directions, so a member added
+#: here that no hook invokes is a red test and not a quiet coverage loss.
+POSIX_USERLAND_TOOLS = ("sh", "grep", "head", "tr", "wc")
+
+
+class CapabilitySkips(NamedTuple):
+    """How many tests a capability skipped, and which members were missing.
+
+    A named tuple rather than a bare pair so the banner code reads as what it
+    means, while still comparing equal to a plain ``(count, missing)`` tuple in
+    a test - the assertion stays readable without importing this type.
+    """
+
+    #: Number of skipped tests attributed to this capability.
+    count: int
+    #: The UNION of the members named across those skips, sorted. A union
+    #: rather than one skip's list because different call sites can ask for
+    #: different member subsets, and the reader wants everything that is
+    #: missing, not whatever the first skip happened to mention.
+    missing: tuple[str, ...]
+
+
+#: Parses a capability reason back out. The name is one whitespace-free token
+#: and the members are inside the parentheses, so the closing paren terminates
+#: the match and a ``skipif`` condition appended after it cannot bleed in.
+_CAPABILITY_REASON_RE = re.compile(
+    re.escape(CAPABILITY_SKIP_REASON_PREFIX) + r"(\S+) \(missing: ([^)]*)\)"
+)
 
 
 def skip_reason(tool: str) -> str:
@@ -165,6 +350,197 @@ def requires(tool: str) -> pytest.MarkDecorator:
     return pytest.mark.skipif(find(tool) is None, reason=skip_reason(tool))
 
 
+#: The Windows EXTENDED-LENGTH path prefixes. ``\\\\?\\C:\\x`` is the same file
+#: as ``C:\\x`` and ``\\\\?\\UNC\\host\\share\\x`` is the same file as
+#: ``\\\\host\\share\\x``, but ``pathlib`` gives the prefixed spelling its own
+#: ANCHOR, so the plain ``%SystemRoot%`` is not among its ``parents`` and the
+#: containment test silently misses. Only the backslash spelling exists:
+#: Windows passes an extended-length path to the filesystem verbatim and does
+#: not accept ``//?/``, so there is no forward-slash form to normalise.
+_EXTENDED_LENGTH_UNC_PREFIX = "\\\\?\\UNC\\"
+_EXTENDED_LENGTH_PREFIX = "\\\\?\\"
+
+
+def _without_extended_length_prefix(path: str) -> str:
+    """``path`` with any extended-length prefix removed, otherwise unchanged.
+
+    The UNC form collapses back to ``\\\\host\\share\\...`` rather than to a
+    drive letter, because that is what it means. It does not become resolvable
+    against ``%SystemRoot%`` by doing so - see :func:`_under_system_root` - but
+    the two spellings of one UNC path stop disagreeing, which is the part that
+    can be settled without guessing.
+    """
+    if path.startswith(_EXTENDED_LENGTH_UNC_PREFIX):
+        return "\\\\" + path[len(_EXTENDED_LENGTH_UNC_PREFIX) :]
+    if path.startswith(_EXTENDED_LENGTH_PREFIX):
+        return path[len(_EXTENDED_LENGTH_PREFIX) :]
+    return path
+
+
+def _under_system_root(path: str) -> bool:
+    """Whether ``path`` sits inside ``%SystemRoot%``.
+
+    Compared as resolved paths rather than as text, so a different casing or a
+    short 8.3 component cannot make a system32 program read as a POSIX one.
+    ``SystemRoot`` is read from the environment on every call - a module-level
+    snapshot would be invisible to a test that sets it. Extended-length
+    spellings are normalised first, because ``pathlib`` treats ``\\\\?\\C:\\``
+    as a different anchor from ``C:\\`` and would otherwise answer ``False``
+    for a system32 program.
+
+    THE LIMIT, stated rather than implied. A UNC ADMINISTRATIVE SHARE -
+    ``\\\\host\\C$\\Windows\\system32\\find.EXE`` - is NOT recognised and reads
+    as a present POSIX utility. It names this machine's own system32 when
+    ``host`` denotes this machine and another machine's when it does not, and
+    nothing here can tell those apart without deciding which of a machine's
+    many names - NetBIOS name, FQDN, ``localhost``, ``.``, a loopback literal,
+    an address that resolves differently on a different network - is itself. A
+    guess would be wrong in both directions: condemning a genuine remote
+    userland, or admitting a system32 homonym. The honest answer is that the
+    question is not settled here, and
+    ``tests/test_toolguard.py`` pins the limit so it is a known hole with a
+    test behind it rather than a silence. It is reachable only from a ``PATH``
+    entry written in UNC form, which nothing this repository creates does.
+    """
+    # Upper case because ruff's SIM112 asks for it; harmless either way, since
+    # os.environ is case-insensitive on Windows - it upper-cases both the keys
+    # it stores and the key it is asked for.
+    root = os.environ.get("SYSTEMROOT") or os.environ.get("WINDIR")
+    if not root:
+        return False
+    try:
+        resolved_root = Path(_without_extended_length_prefix(root)).resolve()
+        resolved_path = Path(_without_extended_length_prefix(path)).resolve()
+        return resolved_root in resolved_path.parents
+    except OSError:
+        return False
+
+
+def resolve_member(tool: str) -> str | None:
+    """Resolve a CAPABILITY member, refusing a Windows program of the same name.
+
+    :func:`find` answers the ``PATH`` question and nothing more, which is the
+    right answer for the single-tool guard and the WRONG one for a member of
+    :data:`WINDOWS_HOMONYMS`: measured 2026-09-12, with Git's ``usr/bin``
+    stripped from ``PATH``, ``shutil.which("find")`` still returns
+    ``C:\\Windows\\system32\\find.EXE``. Reporting the capability complete on
+    the strength of that is how a guard hands back 49 unexplained reds while
+    believing it did its job.
+
+    Deliberately NOT folded into :func:`find`: the single-tool API's behaviour
+    is pinned by ``OPS-78``'s tests and is not changed here.
+    """
+    found = find(tool)
+    if found is None:
+        return None
+    if tool in WINDOWS_HOMONYMS and _under_system_root(found):
+        return None
+    return found
+
+
+def missing_tools(tools: Iterable[str]) -> tuple[str, ...]:
+    """The members of ``tools`` that are not usable on ``PATH``, order preserved.
+
+    Order is preserved rather than sorted so the reason reads in the order the
+    call site declared, which is the order a reader will compare it against.
+    The lookup goes through :func:`resolve_member`, so a Windows homonym under
+    ``%SystemRoot%`` counts as MISSING rather than as present.
+    """
+    return tuple(tool for tool in tools if resolve_member(tool) is None)
+
+
+def capability_skip_reason(name: str, missing: Iterable[str]) -> str:
+    """The exact skip reason for ``name`` with ``missing`` members absent.
+
+    The members are enumerated on purpose. ``posix-userland absent`` would tell
+    a reader that something is wrong and then send them hunting for which
+    something, which is the failure mode the end-of-run banner exists to
+    prevent rather than to reproduce.
+    """
+    return f"{CAPABILITY_SKIP_REASON_PREFIX}{name} (missing: {', '.join(missing)})"
+
+
+def capability_from_reason(reason: object) -> tuple[str, tuple[str, ...]] | None:
+    """The ``(name, missing)`` pair a capability skip reason carries, or ``None``.
+
+    Tolerant of pytest's ``"Skipped: <reason>"`` wrapper in exactly the way
+    :func:`tool_from_reason` is, and terminated by the closing parenthesis so a
+    ``skipif`` condition rendered after the reason cannot be read as a member.
+
+    Returning ``None`` for every other skip is the load-bearing half, for the
+    same reason it is in :func:`tool_from_reason`: this suite skips for reasons
+    that have nothing to do with a capability, and a counter that swept those
+    in would announce a missing userland on a machine that has one.
+    """
+    if not isinstance(reason, str):
+        return None
+    match = _CAPABILITY_REASON_RE.search(reason)
+    if match is None:
+        return None
+    members = tuple(part.strip() for part in match.group(2).split(",") if part.strip())
+    if not members:
+        return None
+    return match.group(1), members
+
+
+def require_capability(name: str, tools: Iterable[str]) -> dict[str, str]:
+    """Return every member of ``name`` mapped to its path, or skip naming ``name``.
+
+    THE RETURN VALUE IS THE POINT, exactly as it is in :func:`require`. A call
+    site that guards with this and then invokes the bare names has pinned only
+    the absent direction; one that invokes the returned paths has pinned both.
+
+    The skip is raised through :func:`pytest.skip`, whose exception derives
+    from ``BaseException`` rather than ``Exception``, so a fail-soft
+    ``except Exception`` in this repository cannot swallow it and turn a skip
+    into a pass that ran nothing.
+    """
+    declared = tuple(tools)
+    resolved: dict[str, str] = {}
+    absent: list[str] = []
+    for tool in declared:
+        found = resolve_member(tool)
+        if found is None:
+            absent.append(tool)
+        else:
+            resolved[tool] = found
+    if absent:
+        pytest.skip(capability_skip_reason(name, tuple(absent)))
+    return resolved
+
+
+def requires_capability(name: str, tools: Iterable[str]) -> pytest.MarkDecorator:
+    """A ``skipif`` marker for a whole class or module that needs ``name``.
+
+    HONEST LIMIT: this pins only the ABSENT direction. A marker cannot hand
+    back the resolved paths, so it cannot make a call site prove it used them.
+    For the four files ``OPS-83`` is about, the PRESENT direction is pinned by
+    the test bodies themselves - they run a real ``git commit`` against this
+    repository's own ``.githooks/pre-commit``, which fails outright if the
+    userland is not really there. That is a stronger positive pin than any
+    marker could supply, which is why the marker is acceptable here and would
+    not be acceptable somewhere the tests merely imported something.
+
+    Prefer :func:`require_capability` at the call site wherever the utilities
+    are actually reached.
+    """
+    declared = tuple(tools)
+    absent = missing_tools(declared)
+    return pytest.mark.skipif(
+        bool(absent), reason=capability_skip_reason(name, absent or declared)
+    )
+
+
+def require_posix_userland() -> dict[str, str]:
+    """Require the POSIX userland the git hooks need. The one call-site name.
+
+    A named function rather than the two arguments spelled out at each of the
+    four files, so the capability a test declares and the capability the banner
+    counts cannot drift apart by a typo.
+    """
+    return require_capability(POSIX_USERLAND, POSIX_USERLAND_TOOLS)
+
+
 def reason_text(report: object) -> str:
     """The human text of a skipped report, however pytest happened to shape it.
 
@@ -198,7 +574,38 @@ def count_absent_tool_skips(reports: Iterable[object]) -> dict[str, int]:
     return counts
 
 
-def summary_lines(counts: Mapping[str, int]) -> list[str]:
+def count_absent_capability_skips(
+    reports: Iterable[object],
+) -> dict[str, CapabilitySkips]:
+    """Count skipped ``reports`` per incomplete capability, and union the members.
+
+    Pure over the reports it is handed, like :func:`count_absent_tool_skips`,
+    so the end-of-run statement can be tested without running a suite twice.
+
+    A capability reason never matches :data:`SKIP_REASON_PREFIX`, so a skip
+    counted here is never also counted there. That is asserted directly in
+    ``tests/test_toolguard.py`` rather than left as a property of two string
+    constants nobody re-checks.
+    """
+    counts: dict[str, int] = {}
+    members: dict[str, set[str]] = {}
+    for report in reports:
+        parsed = capability_from_reason(reason_text(report))
+        if parsed is None:
+            continue
+        name, missing = parsed
+        counts[name] = counts.get(name, 0) + 1
+        members.setdefault(name, set()).update(missing)
+    return {
+        name: CapabilitySkips(count, tuple(sorted(members[name])))
+        for name, count in counts.items()
+    }
+
+
+def summary_lines(
+    counts: Mapping[str, int],
+    capabilities: Mapping[str, tuple[int, tuple[str, ...]]] | None = None,
+) -> list[str]:
     """The end-of-run statement, or NO LINES AT ALL when nothing was skipped.
 
     The empty case is deliberate and is the reason this is a function rather
@@ -206,15 +613,33 @@ def summary_lines(counts: Mapping[str, int]) -> list[str]:
     nobody reads, and a banner that said "0 tests skipped for a missing tool"
     every time would be exactly that. Silence here means the question does not
     arise on this machine.
+
+    Two sections, either of which may be absent. The single-tool section is
+    unchanged from ``OPS-78``, wording included; the capability section is
+    ``OPS-83`` criterion 2, and it names the missing members because a count
+    without them sends the reader hunting. ``lines[0]`` is always a title, so
+    the caller can render it as a separator without inspecting the text.
     """
-    if not counts:
+    capabilities = capabilities or {}
+    if not counts and not capabilities:
         return []
-    lines = [BANNER_TITLE]
-    for tool, count in sorted(counts.items()):
-        lines.append(
-            f"{count} test(s) were SKIPPED because the external tool '{tool}' "
-            "was not found on PATH."
-        )
+    lines: list[str] = []
+    if counts:
+        lines.append(BANNER_TITLE)
+        for tool, count in sorted(counts.items()):
+            lines.append(
+                f"{count} test(s) were SKIPPED because the external tool '{tool}' "
+                "was not found on PATH."
+            )
+    if capabilities:
+        lines.append(CAPABILITY_BANNER_TITLE)
+        for name, entry in sorted(capabilities.items()):
+            count, missing = entry
+            lines.append(
+                f"{count} test(s) were SKIPPED because the capability "
+                f"'{name}' is incomplete on PATH. Missing: "
+                f"{', '.join(missing) if missing else '(none named)'}."
+            )
     lines.append(
         "Those tests did NOT run. The pass/fail summary above says nothing "
         "about them, so a green run on this machine is narrower than a green "
@@ -235,10 +660,15 @@ def pytest_terminal_summary(terminalreporter, exitstatus, config) -> None:
 
     It writes NOTHING when no such skip happened - see :func:`summary_lines`.
     """
-    counts = count_absent_tool_skips(terminalreporter.stats.get("skipped", []))
-    lines = summary_lines(counts)
+    skipped = list(terminalreporter.stats.get("skipped", []))
+    counts = count_absent_tool_skips(skipped)
+    capabilities = count_absent_capability_skips(skipped)
+    lines = summary_lines(counts, capabilities)
     if not lines:
         return
-    terminalreporter.write_sep("=", lines[0], red=True, bold=True)
-    for line in lines[1:]:
-        terminalreporter.write_line(line)
+    titles = {BANNER_TITLE, CAPABILITY_BANNER_TITLE}
+    for line in lines:
+        if line in titles:
+            terminalreporter.write_sep("=", line, red=True, bold=True)
+        else:
+            terminalreporter.write_line(line)
