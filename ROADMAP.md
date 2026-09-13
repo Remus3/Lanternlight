@@ -4687,6 +4687,51 @@ findings from the same instrument on the same day were writes that a `finally`
 undid, and in both cases the instrument was working perfectly and the reading was
 the error.
 
+## OPS-88. The suite-run recorder cannot see a target supplied through the environment, and its reason list says so by omission rather than by name - OPEN
+
+Filed 2026-09-13 by the adversarial pass over `OPS-87`, which found it while
+trying to make the recorder call a cheap run a full one. It is a MINOR finding
+and it is recorded because a finding that lives only in a scratch file is
+invisible to the next cold session.
+
+**What was measured.** `ops/suite_recorder.py` decides whether a pytest session
+was a real full-suite run. Six cheap forms were constructed and all six were
+correctly classified as filtered. The sharpest attack was a target passed
+through the environment rather than on the command line: it is invisible to the
+invocation arguments the recorder inspects, so no target reason was produced.
+
+**Why this is minor and not a defect in the number.** The classification was
+still correct, because a second, independent signal caught it - the recorder
+also checks that every test module on disk actually ran, and reported
+`68 of 69 test modules on disk did not run`. The backstop held, and the error
+direction is the safe one: an unrecognised option's value is misread as a
+target, which errs towards FILTERED and never towards a cheap run being counted
+as a full one.
+
+**What is actually wrong.** The REASON LIST is incomplete while the verdict is
+right. A reader of the record sees the module-coverage reason and not the
+target reason, so the record understates why the run was filtered. That matters
+for exactly one thing: the reasons are what a future session will read when it
+asks why a cycle's run count is lower than it expected.
+
+### Acceptance
+
+1. A run whose target comes from the environment rather than from the command
+   line produces a reason NAMING that, alongside the module-coverage reason it
+   already produces. Written as a failing test first, against a real pytest
+   invocation rather than a constructed record.
+2. The existing backstop is proved still load-bearing after the change: break
+   the module-coverage check, confirm the environment-target case is still
+   classified filtered by the new reason alone, restore, confirm green. If the
+   new reason is the only thing holding the verdict up, that is a worse position
+   than today and the change is refused.
+3. No run that is genuinely full is reclassified. Confirm against the recorded
+   runs already in `ops/runtime/suite_runs/`, which include full runs from the
+   cycle that closed `OPS-87`.
+4. The module docstring, which is the record schema's contract, states what the
+   classifier can and cannot see after the change - the current docstring's
+   honesty about its blind spots is the thing being extended, not replaced.
+
 ## Archive index
 
 Every closed and refuted item is still here, one hop away, in
