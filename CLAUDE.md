@@ -202,7 +202,18 @@ The merger holds the plan, so the merger is the context that must not fill.
   composing agent that reads them instead.
 - Pick the model per slice rather than uniformly. Security-critical or subtle
   logic gets the strongest model; broad web research and mechanical sweeps do
-  not need it.
+  not need it. WHICH kind is which is written down, with the measurement behind
+  it, in [`docs/ORCHESTRATION_TIERS.md`](docs/ORCHESTRATION_TIERS.md) - read it
+  at dispatch, not afterwards. Its one hard rule: the grader never gets a weaker
+  model than the producer.
+- **Run `python -m ops.preflight` before dispatching an adversarial pass.** 19
+  seconds against a 396-second suite, both measured 2026-09-12. It runs the
+  mechanical guards - inventory rows, lane ownership, contracts, the source
+  register - at a moment when the slice can still act on them, and it warns
+  about new files that are not yet staged, which is what makes three of this
+  repository's guards report a false red. It does NOT reduce adversarial review:
+  60 of the 135 events in [`docs/REFUTATION_CENSUS.md`](docs/REFUTATION_CENSUS.md)
+  were real defects and no program here would have found one of them.
 
 ## TDD - not optional
 

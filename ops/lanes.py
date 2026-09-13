@@ -428,6 +428,20 @@ LANES: tuple[Lane, ...] = (
             # re-probe a claim before it is believed, one for a subagent and
             # one for the session's own closing words.
             "tests/test_stop_audit.py",
+            # OPS-87, the refutation census. ops/** already covers
+            # ops/refutation_census.py; neither the test module nor the two
+            # documents match a glob here. The census measures what this
+            # project's own adversarial passes cost, which is continuity
+            # material rather than any feature lane's work - it is read at
+            # dispatch time to decide which slice kinds need an adversary.
+            "tests/test_refutation_census.py",
+            "docs/refutation_census.tsv",
+            "docs/REFUTATION_CENSUS.md",
+            "tests/test_preflight.py",
+            "tools/preflight_backtest.py",
+            "tests/test_preflight_backtest.py",
+            "docs/PREFLIGHT_BACKTEST.md",
+            "docs/ORCHESTRATION_TIERS.md",
             # OPS-32, the hand-off writer. ops/** already covers ops/handoff.py.
             # The hand-off is this lane's central artifact - it is the thing a
             # cold session reads first - so its writer and its guard belong

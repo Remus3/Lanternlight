@@ -694,6 +694,15 @@ KNOWN_NON_HOSTS = frozenset(
         # exempts byte-exact content, and paraphrasing a command to satisfy a
         # guard would break the thing the guard is protecting.
         "tools.doc",
+        # OPS-87. Three more module-path truncations, each cut at the first
+        # underscore of a COMMAND a reader types: `python -m tools.preflight_backtest`
+        # and `python -m ops.preflight`, plus `backtest.strip_mentions` where a
+        # document names the function by its imported alias. Looked at, one at a
+        # time: none is a host. Registered rather than reworded for the reason
+        # given directly above - paraphrasing a command to satisfy a guard breaks
+        # the thing the guard protects.
+        "tools.preflight",
+        "backtest.strip",
         "slot.default",
         # A git CONFIG KEY, quoted by `LL-0169` and `OPS-49`. `core.filemode`
         # is not a host and not a file; `.filemode` simply parses as a TLD-
@@ -1031,6 +1040,8 @@ KNOWN_NON_HOSTS = frozenset(
         "ops.loop",
         "ops.loop.watch",
         "ops.merge",
+        "ops.preflight",
+        "ops.refutation",
         "opss.LEDGER.md",
         "os.abort",
         "os.kill",

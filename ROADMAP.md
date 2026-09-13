@@ -3430,6 +3430,66 @@ verification. The goal is to move the CHEAP classes off the expensive path, not
 to stop refuting. Any proposal that reduces adversarial review of a real defect
 class, rather than pre-empting a mechanical one, is refused here on its face.
 
+### Status 2026-09-12 - criteria 1, 2, 3, 5 and 8 MET, and the measurement REFUTED a premise of criterion 2
+
+Do not re-derive any number below from this text. Every one of them is printed
+by `python -m ops.refutation_census`, and the write-ups are
+[`docs/REFUTATION_CENSUS.md`](docs/REFUTATION_CENSUS.md),
+[`docs/PREFLIGHT_BACKTEST.md`](docs/PREFLIGHT_BACKTEST.md) and
+[`docs/ORCHESTRATION_TIERS.md`](docs/ORCHESTRATION_TIERS.md).
+
+- **Criterion 1 MET.** 135 refutation events over 64 ledger entries dated
+  2026-09-08 or later, every entry examined, every event anchored to a verbatim
+  ledger quote that `tests/test_refutation_census.py` re-resolves on each run.
+  **The largest bucket is (a), a real defect in the deliverable, with 60 of
+  135.** Both columns are published, because grading changed the answer: the
+  five extraction slices filed (c) as largest with 54, and three adjudicators
+  who had not produced the rows moved 12 events, nearly all of them INTO (a).
+- **Criterion 2 MET, and its stated premise is REFUTED.** The item says
+  everything in (b) and (c) "is answerable by a program". Measured, that holds
+  for (b) - 10 of 13 gate-reachable - and fails for (c) at 15 of 54. Overall
+  only 42 of 135 events are gate-reachable at all. `ops/preflight.py` therefore
+  targets (b) in full and the reachable slice of (c), and it is mostly a RUNNER
+  of guards that already existed. Runtime is a stated, measured number: **18.7
+  seconds against a full suite of 396.2, both measured 2026-09-12.**
+- **Criterion 3 MET, and the first experiment's number was an instrument
+  defect.** Running today's pre-flight at the parent of each commit that filed a
+  gate-reachable finding caught 0 of 17 - because a new test module, its
+  registration and its ledger entry all land in ONE commit, so the tree where
+  the registration was missing was never committed at all. Rebuilding that state
+  from the fix commit's own additions caught **9 of 9**, on guards that existed
+  in each of those trees.
+- **Criterion 4 PARTIALLY MET.** The full suite is 396.2 seconds, measured
+  twice this session; the pre-flight is 18.7. What is NOT measured is how many
+  suite runs a whole refute-fix-refute cycle takes, because nothing records that
+  today. See the open item below.
+- **Criterion 5 MET.** `docs/ORCHESTRATION_TIERS.md`, linked from `CLAUDE.md`
+  where a cold session reads it at dispatch rather than afterwards.
+- **Criterion 6 MET.** The consensus request was delivered to CS, RC and RSC
+  on 2026-09-12. RC and RSC have answered and their numbers are recorded as
+  DATA, not as agreement - see the ledger entry. Our own numbers went back out
+  on 2026-09-13T00:07:48Z, under the operator ruling recorded in `LL-0238` that
+  a reply no longer waits for authorisation and the sync inboxes are the one
+  permitted destination.
+- **Criterion 7 MET.** Nothing was adopted. No charter, no lock, no key scheme,
+  no sibling module, no sibling bytes.
+- **Criterion 8 MET.** Nine mutants across the two new modules, nine killed,
+  every anchor asserted before the result was believed.
+
+### Still open under this item
+
+1. **Criterion 4's cycle cost is not measured.** Wall clock and suite-run count
+   for one complete refute-fix-refute cycle, before and after. The acceptance
+   test is a recorded pair of numbers from real cycles, not an estimate.
+2. **The 93 events no program reaches are untouched**, which is the honest
+   position rather than a gap to be papered over. Any proposal that claims to
+   reach them must show a back-test, and a proposal that reduces adversarial
+   review of class (a) is refused on its face - see the trap clause above.
+3. **The pre-flight is not wired into anything.** It is a command a slice runs.
+   Whether it belongs in the dispatch ritual, in a lane contract, or in a hook
+   is a decision this item has not taken, and wiring it before the cycle-cost
+   numbers exist would be optimising without the measurement.
+
 ## OPS-77. A surplus width of ZERO is a permanent silent "busy", one level up from the hole `OPS-73` just closed - OPEN
 
 Filed 2026-09-11 by the refutation pass over this session's own work, which

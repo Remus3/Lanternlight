@@ -1,0 +1,159 @@
+# OPS-87 criterion 1 - the refutation census.
+# One row per refutation EVENT recorded in docs/LEDGER.md, over the entries the
+# five extraction slices read. Columns, tab separated:
+#   entry_id  bucket  inherited  fixfix  uncertain  quote  reason
+# The quote is a VERBATIM substring of docs/LEDGER.md and is the row's anchor:
+# ops/refutation_census.py re-resolves every one at run time, so a row cannot
+# outlive the sentence it classifies. Every total is recomputed from these rows
+# and none is stored anywhere.
+#
+# The #examined lines below declare WHICH entries were read, derived from the
+# line ranges the slices were given rather than from the date window, so the
+# coverage check compares two independent derivations. An entry that produced no
+# event is a result; an entry nobody opened is not, and without this declaration
+# the two are indistinguishable. The first pass here covered 53 of 64 and said
+# nothing about it.
+#examined LL-0236 LL-0235 LL-0234 LL-0233 LL-0232 LL-0231 LL-0230 LL-0229
+#examined LL-0228 LL-0227 LL-0226 LL-0225 LL-0224 LL-0223 LL-0222 LL-0221
+#examined LL-0220 LL-0219 LL-0218 LL-0217 LL-0216 LL-0215 LL-0214 LL-0213
+#examined LL-0212 LL-0211 LL-0210 LL-0209 LL-0208 LL-0207 LL-0206 LL-0205
+#examined LL-0204 LL-0203 LL-0202 LL-0201 LL-0200 LL-0199 LL-0198 LL-0197
+#examined LL-0196 LL-0195 LL-0194 LL-0193 LL-0192 LL-0191 LL-0190 LL-0189
+#examined LL-0188 LL-0187 LL-0186 LL-0185 LL-0184 LL-0183 LL-0182 LL-0181
+#examined LL-0180 LL-0179 LL-0178 LL-0177 LL-0176 LL-0175 LL-0174 LL-0173
+
+LL-0236	e	N	N	N	THE SIBLING QUESTION INVENTED A FINDING IN ITS FIRST VERSION, found by an independent refutation pass.	sibling check falsely flagged a finding before being scoped correctly
+LL-0236	b	N	N	N	a new tracked test module must also appear in `docs/INVENTORY.md`'s test table and in a lane's `owns`	new module's own green missed inventory and lane registration
+LL-0236	b	N	N	Y	docs/INVENTORY.md` naming `core.excludesFile` tripped `tests/test_source_register.py`, which reads a git CONFIG KEY as a host	doc prose named an unregistered host, needing registration
+LL-0236	a	N	N	N	the refutation found a second, undisclosed and load-bearing one - `_clean_env` losing its `env.pop` for git's exported hook environment	mutation guard missed a real leak in throwaway-repo env cleanup
+LL-0235	c	Y	N	N	THE ITEM'S OWN UTILITY LIST WAS WRONG TWICE.	filed OPS-78/83 utility list miscounted mv and find
+LL-0235	c	Y	N	N	`sh` IS THE GATE, refuting the filed reconstruction.	filed reconstruction of which tool gated tests was wrong
+LL-0235	a	N	N	N	the drift matcher's unstated blind spots after `elif`, `while`, `until` and the command wrappers `env`, `time`, `xargs`, `command`	refutation pass found real matcher blind spots
+LL-0235	a	N	N	N	`_under_system_root` reading extended-length and UNC path forms as PRESENT	refutation pass found a real path-normalisation defect
+LL-0235	a	N	N	N	An arm claiming comment lines are not scanned SURVIVED its own mutation	test arm was vacuous/decorative, not a real check
+LL-0235	a	N	N	N	a mutation harness reported a false SURVIVED because two mutants of equal byte length written in the same second	pyc caching made mutation harness misreport a survivor
+LL-0235	d	N	N	N	counted its 5 control tests as REPOSITORY tests, and still printed a full count table including `false_red=50`	probe run in a temp-tree worktree mismeasured and looked like findings
+LL-0234	c	Y	N	N	The /done ritual's step 9 states that this module's reach is `docs/` and nothing else. That is either stale or incomplete	documented ritual step contradicted by observed guard behaviour
+LL-0233	c	Y	N	N	CLAUDE.md still read "Re-implemented, never vendored... No file is copied in" while third_party/lw_write_tracer/ sat in the tree.	CLAUDE.md left stale after vendoring exception was exercised
+LL-0233	c	N	N	N	The OPS-82 outcome heading said "all six criteria met" while its own lead line still said	outcome doc heading contradicted its own lead line
+LL-0233	c	N	N	N	mutation evidence was filed under "3 and 5" and the window acceptance under "4"	outcome doc mislabelled its own numbered criteria
+LL-0233	c	Y	Y	N	LL-0231 credits the OPS-85 catch to "the acceptance criterion this session had just written for its own item"	correction entry LL-0231 itself needed a correction
+LL-0233	c	Y	N	N	LL-0232 carries no suite count and no ruff line, against every sibling entry's norm, and it touched a test file	earlier ledger entry omitted required measurement lines
+LL-0231	c	N	N	N	OPS-85 as first written claimed that two probe files in ops/runtime/ "are not removed" and	filed defect item invented an unmeasured claim
+LL-0228	e	N	N	N	it presented as `appeared=5` and `other_change=1`, which read like findings.	probe's two runs across a moving tree looked like real findings
+LL-0228	d	N	N	Y	The probe strips a PATH ENTRY carrying the tool, never the single executable.	--tool report conflated bash and sh via shared PATH directory
+LL-0227	e	N	N	Y	RE-MEASURED HERE and the corruption reading does not survive: both live records are byte-identical across a run of that test	sibling's corruption report over-read a write tracer's raw byte counts
+LL-0227	a	Y	N	Y	the one non-atomic writer of the operator's live mail state in this tree was the guard whose whole purpose is to leave that state unharmed	real non-atomic restore defect found one level under the refuted report
+LL-0222	a	N	N	N	Pointing the probe at any other executable plants three specimens that cannot match, and the run reports all three as untouched.	probe's positive control was hardcoded to one tool, unprovable elsewhere
+LL-0222	a	N	N	N	the positive control has no NEGATIVE specimen so a classifier that over-reports still passes it	validation harness gap let an over-reporting classifier pass
+LL-0222	a	N	N	N	the recursion guard matches only one import spelling	recursion guard had a real blind spot on import aliasing
+LL-0223	c	N	N	N	the docstring said the lookup was cached at import time before the plugin loads	docstring's explanation of the mechanism was wrong
+LL-0220	c	Y	N	N	That module is a library of pure text-to-text functions whose own docstring says nothing in it opens a file for writing	documented remedy in CLAUDE.md never actually applied anything
+LL-0220	a	N	N	N	A test that passed on the day it was written was measured FAILING once the split had actually been applied	test's assumption broke once real state changed
+LL-0219	c	N	N	N	The refutation pass could not reproduce them under six patterns - HEAD over those directories gives 40/98/6	filed OPS-74 counts relayed from a subagent were unreproducible
+LL-0219	c	N	N	N	'187 false reds across 22 FILES' in both OPS-74 and OPS-78. Re-derived from the findings themselves: 17 files.	filed count conflated two different probe report rows
+LL-0218	a	N	N	N	replacing the syntax-check hook with an inert stub left every closed-stream case GREEN against a transport that ran nothing	mutation found a genuinely vacuous absence-only guard
+LL-0218	a	N	N	N	silencing the pre-commit hook copy left the old HEAD assertion passing while the new one failed	second vacuous guard found by the same mutation technique
+LL-0218	a	N	N	N	a stub standing in for the windowless interpreter exited 0 doing nothing, so resolution and returncode both passed	third vacuous guard, a zero exit code was mistaken for evidence
+LL-0218	c	N	N	N	'six presence guards were found in this tree' rather than in the four files swept	ROADMAP overstated the scope of the sweep actually performed
+LL-0216	c	N	N	N	The merger's diagnosis of that failure was WRONG and is corrected in place in ROADMAP.md rather than deleted.	merger wrote a wrong diagnosis into ROADMAP.md, corrected in place
+LL-0215	a	Y	Y	N	a surplus width of zero, from the parameter or from the environment override, produces an empty candidate order and therefore a permanent silent BUSY	OPS-73's own fix had a further hole causing silent busy on zero width
+LL-0214	c	Y	N	N	ops/loop/lane.py, docs/HEADLESS.md and .claude/commands/loop.md all still said this project never removes a lock it did not create	three docs went stale after OPS-76 changed the behaviour they described
+LL-0214	a	N	N	Y	the bucket display helper in ops/loop/lane.py was INVERTED. It elided paths inside the checkout and printed every other path verbatim	redaction logic was backwards, leaking operator account name each cycle
+LL-0214	a	Y	N	N	The UNUSABLE reason also interpolated the failing absolute path while two documents promised it did not.	code broke a no-interpolation promise made in two documents
+LL-0212	b	Y	N	Y	try_acquire never called reap, and reap had NO CALLER anywhere in ops/, tools/, lanternlight/ or scripts/.	hand-off predicted reclaim on arming but reap was dead code, unwired
+LL-0210	c	Y	N	N	ADR-007's 'joining is one environment variable' WAS REFUTED BY MEASUREMENT, and this is why the join is a code change.	ADR-007's simple env-var join claim was refuted by measuring the bucket
+LL-0210	c	Y	N	N	The record said every test points PROGRAMDATA at tmp_path rather than reading the real one.	ADR-008 overclaimed test isolation; one test actually read the real value
+LL-0210	a	N	N	N	REPO_KEYS holds five short codes but this machine runs SEVEN projects, so a bucket whose only reserved name belongs to Red Moon or Daemon Slayer reads as RESERVED_ABSENT	repo key set too narrow, causing silent failure to detect a live sibling
+LL-0210	a	N	N	N	a PROGRAMDATA pointing at a FILE yields a permanent silent 'busy': the root resolves under the file, mkdir fails, acquire_lane returns None forever	unhandled case caused a permanent silent busy state
+LL-0209	c	Y	N	N	moon_sync_inbox/from-RC-verbatim/ DOES NOT EXIST. Measured: 132 files in moon_sync_inbox	OPS-35 preamble referenced a source drop directory that no longer exists
+LL-0209	c	N	N	N	the merger wrote 'Criteria 2 through 6 are untouched' into ROADMAP.md, twice, by reading the ITEM rather than the TREE	merger's ROADMAP status claim was false when written, four criteria already met
+LL-0209	c	Y	N	Y	It described the lock as slots.py over a Windows named mutex in winmutex.py, conflating two unrelated mechanisms.	OPS-35 preamble conflated two unrelated locking mechanisms
+LL-0208	a	N	N	Y	'git.py' - the truncation of tests/test_no_inbox_in_git.py at its underscore - was added to KNOWN_NON_HOSTS while that file was still UNTRACKED	denylist entry became redundant once the file was staged, hiding a real gap
+LL-0208	b	N	N	N	Creating tests/test_no_inbox_in_git.py without a row in docs/INVENTORY.md turned both inventory properties red immediately.	new module was missing its required inventory row
+LL-0208	b	N	N	N	tests/test_lanes.py reported the new module as owned by no lane.	new module was missing a lane ownership assignment
+LL-0207	a	N	Y	N	a permission rule with a TRAILING SPACE was never scanned, because the splitter required a closing parenthesis and returned the rule unsplit when it found none	OPS-70's first closure shipped a working bypass via a splitter bug
+LL-0207	a	N	Y	N	The UNC backslash spelling was missed because the permission side held a hand-written near-copy of the UNC pattern instead of the pattern itself.	second bypass in same closure, from a duplicated near-copy pattern
+LL-0207	a	N	N	N	tools/hook_command_guard.py asserted 'Measured for OPS-70' in three places, one of them inside the user-facing finding text	guard printed false provenance, claiming measurement that never happened
+LL-0207	a	N	N	Y	docs/INVENTORY.md claimed in its own voice that between its two tables every tests/test_*.py is named. That was FALSE	document's completeness claim was false, guard was too loose to catch it
+LL-0207	c	Y	N	N	OPS-69 was filed because three modules had gone missing from the inventory. The reverse guard found 37	OPS-69's own filed scope understated the real gap by a factor of twelve
+LL-0207	b	N	N	N	tests/_tracked.py - the shared walker the new guard itself runs on - was tracked, uninventoried and out of scope.	the new guard's own scope excluded the file that implements it
+LL-0207	d	N	Y	N	Two independent re-probes of the UNC repair reported BYPASS and both were wrong: the probe's own escaping lost a backslash	a refutation claiming bypass was itself wrong, a harness escaping bug
+LL-0207	c	N	N	N	The OPS-69 repair stamped 2026-09-09 across docs/INVENTORY.md and tests/test_inventory.py. The work happened on 2026-09-10	wrong date written into two committed documents in eight places
+LL-0207	e	N	N	N	permissions.deny, permissions.ask and permissions.additionalDirectories parse as host-shaped tails once docs/INVENTORY.md describes the keys	source-register guard over-reported false positives on config keys
+LL-0206	c	N	N	N	OPS-65 said tests/test_handoff.py went 28 tests to 36; measured 26 to 37, and NEITHER term reproduces at any commit under either metric.	test count claim in closure prose did not reproduce at any commit
+LL-0206	c	N	N	N	OPS-63 said KNOWN_NON_HOSTS grew 267 to 315; measured 317 at the closing commit df727b0 and 319 at HEAD.	denylist growth count wrong in closure prose, off by 2 and 4
+LL-0206	c	N	N	N	OPS-62 called 700,000 'fifty bytes under the measured 702,038'; the gap is 2,038.	arithmetic gap misstated as fifty bytes, actually 2038
+LL-0206	c	N	N	N	OPS-67 said deleting the decision sentence from either docstring turned 2 red; measured 1 red PER DOCSTRING	mutation count conflated two single-test mutations as one two-test mutation
+LL-0206	a	N	N	Y	.claude/settings.json still hardcodes //C/Lanternlight/** in three permissions.allow entries.	guard scope narrower than its OK line implied, permissions.allow uncovered
+LL-0206	b	N	N	N	Nothing asks whether something that exists is NAMED, so three modules created this session were absent while the guard stayed green, and a human noticed instead.	inventory guard checks named-exists but not exists-named, missed 3 modules
+LL-0206	d	N	N	Y	a BRE backslash-plus consumed the stream, so the clean bill came from an empty match.	boundary scan regex bug made empty match read as a clean bill
+LL-0204	a	N	N	N	Hardcoding ops/handoff.py's default target killed two tests but NOT test_the_default_target_follows_the_tree	vacuous guard test could not detect its own hardcoded default in primary tree
+LL-0204	d	N	N	N	its initial mutation harness reported per-run summary lines that hid swapped identities between the before and after runs	mutation harness summary lines hid swapped before/after identities
+LL-0204	c	N	N	N	OPS-62's outcome first quoted the pair totals measured at the merge - ROADMAP 702,038 - and writing that outcome into ROADMAP.md took the ROADMAP pair to 711,879	closure quoted a pair total that its own writing then moved
+LL-0203	c	Y	N	N	Measured: it retires 45 of 266 load-bearing entries, 16.9 percent and not most, while introducing 52 brand-new red tokens - net 267 to 274, WORSE.	filed hypothesis that pattern fix retires most entries proved false by measurement
+LL-0203	c	N	N	N	reported.json does not retire under the tolerant pattern - it is RENAMED to inbox_reported.json and still needs an entry	filed sub-case prediction behaved opposite to what was predicted
+LL-0203	d	N	N	N	The first OPS-66 mutation did not match its anchor; the targeted run then reported 67 passed, which read without the assertion looks exactly like a mutation that killed nothing.	mutation that failed to apply printed a green-looking passed count
+LL-0202	c	Y	N	N	The filing said the hook answers about a different repository. It also WRITES that repository's state	roadmap filing understated defect as read-only when code also wrote state
+LL-0202	c	Y	N	Y	That session measured this exact behaviour and read it as a MERGE-TIMING fact - not live until the lane merges - rather than a PATH fact still true after any merge.	earlier session misfiled a path defect as a merge-timing fact
+LL-0202	c	Y	N	N	CLAUDE.md said tools/precommit_gate.py blocks any command merely QUOTING the forbidden cmdlet name.	CLAUDE.md caveat about precommit_gate.py stale since OPS-22 narrowed it
+LL-0202	c	N	N	N	it wrote that the unquoted form fails silently for all five events at a spaced path. One probe fired and the evidence was a MISSING witness.	slice doc overgeneralized one missing-witness probe to all five events
+LL-0201	c	Y	N	N	Measured by the refuting agent with git cat-file -s at the closing commit 0eb6217: 193,854 and 295,174. The prose was wrong by 18,464 and 13,396 bytes.	OPS-57 outcome block byte counts flat-stated, wrong by thousands of bytes
+LL-0201	c	Y	N	N	criterion 5 claimed 5.1 and 5.0 sessions of headroom while the repo's own guard reported 4.5 and 4.5, because the headroom was computed from the superseded sizes.	headroom sessions figure computed from the superseded stale sizes
+LL-0200	c	N	N	N	The README ledger figure is 199, not 200: the two ledger files carry 200 '### LL-' headings and one is the format TEMPLATE in the preamble.	README ledger entry count written as 200, corrected to 199
+LL-0199	c	Y	N	N	Re-measured after the closure prose was written: spent_ids() returns 63 ids WITH the archives and 63 WITHOUT.	prior entry's spent-id count no longer reproduces after its own recording
+LL-0198	a	N	N	N	planning a re-run produced an archive holding only that run's sections, and applying it by overwrite would have deleted the 65 already there.	documented re-run path would silently overwrite and destroy the first archive
+LL-0198	c	N	N	N	The subagent attributed it to another lane's edits, which was wrong; no lane owns that file.	subagent misattributed a concurrency artifact to another lane's edits
+LL-0197	a	N	N	N	Both modules were internally consistent and both were green. The adjudication that ran one against the other passed the path in EXPLICITLY	two modules shipped mismatched default archive filenames, each green alone
+LL-0197	a	N	N	N	next_free_id was 61 both before and after, because it takes the MAXIMUM and the maximum was recent enough to survive.	id allocator held a live blind spot for ledger-only spent ids
+LL-0196	c	Y	N	N	it recorded 83 sections, 61 closed, 612,780 characters; measured at HEAD it was 84 sections, 65 closed or refuted, 633,871 characters.	OPS-57 filed structure counts stale versus HEAD measurement
+LL-0196	d	N	N	N	the first anchor-rule comparison reported 84 of 84 headings disagreeing between the splitter and the guard.	comparison harness fed unstripped heading text, reporting false disagreement
+LL-0195	a	Y	N	Y	Its outcome claimed the arming-time value is still shown and still LABELLED wherever it survives. At the two impostor branches it is rendered bare.	OPS-53 outcome claimed a value stayed labelled but two branches render it bare
+LL-0195	b	N	N	Y	OPS-60 carried a CLOSED heading and NO outcome block. Its closure existed only in a commit message, which is exactly the place a cold session does not look.	closed item had no outcome block, invisible to the heading-counting id guard
+LL-0195	c	N	Y	N	a correction paragraph whose bold heading said the wrong arithmetic was ABOVE while its first sentence said the paragraph BELOW.	a correction paragraph's own heading and sentence disagreed on direction
+LL-0194	a	N	N	N	the QUIET note said the surfaces were healthy, which is false under the STALE verdict a two-days-later read returns	Shipped QUIET-state wording claimed surfaces healthy; false for STALE case, reworded same session.
+LL-0194	a	N	N	Y	Rewriting the THREADED call site, which is the production loop, to report zero copies left the whole suite green	Mutation testing found threaded call site had no behavioral test coverage despite green suite.
+LL-0193	a	Y	Y	N	THE COUNT CONVERSION WAS REMOVED, not re-derived. The report now states the number is COMMITS	Detector commit-to-stash conversion from LL-0191 proven unsound, removed rather than repaired.
+LL-0193	c	Y	Y	Y	THE SLICE FOUND THREE PROSE SITES OUTSIDE ITS FILE LIST still asserting the refuted count, reported them and correctly did not edit them.	Multiple doc/roadmap sites still recited the refuted stash-count conversion; merger fixed them.
+LL-0192	a	Y	N	N	the hook passed a real staged filename to git as a bare pathspec, so a document is reported as differing from the working tree because a DIFFERENT file differs	Hook passed staged filename as bare pathspec to git, causing false diff-differs refusal.
+LL-0192	a	Y	N	N	the line that runs the selected test modules is deliberately unquoted so it word-splits, which is correct - but globbing was ON at that point	Globbing re-enabled before test-selector split line, letting wrong test module run silently.
+LL-0191	c	Y	Y	Y	The second stash added only its work-in-progress commit, because its index commit had the same tree, parent and subject as the first and hashed to the same object	LL-0188 2-commits-per-stash generalization (2N) was wrong; actual is N+1 due to dedup.
+LL-0191	a	Y	N	N	The detector's prefix set matches the second and not the first, so a messaged stash is named by half	Detector stash prefix set only matched unmessaged stashes, missing messaged ones entirely.
+LL-0191	a	Y	N	Y	The mutant that folded drift into the gate's verdict survived because all 86 gate tests built their report object by hand	Mutant folding drift into gate verdict survived because all 86 gate tests built reports by hand.
+LL-0188	c	Y	N	Y	The six unreachable commits observed are THREE stashes, not six - two inside this session's dispatch window and one from the previous session	This items own filing claimed 6 unreachable commits = 6 stashes; actually 3 stashes.
+LL-0188	c	Y	N	Y	dropping a stash does NOT remove those commits. Measured directly and re-measured independently by the merger	Filing assumed dropping a stash removes its commits; measured false, they persist until pruned.
+LL-0188	a	N	N	N	a prefix test whose counterexamples were not counterexamples, so trimming a trailing space changed nothing it asserted	Prefix test counterexamples were not real counterexamples; trimming space changed nothing.
+LL-0188	a	N	N	N	a deleted file-not-found handler that survived because that exception is an operating-system error and a later handler caught it	Deleted file-not-found handler survived mutation because a later handler swallowed the exception.
+LL-0187	a	Y	N	N	pointing the config option at the bracketed path made ruff load the SIBLING's config and report All checks passed on code the named config would have flagged	Gate config path was glob-expanded, so ruff silently loaded a sibling config and passed bad code.
+LL-0185	c	Y	N	N	THE DISPATCHING BRIEF WAS WRONG, and the implementing slice refuted it rather than implementing it	Dispatch brief claimed an under-match defect; measured false, git matches literally first.
+LL-0185	a	Y	N	N	The gate then refuses a commit over a line the path never wrote. A false block, not a silent pass - the opposite direction from the one that was briefed	Real defect was an over-match: added-range parser absorbed neighbour hunk lines, false-blocking.
+LL-0185	c	N	Y	Y	THEN THE ADVERSARIAL PASS REFUTED THE CORRECTION AS A GENERAL CLAIM	Correction general claim that literal-first always holds was refuted for leading-colon pathspecs.
+LL-0185	c	N	N	N	another claimed the fix turns the whole class off, which the backslash case falsifies	Docstring claimed fix disables the whole defect class; backslash-named files falsify that.
+LL-0185	a	Y	N	Y	deleting the origin-equals-path short circuit survives the whole gate-lint file	Mutation found deleting the origin-equals-path short circuit survives the whole gate-lint file.
+LL-0184	a	N	N	N	Without it, both day-crossing tests passed against a same-day record - which is to say they were vacuous and the mutation is what said so	Day-crossing mutation tests were vacuous until a precondition assert made them bite.
+LL-0181	a	N	N	N	the test built its group with a verdict typed as NOT_OURS with an underscore, while the module's constant is NOT OURS with a space	test asserted the right property about the wrong branch, a real test defect
+LL-0180	a	N	N	N	the at field was checked only for being a string - and a string is exactly where a sentence fits	dispatch record at field accepted arbitrary text despite closure's no-prose claim
+LL-0180	a	N	N	Y	to_dict copied the caller's dict, so unknown keys reached disk unvalidated	unknown keys were not rejected as the closure prose claimed
+LL-0180	a	N	N	N	credit() never retired what it credited, so an item closed the way OPS-25 RECOMMENDS for a second closure in one cycle stayed RUNNING	credited item was never retired, stayed running forever in interlock
+LL-0180	a	N	N	N	dispatch() de-duplicated on the item id alone, so two lanes working one item on disjoint files	dedup on item id alone lost the interlock the field exists to hold
+LL-0180	a	N	N	N	The first tally filed was EIGHT and the adversarial pass then found three guards whose deletion changed nothing.	original mutation-kill count was wrong, included vacuous guards
+LL-0179	a	N	N	N	built on str.splitlines(), which CONSUMES U+0085, U+2028 and U+2029 as line terminators, so those three were never inspected	ASCII refusal check had a live bypass, unsafe bytes reached disk as clean
+LL-0179	a	N	N	N	A FAILING WRITE LEFT A TEMPORARY BEHIND on the OS-error path - a target that is a directory or read-only raises after the temporary exists.	atomic-write guarantee violated on the OS-error path, temp file leftover
+LL-0179	a	N	N	N	The first tally written into the item was NINE, and three of those nine did not actually die	claimed mutation kills were false, three had not actually died
+LL-0179	c	Y	N	Y	the item's own 'a guarantee about the DOCUMENT and none about the FILE' shape survives one step smaller	original framing of residual gap needed refinement to pre-write vs publication
+LL-0179	a	N	N	N	the test planted an ordinary address, which the plain EMAIL shape rule already catches, so the test proved nothing about the pass it named	mutation survived because test never exercised the pass it claimed to cover
+LL-0179	a	N	N	N	one pass silently covering for the other while mislabelling the finding as split across literals	joined-literal pass duplicated plain pass coverage and mislabeled the finding
+LL-0178	a	N	N	N	A payload of 200000 nested brackets raised RecursionError past the boundary - not a JSONDecodeError, so not caught	Stop hook could crash the very session it audits on deep nested JSON
+LL-0178	a	N	N	N	A thousands separator was MISREAD: 1,234 passed parsed as 234, which refutes true claims and can confirm false ones	parser misread counts with thousands separators, worse-direction error
+LL-0178	a	N	N	N	only the quoted snippet was redacted, while the claimed PATH is pulled from the raw line by a different expression and was written verbatim beside it	a synthetic identifier reached the written audit report unredacted
+LL-0178	a	N	N	N	An ABSENT transcript and an EMPTY one wrote byte-identical trace rows - the exact OPS-41 objection, landing on the artifact built in answer to it.	absent vs empty transcript states were indistinguishable in the trace
+LL-0178	b	N	N	N	ops/lanes.py gained an ownership pattern without scripts/write_lane_contracts.py being re-run, leaving the rendered contracts stale.	new ownership pattern needed a regenerated contract, missed plumbing step
+LL-0178	e	N	N	N	the source-register guard tripped for the ELEVENTH time on the new docs/INVENTORY.md row, because its extractor truncates stop_audit.py at the underscore	guard over-reported an unregistered host due to a truncation artifact
+LL-0178	e	N	N	N	THE SOURCE-REGISTER GUARD TRIPPED A TWELFTH TIME, on this very entry, and was again resolved with ZERO denylist additions.	same guard over-reported again, a twelfth false trip on this entry's own text
+LL-0177	c	Y	N	Y	The KNOWN_NON_HOSTS header said OPS-44 removed 109 entries and that NOTHING ELSE WAS TOUCHED, while the same commit added two.	code comment contradicted the actual commit; ledger was right, comment wrong
+LL-0177	c	Y	N	Y	ops/runtime/inbox_prompt_trigger.json carries no field for who submitted a prompt, no ordinal and no causal attribution	OPS-41 criterion 1 evidence cannot be re-derived or checked from the artifact
+LL-0176	a	N	N	N	The first lru_cache on the listing had no key. The file passed alone and the FULL SUITE went red with 104 of this repository's files reported unregistered	unkeyed cache caused cross-module false positives, found via full suite
+LL-0176	c	Y	N	N	OPS-44 was filed on the reading that the denylist 'took four entries in one wave and thirteen in the next', which sounds like a list of a few dozen. It held 371.	original item filing undercounted the denylist size by roughly tenfold
+LL-0175	a	Y	Y	Y	its docstring stated the probes were synthetic. They were not - those literals rebuild the operator's real address halves	test claimed synthetic data but actually reconstructed the real leaked address
+LL-0173	a	N	N	N	the first run of the refusal test printed the local part in full. That is the LL-0170 defect a third time	new leak-detection code itself leaked half the address, caught by its own test
+LL-0173	c	Y	N	N	LL-0169 answered LW's request with 'exactly ONE identity across all refs, in both roles'. That was true when it was measured on 2026-09-07	earlier ledger claim sent to a sibling became false after the git identity changed

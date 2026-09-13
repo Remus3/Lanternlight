@@ -50,6 +50,14 @@ Touch these paths and nothing else. Every other path in the repository belongs t
 - `third_party/**`
 - `tests/test_vendored_write_tracer.py`
 - `tests/test_stop_audit.py`
+- `tests/test_refutation_census.py`
+- `docs/refutation_census.tsv`
+- `docs/REFUTATION_CENSUS.md`
+- `tests/test_preflight.py`
+- `tools/preflight_backtest.py`
+- `tests/test_preflight_backtest.py`
+- `docs/PREFLIGHT_BACKTEST.md`
+- `docs/ORCHESTRATION_TIERS.md`
 - `tests/test_handoff.py`
 - `tools/doc_size_budget.py`
 - `tests/test_doc_size_budget.py`
