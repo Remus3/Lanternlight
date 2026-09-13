@@ -84,6 +84,27 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0245 - 2026-09-12 - OPS-77 was closed with the same hole one level over - a NEGATIVE surplus width still answered BUSY on an empty bucket - and the mutation harness that proved the fix then failed to restore and left a mutant on disk
+
+**Evidence:**
+- FOUND BY THE REFUTATION PASS over e646bca, the commit that closed OPS-77, and it is the same lie one level over. acquire_lane(surplus=-1) against an EMPTY, WRITABLE bucket returned the None that means BUSY: surplus_names(-1) is (), so the candidate order was empty, the walk had nothing to try, and the answer was a permanent silent BUSY against a healthy bucket - which is the exact sentence OPS-77 was filed to kill.
+- IT BROKE THE ITEM'S OWN CRITERION 2, that the two entry points must not disagree. They agreed about zero and diverged about minus one: shared_surplus_width floors a negative override to the published default, so the environment path contended normally while the parameter path, which had no validator at all, went straight to the empty order.
+- FIXED with ONE resolver rather than a second validator. ops.lane_slot.resolve_surplus_width is now the only place the width is decided, and is_contention_opt_out and bucket_slot_order both ask it instead of each doing the arithmetic. The rule is the one shared_surplus_width already documents and is unchanged for the environment: a width that is not usable falls back to the published default, because a governor refusing to start over a typo turns a typo into an outage. ZERO is not a typo and survives untouched as the documented opt-out.
+- Five new tests, red first: a negative parameter must not answer BUSY on an empty bucket, a negative resolves to the published default, the two entry points agree about a negative, a negative is NOT quietly turned into an opt-out (that arm was green before the fix and is a regression guard rather than a new claim), and the order for a negative is not empty. tests/test_lane_slot.py 127 to 132 collected.
+- MUTATION WATCH, three mutants, and the FIRST ONE REFUSED TO APPLY - the anchor matched TWICE, because the flooring clause exists in both the new resolver and shared_surplus_width. The harness said ANCHOR-MISS and did not run, which is the only reason a survivor there would not have been believed. Re-run with a unique anchor: KILLED, 4 failed. The other two killed at 2 failed and 3 failed.
+- AND THE HARNESS THEN FAILED TO RESTORE, WHICH IS THE FINDING WORTH KEEPING. The re-run's write_text in its finally clause raised OSError errno 22 on the restore, so the MUTANT WAS LEFT ON DISK - measured immediately afterwards: one occurrence of the mutant marker in ops/lane_slot.py and tests/test_lane_slot.py red at 4 failed. It was reverted by hand and re-verified at 165 passed across both modules.
+- The lesson is not that a write can fail. It is that a mutation harness is trusted to leave the tree as it found it, and this one reported KILLED on its way to leaving a mutant behind. A harness that prints its verdict before its restore has succeeded is reporting on a tree that no longer exists. Nothing was committed from that state; the suite was re-run rather than the report believed.
+
+### LL-0244 - 2026-09-12 - Follow-up SENT to all four trees on a standing operator ruling - it opens by WITHDRAWING a runtime we could not reproduce, and its other four findings all cut against our own proposal
+
+**Evidence:**
+- OPERATOR RULING, 2026-09-12, extending the one recorded in LL-0238: send the follow-up, and do NOT leave it as the operator's call - send it in future without asking. A follow-up is now a session decision bounded by destination, exactly as a reply is, and the sync inboxes remain the only permitted destination.
+- SENT to CS, RC, RSC and LW, NONE failed, 4582 bytes, digest opens d8220fe4a54dd208. Our copy is in moon_sync_inbox/_outbox/ with the delivery manifest.
+- IT OPENS WITH A WITHDRAWAL, because we had told three trees a number we could not reproduce. The note sent on 2026-09-12 quoted the pre-flight at 18.7 seconds. Our own refuter measured 24.56, 20.96 and 24.31 on three consecutive runs, and the audit that followed found THREE filed figures for one measurement - 18.7 in a commit message, 19.3 in two documents, and a real spread of 17.8 to 24.6 across eleven runs. The withdrawal states the range and says the spread tracks machine load.
+- THE REASON IT WENT OUT RATHER THAN BEING QUIETLY CORRECTED IN OUR DOCS: a single reproducible-looking number is exactly what another tree would design against, and three of them had it.
+- THE OTHER FOUR SECTIONS ALL ARGUE AGAINST OUR OWN PROPOSAL, which is why they were worth sending. The vacuous guard our refuter found in the pre-flight's own caveat. The five false reds that turned out to be this session's new test modules. An instrument that runs the suite twice cannot be run against a moving tree, and the shipped version REFUSES where the previous one would have printed a table under the word UNPROVEN. And the back-test warning: check first that the defect ever existed in a tree git can address, because ours never did and the naive number said our gate was worthless.
+- Nothing was adopted, nothing shared was proposed, and the counts stand as sent.
+
 ### LL-0243 - 2026-09-12 - OPS-86 criterion 4 settled on a quiet tree - positive control PROVED, findings ZERO, and the refusal fired correctly on the run before it
 
 **Evidence:**

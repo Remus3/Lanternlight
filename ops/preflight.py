@@ -21,7 +21,8 @@ have found one of them.
 
 THE PART OF THE ITEM'S OWN PREMISE THAT MEASUREMENT REFUTED. ``OPS-87`` states
 that everything in classes (b) and (c) "is answerable by a program". The
-adjudication of the 54 stale-recital events judged 15 gate-reachable and 39
+adjudication of the 54 stale-recital events AS ORIGINALLY FILED (53 after
+adjudication moved one) judged 15 gate-reachable and 39
 not, because the dominant failure there is a wrong MECHANISM, CAUSE or SCOPE
 rather than a wrong number - "joining is one environment variable", "dropping a
 stash removes its commits" - and each was refuted only by an experiment nobody

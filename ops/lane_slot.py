@@ -234,6 +234,7 @@ __all__ = [
     "release",
     "repo_local_root",
     "reserved_name",
+    "resolve_surplus_width",
     "reserved_scheme_state",
     "shared_root",
     "shared_surplus_width",
@@ -531,6 +532,38 @@ def shared_surplus_width() -> int:
     return width
 
 
+def resolve_surplus_width(surplus: int | None) -> int:
+    """The effective surplus width, from the parameter or the environment.
+
+    ONE resolver for both entry points, and it exists because having two was
+    a live defect rather than an untidiness. `OPS-77` closed the case where a
+    width of ZERO produced an empty candidate order and a permanent silent
+    BUSY against a healthy bucket. A refutation pass over that closure found
+    a NEGATIVE width doing the same thing by the same mechanism through the
+    one path nobody validated: :func:`shared_surplus_width` floors a negative
+    override to the published default, so the environment path contended
+    normally while the parameter path went straight to an empty order.
+
+    That is the item's own criterion 2 broken - the two entry points agreed
+    about zero and diverged about minus one - so the resolution lives here
+    now and both callers ask it rather than each doing the arithmetic.
+
+    The rule is the one :func:`shared_surplus_width` already documents and is
+    unchanged for the environment: a width that is not a usable width falls
+    back to the published default rather than propagating, because a governor
+    that refuses to start over a typo turns a typo into an outage. ZERO is
+    not a typo - it is the documented opt-out, and it survives untouched.
+    """
+    if surplus is None:
+        return shared_surplus_width()
+    try:
+        width = int(surplus)
+    except (TypeError, ValueError):
+        return SHARED_SURPLUS_WIDTH
+    if width < 0:
+        return SHARED_SURPLUS_WIDTH
+    return width
+
 def is_contention_opt_out(surplus: int | None) -> bool:
     """Does this configuration say "do not contend for a lane at all"?
 
@@ -553,14 +586,7 @@ def is_contention_opt_out(surplus: int | None) -> bool:
     published default, and turning it into a silent withdrawal from the scheme
     would be the opposite of naming it.
     """
-    if surplus is None:
-        width = shared_surplus_width()
-    else:
-        try:
-            width = int(surplus)
-        except (TypeError, ValueError):
-            return False
-    return width == OPT_OUT_WIDTH
+    return resolve_surplus_width(surplus) == OPT_OUT_WIDTH
 
 
 def _opt_out_reason(surplus: int | None) -> str:
@@ -775,7 +801,7 @@ def bucket_slot_order(
     :func:`is_contention_opt_out`, before it ever reaches here.
     """
     _require_known_key(key)
-    width = shared_surplus_width() if surplus is None else int(surplus)
+    width = resolve_surplus_width(surplus)
     resolved = reserved_scheme_state(root, key) if state is None else state
     if resolved == RESERVED_PRESENT:
         return (reserved_name(key), *surplus_names(width))

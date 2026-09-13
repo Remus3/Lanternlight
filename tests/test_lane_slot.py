@@ -1409,6 +1409,60 @@ class TestTheReapingPathHasACaller:
             )
 
 
+class TestANegativeSurplusWidthIsTheSAMELIEONELEVELOVER:
+    """Found by the refutation pass over the commit that closed `OPS-77`.
+
+    The item was filed because a surplus width of ZERO produced an empty
+    candidate order, so the walk had nothing to try, and the answer against a
+    perfectly healthy empty bucket was a permanent silent BUSY. Zero was
+    fixed. A NEGATIVE width does exactly the same thing by exactly the same
+    mechanism, through the one entry point that was never validated.
+
+    And it broke the item's own criterion 2, which is that the two entry
+    points must not disagree. They agreed about zero and diverged about
+    minus one: `shared_surplus_width` floors a negative override to the
+    published default, so the environment path contended normally, while the
+    parameter path went straight to an empty order and answered BUSY.
+
+    The fix is the resolution `shared_surplus_width` already documents -
+    a width that is not usable falls back to the published default rather
+    than propagating - applied to both paths from one place instead of one.
+    """
+
+    def test_a_negative_parameter_does_not_answer_busy_on_an_empty_bucket(
+        self, tmp_path
+    ):
+        held = lane_slot.acquire_lane(
+            repo="probe", run_id="neg", cycle=0, root=tmp_path, surplus=-1
+        )
+        assert held is not None, (
+            "a negative width produced an empty candidate order and the"
+            " walk was called BUSY - the exact lie OPS-77 was filed to kill"
+        )
+
+    def test_a_negative_width_resolves_to_the_published_default(self):
+        assert lane_slot.resolve_surplus_width(-1) == lane_slot.SHARED_SURPLUS_WIDTH
+        assert lane_slot.resolve_surplus_width(-99) == lane_slot.SHARED_SURPLUS_WIDTH
+
+    def test_the_two_entry_points_agree_about_a_negative(self, monkeypatch):
+        # Criterion 2. The environment path already floored a negative; the
+        # parameter path did not, and that divergence is what let the hole
+        # survive the item that was written to close it.
+        monkeypatch.setenv(lane_slot.SURPLUS_ENV_VAR, "-1")
+        from_env = lane_slot.resolve_surplus_width(None)
+        monkeypatch.delenv(lane_slot.SURPLUS_ENV_VAR, raising=False)
+        from_param = lane_slot.resolve_surplus_width(-1)
+        assert from_env == from_param == lane_slot.SHARED_SURPLUS_WIDTH
+
+    def test_a_negative_is_NOT_quietly_turned_into_an_opt_out(self):
+        # The other wrong answer. Zero means opt out and is named in the
+        # status line; a negative is a typo and must not withdraw this
+        # session from the scheme without saying so.
+        assert lane_slot.is_contention_opt_out(-1) is False
+
+    def test_the_order_for_a_negative_is_not_empty(self, tmp_path):
+        assert lane_slot.bucket_slot_order(tmp_path, surplus=-1) != ()
+
 class TestAZeroSurplusWidthIsAnOptOutAndNeverABusyBucket:
     """``OPS-77``. A width of zero used to answer ``None`` against a healthy bucket.
 

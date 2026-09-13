@@ -360,6 +360,13 @@ a slice faces a choice, resolve it with the adjudicator or the lane and produce
 one unified answer. This project may write into the SYNC INBOXES and nothing
 else outside its own tree.
 
+**Extended the same day: SEND THE FOLLOW-UP TOO, and do not leave that as the
+operator's call.** A follow-up is a session decision on the same terms as a
+reply. In particular, a number this project has published to another tree and
+can no longer reproduce is WITHDRAWN in a note rather than quietly corrected in
+our own documents - a single reproducible-looking figure is what another tree
+designs against. See `LL-0244`.
+
 It replaces "ask first" with a permission bounded by DESTINATION rather than by
 occasion, so `OPS-68`'s standby no longer stops a reply going out. It authorises
 writing into an inbox and NOTHING more: no shared artifact, no adopted charter,

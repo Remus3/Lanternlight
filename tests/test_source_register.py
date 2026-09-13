@@ -704,6 +704,11 @@ KNOWN_NON_HOSTS = frozenset(
         "tools.preflight",
         "backtest.strip",
         "slot.default",
+        # OPS-77, second closure. The truncation of the dotted call
+        # ops.lane_slot.resolve_surplus_width, quoted in a ledger entry because
+        # the finding is about WHICH function decides the width. Looked at, per
+        # the note above: not a host.
+        "slot.resolve",
         # A git CONFIG KEY, quoted by `LL-0169` and `OPS-49`. `core.filemode`
         # is not a host and not a file; `.filemode` simply parses as a TLD-
         # shaped tail. Looked at before adding, per the regenerating note.

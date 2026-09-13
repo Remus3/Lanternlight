@@ -3624,6 +3624,21 @@ no-op wearing the costume of coverage. That judgement is recorded because the
 next session will reasonably ask why the sanctioned path was not taken.
 
 
+### REOPENED AND RE-CLOSED THE SAME DAY - a NEGATIVE width was the same lie
+
+The refutation pass over the closing commit found `acquire_lane(surplus=-1)`
+still returning the `None` that means BUSY against an empty, healthy bucket, by
+the same mechanism: an empty candidate order walked and called busy. It also
+broke criterion 2, because `shared_surplus_width` floors a negative override
+while the parameter path had no validator, so the two entry points agreed about
+zero and diverged about minus one.
+
+Closed with ONE resolver, `resolve_surplus_width`, which both
+`is_contention_opt_out` and `bucket_slot_order` now ask instead of each doing
+the arithmetic. Five tests red first, three mutants - the first refused to apply
+because its anchor matched twice, and was re-run with a unique one. See
+`LL-0245`, including what happened when that harness failed to restore.
+
 ### CLOSED 2026-09-12 - an OPT-OUT, and the fourth branch had to be added TWICE
 
 The decision, taken by the lane rather than referred upward: zero is a
