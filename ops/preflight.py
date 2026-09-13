@@ -43,6 +43,8 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from ops import refutation_census
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 #: The subset, with one line each on the finding class it pre-empts. Every entry
@@ -206,6 +208,44 @@ def run(root: Path = REPO_ROOT, modules: tuple[str, ...] = MODULES) -> Result:
     )
 
 
+def coverage_caveat() -> list[str]:
+    """The lines saying what the pre-flight does NOT reach, with LIVE numbers.
+
+    DERIVED, never typed, and that is not a style preference. The first version
+    of this function carried the counts as string literals, and a refutation
+    pass rewrote them to "3 of the 4 events" and watched every test stay green:
+    the guard beside it asserted only that the words "does not" and "adversar"
+    appeared. That is this repository's own rule that a filed count is a
+    hypothesis, in shipped code, inside the commit whose whole subject is
+    measuring instead of reciting. So the numbers come from the census rows on
+    every run and a stale one is not expressible.
+
+    If the census cannot be read at all, the caveat still prints - without
+    numbers. A report that stayed silent about its own blind spot because a data
+    file moved would be the worse failure of the two.
+    """
+    try:
+        rows = refutation_census.load_rows()
+        counts = refutation_census.tally(rows)
+        total = len(rows)
+    except (OSError, ValueError):
+        return [
+            "  Class (a), a real defect in the deliverable, and every stale",
+            "  recital an adjudication judged unreachable by any program. The",
+            "  census could not be read, so the counts are omitted rather than",
+            "  guessed. Those classes still need an adversarial pass, and this",
+            "  report is not a substitute for one.",
+        ]
+    return [
+        f"  Class (a), a real defect in the deliverable - {counts['a']} of the "
+        f"{total} events in",
+        f"  docs/refutation_census.tsv - and the {counts['c']} stale recitals,"
+        " most of which an",
+        "  adjudication judged unreachable by any program. Those still need an",
+        "  adversarial pass, and this report is not a substitute for one.",
+    ]
+
+
 def format_report(result: Result, untracked: tuple[str, ...]) -> str:
     """The report a slice reads before it claims done."""
     verdict = "PRE-FLIGHT PASS" if result.returncode == 0 else "PRE-FLIGHT REFUSE"
@@ -224,14 +264,7 @@ def format_report(result: Result, untracked: tuple[str, ...]) -> str:
         lines.append("  them and may report a false red. Stage them and re-run:")
         for path in untracked:
             lines.append(f"    {path}")
-    lines += [
-        "",
-        "WHAT THIS DOES NOT COVER:",
-        "  Class (a), a real defect in the deliverable - 60 of the 135 events in",
-        "  docs/refutation_census.tsv - and the 39 of 54 stale-recital events an",
-        "  adjudication judged unreachable by any program. Those still need an",
-        "  adversarial pass, and this report is not a substitute for one.",
-    ]
+    lines += ["", "WHAT THIS DOES NOT COVER:", *coverage_caveat()]
     return "\n".join(lines)
 
 

@@ -434,6 +434,68 @@ def test_an_unusable_bucket_is_answered_in_words_and_never_raises(
     )
 
 
+def test_a_zero_surplus_width_opts_out_in_words_and_never_raises(
+    bucket: Path,
+) -> None:
+    """The fourth branch, and the reason OPS-77 was not closed one layer down.
+
+    ``ops/lane_slot.py`` now refuses a zero surplus width with
+    ``LaneContentionOptedOut`` rather than returning the ``None`` that means
+    "every slot is taken". That fixed the call site and left this layer
+    catching only ``BucketUnusable``, so a zero width propagated straight out of
+    ``session_lane`` and took the loop down - converting a configuration choice
+    into an outage, which is the exact failure the UNUSABLE branch beside it
+    exists to prevent.
+    """
+    seen: list[lane.LaneStatus] = []
+    with lane.session_lane(root=bucket, cycle=13, surplus=0) as status:
+        seen.append(status)
+        assert status.held is False
+        assert status.slot is None
+        assert status.reserved is False
+        assert status.usable is True, (
+            "an opt-out is a working bucket nobody asked to contend for, not a "
+            "broken one"
+        )
+        assert lane_slot.OPT_OUT_STATUS in status.reason
+        assert "OPTED OUT" in status.status_line()
+
+    assert seen, "the body never ran, so this test proved nothing"
+
+
+def test_the_opt_out_is_textually_unmistakable_from_busy_and_unusable(
+    bucket: Path, unusable_bucket: Path
+) -> None:
+    """Three different facts must not be readable as one.
+
+    BUSY is the condition a caller is expected to shrug off and retry past. An
+    opt-out never clears by retrying and a broken bucket never clears by
+    retrying either, so neither may wear the word BUSY.
+    """
+    with lane.session_lane(root=bucket, cycle=14, surplus=0) as opted:
+        opt_out = opted.reason
+    with lane.session_lane(root=unusable_bucket, cycle=14) as broken:
+        unusable = broken.reason
+
+    assert "BUSY" not in opt_out
+    assert "OPTED OUT" in opt_out
+    assert "OPTED OUT" not in unusable
+    assert opt_out != unusable
+
+
+def test_the_opt_out_answer_carries_no_repository_path(bucket: Path) -> None:
+    """The words leave this machine in a hand-off and in a note.
+
+    The layer below puts an absolute bucket path in the exception message. This
+    branch must not pass that through, for the reason ADR-004 gives and the
+    reason the UNUSABLE branch beside it already obeys.
+    """
+    with lane.session_lane(root=bucket, cycle=15, surplus=0) as status:
+        reason = status.reason
+    assert str(bucket) not in reason
+    assert "C:" not in reason and "/Users/" not in reason
+
+
 def test_unusable_and_busy_are_textually_unmistakable(
     bucket: Path, unusable_bucket: Path
 ) -> None:

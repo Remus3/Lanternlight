@@ -1407,3 +1407,244 @@ class TestTheReapingPathHasACaller:
                 cycle=0,
                 surplus=2,
             )
+
+
+class TestAZeroSurplusWidthIsAnOptOutAndNeverABusyBucket:
+    """``OPS-77``. A width of zero used to answer ``None`` against a healthy bucket.
+
+    The measured defect: ``acquire_lane`` with ``surplus=0``, or with
+    ``LL_LANE_SLOT_SURPLUS`` set to ``0``, produced an EMPTY candidate order in
+    every bucket where the reserved-floor widening has not landed. The loop over
+    candidates then had nothing to walk and the return was ``None`` - which by
+    the contract ``OPS-73`` hole 2 established means exactly one thing, that
+    every candidate slot is taken. Against an empty, writable, perfectly healthy
+    bucket that reported ``BUSY - no slot free``, forever.
+
+    The decision, and it is a DECISION rather than a refusal: a width of zero is
+    a documented OPT-OUT from lane contention. :func:`shared_surplus_width`
+    deliberately accepts ``0`` while rejecting a negative and a non-numeric
+    width, so zero is a value an operator may legitimately set; what it may not
+    do is wear the BUSY wording, because BUSY is the one condition a caller is
+    expected to shrug off and retry past, and a zero width is a permanent
+    configuration state that clears only when somebody changes it.
+
+    Every test here uses an EMPTY, WRITABLE bucket wherever it can, because that
+    is the case the old behaviour lied about.
+    """
+
+    def test_a_zero_width_parameter_does_not_answer_none_on_an_empty_bucket(
+        self, bucket: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.delenv(lane_slot.SURPLUS_ENV_VAR, raising=False)
+        assert list(bucket.iterdir()) == [], "the bucket under test is not empty"
+        with pytest.raises(lane_slot.LaneContentionOptedOut):
+            lane_slot.acquire_lane(
+                root=bucket, repo="C:\\Lanternlight", run_id="r", cycle=0, surplus=0
+            )
+
+    def test_the_same_bucket_hands_out_a_slot_at_an_ordinary_width(
+        self, bucket: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        # The control for the test above. Without it, "it did not answer None"
+        # could be a claim about a broken bucket rather than about the width,
+        # and the whole point of OPS-77 is that the bucket is healthy.
+        monkeypatch.delenv(lane_slot.SURPLUS_ENV_VAR, raising=False)
+        held = lane_slot.acquire_lane(
+            root=bucket, repo="C:\\Lanternlight", run_id="r", cycle=0, surplus=2
+        )
+        assert held is not None
+        assert lane_slot.release(held, retries=1, backoff=0.0) is True
+
+    def test_the_environment_override_opts_out_exactly_as_the_parameter_does(
+        self, bucket: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.setenv(lane_slot.SURPLUS_ENV_VAR, "0")
+        with pytest.raises(lane_slot.LaneContentionOptedOut):
+            lane_slot.acquire_lane(
+                root=bucket, repo="C:\\Lanternlight", run_id="r", cycle=0
+            )
+
+    def test_the_two_entry_points_cannot_disagree_about_zero(
+        self, bucket: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        # OPS-77 acceptance criterion 2, and the reason OPS-73 criterion 4
+        # already gave about the two whitespace branches: two readers of the
+        # same kind of value must not mean different things by it. The
+        # parameter wins over the environment when it is given - that is the
+        # precedence the module already had - but ZERO means opt out whichever
+        # of the two supplied it, and a non-zero parameter is never overridden
+        # into an opt-out by the environment.
+        cases = [
+            ({"surplus": 0}, None, True),
+            ({"surplus": 0}, "5", True),
+            ({}, "0", True),
+            ({"surplus": 2}, "0", False),
+            ({}, "2", False),
+        ]
+        for kwargs, env, opted_out in cases:
+            if env is None:
+                monkeypatch.delenv(lane_slot.SURPLUS_ENV_VAR, raising=False)
+            else:
+                monkeypatch.setenv(lane_slot.SURPLUS_ENV_VAR, env)
+            if opted_out:
+                with pytest.raises(lane_slot.LaneContentionOptedOut):
+                    lane_slot.acquire_lane(
+                        root=bucket,
+                        repo="C:\\Lanternlight",
+                        run_id="r",
+                        cycle=0,
+                        **kwargs,
+                    )
+            else:
+                held = lane_slot.acquire_lane(
+                    root=bucket, repo="C:\\Lanternlight", run_id="r", cycle=0, **kwargs
+                )
+                assert held is not None, (kwargs, env)
+                assert lane_slot.release(held, retries=1, backoff=0.0) is True
+
+    def test_one_predicate_decides_for_both_entry_points(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        # Structural half of the criterion above: the two entry points agree
+        # because there is one resolver, not two agreeing implementations.
+        monkeypatch.setenv(lane_slot.SURPLUS_ENV_VAR, "0")
+        assert lane_slot.is_contention_opt_out(None) is True
+        assert lane_slot.is_contention_opt_out(2) is False
+        monkeypatch.delenv(lane_slot.SURPLUS_ENV_VAR, raising=False)
+        assert lane_slot.is_contention_opt_out(None) is False
+        assert lane_slot.is_contention_opt_out(0) is True
+
+    def test_the_opt_out_status_words_name_the_opt_out_and_never_say_busy(self):
+        phrase = lane_slot.OPT_OUT_STATUS
+        assert "opt" in phrase.lower(), (
+            "an undisclosed opt-out is the blind spot OPS-70 closed wearing a "
+            "configuration hat - the status words have to name it"
+        )
+        assert "busy" not in phrase.lower(), (
+            "BUSY is the one condition a caller is expected to shrug off and "
+            "retry past, and a zero width is permanent"
+        )
+        assert phrase == phrase.strip()
+        assert len(phrase.splitlines()) == 1
+
+    def test_the_reason_names_the_variable_that_produced_it(
+        self, bucket: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.setenv(lane_slot.SURPLUS_ENV_VAR, "0")
+        with pytest.raises(lane_slot.LaneContentionOptedOut) as env_error:
+            lane_slot.acquire_lane(
+                root=bucket, repo="C:\\Lanternlight", run_id="r", cycle=0
+            )
+        monkeypatch.delenv(lane_slot.SURPLUS_ENV_VAR, raising=False)
+        with pytest.raises(lane_slot.LaneContentionOptedOut) as param_error:
+            lane_slot.acquire_lane(
+                root=bucket, repo="C:\\Lanternlight", run_id="r", cycle=0, surplus=0
+            )
+        env_text = str(env_error.value)
+        param_text = str(param_error.value)
+        for text in (env_text, param_text):
+            assert lane_slot.OPT_OUT_STATUS in text
+            assert "busy" not in text.lower()
+        assert lane_slot.SURPLUS_ENV_VAR in env_text
+        assert "surplus" in param_text.lower()
+        assert env_text != param_text, (
+            "the two entry points agree on the ANSWER and still say which one "
+            "was set, because an operator has to know where to go and change it"
+        )
+
+    def test_an_opt_out_is_not_an_unusable_bucket(self):
+        # Two conditions sharing one class is the collapse OPS-73 removed. A
+        # bucket that is perfectly fine must never be reported as one that
+        # cannot be created, listed or written.
+        assert issubclass(lane_slot.LaneContentionOptedOut, lane_slot.LaneSlotError)
+        assert not issubclass(
+            lane_slot.LaneContentionOptedOut, lane_slot.BucketUnusable
+        )
+        assert not issubclass(
+            lane_slot.BucketUnusable, lane_slot.LaneContentionOptedOut
+        )
+
+    def test_a_full_bucket_still_answers_none_and_is_not_an_opt_out(
+        self, bucket: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        # The other side of the distinction: BUSY still exists and still means
+        # what it meant. Fill every surplus slot at width 2 and ask again.
+        monkeypatch.delenv(lane_slot.SURPLUS_ENV_VAR, raising=False)
+        for name in lane_slot.surplus_names(2):
+            _plant_lock(bucket, name, age=1.0, pid=os.getpid())
+        assert (
+            lane_slot.acquire_lane(
+                root=bucket, repo="C:\\Lanternlight", run_id="r", cycle=0, surplus=2
+            )
+            is None
+        )
+
+    def test_opting_out_touches_nothing_in_the_bucket(
+        self, bucket: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        # Opting out of contention means not operating the shared bucket at
+        # all, so the acquire-path reaper must not run either: a session that
+        # is not participating has no business deleting another project's
+        # stale surplus lock.
+        monkeypatch.delenv(lane_slot.SURPLUS_ENV_VAR, raising=False)
+        planted = _plant_lock(bucket, "0.lock", age=lane_slot.STALE_SECONDS * 10, pid=0)
+        before = _fingerprint(planted)
+        with pytest.raises(lane_slot.LaneContentionOptedOut):
+            lane_slot.acquire_lane(
+                root=bucket, repo="C:\\Lanternlight", run_id="r", cycle=0, surplus=0
+            )
+        assert planted.exists()
+        assert _fingerprint(planted) == before
+
+    def test_the_opt_out_is_decided_before_the_bucket_is_even_resolved(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        # An unusable root plus a zero width answers OPTED OUT, not UNUSABLE.
+        # Nothing was asked of the bucket, so nothing can be said about it, and
+        # the honest answer is the one about the configuration we did read.
+        monkeypatch.delenv(lane_slot.SURPLUS_ENV_VAR, raising=False)
+        impostor = tmp_path / "afile"
+        impostor.write_text("not a directory", encoding="utf-8")
+        with pytest.raises(lane_slot.LaneContentionOptedOut):
+            lane_slot.acquire_lane(
+                root=impostor / "slots",
+                repo="C:\\Lanternlight",
+                run_id="r",
+                cycle=0,
+                surplus=0,
+            )
+        assert not (impostor / "slots").exists()
+
+    def test_hold_lane_opts_out_before_the_block_runs(
+        self, bucket: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.delenv(lane_slot.SURPLUS_ENV_VAR, raising=False)
+        ran = []
+        with (
+            pytest.raises(lane_slot.LaneContentionOptedOut),
+            lane_slot.hold_lane(
+                root=bucket, repo="C:\\Lanternlight", run_id="r", cycle=0, surplus=0
+            ),
+        ):
+            ran.append("body")
+        assert ran == [], "the block ran under an opt-out"
+
+    def test_try_acquire_with_an_explicit_order_is_deliberately_unchanged(
+        self, bucket: Path
+    ):
+        # The boundary, stated as a test rather than only in prose. A width of
+        # zero at try_acquire still yields the floor-only order, so None there
+        # still means the floor is taken - a caller that states its own order is
+        # asserting knowledge about the bucket, and this primitive keeps its
+        # documented contract of doing exactly what the order says.
+        first = _acquire(bucket, "ll", surplus=0)
+        assert first is not None and first.name == lane_slot.reserved_name("ll")
+        assert _acquire(bucket, "ll", surplus=0) is None
+
+    def test_the_opt_out_is_exported(self):
+        for name in (
+            "LaneContentionOptedOut",
+            "OPT_OUT_STATUS",
+            "is_contention_opt_out",
+        ):
+            assert name in lane_slot.__all__

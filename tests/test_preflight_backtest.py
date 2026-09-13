@@ -23,6 +23,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import _toolguard
+
 from tools import preflight_backtest as bt
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -119,7 +121,16 @@ class TestTheTally:
 
 
 class TestCommitResolution:
+    """Both arms shell out to git, so both declare it - ``OPS-78``.
+
+    ``require`` returns the tool's resolved path and skips with a reason naming
+    it when it is absent, which is what keeps the ABSENT direction from reading
+    as a real failure. The false-red probe found these two arms unguarded on the
+    day they were written, which is the finding ``OPS-74`` exists to produce.
+    """
+
     def test_the_commit_that_introduced_a_real_ledger_entry_resolves(self) -> None:
+        _toolguard.require("git")
         # Measured against this repository rather than a fixture: the entry
         # heading is a string that appears in exactly one commit's diff, so
         # `git log -S` names the commit that filed the finding, and its parent
@@ -128,6 +139,7 @@ class TestCommitResolution:
         assert sha and len(sha) == 40, sha
 
     def test_an_entry_nobody_ever_wrote_resolves_to_nothing(self) -> None:
+        _toolguard.require("git")
         assert bt.entry_commit("LL-9999", REPO_ROOT) is None
 
 class TestReconstruction:

@@ -130,6 +130,32 @@ able to say why. Folding the two together reproduced, one level down in root
 resolution, the silent-fallback shape :class:`UnknownRepoKey` exists to refuse:
 a ``PROGRAMDATA`` naming a FILE made every acquire answer "busy" forever.
 
+A width of zero is an OPT-OUT, and it is never busy either
+----------------------------------------------------------
+
+``OPS-77``, the same defect one layer up from the paragraph above and reachable
+since the width became configurable. A surplus width of zero produced an EMPTY
+candidate order in every bucket where the reserved-floor widening has not
+landed. :func:`try_acquire` then walked nothing, returned ``None``, and a
+healthy, empty, WRITABLE bucket reported permanent contention.
+
+Zero is a legitimate value and stays one: :func:`shared_surplus_width` accepts
+it while refusing a negative and a non-numeric width, and that acceptance is a
+separate decision this item does not reopen. What changed is the ANSWER.
+:func:`acquire_lane` and :func:`hold_lane` now raise
+:class:`LaneContentionOptedOut` before they resolve, create, read or reap a
+bucket, and the exception's message opens with :data:`OPT_OUT_STATUS` so the
+words a reader sees NAME the opt-out. An undisclosed opt-out is the cheapest way
+for a future operator to take this project out of the shared scheme while every
+status line still reads as though it were participating.
+
+Both entry points - the ``surplus`` parameter and :data:`SURPLUS_ENV_VAR` -
+resolve through the single predicate :func:`is_contention_opt_out`, so they
+cannot disagree about zero. :func:`try_acquire` is deliberately unchanged: a
+width of zero there still yields the floor-only order, so its ``None`` still
+means the floor is taken, and a caller passing an explicit ``order`` is stating
+its own terms.
+
 Reclaiming is wired into the acquire, and is narrower than reaping by hand
 -------------------------------------------------------------------------
 
@@ -169,9 +195,12 @@ __all__ = [
     "DETECTION_ONLY_REPO_KEYS",
     "DETECTION_REPO_KEYS",
     "Held",
+    "LaneContentionOptedOut",
     "LaneSlotError",
     "LOCK_SUFFIX",
     "NoSlotAvailable",
+    "OPT_OUT_STATUS",
+    "OPT_OUT_WIDTH",
     "PROGRAMDATA_ENV_VAR",
     "REPO_KEY",
     "REPO_KEYS",
@@ -194,6 +223,7 @@ __all__ = [
     "hold",
     "hold_lane",
     "holders",
+    "is_contention_opt_out",
     "is_detectable_reserved_name",
     "is_ours_to_reclaim",
     "is_reserved_name",
@@ -273,6 +303,20 @@ SURPLUS_ENV_VAR = "LL_LANE_SLOT_SURPLUS"
 #: that reason, so an index above anyone's width is still reclaimable by any
 #: implementation of this scheme rather than being litter forever.
 SHARED_SURPLUS_WIDTH = 3
+
+#: The width that means "do not contend at all", and the one line a status
+#: report prints when it is set. ``OPS-77``.
+#:
+#: Zero is a legitimate value - :func:`shared_surplus_width` accepts it while
+#: refusing a negative and a non-numeric width - so it is treated as a declared
+#: OPT-OUT rather than as a refusal. What it may never do is wear the BUSY
+#: wording, and that is why the words live here rather than being composed at
+#: each call site: BUSY is the one condition a caller is expected to shrug off
+#: and retry past, and a zero width is a permanent configuration state that
+#: clears only when somebody changes it. An opt-out nobody can see in a printed
+#: line is the cheapest possible way to leave the shared scheme silently.
+OPT_OUT_WIDTH = 0
+OPT_OUT_STATUS = "OPTED OUT - surplus width 0, this session contends for no lane slot"
 
 #: The stale arm, in seconds. Four and a half hours, matching the window the
 #: siblings' governor uses, so a lock this repository leaves behind is reclaimed
@@ -356,6 +400,34 @@ class BucketUnusable(LaneSlotError):
     the same silent-fallback shape :class:`UnknownRepoKey` refuses, one level
     down. The general case is the same: a read-only volume, a directory we may
     not write, or a listing we are refused.
+    """
+
+
+class LaneContentionOptedOut(LaneSlotError):
+    """The configured surplus width is zero, so this session does not contend.
+
+    ``OPS-77``, and it is a third answer rather than a flavour of either of the
+    two that already existed. ``None`` means every candidate slot is TAKEN.
+    :class:`BucketUnusable` means the bucket could not be operated. This means
+    the bucket was never asked: a width of :data:`OPT_OUT_WIDTH` produces no
+    candidate to try, and walking an empty candidate list and answering ``None``
+    reported a healthy, empty, writable bucket as permanently busy.
+
+    Measured before the fix, against an empty bucket under ``tmp_path``:
+    ``acquire_lane(..., surplus=0)`` and ``LL_LANE_SLOT_SURPLUS=0`` both
+    answered ``None``, and the loop's status line therefore read
+    ``BUSY - no slot free`` forever.
+
+    DELIBERATELY NOT A SUBCLASS OF :class:`BucketUnusable`, in either direction.
+    A caller writing ``except BucketUnusable`` would otherwise report a perfectly
+    good bucket as broken, which is the same two-conditions-one-class collapse
+    ``OPS-73`` hole 2 removed - and the honest fact here is about our own
+    configuration rather than about the directory.
+
+    The words a reader sees are :data:`OPT_OUT_STATUS`, and they are the first
+    thing in this exception's message so that a status line can carry them
+    verbatim. An opt-out that is not NAMED where a reader looks is the blind
+    spot ``OPS-70`` closed wearing a configuration hat.
     """
 
 
@@ -457,6 +529,67 @@ def shared_surplus_width() -> int:
     if width < 0:
         return SHARED_SURPLUS_WIDTH
     return width
+
+
+def is_contention_opt_out(surplus: int | None) -> bool:
+    """Does this configuration say "do not contend for a lane at all"?
+
+    ``OPS-77`` acceptance criterion 2. THE ONE RESOLVER, and that is the point
+    of it rather than a convenience: ``acquire_lane``'s ``surplus`` parameter
+    and the :data:`SURPLUS_ENV_VAR` override cannot disagree about zero, because
+    neither of them decides - this does, for both, from the same resolution
+    order the module already used. Two agreeing implementations of the same rule
+    are a pair that will eventually disagree, which is the shape ``OPS-73``
+    criterion 4 found in the two whitespace branches.
+
+    ``None`` means "no parameter was given", so the environment decides through
+    :func:`shared_surplus_width`. A parameter that IS given wins, exactly as it
+    does in :func:`bucket_slot_order` - so a caller asking for a real width is
+    never dragged into an opt-out by an environment variable, and a caller
+    asking for zero is never dragged out of one.
+
+    A width that cannot be read as an integer at all is not an opt-out. It is
+    the typo case :func:`shared_surplus_width` already answers with the
+    published default, and turning it into a silent withdrawal from the scheme
+    would be the opposite of naming it.
+    """
+    if surplus is None:
+        width = shared_surplus_width()
+    else:
+        try:
+            width = int(surplus)
+        except (TypeError, ValueError):
+            return False
+    return width == OPT_OUT_WIDTH
+
+
+def _opt_out_reason(surplus: int | None) -> str:
+    """The sentence :class:`LaneContentionOptedOut` carries. Written out, never inferred.
+
+    It opens with :data:`OPT_OUT_STATUS` so a status line can print that prefix
+    verbatim, then names WHICH of the two entry points set the width, because an
+    operator who did not expect to be opted out has to know where to go and
+    change it. The two entry points agree on the answer and still say which one
+    spoke.
+
+    It says nothing about the bucket - not even its path. Nothing was read from
+    or written to one, so there is nothing to report about it, and a reason that
+    described a bucket it never touched would be this repository's own trap of a
+    claim about the tool wearing the costume of a claim about the world.
+    """
+    if surplus is None:
+        source = f"the {SURPLUS_ENV_VAR} environment override"
+    else:
+        source = "the surplus width passed to this call"
+    return (
+        f"{OPT_OUT_STATUS}. The width of {OPT_OUT_WIDTH} came from {source}. No "
+        "bucket was created, read or written, no lock was taken and no stale "
+        "lock was reclaimed, so this session rations with nobody and is counted "
+        "against no other project's concurrency budget. This is a configuration "
+        "state and not contention: it does not clear on its own and no retry "
+        f"changes it. Set {SURPLUS_ENV_VAR} to a positive width, or pass a "
+        "positive surplus, to rejoin the shared lane scheme."
+    )
 
 
 def reserved_name(key: str) -> str:
@@ -632,6 +765,14 @@ def bucket_slot_order(
 
     ``surplus`` defaults to :func:`shared_surplus_width`. ``state`` is for a
     caller that already measured it and does not want a second listing.
+
+    AN EMPTY RESULT IS A REAL ANSWER and it is not contention - ``OPS-77``. A
+    width of zero with no reserved name in the bucket leaves nothing to try.
+    This function stays a pure computation and still returns ``()`` for that,
+    because a caller that asks what the order WOULD be is entitled to see it;
+    what it must not do is walk that emptiness and call the result busy.
+    :func:`acquire_lane` refuses the walk instead, through
+    :func:`is_contention_opt_out`, before it ever reaches here.
     """
     _require_known_key(key)
     width = shared_surplus_width() if surplus is None else int(surplus)
@@ -1105,7 +1246,12 @@ def acquire_lane(
 
     ``None`` means busy - every candidate slot taken - exactly as
     :func:`try_acquire` means it, and nothing else means it. An unusable bucket
-    raises :class:`BucketUnusable` rather than joining that answer.
+    raises :class:`BucketUnusable` rather than joining that answer, and a
+    configured surplus width of zero raises :class:`LaneContentionOptedOut`
+    rather than joining it either - ``OPS-77``. That check runs FIRST, before
+    the bucket is resolved, created, reaped or listed: a session that is not
+    participating asks nothing of a directory other projects share, and cannot
+    report an opinion about a bucket it never touched.
 
     **It reaps before it walks the candidates**, through
     :func:`reap_for_acquire`. ``OPS-76``: until 2026-09-11 nothing in this tree
@@ -1131,6 +1277,8 @@ def acquire_lane(
     The reap runs BEFORE the try order is computed as well as before the
     candidates are walked, so a stale lock cannot influence either decision.
     """
+    if is_contention_opt_out(surplus):
+        raise LaneContentionOptedOut(_opt_out_reason(surplus))
     bucket = default_root() if root is None else Path(root)
     reap_for_acquire(bucket, key)
     order = bucket_slot_order(bucket, key, surplus)
@@ -1161,6 +1309,14 @@ def hold_lane(
     :class:`BucketUnusable` before the block runs. A caller that silently does
     nothing forever because a root is misconfigured is the failure ``OPS-73``
     exists to remove.
+
+    A configured surplus width of zero is not a full bucket either, and raises
+    :class:`LaneContentionOptedOut` before the block runs - ``OPS-77``. The
+    block does NOT run under an opt-out: yielding ``None`` and letting the body
+    proceed is what a busy bucket does, and a caller cannot tell the two apart
+    from a ``None``. What a session should do when it is opted out of lane
+    contention is the caller's decision to make explicitly, in words its own
+    status line can carry.
     """
     held = acquire_lane(
         repo=repo, run_id=run_id, cycle=cycle, key=key, root=root, surplus=surplus

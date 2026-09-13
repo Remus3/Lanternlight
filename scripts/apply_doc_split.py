@@ -62,6 +62,14 @@ WHAT IS CONSERVED, EXACTLY, INCLUDING THE ONE THING THAT IS NOT.
   own correctness - one stub per archived item, every stub resolving - is
   proved separately and in both directions by ``tools/archive_link_guard.py``,
   which is the other half of this guarantee and is run after any apply.
+* APPLYING TWICE IS A STRICT FIXED POINT, in all four documents, byte for
+  byte. It was not always: the planner used to append a blank line above the
+  regenerated index whether or not the junction already had one, so every
+  apply grew ``ROADMAP.md`` by exactly one newline at that one spot, forever.
+  ROADMAP ``OPS-81`` fixed it in the PLANNER - ``doc_archive._index_separator``
+  now tops the junction up to one blank line and can only ever append - so
+  nothing here tolerates a whitespace difference any more, and
+  ``tests/test_apply_doc_split.py`` compares whole documents.
 
 NOTHING IS WRITTEN UNTIL EVERY DOCUMENT VERIFIES. Both plans are built and both
 are verified before the first byte is published, so a roadmap plan that fails
@@ -263,7 +271,11 @@ def verify_roadmap(
        previous ``## Archive index`` section removed, that being the one
        section a split regenerates rather than conserves.
     3. The new live document is the preamble and the kept sections verbatim,
-       followed by nothing except the regenerated index.
+       followed by nothing except the regenerated index. The newline run
+       between the two is the planner's generated separator; check 3 accepts
+       any length of it because the kept-sections prefix is already required
+       to be byte-identical, and ROADMAP ``OPS-81`` made the planner emit a
+       settled one blank line rather than one more per run.
     4. The new archive is its header, then everything the archive already held,
        then this run's sections, verbatim and in that order.
 

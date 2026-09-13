@@ -122,8 +122,11 @@ than an omission.
 
 ## What was built on it
 
-* `ops/preflight.py` - the mechanical subset, measured at 19.3 seconds against a
-  full suite measured at 396.2 seconds the same day. It targets (b) in full and
+* `ops/preflight.py` - the mechanical subset, measured at 17.8 to 24.6 seconds
+  across eleven runs on 2026-09-12, the spread tracking what else was running
+  on the machine, against a full suite measured at 396.2 seconds the same day.
+  A single figure was filed first and a refutation pass could not reproduce it,
+  which is why this is a range. It targets (b) in full and
   the reachable slice of (c), and it says in its own report what it does not
   cover.
 * `tools/preflight_backtest.py` - criterion 3. It stands the tree up as it was

@@ -1321,3 +1321,173 @@ class TestTheDocstringExplainsTheModuleLevelMissCorrectly:
 
     def test_it_does_not_still_assert_the_wrapper_was_not_yet_loaded(self):
         assert "already wrapped" in self._collapsed()
+
+
+def _bare_control_id(name: str) -> str:
+    """A planted control's node id in the shape ``OPS-86`` measured.
+
+    Not invented. Measured 2026-09-12 by planting the control under a rootdir
+    that itself sits inside the system temp tree and running
+    ``pytest --collect-only``: every one of the five specimens came back as
+    ``::<test name>`` with the ``.py`` segment gone entirely. The same control
+    collected from a rootdir OUTSIDE that tree kept its file segment.
+    """
+    return f"::{name}"
+
+
+class TestABareControlNodeIdIsStillRecognised:
+    """``OPS-86`` criterion 2, the recognition half.
+
+    When the rootdir sits inside the system temp tree the control's node id
+    loses its file segment altogether, so there is nothing left for a
+    basename match to key on. The only surviving evidence is the test NAME,
+    and it is only usable because the shape is unambiguous: a node id whose
+    single non-empty segment is one of the probe's own planted names cannot
+    have come from a file under ``tests``, where every id carries its path.
+    """
+
+    def test_a_bare_control_nodeid_is_recognised_as_a_control(self):
+        assert probe.is_control(_bare_control_id("test_control_false_red")) is True
+
+    def test_every_planted_specimen_is_recognised_in_the_bare_shape(self):
+        expectations = probe.control_expectations()
+        assert len(expectations) >= 5, (
+            "the anchor: this arm is worthless if the expectations are empty"
+        )
+        for name in expectations:
+            assert probe.is_control(_bare_control_id(name)) is True, name
+
+    def test_a_bare_nodeid_that_is_not_a_planted_name_is_not_a_control(self):
+        assert probe.is_control("::test_something_of_our_own") is False
+
+    def test_an_in_tree_test_borrowing_a_control_name_is_not_a_control(self):
+        """The shape carries the meaning, not the name on its own.
+
+        A repository test that happens to be called ``test_control_false_red``
+        still names its own file, so it must stay a repository test.
+        """
+        assert probe.is_control("tests/test_a.py::test_control_false_red") is False
+
+    def test_the_file_half_of_a_bare_control_nodeid_names_the_control_module(self):
+        assert (
+            probe.file_of(_bare_control_id("test_control_silent_pass"))
+            == probe.CONTROL_MODULE_NAME
+        )
+
+    def test_the_control_name_of_a_bare_nodeid_is_the_name(self):
+        assert (
+            probe.control_test_name(_bare_control_id("test_control_clean_skip"))
+            == "test_control_clean_skip"
+        )
+
+    def test_a_run_reporting_only_bare_ids_is_still_proved(self):
+        report = probe.probe(
+            runner=_proving_runner(control_id=_bare_control_id),
+            base_env={"PATH": "", "PATHEXT": ".EXE"},
+        )
+        assert report.controls.proved is True, report.controls.missing
+
+    def test_bare_controls_are_kept_out_of_the_repository_totals(self):
+        report = probe.probe(
+            runner=_proving_runner(
+                control_id=_bare_control_id,
+                extra={"tests/t.py::test_x": ("passed", True, True)},
+            ),
+            base_env={"PATH": "", "PATHEXT": ".EXE"},
+        )
+        planted = len(probe.control_expectations())
+        assert report.with_total == 1
+        assert report.without_total == 1
+        assert report.with_control_total == planted
+        assert report.without_control_total == planted
+
+
+class TestAnUnprovenRunRefusesToPrintCounts:
+    """``OPS-86`` criterion 2, the refusal half - and the reason for BOTH.
+
+    Recognition closes the one shape that has been measured. The refusal
+    closes the CLASS: any future shape the matcher cannot see leaves a report
+    whose numbers were never attributable, and the ``OPS-83`` run showed what
+    a reader does with those - it printed ``false_red=50`` under an UNPROVEN
+    banner and the numbers read exactly like findings.
+    """
+
+    def _unproven(self):
+        def blind_runner(args, env, record_path):
+            Path(record_path).write_text(
+                _record(
+                    {
+                        "tests/t.py::test_x": ("passed", True, True),
+                        "tests/t.py::test_y": ("passed", True, True),
+                    }
+                ),
+                encoding="ascii",
+            )
+            return 0
+
+        report = probe.probe(
+            runner=blind_runner, base_env={"PATH": "", "PATHEXT": ".EXE"}
+        )
+        assert report.controls.proved is False, (
+            "the anchor: this arm says nothing unless the run really is unproven"
+        )
+        return report
+
+    def test_an_unproven_run_prints_no_kind_tally(self):
+        rendered = probe.format_report(self._unproven())
+        assert "UNPROVEN" in rendered
+        assert "kinds:" not in rendered, rendered
+
+    def test_an_unproven_run_prints_no_finding_count(self):
+        rendered = probe.format_report(self._unproven())
+        assert "findings:" not in rendered, rendered
+
+    def test_an_unproven_run_prints_no_collected_totals(self):
+        rendered = probe.format_report(self._unproven())
+        assert "collected" not in rendered, rendered
+
+    def test_an_unproven_run_says_it_is_withholding_the_counts(self):
+        collapsed = " ".join(probe.format_report(self._unproven()).split())
+        assert "REFUSING to print" in collapsed, collapsed
+
+    def test_it_still_names_which_specimen_went_unseen(self):
+        rendered = probe.format_report(self._unproven())
+        for name in probe.control_expectations():
+            assert name in rendered, name
+
+    def test_a_proved_run_still_prints_its_counts(self):
+        """The anchor against a vacuous refusal.
+
+        A ``format_report`` that printed counts for nobody would pass every
+        arm above. This one fails unless the proved path is untouched.
+        """
+        report = probe.probe(
+            runner=_proving_runner(
+                extra={"tests/t.py::test_x": ("passed", True, True)}
+            ),
+            base_env={"PATH": "", "PATHEXT": ".EXE"},
+        )
+        assert report.controls.proved is True
+        rendered = probe.format_report(report)
+        assert "kinds:" in rendered
+        assert "findings:" in rendered
+        assert "collected" in rendered
+
+
+class TestTheDocstringStatesTheOps86Decision:
+    """``OPS-86`` criterion 2 asks for the choice to be justified in source."""
+
+    def _collapsed(self):
+        return " ".join(probe.__doc__.split())
+
+    def test_it_names_the_temp_rootdir_shape(self):
+        collapsed = self._collapsed()
+        assert "OPS-86" in collapsed
+        assert "::test_control_false_red" in collapsed
+
+    def test_it_says_both_repairs_were_taken_and_why(self):
+        collapsed = self._collapsed()
+        assert "BOTH REPAIRS WERE TAKEN" in collapsed, (
+            "the decision itself has to be in the module's own docstring"
+        )
+        assert "REFUSES to print counts it cannot attribute" in collapsed

@@ -3450,7 +3450,7 @@ by `python -m ops.refutation_census`, and the write-ups are
   for (b) - 10 of 13 gate-reachable - and fails for (c) at 15 of 54. Overall
   only 42 of 135 events are gate-reachable at all. `ops/preflight.py` therefore
   targets (b) in full and the reachable slice of (c), and it is mostly a RUNNER
-  of guards that already existed. Runtime is a stated, measured number: **18.7
+  of guards that already existed. Runtime is a stated, measured RANGE: **17.8 to 24.6
   seconds against a full suite of 396.2, both measured 2026-09-12.**
 - **Criterion 3 MET, and the first experiment's number was an instrument
   defect.** Running today's pre-flight at the parent of each commit that filed a
@@ -3460,13 +3460,18 @@ by `python -m ops.refutation_census`, and the write-ups are
   from the fix commit's own additions caught **9 of 9**, on guards that existed
   in each of those trees.
 - **Criterion 4 PARTIALLY MET.** The full suite is 396.2 seconds, measured
-  twice this session; the pre-flight is 18.7. What is NOT measured is how many
+  twice this session; the pre-flight is 17.8 to 24.6. What is NOT measured is how many
   suite runs a whole refute-fix-refute cycle takes, because nothing records that
   today. See the open item below.
 - **Criterion 5 MET.** `docs/ORCHESTRATION_TIERS.md`, linked from `CLAUDE.md`
   where a cold session reads it at dispatch rather than afterwards.
-- **Criterion 6 MET.** The consensus request was delivered to CS, RC and RSC
-  on 2026-09-12. RC and RSC have answered and their numbers are recorded as
+- **Criterion 6 MET, against FOUR trees.** The consensus request was delivered
+  to CS, RC and RSC on 2026-09-12, and to LW on 2026-09-13 after the operator
+  widened the participant set. LW's note carries the ask AND this project's
+  finished numbers, because a tree asked after the others have answered is
+  otherwise answering blind, and the other three were told the set changed so
+  that the channel's silence-reads-as-dissent rule is not applied to an absence
+  nobody created. See `LL-0242`. RC and RSC have answered and their numbers are recorded as
   DATA, not as agreement - see the ledger entry. Our own numbers went back out
   on 2026-09-13T00:07:48Z, under the operator ruling recorded in `LL-0238` that
   a reply no longer waits for authorisation and the sync inboxes are the one
@@ -3490,7 +3495,7 @@ by `python -m ops.refutation_census`, and the write-ups are
    is a decision this item has not taken, and wiring it before the cycle-cost
    numbers exist would be optimising without the measurement.
 
-## OPS-77. A surplus width of ZERO is a permanent silent "busy", one level up from the hole `OPS-73` just closed - OPEN
+## OPS-77. A surplus width of ZERO is a permanent silent "busy", one level up from the hole `OPS-73` just closed - CLOSED 2026-09-12
 
 Filed 2026-09-11 by the refutation pass over this session's own work, which
 found it while trying to break the three-state distinction `OPS-73` hole 2
@@ -3618,6 +3623,39 @@ log-shaped text and has no filesystem-path rule, so calling it would have been a
 no-op wearing the costume of coverage. That judgement is recorded because the
 next session will reasonably ask why the sanctioned path was not taken.
 
+
+### CLOSED 2026-09-12 - an OPT-OUT, and the fourth branch had to be added TWICE
+
+The decision, taken by the lane rather than referred upward: zero is a
+DOCUMENTED OPT-OUT, not a refusal, because `shared_surplus_width` deliberately
+accepts 0 while rejecting a negative and a non-numeric width, and turning that
+into a refusal would be reversing a different decision.
+
+- `ops/lane_slot.py` raises `LaneContentionOptedOut`, deliberately NOT kin to
+  `BucketUnusable` in either direction, before the bucket is resolved, created,
+  listed or reaped. `None` still means only "every candidate slot is taken".
+- `OPT_OUT_STATUS` is the first token of the message, so a status line can print
+  it verbatim, and the rest names which entry point set it and how to rejoin.
+- Both entry points resolve through ONE predicate, `is_contention_opt_out`;
+  the parameter wins when given and the environment decides when it is `None`.
+  Pinned by a table test over five combinations plus a structural test.
+- Criterion 3 is met against an EMPTY, WRITABLE bucket, which is the case that
+  made the old answer a lie: measured before the change, the candidate order was
+  empty and both entry points returned the `None` that reads as BUSY.
+- `tests/test_lane_slot.py` 113 to 127 collected, none weakened or deleted.
+  Seven mutations, every anchor asserted to match exactly once, all red.
+
+**THE SECOND HALF, AND IT IS THE PART WORTH READING.** Closing it in
+`ops/lane_slot.py` left `ops/loop/lane.py` catching only `BucketUnusable`, so a
+zero width propagated straight out of `session_lane` and would have taken an
+unattended loop down - a configuration choice converted into an outage, which is
+the exact failure the UNUSABLE branch beside it exists to prevent. A fourth
+branch was added there. Then the test for it still failed, because
+`status_line()` builds its own words from `held` and `usable` alone and answered
+BUSY while the reason field said OPTED OUT. **A status line derived from two
+booleans cannot represent a third refusal, and the wrong half is the half a
+human reads.** Both halves are fixed, four more mutations killed, and
+`docs/HEADLESS.md` now describes four states rather than three.
 
 ## OPS-78. 187 tests FAIL rather than skip when `git` is absent, measured - CLOSED 2026-09-11, all five criteria met
 
@@ -4001,7 +4039,7 @@ missing a single character is REFUSED rather than written; neutering the ledger
 total-equality check reddened one; and removing the script's name from
 `CLAUDE.md` reddened one.
 
-## OPS-81. Each applied split adds one blank line before the roadmap's archive index, forever - OPEN
+## OPS-81. Each applied split adds one blank line before the roadmap's archive index, forever - CLOSED 2026-09-12
 
 Filed 2026-09-11, found by `OPS-80` while proving the split conserves every
 word. It does. This is the one thing it does not leave alone, and it is
@@ -4037,6 +4075,24 @@ work out whether a changed newline run means something.
    comment is left describing a wart that is gone.
 4. Watched red under mutation: with the fix in place, re-introducing the extra
    newline must redden the fixed-point test, with the anchor asserted first.
+
+### CLOSED 2026-09-12 - the planner tops the junction up, and can only ever ADD
+
+`_index_separator(live_text)` plus `INDEX_SEPARATOR_NEWLINES = 2` in
+`tools/doc_archive.py`. The planner no longer appends a newline unconditionally
+before the generated index; it tops the junction up to exactly one blank line.
+
+- Criterion 1: applying the split twice leaves `ROADMAP.md` byte-identical.
+- Criterion 2 is satisfied by CONSTRUCTION rather than by care: the function can
+  only RETURN newlines to append and has no power to delete, so the "every
+  surviving section's text verbatim" contract holds structurally, and a junction
+  already longer than one blank line is left alone rather than trimmed - those
+  characters belong to a section. Both distinctions are stated in the docstrings.
+- Criterion 3: both roadmap tests tightened to strict equality, and the two
+  places recording the tolerated newline updated with the fix rather than after.
+- Criterion 4: the old always-newline behaviour re-introduced with the anchor
+  asserted to match exactly once, three tests red including both fixed points,
+  restored green. `tests/test_apply_doc_split.py` 23 to 24 collected.
 
 ## OPS-82. The guard that protects the operator's live mail records is the only NON-ATOMIC writer of them in the tree - CLOSED 2026-09-11, all six criteria met
 
@@ -4399,7 +4455,7 @@ nobody has measured. `sh.exe` here is bash in `sh` mode, so "needs `sh`" means
 where it IS present, `sh` resolves there too, the strip fails to strip, and the
 measurement would silently report nothing.
 
-## OPS-86. `tools/false_red_probe.py` cannot recognise its own control when the rootdir sits inside the system temp tree - OPEN
+## OPS-86. `tools/false_red_probe.py` cannot recognise its own control when the rootdir sits inside the system temp tree - CLOSED 2026-09-12
 
 Filed 2026-09-12 out of `OPS-83`. Measured, not inferred: the probe was run from
 a detached git worktree created under the session scratchpad, which is itself
@@ -4433,6 +4489,38 @@ one anyway.
    believed.
 4. Re-measured afterwards with the positive control PROVED on that run, and
    recorded in the ledger with a date.
+
+### CLOSED 2026-09-12 - BOTH repairs, because they close different things
+
+Recognition closes the one shape that has been MEASURED. Refusal closes the
+CLASS, and only refusal works on a shape nobody has seen yet - which matters
+because the harm in `OPS-83` was never that a node id went unmatched, the
+doctrine already calls that an absence of evidence. The harm was that a full
+count table printed under the word UNPROVEN and read exactly like findings.
+
+- **Criterion 1, by construction rather than by the one observation.** The
+  control was planted under the system temp area both times and only the ROOTDIR
+  varied. With the rootdir OUTSIDE that tree, the id keeps its file segment and
+  ends `::test_false_red_control.py::test_control_false_red`. With the rootdir
+  INSIDE it, the id is `::test_control_false_red` for all five specimens, with
+  no `.py` segment for the basename matcher to find.
+- **Criterion 2:** `is_control` now recognises both shapes, AND the probe
+  refuses to print counts it cannot attribute.
+- **Criterion 3:** six mutants, each anchor asserted to match exactly once, the
+  replacement read back off disk, `__pycache__` purged, and the restore verified
+  byte-identical by digest. All red, no survivors.
+- **Criterion 4, re-measured on the real tree with the positive control PROVED**
+  on all five specimens: 4 PATH entries stripped, `false_red=5`,
+  `clean_skip=242`, `vanished=1`.
+
+**AND THE FIVE FALSE REDS IT FOUND WERE THIS SESSION'S OWN NEW TESTS.**
+`tests/test_preflight.py` and `tests/test_preflight_backtest.py` shelled out to
+`git` without declaring it, so they FAILED rather than skipped when the tool was
+stripped - the `OPS-78` policy, broken by the very work that was measuring how
+this project breaks things. Both now call `_toolguard.require("git")`, which
+returns the resolved path and pins the absent direction as well as the present
+one. That is the finding `OPS-74` was built to produce, produced against the
+newest code in the tree rather than against history.
 
 ## OPS-84. Vendor Legion Wallpaper's write tracer under the license it named - CLOSED 2026-09-11, operator-ruled
 

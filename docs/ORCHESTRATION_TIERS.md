@@ -61,12 +61,12 @@ Measured on this machine, 2026-09-12:
 
 | What | Cost | When |
 |---|---|---|
-| `python -m ops.preflight` | 19.3 s, 14 guard modules | a slice, before it claims done |
+| `python -m ops.preflight` | 17.8 to 24.6 s, 14 guard modules | a slice, before it claims done |
 | `python -m pytest` | 396.2 s | before a commit, always |
 | an adversarial slice | minutes of wall clock, plus its own fix cycle | after the pre-flight is green |
 
 Dispatching an adversarial pass to discover that a new test module has no row in
-`docs/INVENTORY.md` costs the adversarial rate for a nineteen-second answer.
+`docs/INVENTORY.md` costs the adversarial rate for a twenty-second answer.
 That happened in the session that filed `OPS-87`, and it happened AGAIN in the
 session that built the pre-flight, before the pre-flight existed to catch it.
 

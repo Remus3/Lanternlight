@@ -143,6 +143,46 @@ the segments to the one naming a ``.py`` file, :func:`is_control` matches on the
 module basename in any segment, and :func:`control_test_name` reads the test
 from the LAST segment rather than from the second.
 
+A SECOND NODE-ID SHAPE, AND WHY BOTH REPAIRS WERE TAKEN - ``OPS-86``.
+
+The repair above assumes the id still carries a ``.py`` segment somewhere. It
+does not always. Measured BY CONSTRUCTION on 2026-09-12 rather than inferred
+from the single run that found it: the control was planted under the system
+temp area both times and only the ROOTDIR was varied.
+
+* Rootdir OUTSIDE the system temp tree - the ordinary case of running this
+  probe from the repository root - gives an id whose segments are the
+  collector chain and which still names the module::
+
+      ::<temp path segments>::test_false_red_control.py::test_control_false_red
+
+* Rootdir INSIDE the system temp tree - a git worktree under the session
+  scratchpad, which is how ``OPS-83`` hit this - gives::
+
+      ::test_control_false_red
+
+  There is no file segment at all. Not a mangled one: none. So a basename
+  match has nothing to see, all five specimens read as never classified, and
+  the run is UNPROVEN by construction.
+
+BOTH REPAIRS WERE TAKEN, because they close different things.
+
+* RECOGNITION closes the shape that has been MEASURED. :func:`is_control`
+  accepts a bare id whose single non-empty segment is one of this module's own
+  planted specimen names. That is narrow on two axes at once - one segment,
+  and a name this module planted - because a name-only match would reclassify
+  a repository test that happened to share a name, and a repository id always
+  carries its file so it can never have exactly one segment.
+* REFUSAL closes the CLASS. :func:`format_report` now REFUSES to print counts
+  it cannot attribute: an UNPROVEN run prints the control stanza and stops,
+  with no kind tally, no findings list, no per-file deltas and no collected
+  totals. Recognition alone would have been the wrong answer, because the harm
+  in ``OPS-83`` was not that one shape went unmatched - the doctrine already
+  declared that an absence of evidence - it was that a full count table was
+  printed underneath the word UNPROVEN and read exactly like a set of
+  findings. The next unmeasured shape does that again, and the refusal is the
+  only half of this that does not need to have seen the shape first.
+
 BIDIRECTIONAL DISCIPLINE - criterion 5. The clean-skip control skipping without
 the tool is only half the evidence. The probe also requires that the same
 control INVOKED the tool in the run where it was present. A guard that skips
@@ -642,13 +682,40 @@ def file_of(nodeid: str) -> str:
       records, and it is why this is not a one-line split.
 
     A node id naming no ``.py`` file at all falls back to the first segment,
-    which is the old behaviour and the best available answer.
+    which is the old behaviour and the best available answer - EXCEPT for the
+    ``OPS-86`` shape, where the first segment is the empty string and the file
+    is nevertheless known by construction: the probe planted it, so a bare id
+    carrying a planted specimen's name is attributed to
+    :data:`CONTROL_MODULE_NAME`. Without that, all five controls bucket
+    together under ``""`` in :func:`delta_by_file` and the per-file table
+    carries a nameless row.
     """
     segments = nodeid.split("::")
     for index, segment in enumerate(segments):
         if _basename(segment).endswith(".py"):
             return "::".join(segments[: index + 1])
+    if _is_bare_control(nodeid):
+        return CONTROL_MODULE_NAME
     return segments[0]
+
+
+def _is_bare_control(nodeid: str) -> bool:
+    """True for the temp-rootdir shape: one segment, and it is a planted name.
+
+    ``OPS-86``. Measured, not guessed - see the module docstring. The only
+    surviving evidence in this shape is the test NAME, so the match is
+    deliberately narrow on two axes at once: the id must have exactly ONE
+    non-empty segment, AND that segment must be one of the probe's own planted
+    specimen names. A repository test id always carries its file, so it can
+    never have one segment; and a bare id for some other out-of-tree file can
+    never carry a name this module planted.
+
+    The name list is read from :func:`control_expectations` rather than
+    duplicated, so a sixth specimen is recognised by construction rather than
+    by somebody remembering to add it here.
+    """
+    segments = [segment for segment in nodeid.split("::") if segment]
+    return len(segments) == 1 and segments[0] in control_expectations()
 
 
 def is_control(nodeid: str) -> bool:
@@ -658,12 +725,21 @@ def is_control(nodeid: str) -> bool:
     carries no path separator for :func:`file_of` to key on. The match is only
     safe while no file under ``tests`` shares that basename, and a test in
     ``tests/test_false_red_probe.py`` asserts exactly that.
+
+    ``OPS-86`` added the second arm. When the rootdir itself sits inside the
+    system temp tree the control's id loses its file segment ENTIRELY - there
+    is no ``.py`` name anywhere in it - so a basename match has nothing to key
+    on and every specimen reads as never classified. :func:`_is_bare_control`
+    recognises that shape; the refusal in :func:`format_report` covers every
+    shape nobody has measured yet.
     """
-    return any(
+    if any(
         _basename(segment) == CONTROL_MODULE_NAME
         for segment in nodeid.split("::")
         if segment
-    )
+    ):
+        return True
+    return _is_bare_control(nodeid)
 
 
 def control_test_name(nodeid: str) -> str:
@@ -1297,6 +1373,14 @@ def format_report(report: ProbeReport) -> str:
     checked. The ``silent_pass`` limitation is printed every run for the same
     reason: a number whose caveat is somewhere else is a number quoted without
     its caveat.
+
+    AND AN UNPROVEN RUN STOPS THERE - ``OPS-86``. No kind tally, no findings
+    list, no per-file deltas, no collected totals. The caveat above turned out
+    not to be enough on its own: an ``OPS-83`` run printed the UNPROVEN banner
+    and then a complete table including ``false_red=50``, and the item records
+    that the numbers read exactly like findings. A caveat a reader must apply
+    is a caveat a reader will skip, so the numbers are withheld instead of
+    annotated.
     """
     lines: list[str] = []
     if not report.ran:
@@ -1310,10 +1394,32 @@ def format_report(report: ProbeReport) -> str:
         )
     else:
         lines.append(
-            "false red probe: positive control UNPROVEN - every count below is "
-            "an absence of evidence, not evidence of absence"
+            "false red probe: positive control UNPROVEN - this run measured "
+            "nothing it can attribute"
         )
         lines.extend(f"  [control] {note}" for note in report.controls.missing)
+        lines.append(
+            "  REFUSING to print counts, kinds, findings or per-file deltas "
+            "for this run."
+        )
+        lines.append(
+            "  The instrument was not proved, so those numbers would be an "
+            "absence of evidence"
+        )
+        lines.append(
+            "  wearing a finding's clothes - OPS-86, where an UNPROVEN run "
+            "still printed"
+        )
+        lines.append(
+            "  a full table including false_red=50 and a reader filed it as a "
+            "result."
+        )
+        lines.append(
+            "  Fix the control first. If the rootdir sits inside the system "
+            "temp tree, run"
+        )
+        lines.append("  the probe from the real tree instead.")
+        return "\n".join(lines)
     lines.append(
         f"  stripped {len(report.removed_path_entries)} PATH entry(ies) "
         f"carrying the tool; collected {report.with_total} repository test(s) "

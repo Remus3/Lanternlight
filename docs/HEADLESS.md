@@ -381,9 +381,19 @@ two governors above.
 
 - `held` - whether a lane is held for the duration of the block.
 - `usable` - whether the bucket could be operated at all. Read with `held` this
-  is the whole answer, and it has THREE states rather than two: held is HELD,
-  not held but usable is BUSY, and not usable is UNUSABLE. See below for what
-  the third one means and what to do about it.
+  is MOST of the answer, and it has three of the four states: held is HELD, not
+  held but usable is BUSY, and not usable is UNUSABLE. See below for what the
+  third one means and what to do about it.
+- The FOURTH state is not derivable from those two booleans, which is why
+  `OPS-77` had to add it to `status_line` as well as to the reason: a surplus
+  width of ZERO is an OPTED OUT answer, and it reads `OPTED OUT - surplus width
+  0, this session contends for no lane slot`. It is not a fault and it is not
+  contention. The bucket is fine, nothing was written, and this session
+  deliberately took no part in the shared scheme. It NEVER clears by retrying -
+  set a non-zero surplus width to rejoin. Before `OPS-77` a zero width answered
+  BUSY against an empty, perfectly healthy bucket, forever, which is the
+  cheapest way for a future operator to leave the shared scheme while every
+  status line still reads as though this project were participating.
 - `slot` - the lock filename taken, or `None` when busy.
 - `reserved` - whether it is this repository's own reserved floor or a
   first-come surplus slot. "Did I get my guarantee or did I get lucky" is the

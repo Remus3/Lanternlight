@@ -197,9 +197,34 @@ class TestAnchors:
         rows = rc.parse_rows(_row(quote="a sentence nobody wrote"))
         assert rc.missing_anchors(rows, "the ledger says something else") == rows
 
-    def test_a_quote_present_verbatim_is_not_reported(self) -> None:
+    LEDGER = chr(10).join(
+        (
+            "### LL-0236 - 2026-09-12 - the entry the row names",
+            "we found the guard was vacuous here",
+            "### LL-0235 - 2026-09-12 - a different entry",
+            "a sentence that lives somewhere else entirely",
+        )
+    )
+
+    def test_a_quote_present_verbatim_in_its_own_entry_is_not_reported(
+        self,
+    ) -> None:
         rows = rc.parse_rows(_row(quote="the guard was vacuous"))
-        assert rc.missing_anchors(rows, "we found the guard was vacuous here") == []
+        assert rc.missing_anchors(rows, self.LEDGER) == []
+
+    def test_a_quote_that_resolves_in_a_DIFFERENT_entry_is_reported(self) -> None:
+        # The false pass a repository-wide substring test allows, and the
+        # reason the check is scoped. The row would still be describing an
+        # event that no longer exists where it says it does, and the guard
+        # would be green on the strength of somebody else's sentence.
+        rows = rc.parse_rows(_row(quote="lives somewhere else entirely"))
+        assert rc.missing_anchors(rows, self.LEDGER) == rows
+
+    def test_the_unscoped_question_can_still_be_asked_and_answers_differently(
+        self,
+    ) -> None:
+        rows = rc.parse_rows(_row(quote="lives somewhere else entirely"))
+        assert rc.missing_anchors(rows, self.LEDGER, scoped=False) == []
 
     def test_matching_is_case_sensitive_and_not_normalised(self) -> None:
         # A matcher that folded case or collapsed whitespace would keep

@@ -30,6 +30,16 @@ in both directions. Writing the weaker property down here rather than quietly
 relaxing the strong one is the point: a conservation claim that silently
 excludes an unnamed section is worth nothing.
 
+THE ONE TOLERANCE THAT USED TO LIVE HERE IS GONE. Until ROADMAP ``OPS-81`` the
+roadmap comparisons below allowed the live document's trailing newline RUN at
+the index junction to be one character longer than the source's, because the
+planner appended a blank line above the regenerated index whether or not the
+junction already carried one - so every apply grew the file by one newline,
+forever. The planner now tops that separator up instead of adding to it, so
+these tests compare whole documents with no whitespace excuse, and
+``test_the_fixed_point_is_red_when_the_extra_newline_comes_back`` puts the old
+behaviour back to prove the fixed-point assertions are not decoration.
+
 THE VACUOUS-GUARD TRAP THIS FILE IS BUILT AGAINST. A refusal test that feeds
 the applier a plan it would reject for some OTHER reason passes while the
 conservation check is dead code. So every refusal test below mutates a
@@ -306,15 +316,15 @@ class TestApplyOnCopiesOfTheRealDocuments:
         assert remaining == [], "an archived section did not come from the source"
         expected_live = preamble + "".join(expected_items)
 
-        # Equality over the FULL text, with one named exception: the planner
-        # separates the regenerated index from the last kept section with an
-        # extra blank line, so the live document's trailing newline RUN grows
-        # by one per run. That is additive whitespace, never lost content, and
-        # it is pinned rather than tolerated - the second assertion says the
-        # difference can be newlines and nothing else. Filed as ROADMAP OPS-81.
-        assert live_kept.rstrip("\n") == expected_live.rstrip("\n")
-        assert set(live_kept[len(live_kept.rstrip("\n")) :]) <= {"\n"}
-        assert len(live_kept) - len(expected_live) <= 1
+        # Equality over the FULL text, with no exception and no tolerance.
+        # This assertion used to allow the live document's trailing newline
+        # RUN to be one longer than the source's, because the planner appended
+        # a blank line before the regenerated index whether or not one was
+        # already there. ROADMAP OPS-81 fixed that in the planner - the
+        # separator is now only ever topped up to one blank line, never added
+        # to a junction that already has one - so the tolerance is gone and
+        # the whitespace is compared like every other character.
+        assert live_kept == expected_live
 
     def test_the_ledger_pair_reproduces_the_original_byte_for_byte(
         self, tmp_path: Path
@@ -339,13 +349,14 @@ class TestApplyOnCopiesOfTheRealDocuments:
         assert _read(root / "docs/LEDGER.md")[:cut] == before[:cut]
 
     def test_applying_twice_moves_nothing_new(self, tmp_path: Path) -> None:
-        """A second run must be a no-op in content, not merely non-destructive.
+        """A second run must be a strict fixed point in every document.
 
-        Three of the four documents come back byte-identical. ``ROADMAP.md``
-        does not, and the difference is pinned exactly rather than waved at:
-        the planner inserts a blank line between the last kept section and the
-        regenerated index, so the newline RUN at that one junction grows by one
-        per run and nothing else changes. Filed as ROADMAP ``OPS-81``.
+        All four documents come back byte-identical. ``ROADMAP.md`` used to be
+        the exception: the planner appended a blank line between the last kept
+        section and the regenerated index unconditionally, so the newline RUN
+        at that one junction grew by one character per run, forever. ROADMAP
+        ``OPS-81`` fixed that in the planner, so this test no longer excuses
+        any document and compares whole files.
         """
         root = _repo_copy(tmp_path)
         apply_doc_split.apply_split(root, keep_entries=doc_archive.DEFAULT_LEDGER_KEEP)
@@ -353,16 +364,54 @@ class TestApplyOnCopiesOfTheRealDocuments:
         apply_doc_split.apply_split(root, keep_entries=doc_archive.DEFAULT_LEDGER_KEEP)
         twice = {p: _read(root / p) for p in apply_doc_split.WRITTEN_PATHS}
 
+        assert "ROADMAP.md" in apply_doc_split.WRITTEN_PATHS, (
+            "the document this test exists for must be one of the written paths"
+        )
         for path in apply_doc_split.WRITTEN_PATHS:
-            if path == "ROADMAP.md":
-                continue
             assert twice[path] == once[path], f"a second run changed {path}"
 
-        head_once, _, tail_once = once["ROADMAP.md"].partition(_INDEX_PREFIX)
-        head_twice, _, tail_twice = twice["ROADMAP.md"].partition(_INDEX_PREFIX)
-        assert tail_twice == tail_once, "the regenerated index differed between runs"
+    def test_the_fixed_point_is_red_when_the_extra_newline_comes_back(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The mutation watch ROADMAP ``OPS-81`` criterion 4 asks for.
+
+        A fixed-point assertion that would pass with the defect back in place
+        is decoration. So re-introduce exactly the old behaviour - a separator
+        that is always one newline, whatever the junction already carries -
+        and prove the second apply changes ``ROADMAP.md`` again.
+
+        The anchor is asserted before anything is believed: the real separator
+        must return ``""`` for a junction that already ends in a blank line,
+        and the mutation must return something different for that same input.
+        Without those two checks a monkeypatch that missed its target would
+        look exactly like a fix that held.
+        """
+        junction = "prose\n\n"
+        assert doc_archive._index_separator(junction) == "", (
+            "anchor: the fix is what makes a settled junction need nothing added"
+        )
+
+        def always_one_newline(live_text: str) -> str:
+            return "\n"
+
+        assert always_one_newline(junction) != doc_archive._index_separator(junction), (
+            "anchor: the mutation must actually differ from the code it replaces"
+        )
+        monkeypatch.setattr(doc_archive, "_index_separator", always_one_newline)
+
+        root = _repo_copy(tmp_path)
+        apply_doc_split.apply_split(root, keep_entries=doc_archive.DEFAULT_LEDGER_KEEP)
+        once = _read(root / "ROADMAP.md")
+        apply_doc_split.apply_split(root, keep_entries=doc_archive.DEFAULT_LEDGER_KEEP)
+        twice = _read(root / "ROADMAP.md")
+
+        assert twice != once, "the mutation did not reach the planner"
+        head_once, _, _ = once.partition(_INDEX_PREFIX)
+        head_twice, _, _ = twice.partition(_INDEX_PREFIX)
         assert head_twice.rstrip("\n") == head_once.rstrip("\n")
-        assert len(head_twice) - len(head_once) == 1
+        assert len(head_twice) - len(head_once) == 1, (
+            "the defect being watched is exactly one added newline per run"
+        )
 
     def test_a_lossy_plan_writes_nothing_at_all(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

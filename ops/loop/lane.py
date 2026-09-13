@@ -334,17 +334,26 @@ class LaneStatus:
         BUSY one and what to do about an UNUSABLE one, which are different
         actions.
 
-        THREE BRANCHES, NOT TWO, and the words are deliberately unalike. HELD,
-        BUSY and UNUSABLE have to be distinguishable by a reader skimming a
-        cycle's output, not merely by a caller reading two booleans, because
-        the only place the third state is ever seen is this line. A shared
-        phrase between BUSY and UNUSABLE would be the silent-fallback defect
-        with better manners: the operator would read familiar words and act on
-        the wrong one of two conditions, one of which clears by itself and one
-        of which never does.
+        FOUR BRANCHES, NOT THREE, and the words are deliberately unalike.
+        HELD, BUSY, UNUSABLE and OPTED OUT have to be distinguishable by a
+        reader skimming a cycle's output, not merely by a caller reading two
+        booleans, because the only place the last two are ever seen is this
+        line. A shared phrase between BUSY and either of them would be the
+        silent-fallback defect with better manners: the operator would read
+        familiar words and act on the wrong condition, and only one of the four
+        clears by itself.
+
+        THE FOURTH ARRIVED LATE AND THAT IS THE LESSON, ``OPS-77``. The opt-out
+        branch was added to :func:`session_lane` and this method still built
+        BUSY from ``held`` and ``usable`` alone, so the reason field said OPTED
+        OUT while the line a human actually reads said BUSY. A status line
+        derived from two booleans cannot represent a third refusal, and the
+        wrong half is the half that gets printed.
         """
         if not self.usable:
             took = "UNUSABLE - bucket cannot be operated, running ungoverned"
+        elif not self.held and lane_slot.OPT_OUT_STATUS in self.reason:
+            took = lane_slot.OPT_OUT_STATUS
         elif self.held and self.slot is not None:
             floor = "own reserved floor" if self.reserved else "surplus"
             took = f"HELD {self.slot} ({floor})"
@@ -364,6 +373,26 @@ def _busy_reason(bucket: Path, order: tuple[str, ...], scheme: str) -> str:
         f"{tried} in {_display_bucket(bucket)}; reserved scheme is {scheme}. "
         "This is not an error and nothing was written. Another project on this "
         "machine is using the concurrency budget."
+    )
+
+
+def _opt_out_reason(scheme: str) -> str:
+    """The words an OPTED OUT answer carries. Never the words BUSY carries.
+
+    ``OPS-77``. A zero surplus width is a configuration choice, and a choice
+    that never clears by retrying must not wear BUSY - BUSY is the one condition
+    a caller is expected to shrug off. It must not wear UNUSABLE either: the
+    bucket is fine and nobody asked to contend for it.
+
+    No bucket path appears here. The exception raised one layer down puts an
+    absolute path in its message and this branch deliberately does not pass that
+    through, for the reason ADR-004 gives about an identifier leaving the
+    machine in a hand-off.
+    """
+    return (
+        f"{lane_slot.OPT_OUT_STATUS}. Nothing was written and no slot was "
+        f"reserved; the reserved scheme would have been {scheme}. This does not "
+        "clear by retrying - set a non-zero surplus width to rejoin."
     )
 
 
@@ -510,6 +539,7 @@ def session_lane(
     # including when the body raises.
     with contextlib.ExitStack() as stack:
         unusable: Exception | None = None
+        opted_out = False
         held: lane_slot.Held | None = None
         try:
             held = stack.enter_context(
@@ -527,8 +557,29 @@ def session_lane(
             # Caught, named and reported. NOT converted into a busy answer, and
             # NOT re-raised - see the docstring for both halves of that.
             unusable = error
+        except lane_slot.LaneContentionOptedOut:
+            # OPS-77. Deliberately a separate clause rather than a wider except:
+            # LaneContentionOptedOut is not kin to BucketUnusable in either
+            # direction, on purpose, so that neither branch can ever answer for
+            # the other. Catching it here is what stops a configuration choice
+            # taking an unattended loop down.
+            opted_out = True
 
-        if unusable is not None:
+        if opted_out:
+            yield LaneStatus(
+                held=False,
+                slot=None,
+                reserved=False,
+                bucket=bucket,
+                scheme=scheme,
+                order=tuple(order),
+                key=key,
+                run_id=resolved_run_id,
+                cycle=resolved_cycle,
+                reason=_opt_out_reason(scheme),
+                usable=True,
+            )
+        elif unusable is not None:
             cause = unusable.__cause__
             # The class name only. The message carries an absolute path.
             detail = type(cause).__name__ if cause is not None else "an OS error"

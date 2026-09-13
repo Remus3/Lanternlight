@@ -26,6 +26,12 @@ rests on and its round-trip property is exact: ``preamble +
 "".join(section.text ...) == text``. Offsets are returned alongside so a caller
 can re-derive that property against the source without trusting this module.
 
+The contract is about a section's own text, and the roadmap plan also emits one
+thing nobody wrote: the newline run separating the last surviving section from
+the generated ``## Archive index``. That separator is normalised rather than
+conserved, and :func:`_index_separator` keeps the two acts apart by having no
+power to remove a character. ROADMAP ``OPS-81`` is why it exists.
+
 HOW A ROADMAP HEADING IS CLASSIFIED, AND WHY IT IS NOT A SUBSTRING SEARCH. The
 obvious rule - "the heading contains CLOSED or REFUTED" - is wrong on the real
 file in both directions, and the counterexamples are already there:
@@ -406,6 +412,48 @@ def _roadmap_index_section(archived: list[Section], archive_path: str) -> str:
     return "\n".join(lines)
 
 
+#: Newlines the live roadmap must carry between the last surviving section and
+#: the generated ``## Archive index`` heading - two, which renders as exactly
+#: one blank line.
+INDEX_SEPARATOR_NEWLINES = 2
+
+
+def _index_separator(live_text: str) -> str:
+    """Return the newlines to ADD before the generated ``## Archive index``.
+
+    Args:
+        live_text: The live roadmap so far - the preamble and every surviving
+            section, verbatim, with nothing appended yet.
+
+    Returns:
+        Zero or more newlines. Never anything else, and never a removal.
+
+    ROADMAP ``OPS-81``. The planner used to append a newline here
+    unconditionally, on the reasoning that the index needs a blank line above
+    it. That is true on a first split and wrong on every later one:
+    :func:`split_sections` gives a section every character up to the next
+    heading, so after the first run the last surviving section's own text
+    ALREADY ends with the blank line the previous run put there. Each apply
+    therefore added one more newline at that one junction and no apply ever
+    took one away, so the document grew by one character per split with no
+    bound and the split was not a fixed point.
+
+    THE DISTINCTION THIS FUNCTION EXISTS TO MAKE VISIBLE, because ``OPS-81``
+    criterion 2 turns on it: normalising a separator the planner GENERATES is
+    not the same act as trimming a section that somebody WROTE. This function
+    is given no power to do the second one. It returns a string to append and
+    cannot delete a character, so the conservation contract at the end of
+    :func:`plan_roadmap_split` - every surviving section's text present in the
+    new document verbatim - holds by construction rather than by care. That is
+    also why a junction that is already LONGER than one blank line is left
+    exactly as it is instead of being shortened: those characters belong to a
+    section's text, shortening the run would be trimming a section, and
+    leaving them is still a fixed point, which is the property being bought.
+    """
+    already = len(live_text) - len(live_text.rstrip("\n"))
+    return "\n" * max(0, INDEX_SEPARATOR_NEWLINES - already)
+
+
 def plan_roadmap_split(
     text: str, archive_path: str, existing_archive: str = ""
 ) -> RoadmapPlan:
@@ -413,8 +461,10 @@ def plan_roadmap_split(
 
     The new roadmap is the preamble, then every surviving section verbatim, then
     a generated ``## Archive index`` section carrying one stub per archived
-    item. The archive is a short header naming its source, then the archived
-    sections verbatim in their original order.
+    item, separated from the last section by :func:`_index_separator` - the one
+    part of the live document this function normalises rather than conserves.
+    The archive is a short header naming its source, then the archived sections
+    verbatim in their original order.
 
     Args:
         text: The current roadmap document.
@@ -475,9 +525,9 @@ def plan_roadmap_split(
 
     roadmap_text = preamble + "".join(s.text for s in kept)
     if all_archived:
-        if not roadmap_text.endswith("\n"):
-            roadmap_text += "\n"
-        roadmap_text += "\n" + _roadmap_index_section(all_archived, archive_path)
+        roadmap_text += _index_separator(roadmap_text) + _roadmap_index_section(
+            all_archived, archive_path
+        )
 
     for section in all_archived:
         if section.text not in archive_text:

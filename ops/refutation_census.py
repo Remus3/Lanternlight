@@ -225,14 +225,47 @@ def window_entries(
     )
 
 
-def missing_anchors(rows: list[Event], text: str) -> list[Event]:
-    """Rows whose quote no longer appears verbatim in ``text``.
+def entry_sections(text: str) -> dict[str, str]:
+    """Each ledger entry's own body, keyed by entry id.
+
+    Used to scope an anchor to the entry its row NAMES. A repository-wide
+    substring test passes when a quote resolves against some OTHER entry, which
+    is a false pass in the one direction that matters: the row would still be
+    describing an event that no longer exists where it says it does.
+    """
+    marks = [(m.group(1), m.start()) for m in _HEADING.finditer(text)]
+    sections: dict[str, str] = {}
+    for index, (entry_id, start) in enumerate(marks):
+        end = marks[index + 1][1] if index + 1 < len(marks) else len(text)
+        sections[entry_id] = text[start:end]
+    return sections
+
+
+def missing_anchors(
+    rows: list[Event], text: str, scoped: bool = True
+) -> list[Event]:
+    """Rows whose quote no longer appears verbatim where the row says it does.
 
     Matching is exact and case-sensitive. A matcher that folded case or
     collapsed whitespace would keep resolving after the sentence it pins had
     been reworded, which is the failure this check exists to make loud.
+
+    SCOPED BY DEFAULT, and the default was tightened after a refutation pass
+    pointed out the original was repo-global: a quote is required to appear
+    inside the section of the entry the row names, not merely somewhere in the
+    ledger. Measured when the tightening landed - all 135 rows still resolve,
+    and one quote is present in a second entry as well, so the loose check was
+    passing that row for two reasons and would have kept passing it for the
+    wrong one alone. Pass ``scoped=False`` for the old, weaker question.
     """
-    return [row for row in rows if row.quote not in text]
+    if not scoped:
+        return [row for row in rows if row.quote not in text]
+    sections = entry_sections(text)
+    return [
+        row
+        for row in rows
+        if row.quote not in sections.get(row.entry_id, "")
+    ]
 
 
 def out_of_window(rows: list[Event], entries: tuple[str, ...]) -> list[Event]:

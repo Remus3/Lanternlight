@@ -720,6 +720,13 @@ KNOWN_NON_HOSTS = frozenset(
         # clean. See `LL-0170`, `LL-0173` and `OPS-50`. Adding a real host to
         # this denylist to make a red run green is how a guard stops working.
         "core.filemode",
+        # OPS-86. The truncation of the module the false-red probe PLANTS
+        # outside this tree and tears down again, whose basename ends in
+        # `control.py`. It is not a tracked filename, so the git ls-files
+        # subtraction cannot excuse it, and ROADMAP.md quotes the pytest node
+        # id verbatim because the whole finding is about the SHAPE of that
+        # id. Looked at, per the note above: not a host.
+        "control.py",
         # The NINTH trip, on the ledger entries a concurrent lane wrote while
         # `OPS-44` was being landed. Both are case 3 of the regenerating note
         # above and were read in context before being added.
