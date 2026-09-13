@@ -4732,6 +4732,62 @@ asks why a cycle's run count is lower than it expected.
    classifier can and cannot see after the change - the current docstring's
    honesty about its blind spots is the thing being extended, not replaced.
 
+## OPS-89. The single-instance loop guard is INERT when the loop is driven from a conversation rather than from one long-lived process - OPEN
+
+Filed 2026-09-13, measured at the start of a `/loop` run rather than reasoned
+about. It is filed ahead of the item that cycle was going to take because it
+decides whether unattended running is guarded at all.
+
+**What was measured, in this order.**
+
+1. In `ops/loop/guard.py`, `is_locked()` answered False on a clean tree, so a lock was taken:
+   `acquire()` succeeded and recorded pid 15800.
+2. From the NEXT process, `is_locked()` answered **False** and
+   `read_owner()` answered 15800. The owner was already dead, because the
+   process that took the lock was the one-shot interpreter that took it.
+3. `release()` then returned without removing the file. Reading the
+   source rather than guessing: release refuses when the recorded owner is not
+   the calling pid, and `is_locked` is `pid_is_alive(owner)`.
+
+**Why this is structural and not a bug in the guard.** Both halves are pid
+scoped, which is exactly right for the execution model the guard was written
+for - `docs/HEADLESS.md` section 4 describes one long-lived process holding a
+context manager for the whole session, and in that model a dead owner really
+does mean a crashed loop and reclaiming is the correct crash-recovery path.
+
+The `/loop` command as actually run here has a different model. The session is
+a conversation and every command is a fresh interpreter, so there is no process
+whose liveness means "the loop is running". The consequence is not that the
+lock is wrong, it is that **nothing is held**: a second loop started against
+this tree would acquire cleanly, and the first would never know.
+
+**The honest reading of past cycles.** A cycle that printed a lock line and
+proceeded was not guarded, whatever its output said. This is the shape this
+repository keeps finding - a governor that reports one thing and does another -
+and it is the reason `check_watcher` cannot tell a deliberate disarm from a
+death. Presence of a lock file is not the fact; a live holder is.
+
+### Acceptance
+
+1. The measurement above is reproduced, not quoted: a test acquires in one
+   process, then asserts from a SECOND process that the lock reads as not held.
+   Watch it fail against a fix, not only pass against today.
+2. A decision is taken and written down, with the cost of each option, between:
+   a holder process whose liveness is the session's (something must then end it
+   without `Stop-Process`, which `CLAUDE.md` forbids); a lock keyed on
+   something other than pid liveness, such as a session id plus a heartbeat with
+   a stated staleness window; or an explicit statement that a conversational
+   loop is UNGUARDED, printed every cycle in those words, which is the
+   `UNUSABLE` precedent from the lane slot.
+3. Whatever is adopted must not weaken crash recovery. A real crashed loop is
+   still reclaimed, and the staleness window that allows it is a STATED NUMBER.
+4. The same question is asked of the lane slot and the session watcher, because
+   both are reached from the same `with` block and neither has been measured in
+   this execution model. Do not infer either from this one - that is the trap
+   `OPS-70` and `OPS-71` exist to record.
+5. Nothing in the fix removes a lock this project did not write, beyond what
+   `ADR-008`'s stale rules already permit.
+
 ## Archive index
 
 Every closed and refuted item is still here, one hop away, in
