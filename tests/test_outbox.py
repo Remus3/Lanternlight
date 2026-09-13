@@ -721,3 +721,51 @@ class TestAnOutgoingNoteCarryingAnOperatorIdentifierIsRefused:
             inboxes=inboxes,
         )
         assert record.delivered == ("RC",)
+
+
+class TestTheFleetIsANameRatherThanARetypedList:
+    """OPS-87. Every broadcast retyped its own recipient list, so an omission
+    was a typo nobody could see.
+
+    Measured 2026-09-13: the consensus request of 2026-09-12 went to CS, RC and
+    RSC and not to LW, and LW learned it had been left out only by reading a
+    later note that named the participant set. LW then asked, in one plain
+    sentence, to be on the standing address list for a fleet broadcast. There
+    was no standing address list to be on - every caller passed its own tuple.
+
+    The fix is that "everyone" has a name and the name is DERIVED from the
+    inbox map, so a fifth sibling added to that map is in the fleet the moment
+    it is added rather than the next time somebody remembers.
+    """
+
+    def test_the_fleet_is_every_sibling_we_know_an_inbox_for(self) -> None:
+        assert set(outbox.fleet()) == set(outbox.SIBLING_INBOXES)
+
+    def test_the_fleet_is_ordered_so_two_calls_address_the_same_list(
+        self,
+    ) -> None:
+        assert outbox.fleet() == outbox.fleet()
+        assert list(outbox.fleet()) == sorted(outbox.fleet())
+
+    def test_a_sibling_added_to_the_map_is_in_the_fleet_without_a_second_edit(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The anti-vacuity arm. A hardcoded tuple passes both tests above and
+        fails this one, which is the whole reason the function exists."""
+        monkeypatch.setitem(outbox.SIBLING_INBOXES, "ZZ", r"C:\Nowhere\inbox")
+        assert "ZZ" in outbox.fleet()
+
+    def test_the_fleet_is_accepted_by_the_deliverer(self, tmp_path: Path) -> None:
+        """A name nothing accepts is documentation, not an address list."""
+        inboxes = {code: tmp_path / code for code in outbox.SIBLING_INBOXES}
+        for path in inboxes.values():
+            path.mkdir(parents=True)
+        delivery = outbox.deliver(
+            name="2026-09-13-fleet-probe.md",
+            text="A note to everyone." + chr(10),
+            recipients=outbox.fleet(),
+            root=tmp_path,
+            inboxes={k: str(v) for k, v in inboxes.items()},
+        )
+        assert set(delivery.delivered) == set(outbox.SIBLING_INBOXES)
+        assert delivery.failed == ()

@@ -438,6 +438,26 @@ LANES: tuple[Lane, ...] = (
             "docs/refutation_census.tsv",
             "docs/REFUTATION_CENSUS.md",
             "tests/test_preflight.py",
+            # OPS-87 criterion 4, the live suite-run recorder. ops/** already
+            # covers ops/suite_recorder.py; the test module matches no glob
+            # here. It measures what this project's own cycles cost in
+            # full-suite runs and wall clock, which is continuity material of
+            # the same kind as the census beside it.
+            "tests/test_suite_recorder.py",
+            # OPS-87 criterion 4, the HISTORICAL half beside the recorder
+            # above. ops/** already covers ops/cycle_cost.py; the test
+            # module matches no glob here. It derives what a cycle has cost
+            # so far from git history and the ledger, which is the same
+            # continuity material as the census and the recorder.
+            "tests/test_cycle_cost.py",
+            # The write-up criterion 4 is graded on. It joins the historical
+            # half to the recorded one and states in full prose what the two
+            # numbers are, which of them are exact and which are floors, and
+            # why they are not a ratio. Continuity material for a cold session
+            # and for the sibling projects that were told to read it, so it
+            # belongs with the census and the recorder rather than in docs/
+            # unowned.
+            "docs/CYCLE_COST.md",
             "tools/preflight_backtest.py",
             "tests/test_preflight_backtest.py",
             "docs/PREFLIGHT_BACKTEST.md",

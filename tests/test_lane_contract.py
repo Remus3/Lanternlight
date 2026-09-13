@@ -219,3 +219,50 @@ class TestOnDiskMatchesTheRoster:
     def test_contracts_are_written_with_lf_endings(self, tmp_path):
         for path in lane_contract.write_all(tmp_path):
             assert b"\r\n" not in path.read_bytes(), path
+
+
+class TestThePreFlightIsWiredIntoTheContract:
+    """OPS-87 still-open item 3, decided on evidence rather than on taste.
+
+    The pre-flight was a command nobody ran automatically. Where to wire it was
+    left open deliberately, because wiring it before the cycle-cost numbers
+    existed would have been optimising without the measurement.
+
+    THE EVIDENCE DECIDED AGAINST A GIT HOOK. Back-test experiment one in
+    docs/PREFLIGHT_BACKTEST.md ran the pre-flight at the parent of every commit
+    that filed a gate-reachable finding and caught 0 of 17, because this class
+    of defect is repaired inside a session and never reaches a commit at all. A
+    commit or push hook therefore guards a window the defect does not live in.
+    Experiment two rebuilt the mid-session state and caught 9 of 9, so the
+    window where it pays is between a slice claiming done and the merger
+    noticing - and the artifact a slice reads at that moment is its contract.
+
+    Measured on 2026-09-13, serially on a quiet machine: the pre-flight is
+    17.93 to 24.44 seconds against a full suite of 301.8 to 481.6, and this
+    session recorded four full suite runs in one open cycle.
+    """
+
+    def _contracts(self) -> list[str]:
+        return [lane_contract.render(lane) for lane in lanes.LANES]
+
+    def test_every_lane_contract_names_the_pre_flight_command(self) -> None:
+        for text in self._contracts():
+            assert "python -m ops.preflight" in text
+
+    def test_it_is_named_before_the_merge_gate_a_merger_runs(self) -> None:
+        """Order is the claim. The pre-flight is for the slice, before it says
+        done; the merge gate is for the merger, after. A contract that put them
+        the other way round would describe a workflow nobody can follow."""
+        for text in self._contracts():
+            assert text.index("python -m ops.preflight") < text.index(
+                "from ops import merge_gate"
+            )
+
+    def test_the_contract_says_the_pre_flight_does_not_replace_an_adversary(
+        self,
+    ) -> None:
+        """OPS-87's trap clause. An item about doing less verification is the
+        easiest place to do less verification, and a contract is exactly where
+        that misreading would take hold."""
+        for text in self._contracts():
+            assert "does not replace" in text

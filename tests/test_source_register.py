@@ -1046,6 +1046,10 @@ KNOWN_NON_HOSTS = frozenset(
         "non-MistfallHunter.log",
         "nope.md",
         "notes.md",
+        # Truncation of `python -m ops.cycle_cost`, cited by
+        # docs/CYCLE_COST.md - the extractor stops at the underscore, the
+        # same way it does for `ops.merge` and `ops.refutation`.
+        "ops.cycle",
         "ops.lane",
         "ops.lanes.REPO",
         "ops.lanes.owner",

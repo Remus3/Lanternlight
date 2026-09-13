@@ -217,3 +217,92 @@ class TestItActuallyRuns:
         )
         assert completed.returncode == 0, completed.stderr
         assert "tests/test_lanes.py" in completed.stdout
+
+
+class TestTheLintStepIsInTheSet:
+    """OPS-87, and it is here because of a MEASURED event rather than a hunch.
+
+    On 2026-09-13 three slices landed under criterion 4. Every one of them ran
+    `python -m ops.preflight` before claiming done and every one got PRE-FLIGHT
+    PASS. `ruff check .` then failed with seven findings on lines that work
+    added, and the repository's own pre-commit gate refused the commit. The
+    defect was found by the ADVERSARIAL pass, which is the single most
+    expensive instrument this project owns, and it was a mechanical,
+    sub-second, program-answerable defect - exactly the class OPS-87 criterion
+    2 exists to move off the expensive path.
+
+    Note what this does NOT claim. The commit gate would have caught it, so
+    nothing was going to ship. That is the same finding as back-test experiment
+    one in docs/PREFLIGHT_BACKTEST.md: this class does not reach a commit. The
+    cost being removed is not a shipped bug, it is an adversarial round spent
+    on a lint error.
+    """
+
+    def test_the_lint_check_runs_and_reports_its_own_returncode(self) -> None:
+        outcome = preflight.check_lint(REPO_ROOT)
+        assert outcome.ran is True, "ruff is installed here; see ruff_command()"
+        assert outcome.returncode == 0, outcome.summary
+
+    def test_the_summary_is_read_off_ruff_rather_than_typed(self) -> None:
+        """A literal would pass the test above and say nothing about the tree."""
+        outcome = preflight.check_lint(REPO_ROOT)
+        assert "All checks passed" in outcome.summary
+
+    def test_a_failing_lint_makes_the_verdict_REFUSE(self) -> None:
+        """The load-bearing arm. A lint failure that still prints PASS is worse
+        than no lint check at all, because a slice would stop looking."""
+        green = preflight.Result(returncode=0, summary="1 passed", seconds=1.0, modules=1)
+        dirty = preflight.LintResult(
+            returncode=1, summary="Found 7 errors.", seconds=0.4, ran=True
+        )
+        report = preflight.format_report(green, (), lint=dirty)
+        assert "PRE-FLIGHT REFUSE" in report
+        assert "Found 7 errors." in report
+
+    def test_a_missing_ruff_is_reported_as_NOT_RUN_and_never_as_a_pass(
+        self,
+    ) -> None:
+        """A check that did not run has not passed - this repo's own rule."""
+        green = preflight.Result(returncode=0, summary="1 passed", seconds=1.0, modules=1)
+        absent = preflight.LintResult(
+            returncode=0, summary="ruff is not installed", seconds=0.0, ran=False
+        )
+        report = preflight.format_report(green, (), lint=absent)
+        assert "lint DID NOT RUN" in report
+
+    def test_main_fails_when_lint_fails_even_though_pytest_passed(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The exit code is what a ritual or a contract would act on."""
+        monkeypatch.setattr(
+            preflight,
+            "run",
+            lambda *a, **k: preflight.Result(
+                returncode=0, summary="1 passed", seconds=1.0, modules=1
+            ),
+        )
+        monkeypatch.setattr(
+            preflight,
+            "check_lint",
+            lambda *a, **k: preflight.LintResult(
+                returncode=1, summary="Found 7 errors.", seconds=0.4, ran=True
+            ),
+        )
+        monkeypatch.setattr(preflight, "untracked_new_files", lambda *a, **k: ())
+        assert preflight.main([]) == 1
+
+    def test_a_dirty_tree_reports_findings_rather_than_a_clean_bill(
+        self, tmp_path: Path
+    ) -> None:
+        """The anti-vacuity arm for the summary. A literal "All checks passed"
+        satisfies every other test in this class and would report a clean bill
+        on a tree that is not clean, which is the failure mode this whole
+        pre-flight was built to stop being possible."""
+        (tmp_path / "ruff.toml").write_text("", encoding="utf-8")
+        (tmp_path / "dirty.py").write_text(
+            "import os\n", encoding="utf-8"
+        )
+        outcome = preflight.check_lint(tmp_path)
+        assert outcome.ran is True
+        assert outcome.returncode != 0, outcome.summary
+        assert outcome.summary.startswith("Found "), outcome.summary

@@ -56,7 +56,14 @@ if str(REPO_ROOT) not in sys.path:
 # returns a list of strings.
 from _toolguard import pytest_terminal_summary  # noqa: E402,F401
 
-from ops import docguards  # noqa: E402
+# ROADMAP OPS-87 criterion 4 brought in the second import. The live suite-run
+# recorder's hook bodies below are THIN and fail-soft on purpose - a recorder
+# must never turn a green suite red, nor a red one green - and every decision
+# it makes lives in ops/suite_recorder.py, which RAISES. The swallow is here
+# and only here, because a bare `except Exception` eats AssertionError too and
+# would make any spy driven through these hooks vacuous. See the module
+# docstring of tests/test_suite_recorder.py.
+from ops import docguards, suite_recorder  # noqa: E402
 
 
 class DocOpenRecorder:
@@ -104,6 +111,8 @@ class DocOpenRecorder:
 
 _RECORDER = DocOpenRecorder(REPO_ROOT)
 
+_SUITE_RECORDER = suite_recorder.SessionRecorder(root=REPO_ROOT)
+
 
 def _audit(event: str, args: tuple) -> None:
     # Cheapest possible reject first. Every audited event in the process comes
@@ -124,6 +133,49 @@ if not _RECORDER.installed:
     _RECORDER.installed = True
 
 
+def pytest_configure(config) -> None:
+    # Earliest hook that runs in every invocation. The environment mark has to
+    # be set HERE and not at finish, because its whole job is to be inherited
+    # by a pytest this run spawns as a subprocess.
+    try:
+        _SUITE_RECORDER.begin()
+    except Exception:
+        return
+
+
+def pytest_runtest_logreport(report) -> None:
+    try:
+        _SUITE_RECORDER.note_report(
+            report.when, report.outcome, hasattr(report, "wasxfail")
+        )
+    except Exception:
+        return
+
+
+def pytest_deselected(items) -> None:
+    try:
+        _SUITE_RECORDER.note_deselected(len(items))
+    except Exception:
+        return
+
+
+def _record_suite_run(session, exitstatus) -> None:
+    """Fail-soft wrapper around a recorder that raises. Nothing else.
+
+    Kept as a named function rather than inlined so a test can drive it with a
+    raising spy and prove the swallow is real without that same swallow eating
+    the test's own assertions.
+    """
+    try:
+        _SUITE_RECORDER.finish(
+            invocation=suite_recorder.invocation_from_config(session.config),
+            collected=int(getattr(session, "testscollected", 0) or 0),
+            exitstatus=int(exitstatus),
+        )
+    except Exception:
+        return
+
+
 @pytest.fixture
 def docguard_recorder() -> DocOpenRecorder:
     """The live recorder, so a test can prove it is not decoration."""
@@ -141,6 +193,10 @@ def pytest_runtest_logstart(nodeid, location) -> None:
     head = nodeid.split("::")[0]
     _RECORDER.current = head
     _RECORDER.modules_run.add(head)
+    try:
+        _SUITE_RECORDER.note_module(head)
+    except Exception:
+        return
 
 
 def _run_was_complete(config) -> bool:
@@ -160,6 +216,7 @@ def _run_was_complete(config) -> bool:
 
 
 def pytest_sessionfinish(session, exitstatus) -> None:
+    _record_suite_run(session, exitstatus)
     try:
         if not _run_was_complete(session.config):
             return

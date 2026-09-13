@@ -42,6 +42,28 @@ for the right reason, then implement. Prove your guards are not vacuous:
 break the thing a guard protects, watch the test go red, restore, and
 report what you saw.
 
+## Before you claim done - run the pre-flight
+
+```bash
+python -m ops.preflight
+```
+
+Measured 2026-09-13 on a quiet machine: 17.93 to 24.44 seconds, against a
+full suite that ran between 301.8 and 481.6 seconds in the same session. It
+runs the registration and document guards, and the linter, at the one
+moment you can still act on them cheaply, and it warns about new files that
+are not yet in the git index - which is what makes three of this
+repository's guards report a false red. Stage new files with `git add -N`
+before you trust its answer.
+
+It **does not replace** an adversarial pass and it does not reach a real
+defect in your deliverable. 60 of the 135 events in
+`docs/REFUTATION_CENSUS.md` are real defects and no program in the
+pre-flight would have found one of them. What it removes is an adversarial
+round spent on a lint error or a missing inventory row - which is a
+measured event here rather than a hypothetical, and it is why the linter is
+in the set.
+
 ## Verify before you claim anything
 
 Never relay a sub-agent's claim. Measure the per-file test counts BEFORE

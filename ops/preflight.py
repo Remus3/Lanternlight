@@ -45,6 +45,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ops import refutation_census
+from tools import precommit_gate
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -129,6 +130,77 @@ class Result:
     summary: str
     seconds: float
     modules: int
+
+
+@dataclass(frozen=True)
+class LintResult:
+    """One lint run. ``ran`` is the honest third state.
+
+    ``ruff`` is not a declared dependency of this project, so a fresh clone can
+    legitimately not have it. That case is NOT a pass: this repository's rule
+    is that a check which did not run has not passed, so ``ran`` is carried
+    separately from ``returncode`` and the report says so in the verdict line
+    rather than in a footnote a reader can skip.
+    """
+
+    returncode: int
+    summary: str
+    seconds: float
+    ran: bool
+
+
+def _lint_summary(text: str) -> str:
+    """The last line of ruff output that states a result.
+
+    Read off the process, never typed. A typed summary passes every obvious
+    test and tells a reader nothing about the tree in front of them, which is
+    the defect the coverage caveat above was rewritten to avoid.
+    """
+    for line in reversed([ln.strip() for ln in text.splitlines() if ln.strip()]):
+        if "checks passed" in line or line.startswith("Found "):
+            return line
+    return text.strip().splitlines()[-1] if text.strip() else ""
+
+
+def check_lint(root: Path = REPO_ROOT) -> LintResult:
+    """Run the linter over the whole tree and report what it said.
+
+    WHY THIS IS IN THE PRE-FLIGHT, measured rather than assumed. On 2026-09-13
+    three slices each ran this pre-flight, each got PRE-FLIGHT PASS, and
+    ``ruff check .`` then failed with seven findings on lines that work had
+    just added. The pre-commit gate would have refused the commit, so nothing
+    was going to ship - the same shape as back-test experiment one in
+    ``docs/PREFLIGHT_BACKTEST.md``, where no class (b) finding reached a commit
+    either. What it cost was an ADVERSARIAL round spent on a lint error, and
+    the adversary is the most expensive instrument this project owns.
+
+    The invocation is borrowed from ``tools/precommit_gate.ruff_command`` so
+    there is one truth about how ruff is called here, including the fresh-clone
+    case and the ``OPS-55`` config-path trap.
+    """
+    command = precommit_gate.ruff_command()
+    if command is None:
+        return LintResult(
+            returncode=0,
+            summary="ruff is not installed, so nothing was linted",
+            seconds=0.0,
+            ran=False,
+        )
+    start = time.monotonic()
+    completed = subprocess.run(
+        [*command, "check", "."],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    seconds = time.monotonic() - start
+    return LintResult(
+        returncode=completed.returncode,
+        summary=_lint_summary(completed.stdout) or _lint_summary(completed.stderr),
+        seconds=seconds,
+        ran=True,
+    )
 
 
 def check_modules_present(
@@ -247,13 +319,20 @@ def coverage_caveat() -> list[str]:
     ]
 
 
-def format_report(result: Result, untracked: tuple[str, ...]) -> str:
+def format_report(
+    result: Result, untracked: tuple[str, ...], lint: LintResult | None = None
+) -> str:
     """The report a slice reads before it claims done."""
-    verdict = "PRE-FLIGHT PASS" if result.returncode == 0 else "PRE-FLIGHT REFUSE"
+    failed = result.returncode != 0 or (lint is not None and lint.returncode != 0)
+    verdict = "PRE-FLIGHT REFUSE" if failed else "PRE-FLIGHT PASS"
+    if lint is not None and not lint.ran:
+        verdict += " - lint DID NOT RUN"
     lines = [
         f"{verdict} - {result.modules} guard modules in {result.seconds:.2f}s",
         f"  pytest: {result.summary}",
     ]
+    if lint is not None:
+        lines.append(f"  lint:   {lint.summary} ({lint.seconds:.2f}s)")
     if untracked:
         lines.append("")
         lines.append(
@@ -276,8 +355,9 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{module}\n    {WHY[module]}")
         return 0
     result = run()
-    print(format_report(result, untracked_new_files()))
-    return 0 if result.returncode == 0 else 1
+    lint = check_lint()
+    print(format_report(result, untracked_new_files(), lint=lint))
+    return 0 if result.returncode == 0 and lint.returncode == 0 else 1
 
 
 if __name__ == "__main__":

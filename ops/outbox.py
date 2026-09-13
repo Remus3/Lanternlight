@@ -162,6 +162,29 @@ SIBLING_INBOXES: dict[str, str] = {
 }
 
 
+def fleet() -> tuple[str, ...]:
+    """Every sibling we know an inbox for, in a stable order.
+
+    ``OPS-87``. A broadcast used to be a retyped tuple at each call site, and
+    on 2026-09-12 the consensus request went to three of the four trees because
+    one list was typed short. The omission was invisible from here: the
+    delivery manifest faithfully recorded that the note reached everyone it was
+    ADDRESSED to, which is a different question from whether it was addressed
+    to everyone.
+
+    Derived from :data:`SIBLING_INBOXES` rather than written out beside it, so
+    a fifth sibling is in the fleet the moment its inbox is recorded. A
+    hardcoded tuple here would satisfy every obvious test and reintroduce the
+    exact defect, which is why ``tests/test_outbox.py`` adds a code to the map
+    and asks for it back.
+
+    This is an ADDRESS LIST and nothing more. Knowing where the fleet lives is
+    not permission to read a sibling tree, and a note we send is still mail
+    rather than authority in the tree that receives it.
+    """
+    return tuple(sorted(SIBLING_INBOXES))
+
+
 @dataclass
 class Delivery:
     """One note, once, with what reached whom.

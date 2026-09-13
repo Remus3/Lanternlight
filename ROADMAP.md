@@ -3337,7 +3337,7 @@ correct, only that none of them shadows something already tracked. And the answe
 is a fact about THIS machine's git configuration at THIS commit, not a property of
 the repository.
 
-## OPS-87. The refute-then-repair-then-repair-the-repair cycle costs more than the work - OPERATOR-RULED, and laned for cross-project consensus - OPEN
+## OPS-87. The refute-then-repair-then-repair-the-repair cycle costs more than the work - OPERATOR-RULED, and laned for cross-project consensus - CLOSED 2026-09-13
 
 **Filed 2026-09-12 on an operator instruction given in chat, in these words:**
 "operator wants to do a headless lane focused on optimizing the
@@ -3459,10 +3459,19 @@ by `python -m ops.refutation_census`, and the write-ups are
   the registration was missing was never committed at all. Rebuilding that state
   from the fix commit's own additions caught **9 of 9**, on guards that existed
   in each of those trees.
-- **Criterion 4 PARTIALLY MET.** The full suite is 396.2 seconds, measured
-  twice this session; the pre-flight is 17.8 to 24.6. What is NOT measured is how many
-  suite runs a whole refute-fix-refute cycle takes, because nothing records that
-  today. See the open item below.
+- **Criterion 4 MET 2026-09-13.** Both halves are now measured rather than
+  estimated, and the write-up is [`docs/CYCLE_COST.md`](docs/CYCLE_COST.md).
+  Do not re-derive a number from this text: run `python -m ops.cycle_cost`.
+  The BEFORE half is reconstructed at run time from git and the ledger - 14
+  cycles over 25 distinct commits in a 40-commit window, with a suite-run
+  figure that is a FLOOR because no historical run was recorded and the floor
+  is built from full-suite results quoted in prose. The AFTER half is recorded
+  exactly, because `ops/suite_recorder.py` and the hooks in `tests/conftest.py`
+  now write one atomic record per pytest session into `ops/runtime/suite_runs/`
+  with a full-versus-filtered classification. **The two halves are NOT a
+  ratio** - a floor divided by an exact count manufactures a number neither
+  half supports, and this project withdrew one such figure from four sibling
+  trees already (`LL-0244`).
 - **Criterion 5 MET.** `docs/ORCHESTRATION_TIERS.md`, linked from `CLAUDE.md`
   where a cold session reads it at dispatch rather than afterwards.
 - **Criterion 6 MET, against FOUR trees.** The consensus request was delivered
@@ -3483,17 +3492,34 @@ by `python -m ops.refutation_census`, and the write-ups are
 
 ### Still open under this item
 
-1. **Criterion 4's cycle cost is not measured.** Wall clock and suite-run count
-   for one complete refute-fix-refute cycle, before and after. The acceptance
-   test is a recorded pair of numbers from real cycles, not an estimate.
+1. **Criterion 4's cycle cost is not measured - CLOSED 2026-09-13.** See the
+   criterion 4 paragraph above and `docs/CYCLE_COST.md`. What remains true and
+   is worth a cold session's attention: the AFTER count is exact only for runs
+   the recorder saw, the record directory is SHARED between concurrent sessions
+   in this tree, and a record therefore proves that SOME session ran a suite
+   rather than that THIS cycle did. The report prints that caveat from the rows
+   it counted rather than from a literal.
 2. **The 93 events no program reaches are untouched**, which is the honest
    position rather than a gap to be papered over. Any proposal that claims to
    reach them must show a back-test, and a proposal that reduces adversarial
    review of class (a) is refused on its face - see the trap clause above.
-3. **The pre-flight is not wired into anything.** It is a command a slice runs.
-   Whether it belongs in the dispatch ritual, in a lane contract, or in a hook
-   is a decision this item has not taken, and wiring it before the cycle-cost
-   numbers exist would be optimising without the measurement.
+3. **The pre-flight is not wired into anything - DECIDED 2026-09-13, into the
+   LANE CONTRACT, and a git hook was REFUSED.** The refusal is on our own
+   back-test rather than on taste: the pre-flight at the parent of each commit
+   that filed a gate-reachable finding caught 0 of 17, because the registration
+   and its fix land in ONE commit and the broken tree is never committed, while
+   the reconstructed mid-session state caught 9 of 9. The window is inside a
+   session, between a slice claiming done and the merger noticing, and the
+   artifact a slice reads at that moment is its contract. `ops/lane_contract.py`
+   now renders it into every lane's contract and `tests/test_lane_contract.py`
+   fails if the command is removed, moved after the merge-gate instruction, or
+   stripped of the sentence saying it does not replace an adversarial pass.
+   **The linter joined the pre-flight set on a measured event**, not a hunch:
+   three slices this session each got `PRE-FLIGHT PASS` and `ruff check .` then
+   failed on seven lines they had just added, so a sub-second mechanical defect
+   was found by the adversarial pass. Nothing was going to ship - the commit
+   gate refuses it - but an adversarial round was spent on a lint error, which
+   is the substitution criterion 2 exists to prevent. Lint costs 0.07s.
 
 ## OPS-77. A surplus width of ZERO is a permanent silent "busy", one level up from the hole `OPS-73` just closed - CLOSED 2026-09-12
 

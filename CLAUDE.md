@@ -206,12 +206,24 @@ The merger holds the plan, so the merger is the context that must not fill.
   it, in [`docs/ORCHESTRATION_TIERS.md`](docs/ORCHESTRATION_TIERS.md) - read it
   at dispatch, not afterwards. Its one hard rule: the grader never gets a weaker
   model than the producer.
-- **Run `python -m ops.preflight` before dispatching an adversarial pass.** 19
-  seconds against a 396-second suite, both measured 2026-09-12. It runs the
-  mechanical guards - inventory rows, lane ownership, contracts, the source
-  register - at a moment when the slice can still act on them, and it warns
-  about new files that are not yet staged, which is what makes three of this
-  repository's guards report a false red. It does NOT reduce adversarial review:
+- **Run `python -m ops.preflight` before dispatching an adversarial pass**, and
+  a slice runs it before claiming done - every lane contract now says so, which
+  is `OPS-87` still-open item 3 decided on evidence. Measured serially on a
+  quiet machine 2026-09-13: 17.93, 21.45 and 24.44 seconds, against full suite
+  runs of 301.8 to 481.6 seconds recorded in the same session. Under three
+  concurrent lanes one reading was 28.99 seconds, so treat the range as a
+  QUIET-MACHINE range rather than a promise. It runs the mechanical guards -
+  inventory rows, lane ownership, contracts, the source register - AND the
+  linter, at a moment when the slice can still act on them, and it warns about
+  new files that are not yet staged, which is what makes three of this
+  repository's guards report a false red.
+  **A git hook was REFUSED for this, on our own back-test.** Running the
+  pre-flight at the parent of each commit that filed a finding caught 0 of 17,
+  because the registration and the fix land in ONE commit and the broken tree
+  is never committed; the reconstructed mid-session state caught 9 of 9. The
+  window is inside a session, so the contract is the right place and a commit
+  hook is the wrong one. See [`docs/CYCLE_COST.md`](docs/CYCLE_COST.md).
+  It does NOT reduce adversarial review:
   60 of the 135 events in [`docs/REFUTATION_CENSUS.md`](docs/REFUTATION_CENSUS.md)
   were real defects and no program here would have found one of them.
 
@@ -624,6 +636,19 @@ path is to re-implement from observed behaviour.
   the empty output reads as a clean negative. Use `-i` or `-F`, never both. This
   is the repo's "an empty grep is a claim about your pattern" rule with the
   pattern exonerated - here it is a claim about the TOOL.
+- **A mutation harness can leave a POISONED `.pyc` that outlives its own
+  restore.** Measured 2026-09-13 on `ops/lane_contract.py`. A mutant that MOVES
+  a block leaves the file the same SIZE; pytest imported it and wrote that
+  module's cached bytecode under `__pycache__/` from the mutant; the restore
+  then wrote the original back inside the same clock second. A timestamp-based `.pyc`
+  is validated on (mtime, size) alone, both of which now matched, so Python kept
+  serving the MUTANT while the source on disk was correct. The restore really
+  did succeed - a digest comparison of the source said so - and the next two
+  runs still tested the mutant, which read as two unexplained failures in a file
+  nobody had touched. This is last session's "verdict printed before the restore
+  succeeded" one level down: here the restore succeeded and the verdict was
+  still about code that is not on disk. After any harness that rewrites a module
+  in place, delete `__pycache__` before believing the next run.
 - **A line-oriented grep is a claim about the file's line breaks.** Prose in
   this repo is hard-wrapped near 80 columns, so a quoted sentence routinely
   spans two lines and a single-line pattern misses it. Two withdrawal checks in
