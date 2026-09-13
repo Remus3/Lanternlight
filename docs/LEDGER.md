@@ -84,6 +84,19 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0250 - 2026-09-13 - Loop STOPPED on its own stop condition - no eligible roadmap item is left, and the four that remain are each gated on something this session cannot supply
+
+**Evidence:**
+- Four cycles ran: OPS-87 closed (criterion 4 measured on both halves, the pre-flight wired into the lane contract, the linter added to its set), OPS-88 filed and closed, OPS-89 filed and closed, OPS-90 filed and closed. Five commits, all pushed, tree clean at 07c7ed6.
+- NO ELIGIBLE ITEM REMAINS, which is the loop's own stop condition and is why nothing further was attempted. OPS-71 needs a session in DEFAULT permission mode and this one ran in bypass, where a did-it-prompt test cannot distinguish a MATCHED rule from a BYPASSED one and returns a false green either way - that is the item's own stated difficulty, not a new discovery. OPS-36 is operator-ruled ADOPT but its criterion 1 needs RC to say which charter version is current, and asking RC is soliciting RC. OPS-48 is HELD by operator ruling. OPS-68 is operator-held standby.
+- WHOLE-SESSION COST, recorded by the instrument built this session rather than estimated: 8 full non-nested suite runs, at least 2165.9 seconds (36m 5s) of summed suite wall clock, over a 3h 28m span, with 192 records excluded as filtered or nested. These are the numbers OPS-87 criterion 4 existed to make available, taken on the session that made them available.
+- THE INSTRUMENT DISTINGUISHED UNMEASURED FROM MEASURED ZERO at the wrap without being asked to, which is this project's own doctrine working: asked for the cycle starting at the tip commit, it reported zero full runs as 'NO EVIDENCE rather than a measured zero' instead of printing a zero a reader would have believed.
+- Two notes went out to all four trees through the derived fleet address list, its first two real uses: one carrying criterion 4's numbers, the restored pre-flight range and the poisoned-bytecode trap, and one telling them our lane slots are command-scoped and that the workaround they would reach for first is already dead.
+
+THE CAPTURE WATCHER WAS NOT ARMED, deliberately. The loop ritual arms it and the operator disarmed that lane on 2026-09-11 without lifting it; the operator overrides the ritual. Nothing is archiving the log, the saves or the market cache, which is the accepted cost recorded at the previous wrap.
+The single-instance lock was taken WITH a heartbeat for the rest of this session once OPS-89 landed, which is the first real use of that fix - a second process confirmed the lock reads as held on the heartbeat although the recorded pid was already dead.
+A QUESTION FOR THE OPERATOR, recorded rather than asked, because the loop does not block: OPS-71 cannot be settled by any session running in bypass permissions mode. It needs one started in default mode with its working directory in a clone at another path. Everything else about the item is ready.
+
 ### LL-0249 - 2026-09-13 - OPS-90 CLOSED without touching the cross-project protocol - the lane slot stays command-scoped and the status line now says so, because the workaround that would have held it across a session was measured dead
 
 **Evidence:**
