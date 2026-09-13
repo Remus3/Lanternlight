@@ -84,6 +84,20 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0252 - 2026-09-13 - The wrap's refutation pass REFUTED this session's own OPS-89 close - the heartbeat guarded the QUESTION and not the REFUSAL, and a counter-control proved the tests could not tell the two apart
+
+**Evidence:**
+- REFUTED WITH TWO REAL INTERPRETERS, not by reading code: session two acquired cleanly against a heartbeat ZERO SECONDS OLD. is_locked was made heartbeat-aware and acquire was left untouched, and a second loop never calls is_locked - it calls acquire and runs if nothing is raised. OPS-89 had been graded five criteria MET on a mechanism that reported HELD and refused nothing.
+- THE COUNTER-CONTROL IS THE PART WORTH KEEPING. The refuter made acquire heartbeat-aware and tests/test_loop_guard.py stayed GREEN at 84 passed, proving nothing pinned that path in EITHER direction. A suite that cannot distinguish two opposite implementations was never testing the thing at all. That single check was worth more than the four mutants beside it, and it is the technique to reach for whenever a fix looks too easy.
+- REPAIRED RED FIRST. The new arm was watched failing with DID NOT RAISE LockBusy before any code changed. Four tests: a second acquire against a fresh heartbeat raises; a stale heartbeat is reclaimed ON THE ACQUIRE PATH; a lock with no heartbeat is still reclaimed immediately, so the long-lived-process model is unchanged; and a LIVE pid still refuses whatever the heartbeat says, because the heartbeat may only ever ADD a reason to refuse and never remove one.
+- MUTATION including the exact reversion that was previously invisible: acquire-ignores-heartbeat-again KILLED, acquire-refuses-on-ANY-heartbeat-even-stale KILLED, heartbeat-arm-moved-ahead-of-the-live-pid-arm KILLED. Anchors asserted, restores digest-verified, bytecode cache cleared on both sides of every mutation.
+- END TO END, the same probe that refuted it: session1 ACQUIRED pid 27168, session2 REFUSED - LockBusy.
+- A SECOND FINDING FROM THE SAME PASS, an over-claim in ops/preflight.py. With the linter absent the verdict read 'PRE-FLIGHT PASS - lint DID NOT RUN' and the test named ..._never_as_a_pass asserted only that the words appeared. Anything grepping for PASS, a human skimming included, got a pass out of a check that never happened. The verdict is now 'PRE-FLIGHT INCOMPLETE - lint DID NOT RUN' and the test asserts PRE-FLIGHT PASS is absent.
+- A THIRD FINDING, in the hand-off itself: it named a stale head, said seven commits where git says nine, and said four items remain. The last was derived from a grep matching only OPS- headings. Re-derived properly, ROADMAP.md carries 36 level-2 headings of which the non-OPS measurement items - 1, 4b, 5, 6, 7, 10, 11, 12 - are also open and are gated on the game client with the operator playing, which is a different gate from the four OPS items and had to be said separately.
+
+THE LESSON IS NOT THAT THE FIX WAS WRONG, it is that this session graded its own work and the grade held until an independent pass broke it. Three of the four items closed today survived that pass unchanged; the one that did not was the one whose own ledger entry claimed the most.
+Every number in this entry was observed at the wrap and none is carried forward.
+
 ### LL-0251 - 2026-09-13 - The OPS-89 heartbeat is NOT symmetrical - is_locked was made heartbeat-aware and release was not, found at the wrap by trying it
 
 **Evidence:**

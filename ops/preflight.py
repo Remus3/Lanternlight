@@ -325,8 +325,13 @@ def format_report(
     """The report a slice reads before it claims done."""
     failed = result.returncode != 0 or (lint is not None and lint.returncode != 0)
     verdict = "PRE-FLIGHT REFUSE" if failed else "PRE-FLIGHT PASS"
-    if lint is not None and not lint.ran:
-        verdict += " - lint DID NOT RUN"
+    if not failed and lint is not None and not lint.ran:
+        # Never the word PASS when a named check did not run. The first version
+        # of this appended the caveat to "PRE-FLIGHT PASS", so the line read
+        # "PRE-FLIGHT PASS - lint DID NOT RUN" and anything grepping for PASS -
+        # a human skimming included - got a pass out of a check that never
+        # happened. A check that did not run has not passed.
+        verdict = "PRE-FLIGHT INCOMPLETE - lint DID NOT RUN"
     lines = [
         f"{verdict} - {result.modules} guard modules in {result.seconds:.2f}s",
         f"  pytest: {result.summary}",

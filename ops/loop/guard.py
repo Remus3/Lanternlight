@@ -609,6 +609,21 @@ def acquire(
         raise LockBusy(target, None)
     if pid_is_alive(existing):
         raise LockBusy(target, existing)
+    # OPS-89, and this arm was MISSING from the first version of that fix.
+    # `is_locked` is the QUESTION and this is the REFUSAL: a second loop never
+    # calls `is_locked`, it calls this and runs if nothing is raised. Making
+    # only the read path heartbeat-aware produced a guard that reported HELD
+    # and refused nothing, which the wrap's refutation pass demonstrated with
+    # two real interpreters - the second acquired cleanly against a heartbeat
+    # zero seconds old.
+    #
+    # It may only ever ADD a reason to refuse. The live-pid arm above still
+    # runs first and is untouched, and a lock carrying no heartbeat reaches the
+    # reclaim below exactly as it always did, so the long-lived-process model
+    # keeps its immediate recovery.
+    stamp = _heartbeat_of(target)
+    if stamp is not None and _heartbeat_is_fresh(stamp):
+        raise LockBusy(target, existing)
 
     # Stale. Reclaim it - this removes a lock FILE, never a process.
     with suppress(FileNotFoundError):

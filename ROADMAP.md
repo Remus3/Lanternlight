@@ -4761,7 +4761,7 @@ Do not re-derive these from this text. The classifier is `classify` in
   the restore verified by digest, and the bytecode cache cleared afterwards
   because a same-second restore is what poisoned it during `OPS-87`.
 
-## OPS-89. The single-instance loop guard is INERT when the loop is driven from a conversation rather than from one long-lived process - CLOSED 2026-09-13
+## OPS-89. The single-instance loop guard is INERT when the loop is driven from a conversation rather than from one long-lived process - RE-CLOSED 2026-09-13 after the first close was REFUTED
 
 Filed 2026-09-13, measured at the start of a `/loop` run rather than reasoned
 about. It is filed ahead of the item that cycle was going to take because it
@@ -4846,6 +4846,33 @@ death. Presence of a lock file is not the fact; a live holder is.
   survive, and is deliberately disarmed by operator instruction.
 - **Criterion 5 MET.** Nothing in the fix removes any lock. The change touches
   only this repository's own lock file under `ops/runtime/`.
+### REFUTED at the wrap, and re-closed - the first fix guarded the QUESTION and not the REFUSAL
+
+The wrap's refutation pass broke this item's own headline claim with two real
+interpreters: session two acquired cleanly against a heartbeat ZERO SECONDS
+OLD. The first fix made `is_locked` heartbeat-aware and left `acquire`
+untouched - and a second loop never calls `is_locked`. It calls `acquire` and
+runs if nothing is raised. The item was graded five criteria MET on a mechanism
+that reported HELD and refused nothing.
+
+It is the repository's recurring shape - a governor whose report and whose
+behaviour disagree - reached one level in from where it was last found, and the
+previous fix is what made it look solved.
+
+**A COUNTER-CONTROL is what proved the tests were the problem, not just the
+code.** The refuter made `acquire` heartbeat-aware and the module stayed GREEN,
+so nothing pinned that path in EITHER direction. A suite that cannot tell two
+opposite implementations apart was never testing the thing at all. That check
+is worth more than the four mutants it accompanied, and it is the technique to
+reach for when a fix looks too easy.
+
+**Repaired**, red first: a second acquire against a fresh heartbeat now raises,
+a stale heartbeat is still reclaimed ON THE ACQUIRE PATH, a lock with no
+heartbeat is still reclaimed immediately, and a LIVE pid still refuses whatever
+the heartbeat says - the heartbeat may only ever ADD a reason to refuse. Three
+mutants including the exact reversion, all KILLED, and the end-to-end
+two-interpreter probe now prints `session2 REFUSED - LockBusy`.
+
 - **Mutation, and two survivors that were real.** Five mutants first: three
   killed, and TWO SURVIVED - shrinking the window from 900 seconds to 1, and
   reading an unparseable stamp as fresh. Both survived because every test

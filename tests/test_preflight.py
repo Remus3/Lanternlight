@@ -269,6 +269,13 @@ class TestTheLintStepIsInTheSet:
         )
         report = preflight.format_report(green, (), lint=absent)
         assert "lint DID NOT RUN" in report
+        # The over-claim the wrap's refutation pass found: this test asserted
+        # only that the words appeared, while the verdict still read
+        # "PRE-FLIGHT PASS - lint DID NOT RUN". A caller grepping for PASS, or
+        # a human skimming, reads that as a pass - and this repository's rule
+        # is that a check which did not run has not passed.
+        assert "PRE-FLIGHT PASS" not in report
+        assert "PRE-FLIGHT INCOMPLETE" in report
 
     def test_main_fails_when_lint_fails_even_though_pytest_passed(
         self, monkeypatch: pytest.MonkeyPatch

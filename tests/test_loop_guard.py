@@ -1226,3 +1226,76 @@ class TestAHeartbeatLockSurvivesAProcessThatDidNotStayAlive:
         self, lock_path: Path
     ) -> None:
         assert guard_mod.beat(lock_path) is False
+
+
+class TestAcquireHonoursAHeartbeatToo:
+    """OPS-89 REFUTED at the wrap, and this is the defect it was filed on.
+
+    The first fix made `is_locked` heartbeat-aware and left `acquire`
+    untouched. But `is_locked` is the QUESTION and `acquire` is the REFUSAL -
+    a second loop does not consult `is_locked`, it calls `acquire` and runs if
+    it does not raise. Measured by the wrap's refutation pass with two real
+    interpreters: session two acquired cleanly against a heartbeat zero
+    seconds old.
+
+    So the item was graded five criteria MET on a mechanism that reported held
+    and refused nothing. That is this repository's recurring failure shape - a
+    governor whose report and whose behaviour disagree - reached one level in
+    from where it was last found, and the previous fix is exactly what made it
+    look solved.
+
+    A counter-control mattered here and is worth recording: making `acquire`
+    heartbeat-aware left the whole module GREEN, so nothing pinned the acquire
+    path in EITHER direction. A test suite that cannot tell the two
+    implementations apart was never testing this at all.
+    """
+
+    def test_a_second_acquire_is_refused_while_a_heartbeat_is_fresh(
+        self, lock_path: Path
+    ) -> None:
+        """The load-bearing arm. This is the whole purpose of the guard."""
+        guard_mod.acquire(lock_path, heartbeat=True)
+        payload = json.loads(lock_path.read_text(encoding="utf-8"))
+        payload["pid"] = 999999999
+        lock_path.write_text(json.dumps(payload), encoding="utf-8")
+        assert guard_mod.pid_is_alive(999999999) is False
+        with pytest.raises(LockBusy):
+            guard_mod.acquire(lock_path, pid=4242)
+
+    def test_a_stale_heartbeat_is_reclaimed_by_acquire(
+        self, lock_path: Path
+    ) -> None:
+        """Crash recovery, on the acquire path rather than the read path."""
+        guard_mod.acquire(lock_path, heartbeat=True)
+        payload = json.loads(lock_path.read_text(encoding="utf-8"))
+        payload["pid"] = 999999999
+        payload["heartbeat"] = "2026-09-13T00:00:00+00:00"
+        lock_path.write_text(json.dumps(payload), encoding="utf-8")
+        guard_mod.acquire(lock_path, pid=4242)
+        assert guard_mod.read_owner(lock_path) == 4242
+
+    def test_a_lock_with_no_heartbeat_is_still_reclaimed_immediately(
+        self, lock_path: Path
+    ) -> None:
+        """The no-regression arm for the long-lived-process model, on the
+        acquire path. A dead owner with no heartbeat is stale as it always
+        was, and nothing about that model may change."""
+        guard_mod.acquire(lock_path)
+        payload = json.loads(lock_path.read_text(encoding="utf-8"))
+        assert "heartbeat" not in payload
+        payload["pid"] = 999999999
+        lock_path.write_text(json.dumps(payload), encoding="utf-8")
+        guard_mod.acquire(lock_path, pid=4242)
+        assert guard_mod.read_owner(lock_path) == 4242
+
+    def test_a_live_pid_still_refuses_whatever_the_heartbeat_says(
+        self, lock_path: Path
+    ) -> None:
+        """The heartbeat may only ever ADD a reason to refuse, never remove
+        one. A live owner is busy even if its heartbeat expired."""
+        guard_mod.acquire(lock_path, heartbeat=True)
+        payload = json.loads(lock_path.read_text(encoding="utf-8"))
+        payload["heartbeat"] = "2026-09-13T00:00:00+00:00"
+        lock_path.write_text(json.dumps(payload), encoding="utf-8")
+        with pytest.raises(LockBusy):
+            guard_mod.acquire(lock_path, pid=4242)
