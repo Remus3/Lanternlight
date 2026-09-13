@@ -577,3 +577,86 @@ class TestLiveWiring:
         import conftest
 
         assert "tests/test_suite_recorder.py" in conftest._SUITE_RECORDER.modules_run
+
+
+class TestATargetSuppliedThroughConfigurationIsNamed:
+    """OPS-88. The verdict was already right; the REASON LIST was not.
+
+    Found by the adversarial pass over OPS-87, which tried to make a cheap run
+    be counted as a full one. A target supplied through the environment rather
+    than on the command line is invisible to pytest's invocation arguments, so
+    no target reason was produced. The run was still classified FILTERED,
+    because the module-coverage backstop noticed that most modules on disk had
+    not run - so the number was never wrong. What was wrong is that a reader of
+    the record sees only "N of M test modules on disk did not run" and cannot
+    tell that somebody narrowed the run deliberately.
+
+    Measured on a throwaway repository 2026-09-13, which is what makes the fix
+    possible at all: with a target in the environment, pytest's
+    ``invocation_params.args`` held only ``('-s',)`` while ``config.args`` held
+    ``('tests/test_a.py',)``. On a full run ``config.args`` is exactly the
+    configured ``testpaths``, which is why the comparison below is against
+    testpaths and not against emptiness - a naive read of ``config.args`` would
+    mark EVERY full run as narrowed.
+    """
+
+    def test_a_configured_target_that_is_not_testpaths_is_a_reason(self) -> None:
+        result = suite_recorder.classify(
+            _invocation(config_args=("tests/test_a.py",), testpaths=("tests",)),
+            modules_run={"tests/test_a.py"},
+            modules_on_disk={"tests/test_a.py"},
+        )
+        assert result.full is False
+        assert any("configuration" in r for r in result.reasons), result.reasons
+
+    def test_the_reason_names_the_target_so_a_reader_can_act_on_it(self) -> None:
+        result = suite_recorder.classify(
+            _invocation(config_args=("tests/test_a.py",), testpaths=("tests",)),
+            modules_run={"tests/test_a.py"},
+            modules_on_disk={"tests/test_a.py"},
+        )
+        assert any("tests/test_a.py" in r for r in result.reasons), result.reasons
+
+    def test_a_full_run_whose_config_args_are_exactly_testpaths_stays_FULL(
+        self,
+    ) -> None:
+        """The arm that makes this safe. Criterion 3 of the item: no run that
+        is genuinely full may be reclassified by this change."""
+        result = suite_recorder.classify(
+            _invocation(config_args=("tests",), testpaths=("tests",)),
+            modules_run={"tests/test_a.py"},
+            modules_on_disk={"tests/test_a.py"},
+        )
+        assert result.full is True, result.reasons
+
+    def test_an_unknown_testpaths_does_not_invent_a_reason(self) -> None:
+        """When testpaths cannot be read we know nothing, and a guard that
+        guesses here would redden every full run in a tree that configures
+        collection differently. Absent is not empty."""
+        result = suite_recorder.classify(
+            _invocation(config_args=("tests",), testpaths=()),
+            modules_run={"tests/test_a.py"},
+            modules_on_disk={"tests/test_a.py"},
+        )
+        assert result.full is True, result.reasons
+
+    def test_the_module_coverage_backstop_still_catches_it_alone(self) -> None:
+        """Criterion 2. The two signals must be INDEPENDENTLY sufficient. If
+        the new reason were the only thing holding the verdict up, a tree that
+        reads config.args differently would silently start counting narrowed
+        runs as full ones - worse than today."""
+        result = suite_recorder.classify(
+            _invocation(config_args=(), testpaths=()),
+            modules_run={"tests/test_a.py"},
+            modules_on_disk={"tests/test_a.py", "tests/test_b.py"},
+        )
+        assert result.full is False
+        assert any("did not run" in r for r in result.reasons), result.reasons
+
+    def test_both_signals_fire_together_and_are_both_reported(self) -> None:
+        result = suite_recorder.classify(
+            _invocation(config_args=("tests/test_a.py",), testpaths=("tests",)),
+            modules_run={"tests/test_a.py"},
+            modules_on_disk={"tests/test_a.py", "tests/test_b.py"},
+        )
+        assert len(result.reasons) >= 2, result.reasons

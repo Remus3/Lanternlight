@@ -4687,7 +4687,7 @@ findings from the same instrument on the same day were writes that a `finally`
 undid, and in both cases the instrument was working perfectly and the reading was
 the error.
 
-## OPS-88. The suite-run recorder cannot see a target supplied through the environment, and its reason list says so by omission rather than by name - OPEN
+## OPS-88. The suite-run recorder cannot see a target supplied through the environment, and its reason list says so by omission rather than by name - CLOSED 2026-09-13
 
 Filed 2026-09-13 by the adversarial pass over `OPS-87`, which found it while
 trying to make the recorder call a cheap run a full one. It is a MINOR finding
@@ -4731,6 +4731,35 @@ asks why a cycle's run count is lower than it expected.
 4. The module docstring, which is the record schema's contract, states what the
    classifier can and cannot see after the change - the current docstring's
    honesty about its blind spots is the thing being extended, not replaced.
+
+### Status 2026-09-13 - CLOSED, all four criteria met
+
+Do not re-derive these from this text. The classifier is `classify` in
+`ops/suite_recorder.py` and its tests are `tests/test_suite_recorder.py`.
+
+- **Criterion 1 MET.** The mechanism was measured before the fix was designed,
+  on a throwaway repository: with a target supplied through the environment,
+  pytest's invocation arguments held only `('-s',)` while the configured
+  argument list held the path of one test module. End to end in this tree
+  afterwards, a real run narrowed through the environment records BOTH reasons,
+  the new one naming the target.
+- **Criterion 2 MET, and this was the part that could have gone wrong.** The
+  two signals are INDEPENDENTLY sufficient and each is pinned by its own test.
+  The comparison is against the configured test paths rather than against
+  emptiness, because a full run's configured argument list IS exactly those
+  paths - a naive read would have marked every full run narrowed. An unknown
+  test-paths setting says nothing at all rather than guessing.
+- **Criterion 3 MET.** Of every record on disk, the number of FULL runs
+  carrying the new reason is zero, and the full suite run taken after the
+  change records 3392 collected, 3391 passed, 229.9 seconds, `full` true, with
+  an empty reason list.
+- **Criterion 4 MET.** The module docstring carries the extended statement of
+  what the classifier can and cannot see.
+- **Mutation:** four mutants - the test-paths exclusion dropped, an unknown
+  test-paths treated as known, the module-coverage backstop removed, and the
+  new reason removed - all KILLED, each anchor asserted to match exactly once,
+  the restore verified by digest, and the bytecode cache cleared afterwards
+  because a same-second restore is what poisoned it during `OPS-87`.
 
 ## OPS-89. The single-instance loop guard is INERT when the loop is driven from a conversation rather than from one long-lived process - OPEN
 

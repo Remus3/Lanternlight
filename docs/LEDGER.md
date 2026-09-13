@@ -84,6 +84,18 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0247 - 2026-09-13 - OPS-88 CLOSED - a target supplied through the environment is now NAMED in the record's reason list, and both signals that catch it are proved independently sufficient
+
+**Evidence:**
+- THE MECHANISM WAS MEASURED BEFORE THE FIX WAS DESIGNED, on a throwaway repository rather than inferred from documentation. With a target supplied through the environment, pytest's invocation arguments held only ('-s',) while the configured argument list held the path of one test module. That is the only place such a target is visible.
+- THE TRAP THE MEASUREMENT REVEALED, and it would have reddened every full run in this repository: on a FULL run the configured argument list is exactly the configured test paths. Comparing it against emptiness rather than against those paths would have marked every full suite run as narrowed. The comparison is therefore against test paths, and an unknown test-paths setting produces no reason at all rather than a guess - absent is not empty.
+- BOTH SIGNALS ARE INDEPENDENTLY SUFFICIENT and each has its own test, which was the item's criterion 2. A real run narrowed through the environment now records two reasons: the new one naming the target, and the pre-existing module-coverage reason '68 of 69 test modules on disk did not run'. Neither is load-bearing alone, so a tree that reads the configured arguments differently still cannot have a narrowed run counted as full.
+- CRITERION 3, that no genuinely full run is reclassified, checked against the records on disk rather than asserted: zero FULL runs carry the new reason. The full suite run taken after the change records 3392 collected, 3391 passed, 229.9 seconds, full true, with an empty reason list.
+- MUTATION: four mutants - the test-paths exclusion dropped, an unknown test-paths treated as known, the module-coverage backstop removed, and the new reason removed - all KILLED. Each anchor was asserted to match exactly once before any survivor could be believed, the restore was verified by digest, and the bytecode cache was cleared afterwards because a same-second restore is exactly what poisoned it during OPS-87.
+- SUITE observed this run and not carried forward: 3391 passed, 1 skipped in 230.08s. Pre-flight PASS, 14 guard modules in 12.78s, lint clean in 0.06s.
+
+This was a MINOR finding and the verdict was never wrong - only the reason list was incomplete. It was worth closing rather than leaving because the reasons are what a future session reads when it asks why a cycle's full-run count is lower than expected, which is the number OPS-87 just made load-bearing.
+
 ### LL-0246 - 2026-09-13 - OPS-87 CLOSED - criterion 4 measured on both halves, the pre-flight is wired into the LANE CONTRACT and a git hook was refused on our own back-test, and the linter joined the set because an adversarial round was spent on a lint error
 
 **Evidence:**

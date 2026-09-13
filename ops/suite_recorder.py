@@ -222,6 +222,16 @@ class Invocation:
     failed_first: bool = False
     stepwise: bool = False
     deselected: int = 0
+    #: ``config.args`` - the positional targets AFTER pytest has folded in
+    #: ``addopts`` and ``PYTEST_ADDOPTS``. ``OPS-88``. This is the only place a
+    #: target supplied through the environment is visible: measured
+    #: 2026-09-13, an environment-supplied target left ``invocation_params.args``
+    #: holding just ``('-s',)`` while this held ``('tests/test_a.py',)``.
+    config_args: tuple[str, ...] = ()
+    #: ``testpaths`` from the ini file. Carried because ``config_args`` on a
+    #: FULL run is exactly testpaths, so emptiness is the wrong comparison and
+    #: would mark every full run narrowed. Empty means UNKNOWN, not none.
+    testpaths: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -252,7 +262,32 @@ def invocation_from_config(config) -> Invocation:
         # through :meth:`SessionRecorder.note_deselected`. ``option.deselect``
         # holds the PATHS the caller named, not the number of tests removed.
         deselected=0,
+        config_args=tuple(getattr(config, "args", ()) or ()),
+        testpaths=_ini_testpaths(config),
     )
+
+
+def _ini_testpaths(config) -> tuple[str, ...]:
+    """``testpaths`` from the ini file, or ``()`` when it cannot be read.
+
+    Empty means UNKNOWN here and never "no test paths configured". A tree that
+    configures collection some other way must not have every full run reddened
+    by this module, so the comparison that uses this treats absence as "say
+    nothing" rather than as "everything is narrowed".
+    """
+    getini = getattr(config, "getini", None)
+    if getini is None:
+        return ()
+    try:
+        value = getini("testpaths")
+    except (ValueError, KeyError):
+        return ()
+    if isinstance(value, str):
+        return (value,)
+    try:
+        return tuple(str(item) for item in value)
+    except TypeError:
+        return ()
 
 
 def target_arguments(args) -> tuple[str, ...]:
@@ -314,6 +349,26 @@ def classify(
     targets = target_arguments(invocation.args)
     if targets:
         reasons.append("target arguments narrowed collection: " + " ".join(targets))
+    # OPS-88. A target can also arrive through addopts or PYTEST_ADDOPTS, where
+    # the command line never sees it. config.args is where pytest puts the
+    # result, but on a FULL run that is exactly testpaths - so the comparison
+    # is against testpaths, and an unknown testpaths says nothing at all rather
+    # than guessing. This reason is deliberately NOT the only thing standing
+    # between a narrowed run and a FULL verdict: the module-coverage check
+    # below catches the same case independently, and tests/test_suite_recorder.py
+    # pins both halves separately so neither can quietly become load-bearing
+    # alone.
+    if invocation.testpaths:
+        configured = tuple(
+            arg
+            for arg in invocation.config_args
+            if arg not in invocation.testpaths and arg not in targets
+        )
+        if configured:
+            reasons.append(
+                "targets came from configuration or the environment rather "
+                "than the command line: " + " ".join(configured)
+            )
     if not modules_on_disk:
         reasons.append("no test modules were found on disk under tests/")
     else:
