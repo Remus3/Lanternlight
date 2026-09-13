@@ -4857,7 +4857,7 @@ death. Presence of a lock file is not the fact; a live holder is.
   mutants are now killed, including a fourth added in the opposite direction
   that made the window enormous.
 
-## OPS-90. The lane slot is held only for the length of one command, so a conversational session rations with nobody - and the fix is a PROTOCOL change we may not make alone - OPEN
+## OPS-90. The lane slot is held only for the length of one command, so a conversational session rations with nobody - and the fix is a PROTOCOL change we may not make alone - CLOSED 2026-09-13
 
 Filed 2026-09-13 out of `OPS-89`, which measured the three governors
 SEPARATELY rather than inferring one from another. The lock got a heartbeat;
@@ -4903,6 +4903,34 @@ here at all. That is why this is filed rather than fixed in place.
    participant's reserved floor.
 4. If the route involves the other trees, the ask goes out through the outbox
    and what comes back is recorded as DATA rather than as agreement.
+
+### Status 2026-09-13 - CLOSED, and the protocol was not touched
+
+- **Criterion 1 MET.** `tests/test_loop_lane.py` runs two real subprocesses
+  against one bucket and asserts the SECOND is handed the same slot the first
+  took, because the first released it on exit.
+- **Criterion 2 MET, and the obvious route was ruled out by measurement rather
+  than by preference.** Leaving our lock in the bucket between commands would
+  have held the slot across a session with no payload change at all - except it
+  does not survive: the staleness rule consults the recorded pid, and a lock
+  whose pid is dead is stale to every participant's reaper, ours included. That
+  is pinned by a test so nobody re-proposes it. The field that would fix it
+  properly is a payload change, which `CLAUDE.md` says is the one thing
+  deliberately held in common, so it was not made.
+  **Adopted instead: the slot stays command-scoped and the status line states
+  that scope.** A slot taken for the length of a command is honest rationing
+  for exactly the period this project consumes the machine; what was wrong was
+  a line reading `HELD 0.lock` that a reader would fairly take to mean the
+  session holds it. The HELD branch now reads `for this command only`.
+- **Criterion 3 MET.** Nothing about reclaiming changed. No lock this project
+  did not write is touched, and no participant's reserved floor is weakened -
+  the only change is the wording of a line this project prints.
+- **Criterion 4 MET by not applying.** The route involves no other tree, so
+  there was no ask to send. The fleet was told as DATA, because they share the
+  bucket and might otherwise assume our slots are session-scoped.
+- **Mutation:** two mutants - the scope note removed, and the scope note leaked
+  onto the BUSY branch where there is no hold to scope - both KILLED, anchors
+  asserted, restore digest-verified.
 
 ## Archive index
 

@@ -356,7 +356,18 @@ class LaneStatus:
             took = lane_slot.OPT_OUT_STATUS
         elif self.held and self.slot is not None:
             floor = "own reserved floor" if self.reserved else "surplus"
-            took = f"HELD {self.slot} ({floor})"
+            # OPS-90. The SCOPE is part of the claim. This slot is released
+            # when the process that took it exits, and a loop driven from a
+            # conversation is a new process every command - so a reader who
+            # sees only "HELD 0.lock" would reasonably believe the slot is
+            # held for as long as the session lives, and it is not. Measured
+            # 2026-09-13: one process took a slot, exited, and the next
+            # process was handed the same one. The scope is stated here rather
+            # than fixed, because a lane lock is the cross-project protocol
+            # ADR-008 records and its payload shape is not ours to change
+            # alone. It rides on the HELD branch only - a refusal has no hold
+            # to scope.
+            took = f"HELD {self.slot} ({floor}, for this command only)"
         else:
             took = "BUSY - no slot free"
         return (

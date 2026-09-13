@@ -84,6 +84,19 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0249 - 2026-09-13 - OPS-90 CLOSED without touching the cross-project protocol - the lane slot stays command-scoped and the status line now says so, because the workaround that would have held it across a session was measured dead
+
+**Evidence:**
+- CRITERION 1: two real subprocesses against one bucket, and the SECOND is handed the same slot the first took, because the first released it when it exited. That is the context manager doing exactly what it promises rather than a bug in it, and the test pins the consequence: across a conversational session, which is a new process every command, this project rations with nobody between commands.
+- THE OBVIOUS WORKAROUND WAS RULED OUT BY MEASUREMENT, NOT BY PREFERENCE, and it is pinned by a test so nobody re-proposes it. Leaving our lock in the bucket between commands would have held the slot across a session with no payload change at all. It does not survive: the staleness rule consults the recorded pid, and a lock whose pid is dead is stale to every participant's reaper including ours. The protocol's pid field assumes a live process and a conversational session has none.
+- WHAT WAS THEREFORE NOT DONE. The field that would fix this properly is a payload change, and a lane slot lock lives in the shared bucket whose payload shape CLAUDE.md names as the one thing deliberately held in common. Adding a heartbeat there is not a session decision, which is the whole reason OPS-90 was split out of OPS-89 rather than fixed alongside it - the single-instance lock is ours alone and could take one.
+- ADOPTED INSTEAD: the slot stays command-scoped, which is honest rationing for exactly the period this project is consuming the machine, and the STATUS LINE states that scope. What was actually wrong was a line reading 'HELD 0.lock' that a reader would fairly take to mean the session holds it. The HELD branch now reads 'for this command only', and the note rides on that branch alone because a refusal has no hold to scope.
+- MUTATION: two mutants - the scope note removed, and the scope note leaked onto the BUSY branch - both KILLED, each anchor asserted to match exactly once, restore verified by digest, and the bytecode cache cleared afterwards.
+- SUITE observed this run and not carried forward: 3405 passed, 1 skipped in 219.75s. Pre-flight PASS, 14 guard modules in 11.32s, lint clean.
+
+Criterion 4 is met by not applying: the adopted route involves no other tree, so there was no ask to send and nothing to record as data. The fleet was told anyway, because they share the bucket and might otherwise assume this project's slots are session-scoped.
+This closes the thread OPS-89 opened by measuring the three governors separately. The lock now holds on a heartbeat, the slot is honestly command-scoped, and the session watcher remains deliberately disarmed by operator instruction of 2026-09-11.
+
 ### LL-0248 - 2026-09-13 - OPS-89 CLOSED - the single-instance lock was INERT in a conversational loop and now holds on a heartbeat, and the three governors gave three different answers rather than one
 
 **Evidence:**

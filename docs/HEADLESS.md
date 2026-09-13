@@ -195,9 +195,16 @@ record.
 
 - The **lane slot** is correct WITHIN one command and released when that
   command's process exits, so across a conversational session it rations with
-  nobody. It is not fixed here because its lock is the cross-project PROTOCOL
-  described in [ADR-008](adr/ADR-008-join-the-shared-bucket.md), and changing a
-  payload other projects read is not a session decision. Filed as `OPS-90`.
+  nobody. Its lock is the cross-project PROTOCOL described in
+  [ADR-008](adr/ADR-008-join-the-shared-bucket.md), and changing a payload other
+  projects read is not a session decision. `OPS-90` settled it WITHOUT touching
+  the wire: the obvious workaround - leave our lock behind between commands -
+  was measured and does not work, because the staleness rule consults the pid
+  and a dead pid is stale to every participant's reaper. So the slot stays
+  command-scoped, which is honest rationing for exactly the period this project
+  is consuming the machine, and the status line now says
+  `for this command only` on its HELD branch so nobody reads a slot as held for
+  the session.
 - The **session watcher** is a separate process, so it is the one governor that
   does survive a command exiting. It is deliberately DISARMED by operator
   instruction of 2026-09-11 and this document does not re-arm it.

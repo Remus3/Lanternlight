@@ -860,3 +860,104 @@ def test_no_lane_document_still_claims_we_never_remove_a_foreign_lock(
         f"{relative.as_posix()} no longer names the reaper the acquire path "
         "runs, so a reader cannot find out what is actually deleted"
     )
+
+
+class TestTheSlotIsHeldForOneCommandAndNotForTheSession:
+    """OPS-90. The slot is correct WITHIN one command and released when that
+    command's process exits, so a loop driven from a conversation rations with
+    nobody between commands - which is nearly all of its wall clock.
+
+    Measured 2026-09-13: one process took `0.lock`, exited, and the NEXT
+    process was handed `0.lock` again. That is the context manager doing
+    exactly what it promises, not a bug in it.
+
+    WHY THIS IS NOT FIXED THE WAY THE LOCK WAS. `OPS-89` gave the
+    single-instance lock a heartbeat, and that lock is ours alone - it lives
+    under ops/runtime/, nothing else reads it. A lane slot lock lives in the
+    SHARED bucket and its payload is the cross-project protocol recorded in
+    ADR-008. Measured here too: is_stale consults the pid arm, so a lock whose
+    recorded pid is dead is stale to every participant's reaper - leaving ours
+    behind between commands would not hold it, it would just be reaped. The
+    field that would fix it is a payload change, and CLAUDE.md says the payload
+    shape is the one thing deliberately held in common.
+
+    So the slot stays command-scoped, which is honest rationing for exactly the
+    period this project is actually consuming the machine, and the STATUS LINE
+    stops implying more than that.
+    """
+
+    def test_a_second_process_is_handed_the_same_slot(self, tmp_path: Path) -> None:
+        """Criterion 1, reproduced rather than quoted."""
+        script = (
+            "import sys; sys.path.insert(0, sys.argv[1]);"
+            "from ops import lane_slot;"
+            "h = lane_slot.acquire_lane(root=sys.argv[2], repo='ll',"
+            " run_id='probe', cycle=1);"
+            "print(h.name if h is not None else 'NONE')"
+        )
+        seen = []
+        for _ in range(2):
+            completed = subprocess.run(
+                [sys.executable, "-c", script, str(REPO_ROOT), str(tmp_path)],
+                capture_output=True,
+                text=True,
+            )
+            assert completed.returncode == 0, completed.stderr
+            seen.append(completed.stdout.strip())
+        assert seen[0] != "NONE"
+        assert seen[0] == seen[1], (
+            "the first process released its slot when it exited, so the second "
+            "was handed the same one - this is the OPS-90 finding"
+        )
+
+    def test_a_dead_pid_makes_a_lock_stale_so_leaving_it_would_not_hold_it(
+        self,
+    ) -> None:
+        """The measurement that ruled out the obvious workaround. If a lock
+        left behind between commands survived, the slot could be held across a
+        session with no payload change at all. It does not survive."""
+        payload = {
+            "pid": 999999999,
+            "ts": time.time(),
+            "repo": "ll",
+            "run_id": "probe",
+            "cycle": 1,
+        }
+        assert lane_slot.is_stale(payload) is True
+
+    def test_the_status_line_says_the_hold_is_for_this_command(self) -> None:
+        """The fix that is available without touching the protocol. A reader
+        skimming `HELD 0.lock` would otherwise reasonably believe the slot is
+        held for as long as the session is alive."""
+        status = lane.LaneStatus(
+            key="ll",
+            held=True,
+            usable=True,
+            slot="0.lock",
+            reserved=False,
+            reason="",
+            bucket=Path("bucket"),
+            scheme=lane_slot.RESERVED_ABSENT,
+            order=("0.lock",),
+            run_id="probe",
+            cycle=1,
+        )
+        assert "this command" in status.status_line()
+
+    def test_a_refusal_does_not_claim_a_hold_scope_it_does_not_have(self) -> None:
+        """The scope note belongs to a HELD line only. Printing it on BUSY
+        would attach a duration to a slot that was never taken."""
+        status = lane.LaneStatus(
+            key="ll",
+            held=False,
+            usable=True,
+            slot=None,
+            reserved=False,
+            reason="BUSY",
+            bucket=Path("bucket"),
+            scheme=lane_slot.RESERVED_ABSENT,
+            order=("0.lock",),
+            run_id="probe",
+            cycle=1,
+        )
+        assert "this command" not in status.status_line()
