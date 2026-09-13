@@ -84,6 +84,17 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0251 - 2026-09-13 - The OPS-89 heartbeat is NOT symmetrical - is_locked was made heartbeat-aware and release was not, found at the wrap by trying it
+
+**Evidence:**
+- FOUND BY USING THE FIX RATHER THAN BY REVIEWING IT. At the wrap of the session that added the heartbeat, releasing the lock returned False and the lock stayed held. The cause is that release still declines when the recorded owner is not the calling pid, so a conversational session cannot release its own lock the obvious way - the pid in the file died with the command that wrote it. That is exactly the defect OPS-89 fixed on the reading side, surviving on the writing side.
+- NOT A NEW CAPABILITY, ONLY AN UNNAMED ONE. Releasing AS the recorded owner already works and needs nothing new: read the owner out of the lock and pass it. Verified at the wrap - released True, and the lock then read as not held.
+- DOCUMENTED IN docs/HEADLESS.md SECTION 4z rather than fixed in code, and the reason is a threat-model one rather than laziness. Making release heartbeat-aware the way is_locked is would mean any process could clear any heartbeat lock, including a second loop clearing the first one's, which is the exact thing the guard exists to prevent. The force flag is refused here for the same reason - it exists for an operator clearing a lock by hand.
+- SKIPPING THE RELEASE IS ALSO CORRECT and is written down as such, because it is what a crash does: the session stops beating and the claim expires inside the 900-second window. The asymmetry is therefore a documentation gap rather than a hole.
+- SUITE observed this run and not carried forward: 3405 passed, 1 skipped in 219.34s. Pre-flight PASS, lint clean.
+
+This is the fourth time this session that a dotted identifier tripped the source register, and the second where the right answer was KNOWN_NON_HOSTS rather than rewording - the text was inside a fenced CODE block, where CLAUDE.md requires it stay byte-exact.
+
 ### LL-0250 - 2026-09-13 - Loop STOPPED on its own stop condition - no eligible roadmap item is left, and the four that remain are each gated on something this session cannot supply
 
 **Evidence:**

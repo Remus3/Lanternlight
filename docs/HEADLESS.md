@@ -189,6 +189,27 @@ guard.acquire(heartbeat=True)   # a conversational loop
 guard.beat()                    # once per cycle, before the work
 ```
 
+**Releasing one, which is NOT symmetrical with holding one.** `is_locked` was
+made heartbeat-aware; `release` was not, and it still declines when the
+recorded owner is not the calling pid - so a conversational session cannot
+release its own lock the obvious way, because the pid in the file died with the
+command that wrote it. Found at the wrap of the session that added the
+heartbeat, by trying it.
+
+The capability is already there and only needs naming: release AS the recorded
+owner, which the session can read out of its own lock.
+
+```python
+guard.release(pid=guard.read_owner())   # at the wrap
+```
+
+Do not reach for the force flag for this. It exists for an operator clearing a
+lock by hand, and using it here would mean any process could clear any lock -
+including a second loop clearing the first one's, which is the exact thing the
+guard exists to prevent. Skipping the release entirely is also acceptable and
+is what a crash does: the session stops beating and the claim expires within
+the window.
+
 **The other two governors were measured SEPARATELY and do not have this fix.**
 Do not infer one from another - that is the trap `OPS-70` and `OPS-71` exist to
 record.

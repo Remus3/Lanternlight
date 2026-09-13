@@ -1056,6 +1056,7 @@ KNOWN_NON_HOSTS = frozenset(
         # the way it was for the dotted identifiers in ROADMAP.md.
         "guard.acquire",
         "guard.beat",
+        "guard.release",
         "ops.lane",
         "ops.lanes.REPO",
         "ops.lanes.owner",
