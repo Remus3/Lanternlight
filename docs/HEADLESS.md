@@ -141,6 +141,67 @@ with (
     ...  # the lock is held here and released however the block exits
 ```
 
+### 4z. When there is no long-lived process - the heartbeat, `OPS-89`
+
+Everything above assumes ONE PROCESS holds that `with` block for the whole
+session, and in that model pid liveness is exactly the right question: a dead
+owner really does mean a crashed loop, and reclaiming immediately is the
+correct recovery.
+
+**A loop driven from a conversation has no such process, and the guard was
+measured INERT there.** Taken 2026-09-13, in this order, before anything was
+designed: an acquire in one interpreter recorded its pid; the NEXT interpreter
+read the lock as NOT held with that same pid as owner, because the process that
+took the lock was the one-shot interpreter that took it; the release then
+refused to remove the file, because it declines when the recorded owner is not
+the calling pid. Nothing was held. A second loop would have acquired cleanly
+while the first printed a lock line and believed itself guarded.
+
+**The decision, and the two options it was taken against.**
+
+- *A holder process whose liveness is the session's.* REJECTED. Something must
+  then end it, and `CLAUDE.md` forbids the cmdlet that would; worse, a holder
+  orphaned by a dead session holds the lock against every future loop forever,
+  and the project may not kill it. That converts a nuisance into an outage.
+- *Print UNGUARDED every cycle and change nothing.* REJECTED as the whole
+  answer, though it is the honest `UNUSABLE` precedent from the lane slot. It
+  describes the problem accurately and prevents nothing.
+- *A heartbeat, ADOPTED.* A lock may carry a `heartbeat` stamp, and a lock
+  carrying a fresh one is held whatever its pid says. Each cycle calls
+  `beat()`; a session that stops running stops beating, and the claim expires.
+
+**It is a SECOND way to be held, never a replacement**, and that is what keeps
+crash recovery intact. A lock with no `heartbeat` field is answered exactly as
+it always was - pid liveness, immediate reclaim of a dead owner - so the
+long-lived-process model above is unchanged and loses nothing.
+
+The window is `HEARTBEAT_STALE_SECONDS`, **900 seconds**, and it is stated
+rather than magic. It is chosen against the measured shape of a cycle here: a
+full suite run was between 230 and 482 seconds on 2026-09-13, recorded in
+`ops/runtime/suite_runs/`, so a cycle that beats once has room for a suite run,
+its pre-flight and a commit before the claim expires. Shorter and an ordinary
+cycle looks crashed; much longer and a genuinely crashed loop wedges the next
+one for that long. An unparseable stamp is NOT fresh, so a corrupt timestamp
+falls back to pid liveness rather than wedging the loop forever.
+
+```python
+guard.acquire(heartbeat=True)   # a conversational loop
+guard.beat()                    # once per cycle, before the work
+```
+
+**The other two governors were measured SEPARATELY and do not have this fix.**
+Do not infer one from another - that is the trap `OPS-70` and `OPS-71` exist to
+record.
+
+- The **lane slot** is correct WITHIN one command and released when that
+  command's process exits, so across a conversational session it rations with
+  nobody. It is not fixed here because its lock is the cross-project PROTOCOL
+  described in [ADR-008](adr/ADR-008-join-the-shared-bucket.md), and changing a
+  payload other projects read is not a session decision. Filed as `OPS-90`.
+- The **session watcher** is a separate process, so it is the one governor that
+  does survive a command exiting. It is deliberately DISARMED by operator
+  instruction of 2026-09-11 and this document does not re-arm it.
+
 ### 4a. Arming the session watcher - `ops/loop/watch.py`
 
 The game empties `MistfallHunter.log` on launch, and the market cache empties

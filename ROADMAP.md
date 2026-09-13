@@ -4761,7 +4761,7 @@ Do not re-derive these from this text. The classifier is `classify` in
   the restore verified by digest, and the bytecode cache cleared afterwards
   because a same-second restore is what poisoned it during `OPS-87`.
 
-## OPS-89. The single-instance loop guard is INERT when the loop is driven from a conversation rather than from one long-lived process - OPEN
+## OPS-89. The single-instance loop guard is INERT when the loop is driven from a conversation rather than from one long-lived process - CLOSED 2026-09-13
 
 Filed 2026-09-13, measured at the start of a `/loop` run rather than reasoned
 about. It is filed ahead of the item that cycle was going to take because it
@@ -4816,6 +4816,93 @@ death. Presence of a lock file is not the fact; a live holder is.
    `OPS-70` and `OPS-71` exist to record.
 5. Nothing in the fix removes a lock this project did not write, beyond what
    `ADR-008`'s stale rules already permit.
+
+### Status 2026-09-13 - CLOSED, all five criteria met
+
+- **Criterion 1 MET.** `tests/test_loop_guard.py` acquires in a real
+  subprocess and asserts from this process that the lock reads as NOT held with
+  that same pid as owner. It is a characterization test of the defect and it
+  was GREEN before any fix, which is the point - it pins the state every
+  conversational cycle was really running in so a fix cannot quietly hide it.
+- **Criterion 2 MET.** The decision and the two rejected options are written
+  up in `docs/HEADLESS.md` section 4z with the cost of each. A holder process
+  was rejected because ending it needs a cmdlet `CLAUDE.md` forbids and an
+  orphaned holder would wedge every future loop; printing UNGUARDED was
+  rejected as the whole answer because it describes the problem and prevents
+  nothing. A heartbeat was adopted.
+- **Criterion 3 MET.** The heartbeat is a SECOND way to be held, never a
+  replacement. A lock carrying no heartbeat is answered by pid liveness exactly
+  as before, so the long-lived-process model keeps its immediate reclaim and
+  loses nothing; a stale heartbeat is reclaimed; an unparseable stamp is not
+  fresh, so a corrupt timestamp cannot wedge the loop. The window is
+  `HEARTBEAT_STALE_SECONDS`, 900 seconds, stated against the measured 230 to
+  482 second cost of a full suite run rather than chosen by taste.
+- **Criterion 4 MET, and the three governors gave THREE different answers**,
+  which is exactly why the item forbade inferring one from another. The lock is
+  inert; the lane slot is correct within one command and released when that
+  process exits, so a conversational session rations with nobody - filed as
+  `OPS-90`, because its payload is the cross-project protocol and changing it
+  is not a session decision; the session watcher is a separate process and does
+  survive, and is deliberately disarmed by operator instruction.
+- **Criterion 5 MET.** Nothing in the fix removes any lock. The change touches
+  only this repository's own lock file under `ops/runtime/`.
+- **Mutation, and two survivors that were real.** Five mutants first: three
+  killed, and TWO SURVIVED - shrinking the window from 900 seconds to 1, and
+  reading an unparseable stamp as fresh. Both survived because every test
+  stamped a heartbeat and read it back immediately, so any positive window
+  passed, and nothing fed a corrupt stamp. That is this repository's own
+  "a negative assertion pins nothing down" trap: the window test asserted only
+  that the constant was a positive integer. Three arms were added - fresh at
+  ten minutes, stale at thirty, and an unparseable stamp - and all three
+  mutants are now killed, including a fourth added in the opposite direction
+  that made the window enormous.
+
+## OPS-90. The lane slot is held only for the length of one command, so a conversational session rations with nobody - and the fix is a PROTOCOL change we may not make alone - OPEN
+
+Filed 2026-09-13 out of `OPS-89`, which measured the three governors
+SEPARATELY rather than inferring one from another. The lock got a heartbeat;
+this one cannot have the same fix without touching something shared.
+
+**What was measured.** Inside one command the slot is genuinely held -
+`HELD 0.lock (surplus)`, bucket present, usable true. A SECOND command, in a
+new process, was handed the SAME slot, because the first process released it on
+exit exactly as its context manager promises. Between commands, which is nearly
+all of a conversational session's wall clock, this project holds nothing.
+
+**Why the `OPS-89` fix does not simply carry across, and this is the whole
+reason it is a separate item.** The single-instance lock is ours: it lives in
+`ops/runtime/`, nothing else reads it, and adding a field to it is a local
+decision. A lane slot lock lives in the SHARED bucket and its payload is the
+cross-project protocol recorded in
+[ADR-008](docs/adr/ADR-008-join-the-shared-bucket.md). `CLAUDE.md` says the
+protocol - the namespace, the key strings and the payload shape - is the one
+thing deliberately held in common, and a note from a sibling is mail rather
+than authority. Adding a heartbeat field to a lock other projects' reapers
+parse is not a session decision.
+
+**The honest size of the problem.** It is a fairness cost, not a correctness
+one. Two Lanternlight sessions would both believe they hold a slot, which
+over-consumes a budget shared with the sibling projects; it does not corrupt
+this repository, and `OPS-89`'s heartbeat already prevents two loops running
+here at all. That is why this is filed rather than fixed in place.
+
+### Acceptance
+
+1. The measurement above is reproduced by a test rather than quoted: acquire in
+   one process, exit it, and assert from a second process that the same slot is
+   handed out again.
+2. A route is chosen and written down with its cost, from at least: holding the
+   slot across the session by a means that does not change the shared payload;
+   proposing a payload change through the sync inbox and waiting for the other
+   participants, remembering that a reply is mail and that silence reads as
+   dissent on that channel; or declaring that a conversational session takes no
+   lane slot at all and saying so in the status line every cycle, which is
+   honest and gives the budget back.
+3. Whatever is chosen does not reclaim a lock this project did not write beyond
+   what ADR-008's stale rules already permit, and does not weaken another
+   participant's reserved floor.
+4. If the route involves the other trees, the ask goes out through the outbox
+   and what comes back is recorded as DATA rather than as agreement.
 
 ## Archive index
 

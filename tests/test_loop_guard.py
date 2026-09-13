@@ -1076,3 +1076,153 @@ def test_default_lock_path_points_into_the_gitignored_runtime_dir() -> None:
     assert default.name == guard_mod.LOCK_FILENAME
     assert default.parent == guard_mod.runtime_dir()
     assert default.parent.parent.name == "ops"
+
+
+class TestAHeartbeatLockSurvivesAProcessThatDidNotStayAlive:
+    """OPS-89. The guard is pid scoped, which is right for one long-lived
+    process and inert for a loop driven from a conversation.
+
+    Measured 2026-09-13 before anything was designed: an acquire in one
+    interpreter recorded its pid, and the NEXT interpreter read the lock as NOT
+    held with that same pid as owner, because the process that took the lock
+    was the one-shot interpreter that took it. The release then refused to
+    remove the file, since it declines when the recorded owner is not the
+    calling pid. Nothing was held, and a second loop would have acquired
+    cleanly while the first believed it was guarded.
+
+    The fix does not replace pid liveness, it adds a second way to be held. A
+    lock carrying a fresh HEARTBEAT is held whatever its pid says; a lock
+    carrying none behaves exactly as it always did, so the long-lived-process
+    model keeps its immediate crash recovery and nothing about it changes.
+    """
+
+    def test_a_pid_scoped_lock_is_not_held_once_its_process_is_gone(
+        self, lock_path: Path
+    ) -> None:
+        """The measurement, reproduced rather than quoted. This is the state
+        every conversational cycle was actually running in."""
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "import sys; sys.path.insert(0, sys.argv[1]);"
+                "from ops.loop import guard;"
+                "guard.acquire(guard.Path(sys.argv[2]));"
+                "print(guard.read_owner(guard.Path(sys.argv[2])))",
+                str(REPO_ROOT),
+                str(lock_path),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert completed.returncode == 0, completed.stderr
+        owner = int(completed.stdout.strip())
+        assert lock_path.exists(), "the lock file itself outlives its process"
+        assert guard_mod.read_owner(lock_path) == owner
+        assert guard_mod.is_locked(lock_path) is False, (
+            "a lock whose only claim is a dead pid reads as free - this is the "
+            "defect OPS-89 filed, kept here so a fix cannot hide it"
+        )
+
+    def test_a_fresh_heartbeat_holds_the_lock_although_the_pid_is_dead(
+        self, lock_path: Path
+    ) -> None:
+        guard_mod.acquire(lock_path, heartbeat=True)
+        payload = json.loads(lock_path.read_text(encoding="utf-8"))
+        payload["pid"] = 999999999
+        lock_path.write_text(json.dumps(payload), encoding="utf-8")
+        assert guard_mod.pid_is_alive(999999999) is False
+        assert guard_mod.is_locked(lock_path) is True
+
+    def test_a_stale_heartbeat_is_reclaimed_so_a_crash_cannot_wedge_the_loop(
+        self, lock_path: Path
+    ) -> None:
+        """Criterion 3. Whatever is adopted must not weaken crash recovery."""
+        guard_mod.acquire(lock_path, heartbeat=True)
+        payload = json.loads(lock_path.read_text(encoding="utf-8"))
+        payload["pid"] = 999999999
+        payload["heartbeat"] = "2026-09-13T00:00:00+00:00"
+        lock_path.write_text(json.dumps(payload), encoding="utf-8")
+        assert guard_mod.is_locked(lock_path) is False
+
+    def test_the_staleness_window_is_a_stated_number_not_a_magic_one(
+        self,
+    ) -> None:
+        assert isinstance(guard_mod.HEARTBEAT_STALE_SECONDS, int)
+        assert guard_mod.HEARTBEAT_STALE_SECONDS > 0
+
+    def test_a_heartbeat_well_inside_the_window_is_still_fresh(
+        self, lock_path: Path
+    ) -> None:
+        """Pins the window from BELOW, and it is here because a mutant that
+        shrank the window from 900 seconds to 1 survived every other test in
+        this class - they all stamp the heartbeat and read it back at once, so
+        any positive window passes them. Ten minutes is inside the window on
+        purpose: a cycle here runs a full suite of 230 to 482 seconds, and a
+        window that cannot cover one would call an ordinary cycle crashed."""
+        self._write_aged(lock_path, 600)
+        assert guard_mod.is_locked(lock_path) is True
+
+    def test_a_heartbeat_well_outside_the_window_is_stale(
+        self, lock_path: Path
+    ) -> None:
+        """Pins it from ABOVE. Together with the arm above, the pair says what
+        the number MEANS rather than that it is positive."""
+        self._write_aged(lock_path, 1800)
+        assert guard_mod.is_locked(lock_path) is False
+
+    def test_an_unparseable_heartbeat_does_not_hold_the_lock(
+        self, lock_path: Path
+    ) -> None:
+        """A mutant that read a corrupt stamp as FRESH survived, because
+        nothing fed one. A corrupt stamp must fall back rather than wedge the
+        loop forever on a timestamp nobody can read."""
+        self._write_stamp(lock_path, "not-a-timestamp")
+        assert guard_mod.is_locked(lock_path) is False
+
+    def _write_stamp(self, lock_path: Path, stamp: str) -> None:
+        guard_mod.acquire(lock_path, heartbeat=True)
+        payload = json.loads(lock_path.read_text(encoding="utf-8"))
+        payload["pid"] = 999999999
+        payload["heartbeat"] = stamp
+        lock_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    def _write_aged(self, lock_path: Path, age_seconds: int) -> None:
+        from datetime import datetime, timedelta
+
+        from ops.loop.guard import UTC
+
+        when = datetime.now(UTC) - timedelta(seconds=age_seconds)
+        self._write_stamp(lock_path, when.isoformat())
+
+    def test_a_lock_with_no_heartbeat_behaves_exactly_as_it_always_did(
+        self, lock_path: Path
+    ) -> None:
+        """The no-regression arm. The long-lived-process model must not lose
+        its immediate reclaim of a dead owner."""
+        guard_mod.acquire(lock_path)
+        payload = json.loads(lock_path.read_text(encoding="utf-8"))
+        assert "heartbeat" not in payload
+        payload["pid"] = 999999999
+        lock_path.write_text(json.dumps(payload), encoding="utf-8")
+        assert guard_mod.is_locked(lock_path) is False
+
+    def test_a_heartbeat_can_be_refreshed_by_a_later_process(
+        self, lock_path: Path
+    ) -> None:
+        """What makes it usable from a conversation: each cycle touches it."""
+        guard_mod.acquire(lock_path, heartbeat=True)
+        payload = json.loads(lock_path.read_text(encoding="utf-8"))
+        # The pid has to die too, or this process's own liveness holds the
+        # lock and the arm proves nothing about the heartbeat.
+        payload["pid"] = 999999999
+        payload["heartbeat"] = "2026-09-13T00:00:00+00:00"
+        lock_path.write_text(json.dumps(payload), encoding="utf-8")
+        assert guard_mod.is_locked(lock_path) is False
+        assert guard_mod.beat(lock_path) is True
+        assert guard_mod.is_locked(lock_path) is True
+
+    def test_beating_a_lock_that_is_not_there_answers_False(
+        self, lock_path: Path
+    ) -> None:
+        assert guard_mod.beat(lock_path) is False

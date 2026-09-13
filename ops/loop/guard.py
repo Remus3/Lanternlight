@@ -433,11 +433,106 @@ def is_locked(path: Path | None = None) -> bool:
     owner = owner_of(path)
     if owner is UNREADABLE:
         return True
+    # OPS-89. A heartbeat is a SECOND way to be held, never a replacement. A
+    # lock carrying none is answered exactly as it always was, so the
+    # long-lived-process model keeps its immediate reclaim of a dead owner and
+    # nothing about it changes. A lock carrying a fresh one is held whatever
+    # its pid says, which is the only way a loop with no long-lived process can
+    # hold anything at all.
+    if owner is not None:
+        target = Path(path) if path is not None else default_lock_path()
+        stamp = _heartbeat_of(target)
+        if stamp is not None and _heartbeat_is_fresh(stamp):
+            return True
     return pid_is_alive(owner)
 
 
+#: How long a heartbeat stays fresh, in seconds. ``OPS-89``.
+#:
+#: STATED, not magic. 900 seconds is chosen against the measured shape of a
+#: cycle in this repository rather than by taste: a full suite run is between
+#: 230 and 482 seconds (recorded 2026-09-13 in ``ops/runtime/suite_runs/``), so
+#: a cycle that beats once per cycle has room for one suite run, its pre-flight
+#: and a commit before its claim expires. Shorter and an ordinary cycle would
+#: look crashed; much longer and a genuinely crashed loop wedges the next one.
+HEARTBEAT_STALE_SECONDS = 900
+
+
+def _heartbeat_of(path: Path) -> str | None:
+    """The recorded heartbeat, or ``None`` when there is not one.
+
+    Absent is not stale. A lock written by the long-lived-process model carries
+    no heartbeat at all and must keep behaving exactly as it always did, so
+    this answering ``None`` has to mean "that model", never "expired".
+    """
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    value = payload.get("heartbeat")
+    return value if isinstance(value, str) else None
+
+
+def _heartbeat_is_fresh(stamp: str, now: datetime | None = None) -> bool:
+    """Whether ``stamp`` is within :data:`HEARTBEAT_STALE_SECONDS`.
+
+    An unparseable stamp is NOT fresh. That direction is deliberate and matches
+    :func:`is_locked`'s fail-closed promise only in part - here the consequence
+    of being wrong is that a lock is reclaimable, so the conservative answer is
+    the one that lets a real crash be recovered rather than the one that wedges
+    the loop forever on a corrupt timestamp.
+    """
+    try:
+        beat_at = datetime.fromisoformat(stamp)
+    except ValueError:
+        return False
+    if beat_at.tzinfo is None:
+        beat_at = beat_at.replace(tzinfo=UTC)
+    current = datetime.now(UTC) if now is None else now
+    return (current - beat_at).total_seconds() < HEARTBEAT_STALE_SECONDS
+
+
+def beat(path: Path | None = None) -> bool:
+    """Refresh the heartbeat on an existing lock. ``OPS-89``.
+
+    This is what makes the lock usable from a loop with no long-lived process:
+    each cycle touches it, and a session that stops running stops touching it.
+
+    Returns:
+        True if a lock file was found and stamped, False if there was none.
+
+    Written through a temporary file and ``replace`` rather than in place, so a
+    reader polling the lock never sees a half-written payload - the rule
+    ``CLAUDE.md`` states for anything a reader might poll.
+    """
+    target = Path(path) if path is not None else default_lock_path()
+    try:
+        payload = json.loads(target.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    if not isinstance(payload, dict):
+        return False
+    payload["heartbeat"] = _now()
+    body = json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=True) + "\n"
+    tmp = target.with_name(target.name + ".tmp")
+    tmp.write_text(body, encoding="utf-8", newline="\n")
+    tmp.replace(target)
+    return True
+
+
 def _write_lock(target: Path, pid: int, label: str) -> None:
-    """Create ``target`` exclusively, or raise :class:`FileExistsError`."""
+    """Create ``target`` exclusively, or raise :class:`FileExistsError`.
+
+    Deliberately unchanged by ``OPS-89``. The heartbeat is stamped by
+    :func:`acquire` immediately AFTER this succeeds rather than written in
+    here, because this function's three-argument shape is what the exclusive
+    create is tested through and widening it broke a test that substitutes its
+    own. The gap that leaves is safe: between the create and the stamp there is
+    no heartbeat, so a concurrent reader falls back to pid liveness - and the
+    pid it finds is the acquiring process, which is alive.
+    """
     payload = {
         "pid": pid,
         "acquired": _now(),
@@ -453,7 +548,13 @@ def _write_lock(target: Path, pid: int, label: str) -> None:
         os.fsync(fh.fileno())
 
 
-def acquire(path: Path | None = None, *, pid: int | None = None, label: str = "loop") -> Path:
+def acquire(
+    path: Path | None = None,
+    *,
+    pid: int | None = None,
+    label: str = "loop",
+    heartbeat: bool = False,
+) -> Path:
     """Take the single-instance lock, or refuse.
 
     A lock whose recorded owner is no longer running is stale - the previous
@@ -491,6 +592,8 @@ def acquire(path: Path | None = None, *, pid: int | None = None, label: str = "l
 
     try:
         _write_lock(target, owner_pid, label)
+        if heartbeat:
+            beat(target)
         return target
     except FileExistsError:
         pass
@@ -516,6 +619,8 @@ def acquire(path: Path | None = None, *, pid: int | None = None, label: str = "l
     except FileExistsError as exc:
         # Someone else reclaimed it between our unlink and our create.
         raise LockBusy(target, read_owner(target)) from exc
+    if heartbeat:
+        beat(target)
     return target
 
 

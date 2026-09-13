@@ -1050,6 +1050,12 @@ KNOWN_NON_HOSTS = frozenset(
         # docs/CYCLE_COST.md - the extractor stops at the underscore, the
         # same way it does for `ops.merge` and `ops.refutation`.
         "ops.cycle",
+        # docs/HEADLESS.md section 4z - OPS-89. Two attribute references
+        # inside a fenced CODE block, where CLAUDE.md requires the text
+        # stay byte-exact, so rewording the prose is not available here
+        # the way it was for the dotted identifiers in ROADMAP.md.
+        "guard.acquire",
+        "guard.beat",
         "ops.lane",
         "ops.lanes.REPO",
         "ops.lanes.owner",
