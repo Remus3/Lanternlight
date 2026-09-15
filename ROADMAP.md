@@ -1125,6 +1125,16 @@ The question above is therefore settled in favour of the first route. Nothing
 else moved: `OPS-48` still forbids soliciting RC or RSC, and `OPS-68` still holds
 the responder runner and cross-project propagation on standby.
 
+**SUPERSEDED 2026-09-14, and left standing rather than edited.** The sentence
+above is now FALSE as a statement about the present: `OPS-48` was closed by
+adjudication on 2026-09-14 and no longer forbids soliciting RC or RSC, and
+`OPS-68`'s standby was lifted the same day. It was TRUE when it was written, and
+this item is CLOSED, so it is a record rather than a live instruction - editing
+it would falsify the record instead of correcting it. A reader arriving here
+from a grep for "forbids soliciting" needs this paragraph, which is exactly why
+it is a paragraph and not a deletion. The wrap's own refutation pass caught the
+stale reading.
+
 **A PREMISE OF THIS ITEM HAS EXPIRED, AND THE RULING WAS GIVEN AGAINST IT.**
 The paragraph above, and the item's own preamble, refer to a source drop at
 `moon_sync_inbox/from-RC-verbatim/`. THAT DIRECTORY NO LONGER EXISTS. Measured

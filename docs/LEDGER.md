@@ -84,6 +84,19 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0256 - 2026-09-14 - The wrap's refutation pass REFUTED one of this session's own repairs - the diagram's node was RENAMED and its topology left intact, so the picture still made the false claim after the fix
+
+**Evidence:**
+- THE REPAIR THAT DID NOT REPAIR ANYTHING. LL-0254 records the README's mermaid diagram being corrected because it drew all four data surfaces flowing into REDACT when only the log reader redacts. The wrap refutation read the committed file rather than the claim and found the edges still terminating at that node: L->T, S->RS, P->RS, C->RS, T->O, RS->O. The node's LABEL had changed from 'redact before anything leaves' to a caption about egress. The topology had not. A reader following arrows still learned the false thing.
+- Fixed by changing the SHAPE, not the words: the in-program consumer path now runs T and RS to Emberforge and the overlay as dashed planned edges, and the redactor sits on a separate EGRESS branch ending at a node reading 'Sent off this machine, or reaching a commit'. Re-rendered with mermaid-cli 11.17.0, exit 0, viewBox 915x702, which still needs no downscale on a desktop column.
+- A SECOND FALSE CLAIM the session's own pass missed, inherited from the previous README: 'docs/CLASSES.md - six independent research passes, adjudicated by a seventh reviewer'. That document carries EIGHT 'Adjudication: unresolved' or 'open' lines, at 159, 201, 229, 248, 261, 278 and 290. The adjudicating pass happened; it did not settle the disagreements. The row now says it RECORDS where the six disagree rather than smoothing it, and that several are marked unresolved and stay that way.
+- CLAUDE.md contradiction closed from BOTH ends. The FULL AUTHORITY section carried the asymmetry, and the adoption rule 300 lines below still read flatly as 'always an operator ruling' with no pointer to it. A reader arriving at the rule met a contradiction and had no way to know it was resolved. The rule now cross-references the asymmetry in place.
+- A STALE RECITAL INSIDE A CLOSED ITEM, marked rather than edited. ROADMAP.md's OPS-35 narrative says 'OPS-48 still forbids soliciting RC or RSC, and OPS-68 still holds the responder runner on standby'. Both became false on 2026-09-14. OPS-35 is CLOSED and that paragraph is a record of what was true when written, so it is marked SUPERSEDED in place - editing it would falsify the record, which is the same reasoning applied to the sent-note draft earlier in this session.
+- Suite after the repairs: 3412 passed, 1 skipped in 274.32s, exit 0. Collected 3413. Ruff: All checks passed!. Pre-flight PASS, 14 guard modules.
+
+THE LESSON IS THE ONE OPS-89 TAUGHT, IN A DIFFERENT COSTUME. There, a fix made is_locked heartbeat-aware and left acquire alone - the guard answered the QUESTION correctly and still refused nothing. Here, a fix made the diagram's CAPTION honest and left its ARROWS alone. Both times every criterion read MET, because the thing that was checked was not the thing that carries the meaning. Ask which part of the artifact the reader actually follows.
+The refuting agent was handed eight specific claims and told to default to refuted. It refuted three, confirmed three, and found a fourth defect nobody had asked it about. It also refused to let its verdict read as a clearance, because the tree moved twice during its pass. Both of those behaviours are the reason the pass exists.
+
 ### LL-0255 - 2026-09-14 - The refutation census published five ratios over an undefined unit - LW was right, the denominator is now defined and every cross-tree comparison built on it is WITHDRAWN
 
 **Evidence:**

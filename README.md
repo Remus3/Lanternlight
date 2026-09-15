@@ -113,11 +113,12 @@ flowchart TD
   S["GVAS .sav files<br/>unencrypted"]
   P["AvgPrice_*.ini<br/>market cache"]
   C["Passive screen capture<br/>operator's own display"]
-  T["tail + logparse<br/>redact inline"]
-  RS["gvas, savewatch, damage,<br/>avgprice, vision_meter"]
-  O{{"redact<br/>before anything leaves"}}
+  T["tail + logparse<br/>redacts at the reader"]
+  RS["gvas, savewatch, damage,<br/>avgprice, vision_meter<br/>no redaction in the reader"]
   E["Emberforge<br/>not built"]
   W["Overlay window"]
+  O{{"redact<br/>gate on EGRESS only"}}
+  X["Sent off this machine,<br/>or reaching a commit"]
 
   G -->|writes| L
   G -->|writes| S
@@ -127,10 +128,12 @@ flowchart TD
   S --> RS
   P --> RS
   C --> RS
+  T -.->|planned| E
+  RS -.->|planned| E
+  E -.->|planned| W
   T --> O
   RS --> O
-  O -.->|planned| E
-  E -.->|planned| W
+  O --> X
 ```
 
 Every arrow points **out of** the game. None point back, and none ever will.
@@ -145,17 +148,18 @@ Every arrow points **out of** the game. None point back, and none ever will.
 - **Passive desktop capture** - the only route to values the game renders but
   never writes down. No overlay, no swapchain hook, no window hook.
 
-The two dashed edges are not built: Emberforge computes nothing, so the overlay
-is not fed from it yet.
+The dashed edges are not built. Emberforge computes nothing, so nothing is fed
+through it to the overlay yet.
 
-**Where redaction actually sits.** The log reader redacts inline, because the log
-is the surface that carries a SteamID64, a Steam persona, publisher SDK and EOS
-account ids and an IP-resolved location. The other readers hand back what the
-game wrote, and the redactor is the gate on the way OUT instead:
+**Where redaction actually sits, because the picture above is easy to misread.**
+The log reader redacts INLINE, since the log is the surface carrying a SteamID64,
+a Steam persona, publisher SDK and EOS account ids and an IP-resolved location.
+The other readers hand back exactly what the game wrote and redact nothing. The
+redactor is a gate on EGRESS, not a stage every value passes through:
 `ops.outbox.deliver` for anything sent off this machine, and
 `tests/test_no_pii.py` for anything reaching a commit. The save watcher never
-redacts a snapshot - it refuses any destination inside a repository working
-directory, which is the same policy enforced at a different layer.
+redacts a snapshot either - it refuses any destination inside a repository
+working directory, which is the same policy enforced at a different layer.
 [ADR-004](docs/adr/ADR-004-redaction-is-mandatory.md)
 
 ## Quick start
@@ -252,7 +256,7 @@ here.
 | [`docs/FINDINGS.md`](docs/FINDINGS.md) | The feasibility probe. Every line is a measurement, and where something was not measured it says so |
 | [`docs/OBSERVED_IDS.md`](docs/OBSERVED_IDS.md) | First-party id observations, each with the method that established it |
 | [`docs/AFFIXES.md`](docs/AFFIXES.md) | What the game **states**, read off its own tooltips. A tooltip is a developer claim, kept apart from the measured record |
-| [`docs/CLASSES.md`](docs/CLASSES.md) | Single source of truth for all six classes - six independent research passes, adjudicated by a seventh reviewer |
+| [`docs/CLASSES.md`](docs/CLASSES.md) | All six classes - six independent research passes plus a seventh adjudicating pass that RECORDS where they disagree rather than smoothing it. Several disagreements are marked unresolved and stay that way |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Module map, the data surfaces, and where the redactor sits |
 | [`docs/OPERATIONS.md`](docs/OPERATIONS.md) | How to run things, plus the safety boundary as an operational rule |
 | [`docs/OVERLAY.md`](docs/OVERLAY.md) | The always-on-top window design |
