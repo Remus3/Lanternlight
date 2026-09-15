@@ -1,139 +1,249 @@
 # Lanternlight
 
+**Measure what the game never tells you - without ever touching the game.**
+
 [![tests](https://github.com/Remus3/Lanternlight/actions/workflows/tests.yml/badge.svg)](https://github.com/Remus3/Lanternlight/actions/workflows/tests.yml)
 
-A companion and analysis project for **Mistfall Hunter** (Steam appid 3282300),
-the dark fantasy PvPvE extraction ARPG by Bellring Games / Skystone Games.
+**Apache-2.0** &nbsp;|&nbsp; **Python 3.14** &nbsp;|&nbsp; **Windows** &nbsp;|&nbsp;
+**Stdlib-only core** &nbsp;|&nbsp;
+**[Never touches the game process](docs/adr/ADR-001-no-game-process-interaction.md)**
 
-**Emberforge** is the combat and build math engine that Lanternlight is built
-around.
+Lanternlight is a companion and analysis toolkit for **Mistfall Hunter** (Steam
+appid 3282300), the dark fantasy PvPvE extraction ARPG by Bellring Games and
+Skystone Games. It reads the log, save and cache files the game writes about
+itself, joins them to passive screen capture, and derives build and combat
+numbers that nobody has published.
 
-## What makes this one unusual
+**Emberforge** is the build and combat math engine at the centre of it. It
+computes nothing yet, and it will not publish a number until that number has
+been measured twice.
 
-Most game companion tools read the game. Lanternlight cannot, and does not want
-to. Two measured facts set the whole design:
+---
 
-1. **The game ships kernel-level anti-cheat** (Bellring Anti-Cheat, disclosed on
-   the store page). So there is no injected plugin, no process memory read, no
-   packet capture, no hooked overlay, and no synthetic input into the game
-   window. Not as a default that gets relaxed later - as a permanent boundary.
-   See [ADR-001](docs/adr/ADR-001-no-game-process-interaction.md).
-2. **All 15 shipped pak chunks are AES-encrypted** under a single global key
-   (`flags=Compressed|Encrypted|Indexed`, `keyguid=ZERO`). A loose-file sweep of
-   the entire 41.6 GB install returned zero game data files. There is no static
-   data table to extract, and getting one would require exactly the process
-   access that rule 1 forbids. See
-   [ADR-002](docs/adr/ADR-002-no-asset-extraction.md).
+## Why it is built this way
 
-So Lanternlight deliberately does the opposite of a typical companion tool. **It
-touches nothing.** Everything it knows, it derives from what the game itself
-writes into user-writable space, plus passive reading of the operator's own
-screen:
+Two measurements decided the whole architecture before a line of feature code
+was written.
 
-- the live-appending log at `%LOCALAPPDATA%\MistfallHunter\Saved\Logs\MistfallHunter.log`
-- a growing set of unencrypted UE GVAS `.sav` files under the same tree - four at
-  first probe and **eight distinct names** within two days, one of which exists
-  only for the duration of a run, so a reader enumerates rather than assumes
-- `AvgPrice_937566.ini`, a market and trade-price cache
-- passive desktop screen capture, on the operator's own display, with no overlay
+| Measured fact | What follows from it |
+|---|---|
+| The game ships **kernel-level anti-cheat** (Bellring Anti-Cheat, disclosed on the store page) | No injected plugin, no memory read, no packet capture, no hooked overlay, no synthetic input - permanently. [ADR-001](docs/adr/ADR-001-no-game-process-interaction.md) |
+| **All 15 shipped pak chunks are AES-encrypted**, and a sweep of the whole install found zero loose game data files | There is no static data table to extract, and getting one would need the process access the rule above forbids. [ADR-002](docs/adr/ADR-002-no-asset-extraction.md) |
 
-That is a narrower surface than an injected tool would have. It is also the only
-surface that is safe to use on an account you care about.
+So Lanternlight does the opposite of a typical companion tool: **it touches
+nothing**. That is a narrower surface than an injected tool would have. It is
+also the only surface that is safe to use on an account you care about.
 
 The second constraint follows from the first. Because nothing is extractable,
-**no number in this repo can be looked up - it has to be measured**, and the
-hard engineering problem is provenance: proving where every value came from, and
+**no number here can be looked up - it has to be measured**. The hard
+engineering problem is provenance: proving where every value came from, and
 refusing to emit one that has no source. Where a value is unknown, Lanternlight
-omits the field rather than guessing it, and keeps "unmeasured" distinguishable
-from "measured zero". See [ADR-005](docs/adr/ADR-005-omit-rather-than-guess.md).
+omits the field rather than guessing, and keeps *unmeasured* distinguishable
+from *measured zero*.
+[ADR-005](docs/adr/ADR-005-omit-rather-than-guess.md)
 
-## Status
+## Where the project is today
 
-Honest as of 2026-09-08, 30 days after the first commit. **The measurement and
-operations layer is substantial. The product layer is still empty**, and the
-table below says which row is which - the bottom two are the current state, not
-aspirational placeholders.
+> **The measurement and operations layer is substantial. The product layer is
+> not built yet.** The tables below say which is which.
 
-Measured on 2026-09-08 rather than recited, and measured from a **real fresh
-clone at a foreign path** - which is the standard the paragraph below sets:
-**2777 passed, 6 skipped**, 205 ledger entries, 68 wrapped loop cycles, 8
-worktree-isolated lanes, 7 ADRs.
+Status as of 2026-09-14. Nothing below is aspirational, and each measurement
+carries its own date in the document it links to.
 
-(205, not 206: the two ledger files carry 206 `### LL-` headings and one of them
-is the format TEMPLATE in the preamble. That distinction was measured after a
-count was filed wrong, and it is the kind of thing this README would otherwise
-repeat forever.)
+### Built and measured
 
-**The same tree in place reports 2782 passed, 1 skipped** - 2783 collected
-either way. The five that skip only in a clone are named rather than waved at,
-because an unexplained difference between two counts is where a wrong one
-hides: one needs the observed-document map under the gitignored `ops/runtime/`,
-which no checkout has until a full run writes it, and four need real notes in
-the gitignored `moon_sync_inbox/`. All five are absent-state skips, not
-failures, and a clone is expected to show them.
+| Area | Notes |
+|---|---|
+| **GVAS save reader** | Every save parses with no unconsumed trailing bytes. Natively serialised structs are handed back verbatim and *named* undecoded rather than guessed. Published parsers do not work on this build: UE 5.4+ changed the property tag |
+| **GVAS save writer** | `serialise(parse(raw)) == raw`, byte-identical on all 276 files of the 2026-08-10 corpus - an oracle that caught a flags word the reader was discarding |
+| **Log parsing and live tail** | Survives in-place truncation and delete-and-recreate, splits bytes before decoding, and redacts before any sink |
+| **Redaction** | Sees through base64, hex and raw UTF-16, scans binaries, and refuses to certify what it cannot assess |
+| **Save and session watchers** | Snapshot every generation of every save, never write to the source, and name the surface that went stale |
+| **Damage series reader** | Accumulates and deduplicates the game's rolling damage window. Found that the save's `timeStamp` is not a Unix epoch |
+| **Market cache parser** | `AvgPrice_937566.ini` is parsed; the watcher is not built |
+| **Class and id reference** | Class ids bound to names by a log-to-pixel wall-clock join, each binding recording the method that established it |
+| **Overlay window** | A separate always-on-top window of our own. Placement and render are pure functions, so the panel is asserted on in CI |
 
-One caveat for anyone reproducing that: `git archive` is **not** a clone. Without
-a `.git` directory the lane-ownership and worktree tests fail - 19 of them,
-measured - so a source export reads as a broken checkout. Use `git clone`.
+### Partial
 
-**A fresh clone now runs green.** It did not until 2026-08-12: the generated
-lane contracts embedded the absolute checkout path, so the suite passed only at
-`C:\Lanternlight` and a clone measured one failure - which was the documented
-first-run experience for anyone following the instructions below. Fixed and
-closed as `ROADMAP.md` item 2d, ledger `LL-0033`, demonstrated with a real
-clone rather than argued.
+| Area | What is missing |
+|---|---|
+| **Weapon config ids** | The live id space is joined to item cfgIds, but the table is incomplete |
+| **Raid and PvP data** | Solo explores are measured. No run with another player yet, so loot and extraction are **unmeasured, not absent** |
+| **Affix ids** | Two remain unbound - 101 and 214 |
+| **Meter OCR** | The training-ground meter's orange pair is read without a human in the loop. The white row is still open |
 
-The consequence is worth stating once: every test count recorded in this
-repository **before** that date was an in-place number. Counts from 2026-08-12
-onward are measured from a fresh clone at a foreign path.
+### Not built
 
-| Area | State | Notes |
-|---|---|---|
-| Feasibility probe | **Done** | Anti-cheat and encryption measured, not assumed. `docs/FINDINGS.md` |
-| Pak / encryption probe | **Done** | 15/15 chunks encrypted, 101,500 TOC entries |
-| Class id table | **Done** | Ids 10-15 bound to class names by a log-to-pixel join. `docs/OBSERVED_IDS.md` |
-| Weapon config ids | **Partial** | Creation-preview ids recorded. The live id space is now **joined**: it is the same space as item cfgIds |
-| Class reference | **Done** | All six researched independently and adjudicated into `docs/CLASSES.md` |
-| Specialist lanes | **Done** | Eight lanes, ownership enforced by tests, worktree-isolated, each with on-disk state and its own ledger fragment so no two lanes race |
-| Log parsing | **Early** | `lanternlight.logparse` reads the surfaces named above |
-| Redaction | **Hardened** | Sees through base64, hex and raw UTF-16, scans binaries, and refuses to certify what it cannot assess. `ROADMAP.md` item 0 |
-| Market cache | **Parser done** | `AvgPrice_937566.ini` filled. `lanternlight.avgprice` parses it; watcher not built |
-| Save watcher | **Done** | `lanternlight.savewatch` snapshots every generation of every save, refuses any destination inside a repo working directory, and never writes to the source. Since `OPS-26`, a destination that refuses writes stops the surface reporting itself healthy instead of archiving nothing in silence - it was PROVOKED before it was fixed, and the provocation refuted half the item as filed. **Date a snapshot by its filename stamp, never its mtime:** `shutil.copy2` carries the source's mtime onto the copy, so an archived file wears the game file's clock - off by up to **25.44 days** on the real tree, and right on 60.3 percent of snapshots, which is what makes a spot check confirm the wrong instrument |
-| Session watcher | **Done, armed from the session start-up step** | `lanternlight.armwatch` arms all four capture surfaces from one command: `python -m lanternlight.armwatch --dest-base C:/ll-captures`. Pass the BASE, not a dated path - it derives `<base>/<local date>` every pass and retargets at midnight, so an archive never claims to cover a day it does not. `ops.loop.watch` arms it as part of starting a session and refuses to start a second, never terminating anything. Its wrap-side check reports seven states and NAMES the surface that stopped; since `OPS-26` a surface whose copies are being refused stops advancing too, so a watcher that is running but archiving nothing no longer reads healthy. `ROADMAP.md` items 4d (closed 2026-09-01), 4e, 4f and `OPS-26` |
-| Dungeon data | **Prologue measured** | Lifecycle, escape portals, loot, death and escape states all observed. `docs/FINDINGS.md` section 9 |
-| Raid / PvP data | **Solo measured, PvP unmeasured** | Solo explores are now measured at non-zero `matchId`, which **refutes** the old assumption that a non-zero `matchId` means a matchmade run. No run with another player has been observed |
-| GVAS `.sav` reader | **Done, one gap named** | Every save parses with zero undecoded bytes, including 263 captured generations of the transient run-scoped save. Natively serialised structs (`Vector`, `Rotator`, `Quat`, `Vector2D`) are handed back verbatim and **named** undecoded rather than guessed - `Vector` and `Rotator` share a width, so only the name separates them. Published parsers do not work on this build - UE 5.4+ changed the property tag |
-| GVAS `.sav` **writer** | **Done** | `serialise(parse(raw)) == raw`, byte-identical on **276** files - 6 fixtures, 7 live saves, all 263 captures. Byte identity is a far harsher oracle than value equality: it immediately caught a `TextProperty` flags word the reader had been silently discarding since it was written. `transform()` and `rebuild()` recompute every enclosing `Size`, so nothing is hand-patched |
-| Transient-save fixture | **Committed** | `tests/fixtures/gvas/standalone_slot.gvas.b64`, 19,867 bytes, built by a committed and reproducible builder. It scans **zero** identifiers where its 177,878-byte source scans **882** - the positive control is what makes the zero mean anything |
-| Live log tail | **Library done, no service** | `lanternlight.tail` follows an appending log, holds back any line not yet newline-terminated, survives in-place truncation and delete-and-recreate, holds no handle between polls, and redacts before any sink. Two things were measured rather than assumed: `st_ino` is **preserved** across in-place truncation and **changes** on delete-and-recreate, so neither identity nor size alone can see both cases; and the log carries 594 embedded control characters that `str.splitlines()` treats as line breaks while `bytes.splitlines()` does not, so the reader splits bytes **before** decoding. Port 8811 is still reserved and **nothing is listening**. `ROADMAP.md` item 3 |
-| Damage series reader | **Done** | `lanternlight.damage` accumulates the game's rolling damage window across generations and deduplicates it - 424 readings to 21 distinct hits over one run. It found that the save's `timeStamp` is **not a Unix epoch**: it encodes local wall clock as though it were UTC, confirmed against both capture mtimes and the log's real-UTC clock, so `to_utc()` refuses without an explicit offset rather than shifting every hit by hours. `ROADMAP.md` item 7 |
-| **Emberforge** | **Empty, but no longer blocked** | It still **computes nothing**, and it will not until a number is seen twice. What changed on 2026-08-11 is that the input exists: the game writes **per-hit damage** with sub-millisecond timestamps, and the log binds damage to ability names. The 21 hits measured so far are damage **taken**, which constrains survivability rather than build math; outgoing damage lives in the log at four samples. No coefficient may be published until the same value appears in an **independent run**. `ROADMAP.md` items 7 and 7b |
-| Dashboard | **Does not exist** | Port 8810 reserved. See `BACKLOG.md` |
-| Packaged release | **None** | No wheel, no installer, no tagged version |
+| Area | State |
+|---|---|
+| **Emberforge** | Computes nothing yet. No coefficient is published until the same value appears in an independent run |
+| **Dashboard** | Port 8810 reserved, nothing listening |
+| **Packaged release** | No wheel, no installer, no tagged version |
 
-If a row above says "not started", believe it. Nothing here is oversold.
+## What is next
 
-## Requirements
+The open work splits into two gates.
 
-- Windows (the game, and the paths, are Windows-only)
-- Python 3.14
-- A local install of Mistfall Hunter, if you want to run anything against real
-  data. The tests do not require the game.
+**Measurements that need the game client, with a player at the keyboard.** The
+ammo-family and talent tables, the Sorcerer single-weapon question, the
+weapon-stance toggle, the stack buff at its ceiling, the last two affix ids, a
+forward baseline after the client patch, the meter's white Progress Record row -
+which needs a capture with longer stable stretches - and the first real raid.
 
-No third-party runtime dependencies are required for the current surface.
+Emberforge unblocks from here, and the input already exists: the game writes
+per-hit damage with sub-millisecond timestamps, and the log binds damage to
+ability names. What is missing is a second independent run of the same value.
+Until then the overlay shows dashed rows rather than a fabricated one.
+
+**Decisions that are parked.** A few items are waiting on a ruling rather than
+on work.
+
+Every open item carries an acceptance criterion in [`ROADMAP.md`](ROADMAP.md),
+and every closed one is kept verbatim in
+[`docs/ROADMAP_ARCHIVE.md`](docs/ROADMAP_ARCHIVE.md) - the shape of a bug is the
+useful part.
+
+## What it reads
+
+```mermaid
+flowchart TD
+  G["Mistfall Hunter<br/>never touched"]
+  L["MistfallHunter.log<br/>live-appending"]
+  S["GVAS .sav files<br/>unencrypted"]
+  P["AvgPrice_*.ini<br/>market cache"]
+  C["Passive screen capture<br/>operator's own display"]
+  T["tail + logparse<br/>redact inline"]
+  RS["gvas, savewatch, damage,<br/>avgprice, vision_meter"]
+  O{{"redact<br/>before anything leaves"}}
+  E["Emberforge<br/>not built"]
+  W["Overlay window"]
+
+  G -->|writes| L
+  G -->|writes| S
+  G -->|writes| P
+  G -.->|renders| C
+  L --> T
+  S --> RS
+  P --> RS
+  C --> RS
+  T --> O
+  RS --> O
+  O -.->|planned| E
+  E -.->|planned| W
+```
+
+Every arrow points **out of** the game. None point back, and none ever will.
+
+- **The log**, at `%LOCALAPPDATA%\MistfallHunter\Saved\Logs\MistfallHunter.log` -
+  the primary surface, and that is a decision rather than an accident
+  ([ADR-003](docs/adr/ADR-003-log-is-primary-surface.md)).
+- **GVAS saves** under the same tree - plain Unreal `GVAS`, unencrypted. A
+  reader enumerates them rather than assuming, because one of them exists only
+  for the duration of a run.
+- **`AvgPrice_937566.ini`** - the market and trade-price cache.
+- **Passive desktop capture** - the only route to values the game renders but
+  never writes down. No overlay, no swapchain hook, no window hook.
+
+The two dashed edges are not built: Emberforge computes nothing, so the overlay
+is not fed from it yet.
+
+**Where redaction actually sits.** The log reader redacts inline, because the log
+is the surface that carries a SteamID64, a Steam persona, publisher SDK and EOS
+account ids and an IP-resolved location. The other readers hand back what the
+game wrote, and the redactor is the gate on the way OUT instead:
+`ops.outbox.deliver` for anything sent off this machine, and
+`tests/test_no_pii.py` for anything reaching a commit. The save watcher never
+redacts a snapshot - it refuses any destination inside a repository working
+directory, which is the same policy enforced at a different layer.
+[ADR-004](docs/adr/ADR-004-redaction-is-mandatory.md)
 
 ## Quick start
 
-```
+```bash
 git clone https://github.com/Remus3/Lanternlight
 cd Lanternlight
 python scripts/install_hooks.py
 python -m pytest
 ```
 
-`install_hooks.py` is not optional housekeeping - a fresh clone runs **zero**
-git hooks until you run it, because `core.hooksPath` is local config and is
-never cloned. See `docs/OPERATIONS.md`.
+`install_hooks.py` is not optional housekeeping: a fresh clone runs **zero** git
+hooks until you run it, because `core.hooksPath` is local config and is never
+cloned. See [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
+
+To see the overlay panel itself:
+
+```bash
+python -m overlay.window
+```
+
+It opens the always-on-top window with its waiting-for-data panel. Nothing is
+computed yet, so the rows are dashed - that is the design, not a placeholder.
+
+### Requirements
+
+- **Windows** - the game, and the paths, are Windows-only
+- **Python 3.14**
+- **No third-party runtime dependencies in the library.** Pillow is imported
+  lazily and only by the screen-capture and meter-OCR paths, and the vision
+  tests do require it
+- A local install of Mistfall Hunter, only if you want to run against real data.
+  The tests do not need the game.
+
+> Use `git clone`, not `git archive`. Dozens of tests ask `git` about the tree
+> itself, so without a `.git` directory a source export reads as a broken
+> checkout rather than as a clean one.
+
+## How this repository works
+
+Four rules, each enforced by tests, and each adopted after a measured failure.
+
+1. **Never touch the game process.** There is no debug flag that makes an
+   exception. If a feature needs one, the feature is rejected.
+2. **Every change starts with a failing test.** Write it, watch it fail, then
+   implement. Almost every fact here is a measurement, and a test is how a
+   measurement stops being a memory.
+3. **Omit rather than guess.** A missing number is recoverable; a confident
+   wrong one poisons everything downstream of it.
+4. **Redact before anything leaves the machine.** The log carries a SteamID64, a
+   Steam persona, publisher SDK and EOS account ids, and an IP-resolved
+   location.
+
+<details>
+<summary><b>Continuity - how a cold session picks this up</b></summary>
+
+State lives on disk, never in a context window. `docs/LEDGER.md` is an
+append-only record of what was decided and why, `ROADMAP.md` holds the open
+items with their acceptance criteria, and `docs/adr/` holds the decisions that
+are not open for re-litigation. Work runs in specialist lanes with enforced file
+ownership so two lanes never race, and every "done" claim gets an independent
+pass that is trying to refute it.
+
+Both continuity documents are split rather than trimmed: the live file holds the
+open and recent material, and
+[`docs/ROADMAP_ARCHIVE.md`](docs/ROADMAP_ARCHIVE.md) and
+[`docs/LEDGER_ARCHIVE.md`](docs/LEDGER_ARCHIVE.md) hold the rest verbatim. **An
+empty search of one half is not a claim about the project**, only about which
+half you searched.
+
+</details>
+
+## Contributing
+
+Read [`CONTRIBUTING.md`](CONTRIBUTING.md) first - the four rules above are
+stricter than usual, and a pull request is measured against them. Two smaller
+conventions are worth knowing before a first PR:
+
+- **7-bit ASCII only** in authored content - code, comments, docstrings,
+  Markdown, commit messages. Use `" - "` for a clause break and `-` otherwise.
+- **No log excerpt, fixture or sample is committed without passing the
+  redactor.**
+- **No `Co-Authored-By` trailer on a commit.**
+
+Also worth reading: [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) - be decent,
+argue with the work. [`SECURITY.md`](SECURITY.md) - how to report a
+vulnerability privately, and why cheats and anti-cheat bypasses are out of scope
+here.
 
 ## Documentation
 
@@ -141,60 +251,15 @@ never cloned. See `docs/OPERATIONS.md`.
 |---|---|
 | [`docs/FINDINGS.md`](docs/FINDINGS.md) | The feasibility probe. Every line is a measurement, and where something was not measured it says so |
 | [`docs/OBSERVED_IDS.md`](docs/OBSERVED_IDS.md) | First-party id observations, each with the method that established it |
-| [`docs/AFFIXES.md`](docs/AFFIXES.md) | **What the game STATES**, read off its own tooltips - affix ladders, the gem inlay rules, item stats. Kept apart from the measured record on purpose: a tooltip is a developer claim, not an observation |
-| [`docs/CLASSES.md`](docs/CLASSES.md) | **Single source of truth for all six classes.** Six independent research passes, adjudicated by a seventh agent that wrote none of them |
-| [`docs/CLASS_RESEARCH.md`](docs/CLASS_RESEARCH.md) | Blackarrow vs Shadowstrix, the earlier decision record behind the operator's class choice |
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Module map, the three data surfaces, and where the redactor sits |
+| [`docs/AFFIXES.md`](docs/AFFIXES.md) | What the game **states**, read off its own tooltips. A tooltip is a developer claim, kept apart from the measured record |
+| [`docs/CLASSES.md`](docs/CLASSES.md) | Single source of truth for all six classes - six independent research passes, adjudicated by a seventh reviewer |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Module map, the data surfaces, and where the redactor sits |
 | [`docs/OPERATIONS.md`](docs/OPERATIONS.md) | How to run things, plus the safety boundary as an operational rule |
+| [`docs/OVERLAY.md`](docs/OVERLAY.md) | The always-on-top window design |
 | [`docs/adr/README.md`](docs/adr/README.md) | Architectural decisions, indexed |
-| [`ROADMAP.md`](ROADMAP.md) | What is next, in priority order, each with an acceptance criterion. Open items only since 2026-09-08 - closed ones are one hop away in the archive below, and the roadmap carries a stub linking to each |
-| [`docs/ROADMAP_ARCHIVE.md`](docs/ROADMAP_ARCHIVE.md) | Every closed and refuted roadmap item, verbatim. Kept rather than deleted, because the shape of a bug is the useful part |
-| [`docs/LEDGER_ARCHIVE.md`](docs/LEDGER_ARCHIVE.md) | The older half of the ledger, verbatim and in order |
+| [`ROADMAP.md`](ROADMAP.md) | What is next, in priority order, each with an acceptance criterion |
+| [`docs/LEDGER.md`](docs/LEDGER.md) | Append-only session record, newest first |
 | [`BACKLOG.md`](BACKLOG.md) | Aspirational. Nothing here is committed to |
-| [`WAKEUP_NOTES.md`](WAKEUP_NOTES.md) | Session hand-off |
-
-**The two continuity documents are split, and nothing was deleted.** They had
-grown to 634 KB and 868 KB, which is a size nobody reads - so on 2026-09-08 the
-closed material moved into the two archives above and the live files kept the
-open items and the newest entries. **An empty search of one half is therefore
-not a claim about the project**, only about which half you searched. `ROADMAP.md`
-carries an `Archive index` with a one-line stub per archived item, and a test
-proves every one of them still resolves.
-
-## Contributing
-
-Read [`CONTRIBUTING.md`](CONTRIBUTING.md) before writing code - it has four
-rules that are stricter than usual, and each exists because of a measured
-failure rather than a preference. The shortest version: never touch the game
-process, start with a failing test and watch it fail, omit rather than guess,
-and redact before anything leaves the machine.
-
-- [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) - be decent, argue with the work
-- [`SECURITY.md`](SECURITY.md) - how to report a vulnerability privately, and
-  why cheats and anti-cheat bypasses are out of scope here
-
-## Contributing
-
-Two house rules, both enforced by tests rather than by review.
-
-1. **7-bit ASCII only.** No em-dashes, no en-dashes, no smart quotes, anywhere
-   in authored content - code, comments, docstrings, Markdown, commit messages.
-   Use `" - "` for a clause break and `-` otherwise.
-2. **Every feature starts with a failing test.** Write the characterization or
-   regression test first, watch it fail, then implement. This matters more than
-   usual here: almost every fact in this repo is a measurement, and a test is
-   how a measurement stops being a memory.
-
-Two smaller conventions worth knowing before your first PR:
-
-- **No log excerpt, fixture or sample may be committed without passing through
-  the redactor.** The game log carries a SteamID64, a Steam persona, publisher
-  SDK and EOS account ids, and an IP-resolved location. See
-  [ADR-004](docs/adr/ADR-004-redaction-is-mandatory.md).
-- If you do not know a number, leave the field out. A missing value is
-  recoverable later; a confident wrong one poisons everything downstream of it.
-
-Do not add a `Co-Authored-By` trailer to commits.
 
 ## License
 
@@ -204,8 +269,7 @@ Apache License 2.0. Copyright 2026 Moonbeam. See [`LICENSE`](LICENSE).
 Games, or Valve.** Mistfall Hunter and all related names and marks belong to
 their respective owners.
 
-**No game assets or extracted game data are redistributed by this project.**
-That statement is trivially true and will stay true: the game's content is
-encrypted and this project has no means, and no intention, of decrypting it.
-Everything Lanternlight publishes is either its own code, or an observation
-recorded by an operator watching their own screen.
+**No game assets or extracted game data are redistributed by this project.** The
+game's content is encrypted, and this project has no means - and no intention -
+of decrypting it. Everything Lanternlight publishes is either its own code, or
+an observation recorded by an operator watching their own screen.
