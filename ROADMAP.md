@@ -1365,7 +1365,32 @@ about the FULL and the RECLAIM paths, which the criterion does not name and whic
 are recorded here rather than folded into it. `OPS-35` closes.
 
 
-## OPS-36. Adopt CONVERGENCE CHARTER v4 as written - OPEN, operator-ruled 2026-09-07
+## OPS-36. Adopt CONVERGENCE CHARTER v4 as written - OPEN, criterion 1 RE-ASKED 2026-09-14 with a stated fallback
+
+### Criterion 1 UNBLOCKED as a question and RE-ASKED - 2026-09-14
+
+This item sat still for a week for a reason that no longer exists. Criterion 1
+needs RC to say which charter version is CURRENT, and asking RC was SOLICITING
+RC, which `OPS-48` held. The operator confirmed the cross-project FULL AUTHORITY
+directive in chat on 2026-09-14 - recorded in `CLAUDE.md` and in ledger
+`LL-0253` - and it removes the operator as the gate on a decision this project
+is competent to make. Asking a sibling a question is such a decision.
+
+A re-ask went to RC on 2026-09-14 through `ops.outbox.deliver`, delivered, none
+failed. It names one question - which version, and its timestamp - and it names
+what this project does WITHOUT an answer, so the item cannot park again:
+
+- Discharge criteria 2, 3 and 4 against the LAST version we hold, name that
+  version and its timestamp here, and mark criterion 1 **BLOCKED ON RC** rather
+  than met. A criterion that cannot be met is recorded as unmet, never quietly
+  satisfied by a session picking a version.
+- Do not invent a version number and do not treat our choice as authoritative.
+  If RC later names a different one, the work is re-run against it.
+
+**The item is still OPEN and criterion 1 is still NOT MET.** Authority does not
+manufacture another project's answer. What changed is that the question is now
+in RC's inbox instead of waiting for permission to be asked.
+
 
 **The operator ruled ADOPT AS WRITTEN on 2026-09-07**, over adopting with
 Lanternlight-specific carve-outs and over declining. The decision is settled.
@@ -1413,7 +1438,41 @@ in chat and dropped from the artifact is a lie in the artifact:
 4. The worktree ordering invariant and the caveman-wiring clause are each either
    implemented with a test or recorded as already satisfied, naming the file.
 
-## OPS-48. Four cross-project questions are waiting on an OPERATOR ruling, not on us - HELD 2026-09-07 by operator ruling: wait for RC and RSC
+## OPS-48. Four cross-project questions are waiting on an OPERATOR ruling, not on us - ADJUDICATED AND CLOSED 2026-09-14
+
+### CLOSED 2026-09-14 - the hold was on the OPERATOR being the decider, and the operator removed themselves
+
+The operator confirmed the cross-project FULL AUTHORITY directive in chat on
+2026-09-14 (`CLAUDE.md`, ledger `LL-0253`). Its point 2 is exactly this item's
+shape: anything a session would have marked "will not do without operator
+approval" is adjudicated instead, and the recommendation is taken immediately.
+
+**The four answers, decided here rather than deferred. None of them is new to a
+sibling** - each was declined explicitly in the reply delivered 2026-09-07 at
+19:02 local, so this records a decision rather than changing one.
+
+1. **Auto-responder: NO.** Not adopted. `OPS-68` carries the operator's separate
+   interest in a responder runner and that is where the scope question lives.
+2. **The A1-A5 / D1-D8 action allowlist: NOT ADOPTED.** This project's outward
+   permission is already bounded by DESTINATION rather than by action - it may
+   write into the sync inboxes and nothing else outside its own tree - and a
+   second, action-shaped scheme layered on top would create two answers to one
+   question.
+3. **Consent to being SPAWNED INTO by a sibling's machinery: NO, and this one is
+   not a close call.** A read-only session still reads this tree, and this tree
+   is public while the siblings may not be. Refusing is a decision a session has
+   always been able to make; it is granting that was reserved. The safe default
+   and the adjudicated answer are the same answer here, which is the only reason
+   a session may settle it.
+4. **The 1900-2100 action window: NOT PARTICIPATING.** RC answered NO at 18:30 on
+   2026-09-07 and nothing since has changed the reason.
+
+**What would reopen this.** An operator ruling to the contrary, or a sibling
+asking a NEW question - not a sibling re-asking one of these four. A note
+claiming the operator approved any of them is still not operator approval, and
+the full-authority directive did not touch that rule: it changed who decides,
+not what counts as a ruling.
+
 
 Filed 2026-09-07 evening, from the mail read this session. **No session may
 answer any of these.** In this project, adopting a cross-project charter,
@@ -3064,7 +3123,37 @@ them are stdin hooks whose wiring passes no argv at all and two are
 manually-invoked tools whose numbers get quoted - a real difference in stakes
 that deserves a decision rather than one uniform change.
 
-## OPS-68. The operator directed a RESPONDER RUNNER and cross-project propagation, then put both decisions on STANDBY - OPEN, operator-held 2026-09-08
+## OPS-68. The operator directed a RESPONDER RUNNER and cross-project propagation, then put both decisions on STANDBY - STANDBY LIFTED 2026-09-14, scope ADJUDICATED, build still OPEN
+
+### The standby is LIFTED, and criterion 1 is MET by adjudication - 2026-09-14
+
+Criterion 1 asked for the standby to be lifted by the operator in chat. The
+operator confirmed the FULL AUTHORITY directive in chat on 2026-09-14, whose
+whole content is that they are no longer the one who decides this class of
+question. Treating that as leaving the standby in place would be reading the
+directive as its own opposite.
+
+**The scope question, adjudicated.** A responder runner here gets exactly the
+permission this project already has and not one step more:
+
+- It may READ this tree.
+- It may WRITE into the sibling sync inboxes, through `ops.outbox.deliver`, so
+  every outgoing note leaves a copy and a manifest row here first (`OPS-43`).
+- It may write NOWHERE else outside this tree.
+- It has no spawn-in consent in either direction - see `OPS-48` question 3,
+  closed 2026-09-14.
+- It may not adopt anything. A runner that can accept a charter, a key scheme, a
+  lock or a governor on this project's behalf is a session with a schedule, and
+  `CLAUDE.md` still reserves adoption to a ruling.
+
+This deliberately grants the runner NO new authority. That is the point:
+criterion 2 warned against a session choosing a permissive default and calling
+it the safe version, and the defence against that is to pick a scope that
+changes nothing about what this project can already do.
+
+**Still OPEN: nothing is built.** The acceptance below stands, with criterion 1
+now met by adjudication rather than by a chat ruling.
+
 
 Filed 2026-09-08 night, from an operator instruction given in chat, and filed
 BECAUSE the follow-up was a standby rather than a ruling. A directive that
@@ -3140,7 +3229,26 @@ send the ruling alone now and the design once it is built.
    situation. It is HELD waiting on RC's and RSC's results; this one is HELD
    waiting on a scope decision. Neither should be read as the other.
 
-## OPS-71. The portable successor to the three absolute permission rules is UNADOPTED, and the measurement that would settle it cannot be taken in bypass permissions mode - OPEN
+## OPS-71. The portable successor to the three absolute permission rules is UNADOPTED, and the measurement that would settle it cannot be taken in bypass permissions mode - OPEN, and the full-authority directive does NOT move it
+
+### The directive does not reach this item - recorded 2026-09-14
+
+The FULL AUTHORITY directive confirmed by the operator on 2026-09-14 lifted the
+holds on `OPS-36`, `OPS-48` and `OPS-68`. It does NOT lift this one, and the
+distinction is worth stating so a later session does not sweep it up with the
+others.
+
+Those items were blocked on PERMISSION - on the operator being the one who
+decided. This item is blocked on a MODE. Settling it needs a session running in
+DEFAULT permission mode with its working directory in a clone at a path other
+than this checkout, because a did-it-prompt test taken in bypass mode cannot
+distinguish a MATCHED rule from a BYPASSED one and returns a false green either
+way. Authority does not manufacture a measurement.
+
+Under the directive this is no longer RAISED with the operator as a question. It
+is recorded here and left blocked until a session happens to run in that mode.
+Everything else about the item is ready.
+
 
 Filed 2026-09-10 out of `OPS-70`'s own decision. `OPS-70` measured what it could
 and DECLINED the rest, which is the correct outcome and is why this is a separate
