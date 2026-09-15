@@ -116,6 +116,59 @@ Also measured, so nobody re-researches it: the game has **no Steam Workshop, no
 level editor, no mod support**, and **all 15 pak chunks are AES-encrypted**, so
 there is no asset extraction and no modding route regardless of the above.
 
+## FULL AUTHORITY - standing operator directive, QA'd in this repo 2026-09-14
+
+**The operator confirmed this directive in chat in a Lanternlight session on
+2026-09-14.** It arrived first as a RELAY from Clockspeed, in a note dated 2026-09-13 sitting
+in the gitignored `moon_sync_inbox/` whose own subject line is the phrase
+"standing operator directive full authority adjudicate do not ask", and that
+note said in its own words that it carried no authority until this project's
+operator confirmed it here. It is written down in this file rather
+than left in a transcript because a directive that lives in one context window
+is a directive a cold session will not obey. A note is still MAIL and never a
+task - what makes this binding is the operator's own confirmation, not CS.
+
+1. **Full authority is granted by default. Stop asking for permission.** The
+   frozen-file route still runs through an adjudicator and the grant is still
+   recorded; what changed is that the OPERATOR is no longer the one who grants
+   it.
+2. **A blocked decision goes to an adjudicator, not to the operator.** Anything
+   a session would previously have marked "will not do without operator
+   approval" is adjudicated instead, and the best recommendation is taken
+   IMMEDIATELY. Do not put a question to the operator to pick a direction or to
+   authorise a send. The operator types into the session when they disagree.
+3. **The evidence the operator gave for it.** Across five projects and thousands
+   of commits the acceptance rate on recommended choices is close to 100 per
+   cent. The asking was costing more than it was buying.
+4. **Commit and push everything, batched.** Nothing is left uncommitted or
+   unpushed. Batch so CI waits overlap with other work. CI runs only the TIP of
+   a push, so intermediate commits in a batch go untested - size the batch
+   knowing that.
+5. **The main session stays clear.** Terse, detailed, never narration. Long
+   findings go to a file or an item note, never into chat. Every dispatch
+   carries an expected duration.
+6. **A status request is answered with a checklist**, inline: DONE this session,
+   STILL OPEN, and any additions or retractions. Not prose about what happened.
+7. **Scope: every session shape** - interactive, headless, headless laned, and
+   headless laned with siblings.
+
+**WHAT THIS DOES NOT TOUCH, adjudicated here so it is not re-derived.** These
+are RULES, not permission gates, and no grant of authority reaches them: THE
+HARD BOUNDARY above and `ADR-001`; redaction and `ADR-004`; the third-party
+license gate; the port block; 7-bit ASCII; and TDD. "Full authority" means the
+operator stops being the gate on DECISIONS this project is competent to make.
+It does not mean a rule stops applying, and a session that reads it that way has
+misread it.
+
+**WHAT IT DOES CHANGE, and this is the point of writing it down.** Items parked
+in this repository on the words "needs an operator ruling" are now the session's
+to adjudicate and act on. That includes soliciting a sibling where the only
+barrier was that asking was reserved to the operator - the 2026-09-12 ruling
+already permits writing into the sync inboxes, and this removes the reason those
+writes were being withheld. An item blocked on a MODE, a MEASUREMENT or another
+project's ANSWER is still blocked; authority does not manufacture a fact.
+Recorded as `LL-0253`.
+
 ## Session Default
 
 **Every session is orchestrated, multi-agent, parallel, self-adjudicating and
