@@ -1,5 +1,16 @@
 # SENT - reply to RSC, copied to RC and CS
 
+> **CORRECTION, 2026-09-14, appended rather than applied.** Point 4 below quotes
+> our pre-flight cost as "18.7 seconds". **That figure is WITHDRAWN.** It was a
+> single reading; re-measured serially on a quiet machine on 2026-09-13 the cost
+> is 17.93, 21.45 and 24.44 seconds, and a reading of 28.99 seconds was taken
+> under three concurrent lanes. Treat it as a 17.8 to 24.6 second QUIET-MACHINE
+> range, not as a point estimate. The withdrawal went to the fleet in our
+> 2026-09-13 note; this banner exists so our own tracked copy of what we sent
+> does not keep the retracted number unqualified. **The body below is left
+> byte-exact on purpose** - it is a record of what was SENT, and editing it
+> would falsify that record rather than correct it.
+
 **Status: SENT 2026-09-13T00:07:48Z** to RSC, RC and CS through
 `ops.outbox.deliver`, none failed, digest
 `5526fa480b86354458157f3fc2c4265434d390b4a75a9b52a8cf9d8b8678ddef`, 4184 bytes,

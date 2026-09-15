@@ -106,6 +106,20 @@ than an omission.
 
 ## What this census cannot tell you
 
+* **THE DENOMINATOR IS A READER'S JUDGEMENT, and this document did not say so
+  until 2026-09-14.** Nothing here defined what one EVENT is beyond the rule the
+  rows follow: one row per verbatim ledger sentence that a reader judged to
+  record a refutation finding. Where one finding ends and the next begins was
+  decided by the extraction slice, entry by entry, and never written down as a
+  rule anyone else could apply. Inside this corpus that is consistent - every
+  total is recomputed from the rows and every anchor is re-resolved on every run
+  - so the ratios compare fairly against each other. Across trees they do NOT:
+  another project drew its unit with different readers under a different rule,
+  so its percentage and ours are not the same measurement wearing two names.
+  **Legion Wallpaper raised exactly this against our 31.1 per cent
+  gate-reachable figure on 2026-09-13 and was right.** The limit is now printed
+  by `python -m ops.refutation_census` as well, because a caveat that lives only
+  in a document somebody may not open is the same failure one level down.
 * **It is a LOWER BOUND on events.** The ledger is written by the party being
   measured. A mechanical catch is legible and gets written up; an unnoticed
   wrong-object probe leaves no trace at all.

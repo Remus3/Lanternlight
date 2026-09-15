@@ -20,12 +20,15 @@ published had to be recomputed from the rows. That is mail rather than
 authority and it changes no rule here, but it is cheap to be immune to the
 failure it describes: this module never reads a total that anybody typed.
 
-THE TWO LIMITS, repeated in the printed report rather than left here. The
+THE THREE LIMITS, repeated in the printed report rather than left here. The
 ledger is written by the party being measured, so an event nobody wrote down is
 invisible and the census is a LOWER BOUND. And the split between "a real defect
 in the deliverable" and "a stale recital in a document" depends on how an entry
 chose to describe itself, so treat it as DIRECTIONAL rather than as a point
-estimate.
+estimate. And the DENOMINATOR is a reader's judgement about where one finding
+ends and the next begins, which makes every ratio here internally consistent and
+NOT comparable to another project's, because that project's readers drew the
+unit differently. Legion Wallpaper raised this on 2026-09-13 and was right.
 
 Run it with ``python -m ops.refutation_census``.
 """
@@ -354,11 +357,20 @@ def format_report(
         lines.append("  every anchor resolves verbatim and every entry is in window")
     lines += [
         "",
-        "TWO LIMITS ON THIS NUMBER:",
+        "THREE LIMITS ON THIS NUMBER:",
         "  The ledger is written by the party being measured, so an event nobody",
         "  wrote down is invisible here. The event count is a lower bound.",
         "  The (a) against (c) split depends on how an entry described itself, so",
         "  treat that split as directional rather than as a point estimate.",
+        "  THE DENOMINATOR. what one EVENT is was never defined beyond the rule",
+        "  the rows follow: one row per verbatim ledger sentence that a reader",
+        "  judged to record a refutation finding. Where one finding ends and the",
+        "  next begins is that reader's judgement. Inside this corpus that is",
+        "  consistent, because every total is recomputed from the rows and every",
+        "  anchor is re-resolved. Across trees it is NOT COMPARABLE, because",
+        "  another project drew its denominator with different readers under a",
+        "  different rule, so a percentage here and a percentage there are not",
+        "  the same measurement wearing two names.",
     ]
     return "\n".join(lines)
 

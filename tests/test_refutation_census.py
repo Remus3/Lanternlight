@@ -351,3 +351,56 @@ class TestTheRealCensus:
         )
         assert completed.returncode == 0, completed.stderr
         assert "LARGEST BUCKET:" in completed.stdout
+
+
+def _report_text() -> str:
+    """The report as the CLI prints it, recomputed rather than fixtured."""
+    rows = rc.load_rows()
+    text = rc.ledger_text()
+    window = rc.window_entries(text)
+    examined = rc.examined_entries(rc.DATA_PATH.read_text(encoding="utf-8"))
+    return rc.format_report(
+        rows,
+        window,
+        missing=rc.missing_anchors(rows, text),
+        stray=rc.out_of_window(rows, window),
+        unread=rc.unexamined(window, examined),
+    )
+
+
+class TestTheDenominatorIsDefinedWhereTheRatiosArePrinted:
+    """A ratio with an undefined denominator is not a measurement.
+
+    Legion Wallpaper raised this against us on 2026-09-13 and it LANDS: this
+    census publishes five ratios over "events" and nothing said what makes one
+    event. The unit is a per-slice judgement about where one refutation finding
+    ends and the next begins, which is fine INSIDE this corpus - every row is
+    anchored to a verbatim ledger sentence and every total is recomputed from
+    the rows - and is not fine across projects, because another tree's
+    denominator was drawn by different readers under a different rule.
+
+    So the report must say so where the numbers are, not only in a document
+    somebody may not open. A caveat stated in chat and dropped from the
+    artifact is a lie in the artifact, and this repository has that rule
+    written down.
+    """
+
+    def test_the_printed_report_defines_what_one_event_is(self) -> None:
+        report = _report_text()
+        assert "what one EVENT is" in report, report[-800:]
+
+    def test_the_printed_report_refuses_cross_project_comparison(self) -> None:
+        report = _report_text()
+        lowered = report.lower()
+        assert "not comparable" in lowered, report[-800:]
+        assert "another project" in lowered, report[-800:]
+
+    def test_the_limits_block_counts_itself_correctly(self) -> None:
+        # The block used to say TWO LIMITS. Adding a third and leaving the
+        # word alone is exactly the stale-recital bucket this census measures,
+        # so the count in the heading is pinned to the number of limits under
+        # it rather than left as prose nobody re-reads.
+        report = _report_text()
+        heading = [line for line in report.splitlines() if "LIMITS ON THIS" in line]
+        assert len(heading) == 1, heading
+        assert "THREE LIMITS" in heading[0], heading[0]
