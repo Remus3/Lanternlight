@@ -26,6 +26,8 @@ import shlex
 import shutil
 import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -848,3 +850,302 @@ def test_the_reader_sanitises_the_name_it_reports(tmp_path: Path, monkeypatch) -
 
     assert forged not in problem
     assert "unreadable.md?forged" in problem
+
+
+# ---------------------------------------------------------------------------
+# the SCAN path records the harness session id - and must never hang doing it
+# ---------------------------------------------------------------------------
+#
+# The default run of this module is a SessionStart hook. Until now it read no
+# stdin at all, so a scan could not be attributed to a session in the trigger
+# trace: "the report printed" and "the report printed FOR THIS SESSION" were
+# the same absence of evidence.
+#
+# Reading the payload is worth a row and nothing more, and the read itself is
+# the dangerous half. An UNBOUNDED stdin read on a hook is the single failure
+# that silently kills mail announcements: a plain read() on a pipe the harness
+# never closes blocks for ever, and a hand-run from a terminal blocks on a tty
+# that will never EOF. A byte cap alone does not help, because read(N) still
+# blocks until N bytes OR EOF. So the bound is TIME, and these tests exist to
+# keep it that way.
+#
+# Nothing else about the scan changes: it does not acknowledge, it does not
+# touch the seen store, it prints exactly what it printed before, and it still
+# exits 0.
+
+
+class _TtyStdin:
+    """A terminal: it would block for ever, so it must never be read.
+
+    The read COUNTER is the evidence, not the exception. A spy that only
+    raises is vacuous here by construction - the reader swallows every
+    exception on purpose, and ``AssertionError`` is an ``Exception``.
+    """
+
+    closed = False
+
+    def __init__(self) -> None:
+        self.read_calls = 0
+
+    def isatty(self) -> bool:
+        return True
+
+    def read(self, *args: object) -> str:
+        self.read_calls += 1
+        raise AssertionError("a tty stdin was read")
+
+
+class _BlockingStdin:
+    """A pipe nobody ever writes to and nobody ever closes."""
+
+    closed = False
+
+    def __init__(self, seconds: float = 30.0) -> None:
+        self.seconds = seconds
+        self.started = threading.Event()
+        self.read_calls = 0
+
+    def isatty(self) -> bool:
+        return False
+
+    def read(self, *args: object) -> str:
+        self.read_calls += 1
+        self.started.set()
+        time.sleep(self.seconds)
+        return ""
+
+
+class _PayloadStdin:
+    """A pipe carrying one hook payload, delivered whole on the first read."""
+
+    closed = False
+
+    def __init__(self, body: str) -> None:
+        self.body = body
+        self.read_calls = 0
+
+    def isatty(self) -> bool:
+        return False
+
+    def read(self, *args: object) -> str:
+        self.read_calls += 1
+        body, self.body = self.body, ""
+        return body
+
+
+def _scan_argv(inbox: Path, state: Path, reported: Path, trace: Path) -> list[str]:
+    return [
+        "--inbox",
+        str(inbox),
+        "--state",
+        str(state),
+        "--reported",
+        str(reported),
+        "--trace",
+        str(trace),
+    ]
+
+
+class TestTheScanPathRecordsItsSession:
+    def _tree4(self, tmp_path: Path) -> tuple[Path, Path, Path, Path]:
+        inbox, state = _tree(tmp_path)
+        # A NON-Markdown note on purpose: a new Markdown note makes classify()
+        # walk the whole repository tree, and this class times a run.
+        _write(inbox, "note.txt", "not markdown, so nothing is classified\n")
+        runtime = tmp_path / "runtime"
+        return inbox, state, runtime / "reported.json", runtime / "trace.json"
+
+    def test_a_tty_stdin_is_not_read_at_all_and_leaves_no_row(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+    ) -> None:
+        inbox, state, reported, trace = self._tree4(tmp_path)
+        stdin = _TtyStdin()
+        monkeypatch.setattr(sys, "stdin", stdin)
+
+        assert inbox_watch.main(_scan_argv(inbox, state, reported, trace)) == 0
+
+        assert stdin.read_calls == 0, "a hand-run from a terminal read the tty"
+        assert capsys.readouterr().out.strip(), "the report was not printed"
+        # STATED: no row at all, rather than a row with an empty session. A row
+        # per hand-run would consume the bounded trace for no evidence, and the
+        # rows it evicted are what the once-per-session acknowledge check reads.
+        rows, note = inbox_watch.load_trace(trace)
+        assert rows == []
+        assert note == ""
+
+    def test_a_stdin_that_never_produces_data_returns_within_the_timeout(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+    ) -> None:
+        """THE ANTI-HANG TEST. It exercises the real timeout, not a mock of it."""
+        inbox, state, reported, trace = self._tree4(tmp_path)
+        stdin = _BlockingStdin(seconds=30.0)
+        monkeypatch.setattr(sys, "stdin", stdin)
+
+        start = time.monotonic()
+        assert inbox_watch.main(_scan_argv(inbox, state, reported, trace)) == 0
+        elapsed = time.monotonic() - start
+
+        # The read really was attempted - otherwise this test would pass for
+        # the wrong reason, proving only that the tty skip fired.
+        assert stdin.started.wait(5.0), "the bounded reader never started"
+        assert stdin.read_calls == 1
+        assert elapsed < inbox_watch.SCAN_STDIN_TIMEOUT_SECONDS + 5.0, (
+            f"the scan waited {elapsed:.1f}s on a pipe that never produces data"
+        )
+        assert "MAIL RECEIVED" in capsys.readouterr().out
+        rows, _note = inbox_watch.load_trace(trace)
+        assert rows == [], "a timed-out read invented a session"
+
+    def test_a_well_formed_payload_records_the_session_id(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+    ) -> None:
+        inbox, state, reported, trace = self._tree4(tmp_path)
+        argv = _scan_argv(inbox, state, reported, trace)
+
+        monkeypatch.setattr(sys, "stdin", _TtyStdin())
+        assert inbox_watch.main(argv) == 0
+        without_stdin = capsys.readouterr().out
+
+        monkeypatch.setattr(
+            sys,
+            "stdin",
+            _PayloadStdin(
+                json.dumps({"hook_event_name": "SessionStart", "session_id": "session-nine"})
+            ),
+        )
+        assert inbox_watch.main(argv) == 0
+        with_stdin = capsys.readouterr().out
+
+        rows, _note = inbox_watch.load_trace(trace)
+        assert [row["session"] for row in rows] == ["session-nine"]
+        assert rows[0]["decision"] == inbox_watch.TRIGGER_SCANNED
+        # NOT ONE BYTE of the report changed, and nothing was acknowledged.
+        assert with_stdin == without_stdin
+        assert not state.exists(), "the scan path wrote the seen store"
+
+    def test_a_malformed_payload_records_no_session_and_does_not_raise(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+    ) -> None:
+        inbox, state, reported, trace = self._tree4(tmp_path)
+        monkeypatch.setattr(sys, "stdin", _PayloadStdin("{not json at all"))
+
+        assert inbox_watch.main(_scan_argv(inbox, state, reported, trace)) == 0
+
+        assert "MAIL RECEIVED" in capsys.readouterr().out
+        rows, _note = inbox_watch.load_trace(trace)
+        assert rows == []
+        assert not state.exists()
+
+    def test_a_scan_row_cannot_satisfy_the_once_per_session_acknowledge_check(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+    ) -> None:
+        """REGRESSION for the scan row reusing an acknowledge decision.
+
+        ``on_prompt_submit`` decides "already acknowledged this session" by
+        looking for a row whose decision is ``TRIGGER_ACKNOWLEDGED`` and whose
+        session matches. A scan row carrying that decision - or that session
+        under that decision - would make the operator's first real prompt a
+        no-op, and the mail would never be marked read at all. With the bug,
+        the call below returns ``TRIGGER_ALREADY`` and no seen store appears.
+        """
+        inbox, state, reported, trace = self._tree4(tmp_path)
+        session = "session-seven"
+        monkeypatch.setattr(
+            sys,
+            "stdin",
+            _PayloadStdin(
+                json.dumps({"hook_event_name": "SessionStart", "session_id": session})
+            ),
+        )
+
+        assert inbox_watch.main(_scan_argv(inbox, state, reported, trace)) == 0
+        capsys.readouterr()
+
+        rows, _note = inbox_watch.load_trace(trace)
+        assert rows, "the scan recorded nothing to regress against"
+        assert all(row["decision"] != inbox_watch.TRIGGER_ACKNOWLEDGED for row in rows)
+        assert not state.exists()
+
+        decision = inbox_watch.on_prompt_submit(
+            json.dumps({"hook_event_name": "UserPromptSubmit", "session_id": session}),
+            inbox=inbox,
+            state=state,
+            reported=reported,
+            trace=trace,
+        )
+
+        assert decision == inbox_watch.TRIGGER_ACKNOWLEDGED
+        assert state.exists(), "the operator's own turn acknowledged nothing"
+
+
+class TestTheTraceTrimKeepsWhatIsActuallyREAD:
+    """REGRESSION for scan rows evicting the one row anything reads.
+
+    Filed by an adversarial pass on 2026-09-15 against the first version of the
+    session-id scan row. The trace was trimmed with a bare ``rows[-200:]``, so
+    200 scans under 200 distinct session ids pushed a live session's
+    acknowledge row out of the file. ``on_prompt_submit`` then sees no
+    acknowledgement for that session and acknowledges a SECOND time - marking
+    mail that arrived mid-session as read without ever having shown it, which
+    is the one failure this whole watcher exists to prevent.
+    """
+
+    def _row(self, decision: str, session: str) -> dict:
+        return {"at": "2026-09-15T00:00:00", "event": "e", "session": session, "decision": decision}
+
+    def test_an_acknowledge_row_survives_a_flood_of_scan_rows(self, tmp_path: Path) -> None:
+        trace = tmp_path / "trace.json"
+        rows = [self._row(inbox_watch.TRIGGER_ACKNOWLEDGED, "the-live-session")]
+        rows += [
+            self._row(inbox_watch.TRIGGER_SCANNED, f"scan-{n}")
+            for n in range(inbox_watch.TRACE_LIMIT)
+        ]
+        assert inbox_watch.save_trace(rows, trace) == ""
+
+        kept, note = inbox_watch.load_trace(trace)
+        assert note == ""
+        assert len(kept) == inbox_watch.TRACE_LIMIT
+        surviving = [r for r in kept if r["decision"] == inbox_watch.TRIGGER_ACKNOWLEDGED]
+        assert [r["session"] for r in surviving] == ["the-live-session"], (
+            "the acknowledge row - the only row anything READS - was evicted by "
+            "evidence rows, so this session can acknowledge a second time"
+        )
+
+    def test_the_flood_does_not_reorder_what_survives(self, tmp_path: Path) -> None:
+        """Choosing WHICH rows survive must not change their sequence."""
+        trace = tmp_path / "trace.json"
+        rows = [
+            self._row(inbox_watch.TRIGGER_ACKNOWLEDGED, "ack-one"),
+            *[
+                self._row(inbox_watch.TRIGGER_SCANNED, f"scan-{n}")
+                for n in range(inbox_watch.TRACE_LIMIT)
+            ],
+            self._row(inbox_watch.TRIGGER_ACKNOWLEDGED, "ack-two"),
+        ]
+        assert inbox_watch.save_trace(rows, trace) == ""
+
+        kept, _note = inbox_watch.load_trace(trace)
+        sessions = [r["session"] for r in kept]
+        assert sessions.index("ack-one") == 0
+        assert sessions.index("ack-two") == len(sessions) - 1
+
+    def test_acknowledge_rows_alone_still_trim_to_the_newest(self, tmp_path: Path) -> None:
+        """The one case where a read row can still be lost, pinned rather than hidden."""
+        trace = tmp_path / "trace.json"
+        rows = [
+            self._row(inbox_watch.TRIGGER_ACKNOWLEDGED, f"ack-{n}")
+            for n in range(inbox_watch.TRACE_LIMIT + 5)
+        ]
+        assert inbox_watch.save_trace(rows, trace) == ""
+
+        kept, _note = inbox_watch.load_trace(trace)
+        assert len(kept) == inbox_watch.TRACE_LIMIT
+        assert kept[0]["session"] == "ack-5"
+        assert kept[-1]["session"] == f"ack-{inbox_watch.TRACE_LIMIT + 4}"
+
+    def test_a_short_trace_is_returned_untouched(self, tmp_path: Path) -> None:
+        trace = tmp_path / "trace.json"
+        rows = [self._row(inbox_watch.TRIGGER_SCANNED, f"s-{n}") for n in range(3)]
+        assert inbox_watch.save_trace(rows, trace) == ""
+        kept, _note = inbox_watch.load_trace(trace)
+        assert [r["session"] for r in kept] == ["s-0", "s-1", "s-2"]

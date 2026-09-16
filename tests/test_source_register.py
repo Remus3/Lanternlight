@@ -1258,6 +1258,47 @@ KNOWN_NON_HOSTS = frozenset(
         "word.word",
         "wrote.py",
         "ws.CreateShortcut",
+        # QUOTED BY `OPS-91`, the refusal to vendor a sibling's channel doc
+        # at the license gate. All five are MARKDOWN FILENAMES that the
+        # extractor reads as hosts because `.md` is Moldova's TLD - the exact
+        # trap this module's docstring names. None is a host, none resolves
+        # anywhere, and none is a source for THIS GAME, which is what the
+        # register in `docs/ECOSYSTEM.md` is a register of; putting a sibling
+        # project's note in that table would be a category error that made the
+        # table mean less.
+        #
+        # The two dated names are notes sitting in `moon_sync_inbox/`, which is
+        # gitignored in full, so the live tracked-file check can never absorb
+        # them however long they sit there. The other three are files in
+        # ANOTHER PROJECT'S tree that this project deliberately does not open:
+        # `CHANNEL.md` is the doc being refused, `CHARTER.md` is the tail the
+        # extractor emits for that project's convergence charter, and
+        # `LICENSE.md` is the tail of the redistribution-forbidding licence
+        # file in the three-way contradiction that is the reason for the
+        # refusal. A file we will not read is not a file `git ls-files` will
+        # ever answer for.
+        "2026-09-07-0055-from-RC-pre-public-audit-findings-eight-checks-two-of-you-are-public.md",
+        "2026-09-15-1858-from-RC-FYI-899f6eb957cc-channel-md-v1-conventions-and-charter-v4-is-current.md",
+        # Two more of the same class, from the OPS-91 / LL-0259 measurement of
+        # the MSIX package shadow. `CLAUDE.md.bak` is a stray file found INSIDE
+        # the Claude package's LocalCache twin on this machine, and `status.md`
+        # is the name of RC's fleet-status file under %LOCALAPPDATA%. Both are
+        # local filenames observed on this box; neither is a host and neither
+        # is tracked here, so the live tracked-file check cannot absorb them.
+        # `Node.js` is a RUNTIME NAME quoted by `OPS-92`, not a host. The
+        # extractor reads the trailing `.js` as a domain tail the same way it
+        # reads `.md`. The external source that item actually cites is the
+        # GitHub repository, which is registered by its own host.
+        "Node.js",
+        # `SKILL.md` is the FILENAME CONVENTION an external skills repository
+        # uses, quoted by `OPS-94`. Same `.md`-as-Moldova reading as the block
+        # above, and no such file is tracked here.
+        "SKILL.md",
+        "CLAUDE.md.bak",
+        "status.md",
+        "CHANNEL.md",
+        "CHARTER.md",
+        "LICENSE.md",
         }
 )
 

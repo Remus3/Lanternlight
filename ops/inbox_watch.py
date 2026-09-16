@@ -258,12 +258,14 @@ dependency; standard library only.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import os
 import re
 import sys
 import tempfile
+import threading
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -285,6 +287,10 @@ __all__ = [
     "TRIGGER_WRONG_EVENT",
     "TRIGGER_UNREADABLE",
     "TRIGGER_NO_SESSION",
+    "TRIGGER_SCANNED",
+    "SCAN_STDIN_TIMEOUT_SECONDS",
+    "SCAN_STDIN_BYTE_LIMIT",
+    "note_scan_session",
     "SCHEMA",
     "REPO_ROOT",
     "NAME_DISPLAY_LIMIT",
@@ -373,6 +379,39 @@ TRIGGER_ALREADY = "already-acknowledged-this-session"
 TRIGGER_WRONG_EVENT = "refused-wrong-event"
 TRIGGER_UNREADABLE = "refused-unreadable-payload"
 TRIGGER_NO_SESSION = "refused-no-session-id"
+
+#: The decision written by the SCAN path - the ordinary ``SessionStart`` run.
+#:
+#: It is a SEPARATE constant and that is the whole point. The once-per-session
+#: rule in :func:`on_prompt_submit` is decided by looking for a row whose
+#: decision is :data:`TRIGGER_ACKNOWLEDGED` and whose session matches, so a scan
+#: row carrying that decision would make the operator's first real prompt a
+#: no-op and the mail would never be marked read at all. A scan REPORTS; it
+#: acknowledges nothing, and its row says so in its own word.
+TRIGGER_SCANNED = "scan-reported-only"
+
+#: How long the scan path waits for a hook payload on stdin, in seconds.
+#:
+#: THE BOUND IS TIME, NOT BYTES, and that is not a preference. ``read(N)``
+#: blocks until N bytes OR end-of-file, so a byte cap alone buys nothing against
+#: the failure that matters: a pipe the harness opened and never closes, or a
+#: terminal that will never EOF. An unbounded read on a hook is the single
+#: failure that silently kills mail announcements - the report never prints and
+#: nothing anywhere says why.
+#:
+#: One second, chosen against what the two cases actually cost. A payload that
+#: is coming was written before this process started and is readable in well
+#: under a millisecond, so the wait is never paid when there is something to
+#: read; a payload that is not coming never arrives, so the wait is paid in full
+#: and exactly once per session start, for an OPTIONAL row of evidence. Three
+#: orders of magnitude of headroom over the real read, against one second of
+#: latency in the worst case, on a path whose output the operator is waiting for.
+SCAN_STDIN_TIMEOUT_SECONDS = 1.0
+
+#: How many characters of that payload are read. The harness writes a small JSON
+#: object; this is a guard against a runaway or hostile producer filling memory,
+#: not a size estimate. It is the SECOND bound, never the only one.
+SCAN_STDIN_BYTE_LIMIT = 65536
 
 #: Schema marker. An unrecognised value is treated as unreadable, not guessed.
 SCHEMA = 1
@@ -815,16 +854,48 @@ def load_trace(path: Path) -> tuple[list[dict], str]:
     return kept, ""
 
 
+def _trim_trace(rows: list[dict]) -> list[dict]:
+    """Keep the newest :data:`TRACE_LIMIT` rows, ACKNOWLEDGE ROWS FIRST.
+
+    A plain ``rows[-TRACE_LIMIT:]`` was wrong and an adversarial pass on
+    2026-09-15 measured it: seed one :data:`TRIGGER_ACKNOWLEDGED` row, then run
+    200 scans under 200 distinct session ids, and the acknowledge row is gone.
+    That matters because the acknowledge rows are the only ones anything READS -
+    :func:`on_prompt_submit` decides "already acknowledged this session" from
+    them. Losing one lets a live session acknowledge a SECOND time, and a second
+    acknowledgement marks mail that arrived mid-session as read without ever
+    having shown it. Evidence rows evicting the one load-bearing row is the
+    wrong way round.
+
+    So the budget is spent on acknowledge rows first and the remainder goes to
+    the newest of everything else. Chronological order is preserved: this
+    chooses WHICH rows survive, never their sequence. When acknowledge rows
+    alone overflow the limit the newest of them win, which is the old behaviour
+    for that class and the only case where a read row can still be lost.
+    """
+    if len(rows) <= TRACE_LIMIT:
+        return list(rows)
+    keep: set[int] = set()
+    acknowledged = [i for i, row in enumerate(rows) if row["decision"] == TRIGGER_ACKNOWLEDGED]
+    keep.update(acknowledged[-TRACE_LIMIT:])
+    if len(keep) < TRACE_LIMIT:
+        room = TRACE_LIMIT - len(keep)
+        others = [i for i in range(len(rows)) if i not in keep]
+        keep.update(others[-room:])
+    return [rows[i] for i in sorted(keep)]
+
+
 def save_trace(rows, path: Path) -> str:
     """Write the trigger trace atomically, newest last. Returns "" or the error.
 
-    Only the last :data:`TRACE_LIMIT` rows are kept. Writing this file is not an
-    acknowledgement and never has been: :func:`on_prompt_submit` decides first
-    and records afterwards.
+    Only :data:`TRACE_LIMIT` rows are kept, chosen by :func:`_trim_trace` rather
+    than by a bare tail slice - read there for why the choice matters. Writing
+    this file is not an acknowledgement and never has been:
+    :func:`on_prompt_submit` decides first and records afterwards.
     """
     trimmed = [{key: str(row.get(key, "")) for key in _TRACE_FIELDS} for row in rows]
     return _write_json_atomic(
-        {"schema": SCHEMA, "updated": _now(), "trace": trimmed[-TRACE_LIMIT:]},
+        {"schema": SCHEMA, "updated": _now(), "trace": _trim_trace(trimmed)},
         Path(path),
         "could not persist the trigger trace",
         "this invocation leaves no evidence that the hook ran",
@@ -1433,6 +1504,118 @@ def on_prompt_submit(
     return decision
 
 
+def _read_stdin_bounded(
+    timeout: float = SCAN_STDIN_TIMEOUT_SECONDS,
+    limit: int = SCAN_STDIN_BYTE_LIMIT,
+) -> str:
+    """Read at most ``limit`` characters from stdin, waiting at most ``timeout``.
+
+    Returns whatever arrived in time, or ``""``. Never raises, never blocks
+    beyond ``timeout``, and never reads a terminal at all.
+
+    THREE BOUNDS, AND EACH ONE IS LOAD-BEARING
+    ------------------------------------------
+    The tty test comes first, because ``python ops/inbox_watch.py`` typed by
+    hand is a documented thing to do - ``CLAUDE.md`` tells a session to run it
+    when no report appeared - and a terminal never reaches end-of-file. A
+    watcher that hangs when you run it to find out why you saw no mail is worse
+    than the absence it was run to explain. ``None`` and a closed stream are
+    refused in the same breath: a hook may be launched with no stdin at all.
+
+    The TIME bound is the one that matters, and it is why this costs a thread.
+    ``read(N)`` blocks until N characters OR end-of-file, so a byte cap alone
+    does not bound the wait - it bounds the memory. The read therefore runs on a
+    DAEMON thread and the caller joins it with a timeout: on expiry the caller
+    walks away with nothing, and because the thread is a daemon a reader still
+    stuck on a pipe that will never close can never keep the process alive.
+
+    The BYTE bound is the third, for a runaway or hostile producer: a harness is
+    not an attacker, but a bound that only exists against attackers is a bound
+    that is missing on the day the pipe is wrong rather than evil.
+    """
+    stream = getattr(sys, "stdin", None)
+    if stream is None:
+        return ""
+    try:
+        if getattr(stream, "closed", False):
+            return ""
+        if stream.isatty():
+            return ""
+    except Exception:  # a stdin that cannot answer is a stdin we do not read
+        return ""
+
+    box: list[str] = []
+
+    def _reader() -> None:
+        try:
+            box.append(stream.read(limit))
+        except Exception:  # fail soft and SILENT - this is optional evidence
+            return
+
+    try:
+        worker = threading.Thread(target=_reader, name="inbox-watch-stdin", daemon=True)
+        worker.start()
+        worker.join(timeout)
+    except Exception:
+        return ""
+    if worker.is_alive():
+        return ""
+    return box[0] if box and isinstance(box[0], str) else ""
+
+
+def note_scan_session(raw: str, *, trace: Path | None = None) -> str:
+    """Record that a SCAN ran for the session named in ``raw``. Returns that id.
+
+    This is the reporting path's only write outside the reported record, and it
+    is EVIDENCE rather than state: nothing in this module reads a
+    :data:`TRIGGER_SCANNED` row to decide anything. It exists because the
+    ``SessionStart`` report could not be attributed to a session at all - "the
+    hook printed" and "the hook printed for THIS session" left the same trace.
+
+    Reading is not acknowledging. Nothing here touches the seen store, changes
+    one byte of what :func:`render` prints, or alters an exit code.
+
+    NO SESSION ID MEANS NO ROW, deliberately. A row per hand-run or per
+    unreadable payload would spend the bounded trace on rows that say nothing,
+    and the rows it evicted are exactly the ones
+    :func:`on_prompt_submit` reads to decide it has already acknowledged this
+    session. The same reasoning caps this at ONE row per session: a scan that
+    finds its own session already recorded adds nothing.
+
+    Args:
+        raw: The hook payload as read from stdin. Anything unparseable is a
+            no-op.
+        trace: Trigger-trace path, defaulting to :func:`default_trace_path`.
+
+    Returns:
+        The sanitised session id if a row was written or already present, else
+        ``""``.
+    """
+    if not isinstance(raw, str) or not raw.strip():
+        return ""
+    try:
+        payload = json.loads(raw)
+    except (json.JSONDecodeError, ValueError):
+        return ""
+    if not isinstance(payload, dict):
+        return ""
+
+    session = _trace_field(payload.get("session_id"))
+    if not session:
+        return ""
+    event = _trace_field(payload.get("hook_event_name"))
+
+    trace_path = Path(trace) if trace is not None else default_trace_path()
+    rows, _note = load_trace(trace_path)
+    if any(row["decision"] == TRIGGER_SCANNED and row["session"] == session for row in rows):
+        return session
+    rows.append(
+        {"at": _now(), "event": event, "session": session, "decision": TRIGGER_SCANNED}
+    )
+    save_trace(rows, trace_path)
+    return session
+
+
 # ---------------------------------------------------------------------------
 # rendering
 # ---------------------------------------------------------------------------
@@ -1724,6 +1907,17 @@ def main(argv: list[str] | None = None) -> int:
             acknowledge=args.acknowledge,
         )
         sys.stdout.write(render(result) + "\n")
+        # ATTRIBUTION ONLY, AND IT HAPPENS AFTER THE REPORT IS OUT. The report
+        # is the deliverable; this row is optional evidence, so it must never
+        # be able to delay or replace one. Every failure inside is swallowed
+        # here as well as inside, because two fail-soft layers cost nothing and
+        # the cost of this path raising is a session that starts with no mail
+        # report at all.
+        with contextlib.suppress(Exception):
+            note_scan_session(
+                _read_stdin_bounded(),
+                trace=Path(args.trace) if args.trace else None,
+            )
     except SystemExit:
         raise
     except Exception as exc:  # a hook must never break a session

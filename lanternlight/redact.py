@@ -1504,6 +1504,16 @@ _IDENTITY_HALF_MIN_CHARS = 4
 #: address across all refs in both the author and committer roles.
 _GIT_TIMEOUT_SECONDS = 60
 
+#: Suppress the console window a console-subsystem child flashes when its
+#: parent has no console of its own - a ``pythonw`` process, or anything run
+#: under the Claude desktop harness. ``CREATE_NO_WINDOW`` is a Windows-only
+#: attribute and 0 is the legal inert value for ``creationflags`` everywhere
+#: else, so the ``getattr`` keeps this public repository importable on POSIX.
+#: Defined HERE rather than imported: this module is the redaction path and
+#: depends on nothing under ``ops/`` or ``tools/``. Pinned by
+#: ``tests/test_spawn_no_window.py``.
+_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
 
 @lru_cache(maxsize=8)
 def _derive_git_identities(root: str) -> tuple[str, ...]:
@@ -1538,6 +1548,7 @@ def _derive_git_identities(root: str) -> tuple[str, ...]:
                 errors="replace",
                 timeout=_GIT_TIMEOUT_SECONDS,
                 check=False,
+                creationflags=_NO_WINDOW,
             )
         except (OSError, subprocess.SubprocessError):
             continue

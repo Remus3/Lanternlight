@@ -136,6 +136,15 @@ NOT_CHECKED: tuple[str, ...] = (
 #: Stop event would make every commit a diff of session noise.
 RUNTIME_DIR = REPO_ROOT / "ops" / "runtime" / "stop_audit"
 
+#: Suppress the console window a console-subsystem child flashes when its
+#: parent has no console of its own - a ``pythonw`` process, or a hook running
+#: under the Claude desktop harness, which is exactly how this auditor is
+#: invoked. ``CREATE_NO_WINDOW`` is a Windows-only attribute and 0 is the legal
+#: inert value for ``creationflags`` everywhere else, so the ``getattr`` keeps
+#: this public repository importable on POSIX. Pinned by
+#: ``tests/test_spawn_no_window.py``.
+_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
 TRACE_NAME = "trace.jsonl"
 REPORT_NAME = "last_report.json"
 
@@ -476,6 +485,7 @@ def collect_count(root: Path | str | None = None, timeout: float = 120.0) -> int
             text=True,
             timeout=timeout,
             check=False,
+            creationflags=_NO_WINDOW,
         )
     except (OSError, subprocess.SubprocessError):
         return None

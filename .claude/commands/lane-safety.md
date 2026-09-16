@@ -42,6 +42,7 @@ Touch these paths and nothing else. Every other path in the repository belongs t
 - `tests/test_ascii_hygiene.py`
 - `tests/test_ports.py`
 - `tests/test_precommit_gate.py`
+- `tests/test_spawn_no_window.py`
 - `tests/test_process_capability.py`
 - `tests/test_source_register.py`
 - `tests/test_gitignore_shadowing.py`

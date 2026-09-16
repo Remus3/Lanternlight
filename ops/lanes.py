@@ -257,6 +257,12 @@ LANES: tuple[Lane, ...] = (
             "tests/test_ascii_hygiene.py",
             "tests/test_ports.py",
             "tests/test_precommit_gate.py",
+            # The console-flash guard, OPS-91. It parses lanternlight/redact.py,
+            # tools/precommit_gate.py and ops/stop_audit.py and fails if any
+            # spawn in them loses creationflags=CREATE_NO_WINDOW. Two of those
+            # three files are already this lane's, and a guard over a hygiene
+            # property belongs with the lane that may not weaken one.
+            "tests/test_spawn_no_window.py",
             "tests/test_process_capability.py",
             "tests/test_source_register.py",
             "tests/test_gitignore_shadowing.py",

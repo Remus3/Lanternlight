@@ -80,6 +80,35 @@ def _inbox_test_files() -> list[Path]:
     return sorted(files)
 
 
+def _argv_builders(tree: ast.AST) -> set[str]:
+    """Module-level helpers whose own body names ``--state``.
+
+    ONE LEVEL OF INDIRECTION, DELIBERATELY. A test that builds its argv through
+    a shared helper - ``main(_scan_argv(inbox, state, reported, trace))`` - is
+    injecting a throwaway path exactly as safely as one that spells the flag
+    inline, but the flag is then in the HELPER'S body and not in the test's.
+    Without this, five correct tests were reported as offenders on 2026-09-15
+    and the honest fix would have been to duplicate the same four flags five
+    times, which is how a guard teaches people to write worse code.
+
+    It does NOT recurse and it does NOT resolve imports. A helper that reaches
+    a state path through a second helper is still reported, and so is one in
+    another module. That is the conservative direction: this returns only names
+    it has READ the body of, so a helper that does not name the flag can never
+    launder a call.
+    """
+    builders: set[str] = set()
+    for node in ast.iter_child_nodes(tree):
+        if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+            continue
+        if any(
+            isinstance(inner, ast.Constant) and inner.value == "--state"
+            for inner in ast.walk(node)
+        ):
+            builders.add(node.name)
+    return builders
+
+
 def _calls_with_enclosing_function(tree: ast.AST):
     """Yield ``(function name, names a state path, Call node)`` for each call.
 
@@ -87,12 +116,21 @@ def _calls_with_enclosing_function(tree: ast.AST):
     the call, because ``main`` takes an argv LIST that tests build once and pass
     several times. Reading only the call site reported four false offenders on
     the first run of this guard.
+
+    A call to one of :func:`_argv_builders` counts as naming it too - see there
+    for why that is a narrowing of the false-red class and not a hole.
     """
+    builders = _argv_builders(tree)
     for node in ast.walk(tree):
         if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
             continue
         argv_flag = any(
             isinstance(inner, ast.Constant) and inner.value == "--state"
+            for inner in ast.walk(node)
+        ) or any(
+            isinstance(inner, ast.Call)
+            and isinstance(inner.func, ast.Name)
+            and inner.func.id in builders
             for inner in ast.walk(node)
         )
         for inner in ast.walk(node):

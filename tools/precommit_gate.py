@@ -39,6 +39,15 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 
+#: Suppress the console window a console-subsystem child flashes when its
+#: parent has no console of its own. This module runs as a ``PreToolUse`` hook
+#: under the Claude desktop harness, so every ``git.exe`` and ``ruff.exe`` it
+#: spawns hit exactly that case on every tool call. ``CREATE_NO_WINDOW`` is a
+#: Windows-only attribute and 0 is the legal inert value for ``creationflags``
+#: everywhere else, so the ``getattr`` keeps this public repository importable
+#: on POSIX. Pinned by ``tests/test_spawn_no_window.py``.
+_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
 # Built with chr() on purpose: this source file is itself subject to the 7-bit
 # ASCII rule, so the banned characters must not appear literally here. An
 # earlier draft pasted them in and would have failed tests/test_ascii_hygiene.
@@ -177,6 +186,7 @@ def _staged_paths() -> list[str]:
             text=True,
             timeout=15,
             check=False,
+            creationflags=_NO_WINDOW,
         )
     except (OSError, subprocess.SubprocessError):
         return []
@@ -274,6 +284,7 @@ def ruff_command() -> list[str] | None:
                 text=True,
                 timeout=60,
                 check=False,
+                creationflags=_NO_WINDOW,
             )
         except (OSError, subprocess.SubprocessError):
             continue
@@ -324,6 +335,7 @@ def _git_stdout(repo: Path, *args: str) -> str | None:
             text=True,
             timeout=120,
             check=False,
+            creationflags=_NO_WINDOW,
         )
     except (OSError, subprocess.SubprocessError):
         return None
@@ -618,6 +630,7 @@ def ruff_findings(repo: Path, path: str, source: str) -> list[LintFinding]:
             text=True,
             timeout=300,
             check=False,
+            creationflags=_NO_WINDOW,
         )
     except (OSError, subprocess.SubprocessError) as exc:
         raise RuffFailed(f"could not run ruff on {path}: {exc}") from exc
