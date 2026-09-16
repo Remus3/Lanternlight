@@ -252,6 +252,51 @@ grep "server_refreshKnightFeature" MistfallHunter.log
 grep "match state changed to" MistfallHunter.log
 ```
 
+### The MSIX shadow - why a path under `%LOCALAPPDATA%` can lie, and why this one does not
+
+Reported by sibling project RC on 2026-09-15 and MEASURED HERE the same day,
+because a claim about this machine is not a claim this project inherits.
+
+**The trap.** A tool shell or hook running under the Claude desktop app carries
+MSIX package identity. Anything it WRITES under `%LOCALAPPDATA%` or `%APPDATA%`
+can land in the package's LocalCache twin instead of the real path, and from
+then on reads from that harness can return the twin - silently, with no error
+and no permission failure. RC hit this on its own runtime state: a months-old
+shadow was being read by every harness shell while a scheduled task rewrote the
+real file on every poll. **Repo roots are NOT virtualised**, which is why this
+project's own runtime state lives under `ops/runtime/` and must stay there.
+
+**What was measured here, 2026-09-15, from BOTH shell tools this session has.**
+The twin tree exists on this machine at
+
+```
+%LOCALAPPDATA%\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Local\
+```
+
+and it is not empty - it carries a dozen directories and at least one stray
+`.bak` file, so the redirection is real here and not theoretical.
+
+- **There is NO `MistfallHunter` directory in the twin.** Checked from Git Bash
+  and independently from PowerShell; both say absent. The game writes its own
+  Saved tree as an ordinary unpackaged process, and nothing in this repository
+  writes into it. So the game log, the saves, the config and the price cache
+  read through `lanternlight/paths.py` are the REAL files. That is a
+  measurement, and it is written down so nobody re-derives it.
+- A `moonsync` directory DOES exist in the twin and is EMPTY, while the real
+  `%LOCALAPPDATA%\moonsync\` carried five live files whose mtimes were two
+  minutes old at the time of the check. Both shells read the real ones. So
+  reading another project's fleet-status file from a session on this box works
+  today - but the empty twin directory is the precursor state, and one harness
+  write into that path is all it would take to start shadowing it.
+
+**The rule this leaves.** Never have anything in this repository WRITE under
+`%LOCALAPPDATA%` or `%APPDATA%`. Reading the game's own files there is fine and
+is measured clean. If a future tool needs a runtime record, it goes under the
+repo root like every other one. `tools/frame_poller.py` writes under
+`~/.lanternlight/`, which is the user profile rather than either variable and is
+**UNVERIFIED** against this redirection - if that ever matters, measure it the
+way this section was measured rather than reasoning about it.
+
 ### Before you paste any of it anywhere
 
 The log contains the operator's SteamID64, Steam persona, GSDK openID and userId,
