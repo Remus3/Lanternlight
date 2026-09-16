@@ -228,3 +228,151 @@ class TestAgainstARealRepo:
         b = lane_launcher.ensure_worktree(lanes.by_id("safety"), repo_root=scratch_repo)
         assert a != b
         assert a.is_dir() and b.is_dir()
+
+
+def _names_force(argv: list[str]) -> bool:
+    """True when ``argv`` carries git's force flag in any spelling.
+
+    Written as a scan rather than a membership test because ``--force`` is not
+    the only spelling: git also accepts ``-f``, ``--force=...``, and short
+    option clusters such as ``-fv``. A guard that looked only for the long form
+    would be defeated by the shortest edit that defeats the invariant.
+    """
+    for token in argv:
+        if token.startswith("--"):
+            if token == "--force" or token.startswith("--force="):
+                return True
+        elif token.startswith("-") and len(token) > 1 and "f" in token[1:]:
+            return True
+    return False
+
+
+class TestTheWorktreeOrderingInvariant:
+    """CONVERGENCE CHARTER v4, the worktree ordering invariant.
+
+    Stated by the charter as: no worktree is removed until the work it holds
+    exists somewhere durable that survives the removal. The test that decides
+    it is "if this directory vanished right now, what would be lost?" - if the
+    answer is anything, it is not removable yet.
+
+    This project's implementation of that invariant is a single mechanism:
+    :func:`ops.lane_launcher.remove_worktree_argv` plans an UNFORCED removal,
+    and git itself then refuses to delete a worktree holding uncommitted or
+    untracked work. Nothing else enforces it.
+
+    That mechanism is switched off by four characters. An adversarial pass
+    showed that ``['git', 'worktree', 'remove', '--force', path]`` satisfied
+    every assertion the planning tests made, so the one guard the invariant
+    leaned on could be disabled without a single test noticing. These tests
+    close that: the first pins the flag's absence for every writable lane, and
+    the rest pin the BEHAVIOUR the flag's absence buys, against a real git
+    repository, so a future refactor that reaches the same outcome differently
+    is not punished while one that loses the refusal is.
+    """
+
+    def test_no_writable_lane_plans_a_forced_removal(self):
+        for lane in lanes.LANES:
+            if lane.read_only:
+                continue
+            argv = lane_launcher.remove_worktree_argv(lane)
+            assert not _names_force(argv), (
+                f"lane {lane.lane_id!r} plans a FORCED worktree removal: {argv}. "
+                "Forcing defeats git's refusal to delete a worktree holding "
+                "uncommitted work, which is the only mechanism enforcing the "
+                "CONVERGENCE CHARTER v4 worktree ordering invariant here."
+            )
+
+    def test_the_force_detector_itself_sees_every_spelling(self):
+        # Guards the guard: a detector blind to -f would pass a forced argv.
+        base = ["git", "worktree", "remove", "C:/somewhere"]
+        assert not _names_force(base)
+        for flag in ("--force", "--force=true", "-f", "-fv", "-vf"):
+            assert _names_force([*base[:3], flag, base[3]]), flag
+
+    def test_removal_is_refused_while_tracked_work_is_uncommitted(
+        self, scratch_repo, monkeypatch
+    ):
+        monkeypatch.setattr(lanes, "WORKTREE_ROOT", scratch_repo.parent / "wt")
+        lane = lanes.by_id("ingest")
+        wt = lane_launcher.ensure_worktree(lane, repo_root=scratch_repo)
+        (wt / "seed.txt").write_text("in-flight lane work\n", encoding="utf-8")
+
+        proc = subprocess.run(
+            [_toolguard.require("git"), *lane_launcher.remove_worktree_argv(lane)[1:]],
+            cwd=scratch_repo,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert proc.returncode != 0, (
+            "git removed a worktree holding uncommitted changes - the planned "
+            f"command must not be forced. stdout={proc.stdout!r}"
+        )
+        assert wt.is_dir()
+        assert (wt / "seed.txt").read_text(encoding="utf-8") == "in-flight lane work\n"
+
+    def test_removal_is_refused_while_untracked_work_is_present(
+        self, scratch_repo, monkeypatch
+    ):
+        # Untracked is the likelier shape here: a lane's new module exists on
+        # disk and in no commit, so the directory vanishing loses all of it.
+        monkeypatch.setattr(lanes, "WORKTREE_ROOT", scratch_repo.parent / "wt")
+        lane = lanes.by_id("ingest")
+        wt = lane_launcher.ensure_worktree(lane, repo_root=scratch_repo)
+        (wt / "brand_new_module.py").write_text("# not in any commit\n", encoding="utf-8")
+
+        proc = subprocess.run(
+            [_toolguard.require("git"), *lane_launcher.remove_worktree_argv(lane)[1:]],
+            cwd=scratch_repo,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert proc.returncode != 0, (
+            "git removed a worktree holding untracked work - the planned "
+            f"command must not be forced. stdout={proc.stdout!r}"
+        )
+        assert wt.is_dir()
+        assert (wt / "brand_new_module.py").exists()
+
+    def test_removal_succeeds_once_the_work_is_durable(
+        self, scratch_repo, monkeypatch
+    ):
+        # The other half of the pair. Without this, the two refusal tests above
+        # would also pass against a command that could never remove anything,
+        # and a removal step that never works is not the invariant either.
+        monkeypatch.setattr(lanes, "WORKTREE_ROOT", scratch_repo.parent / "wt")
+        lane = lanes.by_id("ingest")
+        wt = lane_launcher.ensure_worktree(lane, repo_root=scratch_repo)
+        (wt / "brand_new_module.py").write_text("# soon durable\n", encoding="utf-8")
+        _git("add", "-A", cwd=wt)
+        _git("-c", "user.email=t@e.invalid", "-c", "user.name=T",
+             "commit", "-m", "lane work", cwd=wt)
+
+        proc = subprocess.run(
+            [_toolguard.require("git"), *lane_launcher.remove_worktree_argv(lane)[1:]],
+            cwd=scratch_repo,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert proc.returncode == 0, (
+            "committed lane work is durable and the worktree must then be "
+            f"removable. stderr={proc.stderr!r}"
+        )
+        assert not wt.exists()
+        # The work survived the removal, which is what "durable" means here.
+        show = subprocess.run(
+            [_toolguard.require("git"), "show", f"{lane.branch_name()}:brand_new_module.py"],
+            cwd=scratch_repo,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        assert show.stdout.strip() == "# soon durable"
+
+    def test_the_docstring_still_states_why_it_is_unforced(self):
+        # The reason is the thing that decays. A future editor who adds --force
+        # to silence a cleanup failure should have to delete this sentence.
+        doc = lane_launcher.remove_worktree_argv.__doc__ or ""
+        assert "not forced" in doc.lower()

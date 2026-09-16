@@ -215,6 +215,31 @@ have seen what we could not read. Independently, :func:`render` refuses the
 required ``not result.groups``, which is False the moment any note exists, even
 a previously seen one.
 
+AND "I COULD NOT READ IT" IS NOT "IT IS GONE" - the same rule, aimed at the
+records rather than at the report. An entry that is on disk but unreadable is
+absent from the bytes this module could hash, and absence from the current
+listing is what WITHDRAWN means here, so without a third fact the two collapse
+into one. Both halves now carry that third fact and they carry it the same way:
+the stable NAME is recorded because the entry exists, and the seen-set PAIR is
+withheld because nothing was read. A drop did this already; :func:`_read_entries`
+returns its unreadable names so a FILE does too.
+
+The failure this prevents was manufactured rather than argued, on 2026-09-16,
+after a sibling reported the shape on its own tree. A ``PermissionError`` against
+one note that never moved produced "gone from the inbox since it was last
+listed", and the next acknowledging run pruned that note out of BOTH records.
+A fabricated withdrawal is the worst thing this module can emit, because a
+withdrawal is the one inbox event with no on-disk artifact left to check it
+against - nothing downstream can catch it.
+
+The whole-directory case was measured in the same pass and does NOT have this
+defect: :func:`scan` returns at its own ``OSError`` clause before any record is
+loaded, so both records came back byte-identical across a report run, an
+acknowledging run and a ``--acknowledge`` command line. A listing that fails
+BETWEEN the two enumerations is the case that needed the guard, and it REFUSES:
+no withdrawal is derived from a listing this run never obtained, and no
+acknowledgement is made on one.
+
 THE ONE AUTOMATIC TRIGGER, AND WHY IT IS NOT A DETECTOR - ``OPS-41``
 --------------------------------------------------------------------
 Leaving acknowledgement entirely manual was correct for safety and wrong for
@@ -279,6 +304,8 @@ __all__ = [
     "outbox_summary",
     "STATE_FILENAME",
     "REPORTED_FILENAME",
+    "REPORT_FILENAME",
+    "NAME_LIST_CAP",
     "TRACE_FILENAME",
     "TRACE_LIMIT",
     "PROMPT_EVENT",
@@ -287,6 +314,7 @@ __all__ = [
     "TRIGGER_WRONG_EVENT",
     "TRIGGER_UNREADABLE",
     "TRIGGER_NO_SESSION",
+    "TRIGGER_UNREADABLE_INBOX",
     "TRIGGER_SCANNED",
     "SCAN_STDIN_TIMEOUT_SECONDS",
     "SCAN_STDIN_BYTE_LIMIT",
@@ -302,6 +330,7 @@ __all__ = [
     "classify",
     "safe_label",
     "default_inbox",
+    "default_report_path",
     "default_reported_path",
     "default_state_path",
     "default_trace_path",
@@ -313,10 +342,12 @@ __all__ = [
     "main",
     "on_prompt_submit",
     "render",
+    "report_and_render",
     "save_reported",
     "save_seen",
     "save_trace",
     "temp_prefix_for",
+    "write_report",
 ]
 
 #: Repository root, resolved from this file's location: ops/inbox_watch.py.
@@ -352,6 +383,30 @@ STATE_FILENAME = "inbox_seen.json"
 #: being pulled before anybody acknowledged it. It never decides newness.
 REPORTED_FILENAME = "inbox_reported.json"
 
+#: Full-report file name, beside the two records above - ``OPS-91``.
+#:
+#: The report printed to stdout is CAPPED, and a capped report that simply loses
+#: the rest is not a report. This file holds the WHOLE listing, and the capped
+#: stdout carries a pointer at it. It lives under ``ops/runtime/`` which is
+#: already gitignored, so no ignore rule was added for it: the inbox listing is
+#: derived from a gitignored channel and nothing derived from that channel is
+#: ever committed.
+REPORT_FILENAME = "inbox_report.txt"
+
+#: How many full names any one list in the stdout report may show - ``OPS-91``.
+#:
+#: RC's watcher-contract clause 3 asks for a counts line, at most N full names,
+#: and a pointer to the rest. Ten is the N this project adopted. The number
+#: matters because the failure it prevents has happened here: a sibling dropped
+#: 49 files in one directory (``OPS-34``) and a session-start report long enough
+#: to scroll past is a report nobody reads, which is the same outcome as not
+#: reporting at all.
+#:
+#: The counts are never capped - only the NAMES are. A reader always learns how
+#: much mail there is; the cap only decides how much of it is spelled out before
+#: the pointer takes over.
+NAME_LIST_CAP = 10
+
 #: Trigger-trace file name, beside the two records above - ``OPS-41``.
 #:
 #: One bounded row per invocation of :func:`on_prompt_submit`, accepted or
@@ -379,6 +434,7 @@ TRIGGER_ALREADY = "already-acknowledged-this-session"
 TRIGGER_WRONG_EVENT = "refused-wrong-event"
 TRIGGER_UNREADABLE = "refused-unreadable-payload"
 TRIGGER_NO_SESSION = "refused-no-session-id"
+TRIGGER_UNREADABLE_INBOX = "refused-inbox-could-not-be-listed"
 
 #: The decision written by the SCAN path - the ordinary ``SessionStart`` run.
 #:
@@ -504,6 +560,17 @@ def default_reported_path(root: Path | None = None) -> Path:
 def default_trace_path(root: Path | None = None) -> Path:
     """Return the trigger-trace file path, beside the two records - ``OPS-41``."""
     return (root or REPO_ROOT) / "ops" / "runtime" / TRACE_FILENAME
+
+
+def default_report_path(root: Path | None = None) -> Path:
+    """Return the full-report file path, beside the records - ``OPS-91``.
+
+    Under ``ops/runtime/``, which ``.gitignore`` already covers. That is the
+    whole reason this directory was chosen: the report is a rendering of a
+    gitignored channel, and a file holding every name a sibling wrote must never
+    become committable by being put somewhere else.
+    """
+    return (root or REPO_ROOT) / "ops" / "runtime" / REPORT_FILENAME
 
 
 def drop_key_name(name: str) -> str:
@@ -902,10 +969,35 @@ def save_trace(rows, path: Path) -> str:
     )
 
 
+def write_report(text: str, path: Path) -> str:
+    """Write the FULL report atomically. Returns "" on success, else the error.
+
+    ``OPS-91``. The stdout report is capped and points here for the rest, so the
+    ordering is part of the contract rather than an implementation detail: a
+    reader who is handed a pointer must be able to open the file, which is only
+    true if this has already completed when the pointer is printed.
+    :func:`report_and_render` is what enforces that, and it refuses to emit a
+    pointer at all when this returns an error.
+
+    Temp-then-replace, like every other write in this module: a reader polling
+    the file must never see a splice of two reports.
+    """
+    return _write_atomic(
+        text if text.endswith("\n") else text + "\n",
+        Path(path),
+        "could not persist the full mail report",
+        "the capped report above lists everything instead of pointing at a file",
+    )
+
+
 def _write_json_atomic(payload: dict, target: Path, what: str, consequence: str) -> str:
     """Write one JSON document through temp-then-replace. Returns "" or an error."""
     body = json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=True) + "\n"
+    return _write_atomic(body, target, what, consequence)
 
+
+def _write_atomic(body: str, target: Path, what: str, consequence: str) -> str:
+    """Write one text document through temp-then-replace. Returns "" or an error."""
     tmp_path: Path | None = None
     try:
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -947,6 +1039,16 @@ class Group:
     verdict: str
     reason: str
     is_new: bool
+    #: Newest modification time among ``names``, seconds since the epoch.
+    #:
+    #: ``OPS-91``. It exists so the name cap can spend its budget on the NEWEST
+    #: entries rather than on whatever sorts first, and it is a stat of the disk
+    #: rather than a date parsed out of a filename: this channel's names carry a
+    #: date by convention, and a convention is not a measurement. It defaults to
+    #: ``0.0`` so a caller building a :class:`Group` by hand - every hostile-name
+    #: test in this suite does - is unaffected, and a group whose files could not
+    #: be stat'ed sorts oldest rather than winning the cap by accident.
+    mtime: float = 0.0
 
 
 @dataclass
@@ -991,6 +1093,8 @@ class Drop:
     is_new: bool
     problem: str = ""
     readable: bool = True
+    #: Modification time of the drop's own directory - see :class:`Group`.
+    mtime: float = 0.0
 
 
 @dataclass
@@ -1058,15 +1162,32 @@ def _read_entries(inbox: Path) -> tuple[list[tuple[str, bytes]], str]:
     note filename already carries: a top-level entry is named in the report so
     the operator can go and look at it. Nothing from inside a subdirectory drop
     passes through this function.
+
+    THE THIRD RETURN VALUE IS THE RAW NAME OF EVERY FILE THAT COULD NOT BE READ,
+    and it exists because omitting it fabricated withdrawals. An unreadable file
+    was simply absent from ``entries``, and absent from the current listing is
+    precisely this module's definition of WITHDRAWN - so a note that never moved
+    was reported as "gone from the inbox", and an acknowledging run under the
+    same fault pruned its pair out of the seen store and its name out of the
+    reported record. Measured 2026-09-16 by manufacturing a ``PermissionError``
+    against a file that stayed on disk throughout.
+
+    The names are returned RAW rather than through :func:`safe_label`, because
+    they are compared against the records rather than printed - the printed copy
+    is the ``problem`` string above, which is sanitised at this source. A caller
+    that renders one of these must route it through :func:`safe_label` itself,
+    exactly as the withdrawal block already does.
     """
     entries: list[tuple[str, bytes]] = []
     problems: list[str] = []
+    unreadable: list[str] = []
     for entry in sorted(inbox.iterdir()):
         if not entry.is_file():
             continue
         try:
             entries.append((entry.name, entry.read_bytes()))
         except OSError as exc:
+            unreadable.append(entry.name)
             # SANITISED AT THE SOURCE, not only where it is rendered.
             # OPS-39 defect 7: this string travels into Scan.detail, which
             # callers other than render() read, and a failure path is where
@@ -1077,7 +1198,11 @@ def _read_entries(inbox: Path) -> tuple[list[tuple[str, bytes]], str]:
                 f"{safe_label(entry.name, NOTE_NAME_DISPLAY_LIMIT)} "
                 f"({exc.__class__.__name__})"
             )
-    return entries, ("could not read: " + ", ".join(problems) if problems else "")
+    return (
+        entries,
+        ("could not read: " + ", ".join(problems) if problems else ""),
+        unreadable,
+    )
 
 
 def _manifest_digest(root: Path) -> tuple[str, int, int, str]:
@@ -1199,6 +1324,13 @@ def _read_drops(inbox: Path) -> tuple[list[Drop], str]:
             # sibling. See OUTBOX_DIRNAME for why this is a classification
             # rather than a silent skip.
             continue
+        # Stat'ed OUTSIDE the walk, and fail-soft to 0.0: this feeds the
+        # OPS-91 name cap and nothing else, so a directory we cannot stat must
+        # sort oldest rather than break the listing it appears in.
+        try:
+            entry_mtime = entry.stat().st_mtime
+        except OSError:
+            entry_mtime = 0.0
         try:
             digest, count, total, problem = _manifest_digest(entry)
             child_dirs, child_files = _child_counts(entry)
@@ -1215,6 +1347,7 @@ def _read_drops(inbox: Path) -> tuple[list[Drop], str]:
                     is_new=True,
                     problem=f"could not walk this drop ({exc.__class__.__name__})",
                     readable=False,
+                    mtime=entry_mtime,
                 )
             )
             continue
@@ -1228,6 +1361,7 @@ def _read_drops(inbox: Path) -> tuple[list[Drop], str]:
                 child_files=child_files,
                 is_new=True,
                 problem=problem,
+                mtime=entry_mtime,
             )
         )
     return drops, ("could not walk: " + ", ".join(problems) if problems else "")
@@ -1286,7 +1420,7 @@ def scan(
         return result
 
     try:
-        notes, read_problem = _read_entries(inbox_path)
+        notes, read_problem, unreadable_names = _read_entries(inbox_path)
     except OSError as exc:
         result.status = "error"
         result.detail = f"could not list {inbox_path} ({exc.__class__.__name__})"
@@ -1299,6 +1433,23 @@ def scan(
         result.detail = read_problem
 
     result.total_notes = len(notes)
+
+    # MODIFICATION TIMES, for the OPS-91 name cap and for nothing else.
+    #
+    # Stat'ed here rather than inside _read_entries, whose three return values
+    # are the bytes a digest is taken over, the sanitised problem string and the
+    # names it could not read - the facts the RECORDS are built from. A
+    # modification time is none of those; it feeds the display cap alone, and
+    # keeping it out of the enumerator keeps that function's contract about
+    # READABILITY rather than about presentation. Every failure resolves to 0.0:
+    # a file we cannot stat sorts oldest, so it loses the cap rather than
+    # silently winning it.
+    mtimes: dict[str, float] = {}
+    for name, _data in notes:
+        try:
+            mtimes[name] = (inbox_path / name).stat().st_mtime
+        except OSError:
+            mtimes[name] = 0.0
 
     by_digest: dict[str, list[str]] = {}
     texts: dict[str, str] = {}
@@ -1340,6 +1491,10 @@ def scan(
                 verdict=verdict,
                 reason=reason,
                 is_new=is_new,
+                # The NEWEST of the names this group collapsed. A duplicate
+                # arriving later under a second name makes the group newer,
+                # which is the correct direction: the late copy is the event.
+                mtime=max((mtimes.get(name, 0.0) for name in names), default=0.0),
             )
         )
     groups.sort(key=lambda g: g.names[0])
@@ -1358,7 +1513,24 @@ def scan(
     # Subdirectory drops. Keyed on the same PAIR shape as the notes, with the
     # name carrying a trailing slash so a drop can never collide with a note of
     # the same name in the seen set.
-    drop_rows, walk_problem = _read_drops(inbox_path)
+    # THE DROPS LISTING IS INSIDE A GUARD, like the notes listing above it.
+    # It was not, and this function's docstring said "never raises" anyway. A
+    # denial landing between the two listings escaped ``scan`` entirely -
+    # measured 2026-09-16 by failing the SECOND ``iterdir`` of the same run.
+    # Nothing was destroyed, because an exception is not a write, but the
+    # contract was false and the honest repair has to say what happens instead:
+    # it REFUSES. A listing this run never obtained cannot tell a withdrawn name
+    # from an unlisted one, so no withdrawal is derived from it and no
+    # acknowledgement is made - see ``listing_incomplete`` below.
+    listing_incomplete = False
+    try:
+        drop_rows, walk_problem = _read_drops(inbox_path)
+    except OSError as exc:
+        listing_incomplete = True
+        drop_rows, walk_problem = [], ""
+        result.status = "error"
+        detail = f"could not list {inbox_path} ({exc.__class__.__name__})"
+        result.detail = (result.detail + "; " + detail) if result.detail else detail
     if walk_problem:
         result.status = "error"
         result.detail = (result.detail + "; " + walk_problem) if result.detail else walk_problem
@@ -1387,10 +1559,30 @@ def scan(
     # The baseline is reported | seen and not seen alone: an item that was
     # printed once and pulled before anybody acknowledged it exists only in the
     # reported record, and that is precisely the case worth catching.
-    seen_names = {name for name, _digest in seen}
-    result.withdrawn = sorted((reported_names | seen_names) - current_names)
+    # A FILE WE COULD NOT READ IS ON DISK, SO ITS NAME IS STILL CURRENT. This
+    # is the rule the drops half already follows two blocks up: the stable NAME
+    # is recorded because the entry exists, and the seen-set PAIR is withheld
+    # because no digest was computed. Without it an unreadable note scored as
+    # withdrawn and the next acknowledging run pruned it out of both records -
+    # durable state destroyed by a permission bit, measured 2026-09-16.
+    current_names |= set(unreadable_names)
 
-    if acknowledge:
+    seen_names = {name for name, _digest in seen}
+    if listing_incomplete:
+        # No withdrawal can be derived from a listing this run never obtained.
+        # Every held name would score as gone, which is the fabricated
+        # withdrawal in its purest form - and a withdrawal is the one inbox
+        # event with no on-disk artifact left to check it against.
+        result.withdrawn = []
+    else:
+        result.withdrawn = sorted((reported_names | seen_names) - current_names)
+
+    if acknowledge and listing_incomplete:
+        # REFUSED, and said so rather than proceeding on an empty set. The
+        # reported record still takes the UNION write below, which can only
+        # grow, so nothing already recorded is lost by the refusal.
+        result.reported_error = save_reported(reported_names | current_names, reported_path)
+    elif acknowledge:
         result.acknowledged = True
         # Rewritten from the CURRENT listing, not merged into the old set:
         # entries for vanished files drop out here, which is what keeps this
@@ -1494,8 +1686,19 @@ def on_prompt_submit(
         ):
             decision = TRIGGER_ALREADY
         else:
-            acknowledge_inbox(inbox=inbox, state=state, reported=reported)
-            decision = TRIGGER_ACKNOWLEDGED
+            outcome = acknowledge_inbox(inbox=inbox, state=state, reported=reported)
+            # THE TRACE RECORDS WHAT HAPPENED, NOT WHAT WAS ATTEMPTED. This
+            # used to write TRIGGER_ACKNOWLEDGED unconditionally, so an inbox
+            # that could not be listed produced a durable row claiming an
+            # acknowledgement ``scan`` had already refused to make - measured
+            # 2026-09-16 against a manufactured PermissionError, with the seen
+            # store byte-identical throughout. The row is not merely wrong: the
+            # once-per-session rule above reads exactly these rows, so the false
+            # one spent the session's one acknowledgement and the mail could
+            # never be marked read even after the denial cleared.
+            decision = (
+                TRIGGER_ACKNOWLEDGED if outcome.acknowledged else TRIGGER_UNREADABLE_INBOX
+            )
     else:
         decision = TRIGGER_UNREADABLE
 
@@ -1672,8 +1875,69 @@ def _entry_label(stable_name: str) -> str:
     return f"<<{safe_label(stable_name)}>>"
 
 
-def render(result: Scan) -> str:
-    """Render one scan, short enough to read at every session start."""
+def _report_location(path: Path | None) -> str:
+    """Render the report file's path for the pointer line.
+
+    Repo-relative when it is inside this tree, because that is the spelling a
+    session can paste, and absolute otherwise. Forward slashes either way: this
+    string is read by a human and written into a report that is 7-bit ASCII.
+    """
+    if path is None:
+        return default_report_path().as_posix()
+    candidate = Path(path)
+    try:
+        return candidate.resolve().relative_to(REPO_ROOT).as_posix()
+    except (ValueError, OSError):
+        return candidate.as_posix()
+
+
+def _more_pointer(hidden: int, shown: int, path: Path | None, ordering: str) -> str:
+    """Return the ``+k more`` line - ``OPS-91`` clause 3.
+
+    It names the ORDERING it used as well as the count. Three of the four lists
+    this module caps are ordered by a measured modification time; the withdrawn
+    list has no such time left to read, because a withdrawn entry is by
+    definition no longer on disk. Printing "newest" over a name-ordered list
+    would be a confident wrong answer where an accurate one costs two words.
+    """
+    return (
+        f"  ... +{hidden} more not shown ({shown} {ordering}) "
+        f"- full list: {_report_location(path)}"
+    )
+
+
+def _cap_by_mtime(rows: list, cap: int | None, key):
+    """Keep the newest ``cap`` rows, preserving the caller's display order.
+
+    Returns ``(kept, hidden)``. ``hidden`` is counted with ``key``, which maps a
+    row to how many FILES it represents - a :class:`Group` can carry several
+    names, and this report counts files rather than groups everywhere on
+    purpose: counting groups in one place and files in another is how a headline
+    of "8 not ours" ended up printed above nine filenames.
+    """
+    if cap is None or len(rows) <= cap:
+        return list(rows), 0
+    order = sorted(range(len(rows)), key=lambda i: (rows[i].mtime, i))
+    keep = set(order[-cap:])
+    kept = [rows[i] for i in range(len(rows)) if i in keep]
+    hidden = sum(key(rows[i]) for i in range(len(rows)) if i not in keep)
+    return kept, hidden
+
+
+def render(result: Scan, cap: int | None = None, report_path: Path | None = None) -> str:
+    """Render one scan, short enough to read at every session start.
+
+    Args:
+        result: The scan to render.
+        cap: How many full names any one list may show, or ``None`` for no cap.
+            **``None`` is the default and that is deliberate** - this function
+            renders the FULL report as well as the capped one, and the full one
+            is what gets written to disk. A caller that wants the capped form
+            should go through :func:`report_and_render`, which writes the file
+            first and only then hands out a pointer to it.
+        report_path: The file the ``+k more`` pointers name. Only consulted when
+            ``cap`` actually truncates something.
+    """
     label = f"{INBOX_DIRNAME}"
 
     failed = result.status in ("missing", "error")
@@ -1750,9 +2014,13 @@ def render(result: Scan) -> str:
         lines.append(f"PARTIAL READ: {result.detail}")
         lines.append("")
 
+    # THE CAP - OPS-91. The COUNTS above are untouched; only the name lists
+    # below are shortened, so a reader always learns how much mail there is.
+    mine_shown, mine_hidden = _cap_by_mtime(mine, cap, lambda g: len(g.names))
+
     if mine:
         lines.append(f"FOR LANTERNLIGHT, OR NOT RULED OUT ({mine_files} files):")
-        for group in mine:
+        for group in mine_shown:
             # EVERY note name here is chosen by whoever writes into our
             # gitignored inbox - the same untrusted party as a drop's
             # directory name, which OPS-39 defect 1 already routed
@@ -1776,17 +2044,33 @@ def render(result: Scan) -> str:
                 )
             lines.append(f"  [{group.verdict}] {head}{extra}")
             lines.append(f"      why: {group.reason}")
+        if mine_hidden:
+            shown_files = mine_files - mine_hidden
+            lines.append(
+                _more_pointer(mine_hidden, shown_files, report_path, "newest listed")
+            )
     else:
         lines.append("FOR LANTERNLIGHT, OR NOT RULED OUT (0 files)")
 
     lines.append("")
     if theirs:
-        names = [
-            safe_label(n, NOTE_NAME_DISPLAY_LIMIT) for group in theirs for n in group.names
-        ]
+        # Capped on NAMES rather than on groups, because this list prints one
+        # line per name and a group's collapsed duplicates are separate lines.
+        pairs = [(group.mtime, n) for group in theirs for n in group.names]
+        their_hidden = 0
+        if cap is not None and len(pairs) > cap:
+            their_hidden = len(pairs) - cap
+            pairs = sorted(pairs, key=lambda pair: (pair[0], pair[1]))[-cap:]
+        names = [safe_label(n, NOTE_NAME_DISPLAY_LIMIT) for _mtime, n in pairs]
         lines.append(f"NOT ADDRESSED TO US ({theirs_files} files), listed so none is lost:")
         for name in sorted(names):
             lines.append(f"  {name}")
+        if their_hidden:
+            lines.append(
+                _more_pointer(
+                    their_hidden, len(names), report_path, "newest listed"
+                )
+            )
     else:
         lines.append("NOT ADDRESSED TO US (0 files)")
 
@@ -1805,7 +2089,10 @@ def render(result: Scan) -> str:
     if new_drops:
         lines.append("")
         lines.append(f"SUBDIRECTORY DROPS, new or changed since last look ({len(new_drops)}):")
-        for drop in sorted(new_drops, key=lambda d: d.name):
+        drops_shown, drops_hidden = _cap_by_mtime(
+            sorted(new_drops, key=lambda d: d.name), cap, lambda d: 1
+        )
+        for drop in drops_shown:
             # safe_label is the ONLY channel-chosen string in this whole block,
             # and the counts beside it are computed here. Nothing from inside
             # the drop is available to print - Drop does not carry it.
@@ -1819,6 +2106,12 @@ def render(result: Scan) -> str:
             )
             if drop.problem:
                 lines.append(f"      PARTIAL: {drop.problem}")
+        if drops_hidden:
+            lines.append(
+                _more_pointer(
+                    drops_hidden, len(drops_shown), report_path, "newest listed"
+                )
+            )
         lines.append(_DROP_BANNER)
 
     if result.withdrawn:
@@ -1827,8 +2120,23 @@ def render(result: Scan) -> str:
             "WITHDRAWN, gone from the inbox since it was last listed "
             f"({len(result.withdrawn)}):"
         )
-        for stable in result.withdrawn:
+        # THE ONE LIST WITH NO MEASURED ORDER. A withdrawn entry is gone from
+        # disk, so there is no modification time left to stat and the cap falls
+        # back to the name order these were already sorted into. The pointer
+        # says so rather than borrowing "newest" from the lists above.
+        gone_shown = list(result.withdrawn)
+        gone_hidden = 0
+        if cap is not None and len(gone_shown) > cap:
+            gone_hidden = len(gone_shown) - cap
+            gone_shown = gone_shown[-cap:]
+        for stable in gone_shown:
             lines.append(f"  {_entry_label(stable)}")
+        if gone_hidden:
+            lines.append(
+                _more_pointer(
+                    gone_hidden, len(gone_shown), report_path, "listed in name order"
+                )
+            )
         lines.append(_WITHDRAWN_BANNER)
 
     for problem in (result.state_error, result.reported_error):
@@ -1836,6 +2144,44 @@ def render(result: Scan) -> str:
             lines.append("")
             lines.append(f"WARNING: {problem}")
     return "\n".join(lines)
+
+
+def report_and_render(
+    result: Scan,
+    report_path: Path | None = None,
+    cap: int | None = NAME_LIST_CAP,
+) -> str:
+    """Write the FULL report, then return the CAPPED one - ``OPS-91`` clause 3.
+
+    The order of the two steps is the contract, not an implementation detail.
+    The capped text hands the reader a pointer, and a pointer at a file that is
+    not there yet is worse than the long report it replaced: the reader follows
+    it, finds nothing, and learns that the pointer cannot be trusted. So the
+    file is written first and the pointer is only produced on success.
+
+    A FAILED WRITE FALLS BACK TO THE WHOLE LIST, which is the other half of the
+    same rule. Nothing is hidden behind a file that does not exist - the full
+    report goes to stdout instead and the failure is stated. That is the
+    module's standing "fail soft, but never silently" contract: a capped report
+    over a missing file would be a silent loss of mail, which is the one outcome
+    this module exists to prevent.
+
+    Args:
+        result: The scan to render.
+        report_path: Where the full report is written. Defaults to
+            :func:`default_report_path`.
+        cap: Names per list in the returned text. ``None`` disables the cap and
+            still writes the file.
+
+    Returns:
+        The text to print. Never raises; a write failure becomes a WARNING.
+    """
+    target = Path(report_path) if report_path is not None else default_report_path()
+    full = render(result)
+    error = write_report(full, target)
+    if error:
+        return f"{full}\n\nWARNING: {error}"
+    return render(result, cap=cap, report_path=target)
 
 
 # ---------------------------------------------------------------------------
@@ -1870,11 +2216,36 @@ def _run_on_prompt(args) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     """Print the report. Always returns 0 - a hook must not break a session."""
-    parser = argparse.ArgumentParser(description="Surface unread cross-project notes.")
+    # PREFIX EXPANSION IS OFF, and it is off because it silently ate a feature.
+    #
+    # Measured 2026-09-16 while OPS-91 was being written: the new flag was first
+    # called ``--report``, argparse expanded it as an unambiguous prefix of
+    # ``--reported``, and two tests that thought they were reading the full mail
+    # report were reading the reported-set JSON - which contains every note name
+    # and is written before stdout, so both assertions passed with not one line
+    # of the feature implemented. That is the repository's own trap about a
+    # green test proving nothing, wearing a new costume: the tests were not
+    # wrong about what they observed, they were wrong about WHICH FILE they
+    # observed. An abbreviation is a second, invisible name for an option, and
+    # this module's options are paths that different files live at.
+    parser = argparse.ArgumentParser(
+        description="Surface unread cross-project notes.",
+        allow_abbrev=False,
+    )
     parser.add_argument("--inbox", default=None, help="inbox directory to read")
     parser.add_argument("--state", default=None, help="acknowledged-set state file to use")
     parser.add_argument("--reported", default=None, help="reported-set state file to use")
     parser.add_argument("--trace", default=None, help="trigger-trace file to use")
+    parser.add_argument(
+        "--report-file",
+        default=None,
+        dest="report_file",
+        help=(
+            "where the FULL mail report is written before anything is printed. "
+            "Defaults beside the state file when one is named, and to "
+            "ops/runtime/ otherwise."
+        ),
+    )
     parser.add_argument(
         "--on-prompt",
         action="store_true",
@@ -1906,7 +2277,20 @@ def main(argv: list[str] | None = None) -> int:
             reported=Path(args.reported) if args.reported else None,
             acknowledge=args.acknowledge,
         )
-        sys.stdout.write(render(result) + "\n")
+        # THE REPORT FILE FOLLOWS THE STATE FILE, for the reason spelled out
+        # beside the reported record in scan(): a caller that injects a
+        # throwaway state path is a test, and a test must not write the
+        # operator's live files. Defaulting this independently would put every
+        # fixture's rendering into ops/runtime/inbox_report.txt, which is the
+        # same defect that once wrote 93 fixture names into the live reported
+        # record.
+        if args.report_file:
+            report_path = Path(args.report_file)
+        elif args.state:
+            report_path = Path(args.state).parent / REPORT_FILENAME
+        else:
+            report_path = default_report_path()
+        sys.stdout.write(report_and_render(result, report_path=report_path) + "\n")
         # ATTRIBUTION ONLY, AND IT HAPPENS AFTER THE REPORT IS OUT. The report
         # is the deliverable; this row is optional evidence, so it must never
         # be able to delay or replace one. Every failure inside is swallowed

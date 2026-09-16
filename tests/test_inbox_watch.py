@@ -16,6 +16,21 @@ The third family reads ``.claude/settings.json``. A hook that never registers
 because its settings file is invalid JSON is indistinguishable from a hook that
 never fires, and this repository has already paid for that once. So the file is
 asserted to PARSE, by a parser, not by eye.
+
+The fourth family - at the end of this file, under its own banner - covers
+``OPS-91``: the stdout report is CAPPED at :data:`ops.inbox_watch.NAME_LIST_CAP`
+names per list and the full listing goes to a gitignored file that must already
+be complete when the pointer to it is printed. It lives here rather than in a
+module of its own because a new ``tests/test_*.py`` needs a row in
+``docs/INVENTORY.md``, which this lane does not own.
+
+The fifth family - also at the end, under its own banner - is the followup to
+that work. It manufactures real ``PermissionError`` faults and drives every
+WRITE-capable path against them, because a reader that is safe says nothing
+about a writer that is not; and it runs the DECLARED hook command as a real
+child process with a real stdin payload, because the code that resolves a
+session id runs only when the module runs as a script and no in-process arm can
+reach it at all.
 """
 
 from __future__ import annotations
@@ -846,7 +861,7 @@ def test_the_reader_sanitises_the_name_it_reports(tmp_path: Path, monkeypatch) -
 
     monkeypatch.setattr(Path, "iterdir", lambda self: iter([_Fake(forged)]))
 
-    _entries, problem = inbox_watch._read_entries(inbox)
+    _entries, problem, _unreadable = inbox_watch._read_entries(inbox)
 
     assert forged not in problem
     assert "unreadable.md?forged" in problem
@@ -1149,3 +1164,845 @@ class TestTheTraceTrimKeepsWhatIsActuallyREAD:
         assert inbox_watch.save_trace(rows, trace) == ""
         kept, _note = inbox_watch.load_trace(trace)
         assert [r["session"] for r in kept] == ["s-0", "s-1", "s-2"]
+
+
+# -------------------------------------------------------------------------
+# THE FOURTH FAMILY - the capped report and its full-report file, OPS-91
+# -------------------------------------------------------------------------
+#
+# The mail report is CAPPED and the full list goes to a file - ``OPS-91``.
+#
+# RC's watcher-contract clause 3, adopted from the prose of its 2026-09-15 FYI
+# rather than from the file itself (the vendor was refused at the license gate,
+# and ``ROADMAP.md`` records why), asks a session-start watcher for three things
+# together:
+#
+# 1. the counts line, which ``ops/inbox_watch.py`` already had;
+# 2. at most N full names, which it did not have - there was no cap at all, so a
+#    49-file drop like the one ``OPS-34`` was opened for buries the report it is
+#    supposed to be read from;
+# 3. a ``+k more`` pointer naming a GITIGNORED report file that holds the whole
+#    list, written ATOMICALLY and written BEFORE anything reaches stdout.
+#
+# THE ORDERING IS THE PART WORTH TESTING CAREFULLY
+# ------------------------------------------------
+# "Both things happened" is not the claim. The claim is that a reader who sees
+# the pointer can open the file, and that is only true if the file is complete at
+# the instant the pointer is printed. A test that asserts the file exists AFTER
+# ``main`` returns passes for an implementation that writes it afterwards, which
+# is the exact defect this criterion exists to prevent.
+#
+# So :func:`test_the_report_file_is_complete_at_the_instant_stdout_is_written`
+# installs a recording ``sys.stdout`` and reads the filesystem INSIDE ``write``.
+# The observation is taken at the moment the report line is produced, so an
+# implementation that writes the file second records a missing file and goes red.
+#
+# WHY THE CAP IS SPENT ON THE NEWEST
+# ----------------------------------
+# A truncated list has to drop something, and the oldest entries are the ones a
+# previous session has most likely already looked at. "Newest" here is measured -
+# :func:`ops.inbox_watch.scan` stats each entry and carries the modification time
+# on the :class:`ops.inbox_watch.Group` and :class:`ops.inbox_watch.Drop`, so the
+# ordering is a fact about the disk rather than an inference from a filename
+# convention. Withdrawn entries are the one list with no such fact available:
+# they are gone from disk, so there is nothing left to stat, and the report says
+# so in its own pointer rather than claiming an order it cannot support.
+
+#: Well above the cap, per the ``OPS-91`` acceptance criterion. Four times the
+#: cap, so a truncation bug that shows twice as many as it should is still red.
+MANY = 40
+
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+
+def _paths(tmp_path: Path) -> dict:
+    inbox = tmp_path / "moon_sync_inbox"
+    inbox.mkdir()
+    runtime = tmp_path / "runtime"
+    runtime.mkdir()
+    return {
+        "inbox": inbox,
+        "state": runtime / "inbox_seen.json",
+        "reported": runtime / "inbox_reported.json",
+        "trace": runtime / "inbox_prompt_trigger.json",
+        "report": runtime / "inbox_report.txt",
+    }
+
+
+def _note_name(index: int) -> str:
+    return f"2026-09-{(index % 28) + 1:02d}-{index:04d}-from-RC-synthetic-{index}.md"
+
+
+def _plant_notes(inbox: Path, count: int) -> list[str]:
+    """Write ``count`` distinct notes, oldest first by modification time.
+
+    The times are set explicitly rather than left to the filesystem clock:
+    forty files written in a loop can share a modification time on a coarse
+    timestamp, and an ordering assertion against a tie is an assertion about
+    the tie-break rather than about the ordering.
+    """
+    names = []
+    for index in range(count):
+        name = _note_name(index)
+        path = inbox / name
+        path.write_text(
+            f"# synthetic note {index}\n\nsent to LL. Body {index}.\n",
+            encoding="utf-8",
+        )
+        stamp = 1_700_000_000 + index * 60
+        os.utime(path, (stamp, stamp))
+        names.append(name)
+    return names
+
+
+def _plant_drops(inbox: Path, count: int) -> list[str]:
+    names = []
+    for index in range(count):
+        name = f"from-RC-drop-{index:03d}"
+        folder = inbox / name
+        folder.mkdir()
+        (folder / "payload.txt").write_text(f"drop {index}\n", encoding="utf-8")
+        stamp = 1_700_000_000 + index * 60
+        os.utime(folder, (stamp, stamp))
+        names.append(name)
+    return names
+
+
+def _stdout_text(paths: dict, monkeypatch) -> str:
+    """Run ``main`` against the synthetic tree and return exactly what it printed."""
+    written: list[str] = []
+
+    class _Recorder:
+        def write(self, text: str) -> int:
+            written.append(text)
+            return len(text)
+
+        def flush(self) -> None:
+            return None
+
+    monkeypatch.setattr("sys.stdout", _Recorder())
+    code = inbox_watch.main(
+        [
+            "--inbox",
+            str(paths["inbox"]),
+            "--state",
+            str(paths["state"]),
+            "--reported",
+            str(paths["reported"]),
+            "--trace",
+            str(paths["trace"]),
+            "--report-file",
+            str(paths["report"]),
+        ]
+    )
+    assert code == 0
+    return "".join(written)
+
+
+# ---------------------------------------------------------------------------
+# the cap
+# ---------------------------------------------------------------------------
+
+
+def test_the_cap_is_ten_names() -> None:
+    """``OPS-91`` acceptance criterion 1 names the number, so it is pinned."""
+    assert inbox_watch.NAME_LIST_CAP == 10
+
+
+def test_a_mail_list_well_above_the_cap_shows_only_the_cap(
+    tmp_path: Path, monkeypatch
+) -> None:
+    paths = _paths(tmp_path)
+    names = _plant_notes(paths["inbox"], MANY)
+
+    text = _stdout_text(paths, monkeypatch)
+
+    shown = [name for name in names if name in text]
+    assert len(shown) == inbox_watch.NAME_LIST_CAP, (
+        f"{len(shown)} of {MANY} names reached stdout; the cap is "
+        f"{inbox_watch.NAME_LIST_CAP}"
+    )
+
+
+def test_the_names_that_survive_the_cap_are_the_newest(
+    tmp_path: Path, monkeypatch
+) -> None:
+    paths = _paths(tmp_path)
+    names = _plant_notes(paths["inbox"], MANY)
+
+    text = _stdout_text(paths, monkeypatch)
+
+    newest = set(names[-inbox_watch.NAME_LIST_CAP :])
+    shown = {name for name in names if name in text}
+    assert shown == newest
+
+
+def test_a_list_at_the_cap_is_not_truncated_and_carries_no_pointer(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """The pointer is a consequence of truncation, never decoration."""
+    paths = _paths(tmp_path)
+    names = _plant_notes(paths["inbox"], inbox_watch.NAME_LIST_CAP)
+
+    text = _stdout_text(paths, monkeypatch)
+
+    assert all(name in text for name in names)
+    assert "more not shown" not in text
+
+
+def test_the_truncated_report_points_at_the_report_file_with_the_hidden_count(
+    tmp_path: Path, monkeypatch
+) -> None:
+    paths = _paths(tmp_path)
+    _plant_notes(paths["inbox"], MANY)
+
+    text = _stdout_text(paths, monkeypatch)
+
+    hidden = MANY - inbox_watch.NAME_LIST_CAP
+    assert f"+{hidden} more not shown" in text
+    assert inbox_watch.REPORT_FILENAME in text
+
+
+def test_a_drop_list_well_above_the_cap_is_capped(tmp_path: Path, monkeypatch) -> None:
+    paths = _paths(tmp_path)
+    names = _plant_drops(paths["inbox"], MANY)
+
+    text = _stdout_text(paths, monkeypatch)
+
+    shown = [name for name in names if name in text]
+    assert len(shown) == inbox_watch.NAME_LIST_CAP
+    assert set(shown) == set(names[-inbox_watch.NAME_LIST_CAP :])
+
+
+def test_a_withdrawal_list_well_above_the_cap_is_capped(tmp_path: Path) -> None:
+    """Withdrawn names are gone from disk, so this list is capped on NAME order.
+
+    The pointer says which ordering it used rather than borrowing the word
+    "newest" from the lists that measured one. A withdrawn entry has no
+    modification time left to read.
+    """
+    paths = _paths(tmp_path)
+    gone = [f"withdrawn-{index:03d}.md" for index in range(MANY)]
+    result = inbox_watch.Scan(status="ok", inbox=paths["inbox"], withdrawn=gone)
+
+    text = inbox_watch.report_and_render(result, report_path=paths["report"])
+
+    shown = [name for name in gone if name in text]
+    assert len(shown) == inbox_watch.NAME_LIST_CAP
+    assert f"+{MANY - inbox_watch.NAME_LIST_CAP} more not shown" in text
+
+
+# ---------------------------------------------------------------------------
+# the report file
+# ---------------------------------------------------------------------------
+
+
+def test_the_report_file_holds_every_name(tmp_path: Path, monkeypatch) -> None:
+    paths = _paths(tmp_path)
+    names = _plant_notes(paths["inbox"], MANY)
+
+    _stdout_text(paths, monkeypatch)
+
+    body = paths["report"].read_text(encoding="utf-8")
+    missing = [name for name in names if name not in body]
+    assert not missing, f"{len(missing)} names never reached the report file"
+
+
+def test_the_report_file_is_complete_at_the_instant_stdout_is_written(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Criterion 3's ordering, observed rather than assumed.
+
+    The filesystem is read INSIDE ``write``. An implementation that writes the
+    report after printing records ``existed=False`` here and goes red, which is
+    the whole difference between this and asserting that both things happened.
+    """
+    paths = _paths(tmp_path)
+    names = _plant_notes(paths["inbox"], MANY)
+    report = paths["report"]
+    assert not report.exists()
+
+    observed: list[tuple[bool, str]] = []
+
+    class _Recorder:
+        def write(self, text: str) -> int:
+            try:
+                body = report.read_text(encoding="utf-8")
+                observed.append((True, body))
+            except OSError:
+                observed.append((False, ""))
+            return len(text)
+
+        def flush(self) -> None:
+            return None
+
+    monkeypatch.setattr("sys.stdout", _Recorder())
+    inbox_watch.main(
+        [
+            "--inbox",
+            str(paths["inbox"]),
+            "--state",
+            str(paths["state"]),
+            "--reported",
+            str(paths["reported"]),
+            "--trace",
+            str(paths["trace"]),
+            "--report-file",
+            str(report),
+        ]
+    )
+
+    assert observed, "nothing was written to stdout at all"
+    existed, body = observed[0]
+    assert existed, "the report file did not exist yet when stdout was written"
+    missing = [name for name in names if name not in body]
+    assert not missing, (
+        "the report file existed but was incomplete at the moment the pointer "
+        f"was printed - {len(missing)} names absent"
+    )
+
+
+def test_the_report_write_goes_temp_then_replace(tmp_path: Path) -> None:
+    """Atomicity, proved by the shape of the write rather than by its result.
+
+    A truncating ``write_text`` leaves the same bytes behind as a
+    temp-then-replace does, so the only observable difference is the rename.
+    The spy records every replace and this asserts the report's own target was
+    reached from a temporary file carrying this module's temp prefix.
+    """
+    paths = _paths(tmp_path)
+    _plant_notes(paths["inbox"], MANY)
+    target = paths["report"]
+    moves: list[tuple[str, str]] = []
+    original = Path.replace
+
+    def _spy(self, other):
+        moves.append((self.name, str(other)))
+        return original(self, other)
+
+    result = inbox_watch.scan(
+        inbox=paths["inbox"], state=paths["state"], reported=paths["reported"]
+    )
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(Path, "replace", _spy)
+        inbox_watch.report_and_render(result, report_path=target)
+
+    onto_report = [src for src, dst in moves if dst == str(target)]
+    assert onto_report, "the report file was never reached through a rename"
+    assert onto_report[0].startswith(inbox_watch.temp_prefix_for(target)), (
+        f"renamed from {onto_report[0]!r}, which does not carry the temp prefix"
+    )
+    assert not list(target.parent.glob(inbox_watch.temp_prefix_for(target) + "*"))
+
+
+def test_a_failed_report_write_prints_every_name_and_warns(tmp_path: Path) -> None:
+    """A pointer a reader cannot follow is worse than a long report.
+
+    The write is forced to fail by putting a FILE where the report's parent
+    directory would have to be, so ``mkdir`` cannot succeed. The contract is
+    then that nothing is truncated and the failure is stated - never a pointer
+    at a file that is not there.
+    """
+    paths = _paths(tmp_path)
+    names = _plant_notes(paths["inbox"], MANY)
+    blocker = tmp_path / "blocked"
+    blocker.write_text("not a directory\n", encoding="utf-8")
+    target = blocker / "inbox_report.txt"
+
+    result = inbox_watch.scan(
+        inbox=paths["inbox"], state=paths["state"], reported=paths["reported"]
+    )
+    text = inbox_watch.report_and_render(result, report_path=target)
+
+    assert "WARNING" in text
+    assert "more not shown" not in text
+    missing = [name for name in names if name not in text]
+    assert not missing, "names were hidden behind a pointer that cannot be opened"
+
+
+# ---------------------------------------------------------------------------
+# the path is gitignored - criterion 2 says the pointer names a gitignored file
+# ---------------------------------------------------------------------------
+
+
+def test_the_default_report_path_is_under_the_gitignored_runtime_directory() -> None:
+    path = inbox_watch.default_report_path()
+    assert path.parent == REPO_ROOT / "ops" / "runtime"
+    assert path.name == inbox_watch.REPORT_FILENAME
+
+
+def test_git_itself_says_the_default_report_path_is_ignored() -> None:
+    """Asked of git, not of a pattern read by eye.
+
+    ``.gitignore`` already carries ``ops/runtime/``, so no ignore rule was added
+    for this file. That is a claim about what git does, and an assertion about
+    the text of ``.gitignore`` would be a claim about a pattern instead - the
+    repository's own rule that an empty grep is a claim about your pattern.
+    """
+    relative = inbox_watch.default_report_path().relative_to(REPO_ROOT).as_posix()
+    proc = subprocess.run(
+        ["git", "check-ignore", "-v", relative],
+        cwd=str(REPO_ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, (
+        f"git does not ignore {relative}; check-ignore said {proc.stdout!r} "
+        f"{proc.stderr!r}"
+    )
+    assert "ops/runtime/" in proc.stdout
+
+
+def test_the_report_flag_cannot_be_reached_by_an_abbreviation_of_another(
+    tmp_path: Path,
+) -> None:
+    """A MEASURED near-miss, pinned so it cannot come back.
+
+    This module's first draft named the new flag ``--report``, and every
+    ordering and completeness test in it went GREEN before one line of the
+    feature existed. ``argparse`` expands an unambiguous prefix by default, so
+    ``--report`` was silently accepted as ``--reported`` and the tests were
+    reading the reported-set JSON - which happens to contain every note name and
+    to be written before stdout. Two passing tests, both vacuous, both about a
+    file that was not the report.
+
+    Prefix expansion is therefore off, and this asserts it rather than trusting
+    the constructor argument to stay put.
+
+    The probe is ``--trac``, deliberately, and not ``--report``. With expansion
+    switched back on ``--report`` would be AMBIGUOUS between ``--reported`` and
+    ``--report-file`` and would exit either way, so a test using it would pass
+    under both behaviours and pin nothing. ``--trac`` has exactly one expansion,
+    so it is accepted when prefixes expand and refused when they do not - which
+    is the only shape of probe that can tell the two apart.
+    """
+    with pytest.raises(SystemExit):
+        inbox_watch.main(
+            [
+                "--inbox",
+                str(tmp_path),
+                "--state",
+                str(tmp_path / "seen.json"),
+                "--trac",
+                str(tmp_path / "t"),
+            ]
+        )
+
+
+# ---------------------------------------------------------------------------
+# AN ENTRY THAT COULD NOT BE READ IS NOT AN ENTRY THAT IS GONE - OPS-91 followup
+# ---------------------------------------------------------------------------
+#
+# RSC reviewed this repository's finding six on 2026-09-16 and reported that in
+# THEIR tree one unreadable directory produced three consequences rather than
+# one, because every caller of the entry enumerator was handed "empty" for
+# "unreadable": a clean line over live notes, a withdrawal derivation that read
+# every held key as retracted, and an acknowledge path that rewrote the seen
+# store to an empty object while printing that it had marked mail read.
+#
+# A note is MAIL and carries no authority, so all three were re-measured here
+# against a manufactured fault rather than relayed. Two results, both produced
+# by driving a real PermissionError rather than by reading the code:
+#
+# THE WHOLE-DIRECTORY CASE DOES NOT REPRODUCE. With ``iterdir`` on the inbox
+# raising ``PermissionError`` WinError 5, ``scan`` returns at its own OSError
+# clause before ``load_seen`` is even called, so every write is unreachable:
+# the seen store, the reported record and the withdrawal list came back
+# byte-identical and empty of fabrication across a report run, an
+# ``acknowledge_inbox`` call and a ``--acknowledge`` command line. The renderer
+# printed CANNOT READ with the exception class named. Nothing to fix there, and
+# no guard is added for a defect this tree does not have.
+#
+# THE PER-ENTRY CASE DOES REPRODUCE, and it is the same class one level down.
+# ``_read_entries`` catches ``OSError`` per FILE and drops that file from the
+# listing, so a note that is on disk but momentarily unreadable is absent from
+# the current names - and absent from the current names is exactly this
+# module's definition of WITHDRAWN. Measured: the note never moved, and the
+# report said it was "gone from the inbox since it was last listed". An
+# acknowledging run under the same fault then pruned its pair out of the seen
+# store and its name out of the reported record, which is durable state
+# destroyed by a permission bit.
+#
+# The repair is this module's own, taken from the rule the DROPS half already
+# follows: an unwalkable drop has its stable name recorded and its seen-set
+# pair withheld, because the directory is on disk but no manifest was computed.
+# A file gets the identical treatment - named so it cannot read as withdrawn,
+# unpaired so it can never read as seen.
+
+
+class TestAnUnreadableEntryIsNotAWithdrawal:
+    """The fabricated-withdrawal half, manufactured rather than reasoned about.
+
+    A withdrawal is the one inbox event with no on-disk artifact left to check
+    it against, which is why a false one is worth a guard of its own: nothing
+    downstream can catch it.
+    """
+
+    @staticmethod
+    def _deny(monkeypatch: pytest.MonkeyPatch, target: Path) -> None:
+        """Make exactly one file unreadable, and PROVE the denial took.
+
+        A fixture that excludes the defect cannot fail, so the denial is
+        asserted before anything is graded.
+        """
+        real = Path.read_bytes
+
+        def denied(self):
+            if str(self) == str(target):
+                raise PermissionError(13, "Access is denied", str(self), 5)
+            return real(self)
+
+        monkeypatch.setattr(Path, "read_bytes", denied)
+        with pytest.raises(PermissionError):
+            target.read_bytes()
+        assert target.exists(), "the file must still be ON DISK for this to mean anything"
+
+    def _tree(self, tmp_path: Path) -> tuple[Path, Path, Path, Path]:
+        inbox = tmp_path / "inbox"
+        inbox.mkdir()
+        held = _write(inbox, "2026-09-16-1200-from-RSC-held.md", "# From RSC\n\nsent to LL.\n")
+        _write(inbox, "2026-09-16-1201-from-LW-other.md", "# From LW\n\nsent to LL.\n")
+        state = tmp_path / "seen.json"
+        reported = tmp_path / "reported.json"
+        inbox_watch.acknowledge_inbox(inbox=inbox, state=state, reported=reported)
+        return inbox, state, reported, held
+
+    def test_an_unreadable_file_is_not_derived_as_withdrawn(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        inbox, state, reported, held = self._tree(tmp_path)
+        self._deny(monkeypatch, held)
+
+        result = inbox_watch.scan(inbox=inbox, state=state, reported=reported)
+
+        assert result.status == "error", "a failure to read must not render as a clean look"
+        assert held.name not in result.withdrawn, (
+            "a file that is on disk but unreadable was reported as withdrawn; "
+            f"withdrawn={result.withdrawn}"
+        )
+
+    def test_the_report_does_not_say_an_unreadable_file_is_gone(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        inbox, state, reported, held = self._tree(tmp_path)
+        self._deny(monkeypatch, held)
+
+        text = inbox_watch.render(inbox_watch.scan(inbox=inbox, state=state, reported=reported))
+
+        assert "WITHDRAWN, gone from the inbox" not in text, text
+        # Nor may it swing the other way into a clean bill. With the false
+        # withdrawal gone and nothing else unseen, the renderer collapses to
+        # its short form - which must be the PARTIAL one, because one file of
+        # the two was never read.
+        assert "nothing new" not in text, text
+        assert "PARTIAL LOOK" in text, text
+        assert "a failure to look is not a clean bill" in text, text
+
+    def test_an_acknowledging_run_does_not_prune_a_name_it_could_not_read(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The destructive half: a permission bit must not empty durable state."""
+        inbox, state, reported, held = self._tree(tmp_path)
+        self._deny(monkeypatch, held)
+
+        inbox_watch.acknowledge_inbox(inbox=inbox, state=state, reported=reported)
+
+        names = json.loads(reported.read_text(encoding="utf-8"))["reported"]
+        assert held.name in names, (
+            "the acknowledge path pruned the reported name of a file still on disk; "
+            f"reported={names}"
+        )
+
+    def test_the_pair_of_an_unreadable_file_is_still_withheld_from_the_seen_set(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Named is not the same as SEEN, and the difference is the whole design.
+
+        The drops half already draws this line: an unwalkable drop is named so
+        it cannot read as withdrawn and left unpaired so it can never read as
+        seen. A file must not be quietly promoted past that rule by the repair.
+        """
+        inbox, state, reported, held = self._tree(tmp_path)
+        self._deny(monkeypatch, held)
+
+        inbox_watch.acknowledge_inbox(inbox=inbox, state=state, reported=reported)
+
+        pairs = json.loads(state.read_text(encoding="utf-8"))["seen"]
+        assert all(row[0] != held.name for row in pairs), (
+            "a pair was recorded for a file whose bytes were never read"
+        )
+
+
+class TestAListingThatFailsPartWayThroughRefusesRatherThanPrunes:
+    """``scan`` documents "never raises" - and the drops listing was outside it.
+
+    ``_read_entries`` is called inside an ``OSError`` clause and ``_read_drops``
+    was not, so a denial that lands between the two listings escaped the
+    function. Measured: ``PermissionError`` propagated out of
+    ``acknowledge_inbox``. It never destroyed state, because an exception is not
+    a write - but the contract in the docstring was false, and the honest repair
+    also has to say what happens instead of proceeding on a listing it does not
+    have. It REFUSES: no seen-set write, and no withdrawal derived from names it
+    could not enumerate.
+    """
+
+    @staticmethod
+    def _tree(tmp_path: Path) -> tuple[Path, Path, Path]:
+        inbox = tmp_path / "inbox"
+        inbox.mkdir()
+        _write(inbox, "2026-09-16-1200-from-RSC-held.md", "# From RSC\n\nsent to LL.\n")
+        drop = inbox / "from-RSC-drop"
+        drop.mkdir()
+        (drop / "a.txt").write_text("payload\n", encoding="utf-8")
+        state = tmp_path / "seen.json"
+        reported = tmp_path / "reported.json"
+        inbox_watch.acknowledge_inbox(inbox=inbox, state=state, reported=reported)
+        return inbox, state, reported
+
+    @staticmethod
+    def _deny_second_listing(monkeypatch: pytest.MonkeyPatch, inbox: Path) -> None:
+        calls = {"n": 0}
+        real = Path.iterdir
+
+        def flaky(self):
+            if str(self) == str(inbox):
+                calls["n"] += 1
+                if calls["n"] >= 2:
+                    raise PermissionError(13, "Access is denied", str(self), 5)
+            return real(self)
+
+        monkeypatch.setattr(Path, "iterdir", flaky)
+
+    def test_it_does_not_raise(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        inbox, state, reported = self._tree(tmp_path)
+        self._deny_second_listing(monkeypatch, inbox)
+
+        result = inbox_watch.acknowledge_inbox(inbox=inbox, state=state, reported=reported)
+
+        assert result.status == "error"
+        assert "could not list" in result.detail, result.detail
+
+    def test_it_refuses_to_acknowledge_and_fabricates_no_withdrawal(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        inbox, state, reported = self._tree(tmp_path)
+        before = state.read_bytes()
+        self._deny_second_listing(monkeypatch, inbox)
+
+        result = inbox_watch.acknowledge_inbox(inbox=inbox, state=state, reported=reported)
+
+        assert result.acknowledged is False, "it marked mail read on a listing it never got"
+        assert result.withdrawn == [], (
+            f"names it could not enumerate were filed as withdrawn: {result.withdrawn}"
+        )
+        assert state.read_bytes() == before, "the seen store was rewritten on a failed listing"
+
+
+class TestThePromptTriggerRecordsWhatActuallyHappened:
+    """The trace is the EVIDENCE half of ``OPS-41``, so a false row is the bug.
+
+    Measured against a manufactured whole-directory denial: ``on_prompt_submit``
+    returned :data:`ops.inbox_watch.TRIGGER_ACKNOWLEDGED` and wrote that row,
+    while ``scan`` had already refused and the seen store was byte-identical.
+    Nothing was destroyed - but the once-per-session rule reads exactly those
+    rows, so the session is then locked out of acknowledging when the denial
+    clears, and the durable evidence claims an acknowledgement that never
+    happened.
+    """
+
+    @staticmethod
+    def _deny_inbox(monkeypatch: pytest.MonkeyPatch, inbox: Path) -> None:
+        real = Path.iterdir
+
+        def denied(self):
+            if str(self) == str(inbox):
+                raise PermissionError(13, "Access is denied", str(self), 5)
+            return real(self)
+
+        monkeypatch.setattr(Path, "iterdir", denied)
+        with pytest.raises(PermissionError):
+            list(inbox.iterdir())
+
+    def test_an_unreadable_inbox_is_not_recorded_as_an_acknowledgement(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        inbox = tmp_path / "inbox"
+        inbox.mkdir()
+        _write(inbox, "2026-09-16-1200-from-RSC-held.md", "# From RSC\n\nsent to LL.\n")
+        state = tmp_path / "seen.json"
+        reported = tmp_path / "reported.json"
+        trace = tmp_path / "trace.json"
+        self._deny_inbox(monkeypatch, inbox)
+
+        decision = inbox_watch.on_prompt_submit(
+            json.dumps({"hook_event_name": "UserPromptSubmit", "session_id": "sess-denied"}),
+            inbox=inbox,
+            state=state,
+            reported=reported,
+            trace=trace,
+        )
+
+        assert decision != inbox_watch.TRIGGER_ACKNOWLEDGED, (
+            "it reported an acknowledgement over a scan that refused to make one"
+        )
+        assert not state.exists(), "nothing may have been written"
+        rows, _note = inbox_watch.load_trace(trace)
+        assert [row["decision"] for row in rows] == [inbox_watch.TRIGGER_UNREADABLE_INBOX]
+
+    def test_the_session_can_still_acknowledge_once_the_denial_clears(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The consequence of the false row, pinned as its own fact.
+
+        A refusal that records ACKNOWLEDGED does not just misreport - it spends
+        the session's one acknowledgement on a run that acknowledged nothing.
+        """
+        inbox = tmp_path / "inbox"
+        inbox.mkdir()
+        _write(inbox, "2026-09-16-1200-from-RSC-held.md", "# From RSC\n\nsent to LL.\n")
+        state = tmp_path / "seen.json"
+        reported = tmp_path / "reported.json"
+        trace = tmp_path / "trace.json"
+        payload = json.dumps(
+            {"hook_event_name": "UserPromptSubmit", "session_id": "sess-recovers"}
+        )
+
+        with monkeypatch.context() as denied:
+            self._deny_inbox(denied, inbox)
+            inbox_watch.on_prompt_submit(
+                payload, inbox=inbox, state=state, reported=reported, trace=trace
+            )
+
+        decision = inbox_watch.on_prompt_submit(
+            payload, inbox=inbox, state=state, reported=reported, trace=trace
+        )
+
+        assert decision == inbox_watch.TRIGGER_ACKNOWLEDGED, (
+            "the refused run consumed the session's one acknowledgement"
+        )
+        assert state.exists()
+
+
+# ---------------------------------------------------------------------------
+# THE DOOR THE HOOK USES IS THE PROCESS BOUNDARY - RSC's finding seven
+# ---------------------------------------------------------------------------
+#
+# RSC reported on 2026-09-16 that a suppression planted in SESSION-ID
+# RESOLUTION - above the entry point, not at it - survived their entire watcher
+# suite at exit 0 while silencing two real sessions. Re-measured here rather
+# than relayed, and it reproduces: planting a line in
+# :func:`ops.inbox_watch._read_stdin_bounded` that returns "" for the real
+# interpreter stdin left 90 arms across four watcher modules PASSING, because
+# every in-process arm substitutes a fake ``sys.stdin`` object and no fake is
+# ever the real one. Driven as a real child process with a real stdin payload,
+# the same mutant produced two sessions at exit 0 and ZERO trace rows.
+#
+# This tree DOES already run the declared command as a child process - the live
+# record guard above, and the runs-as-a-script arm - but neither supplies a
+# stdin payload, so neither can reach the resolution at all. The arms below
+# close that: the DECLARED SessionStart command, a real process, a real payload
+# on real stdin, and ONE runtime directory shared across both fires.
+#
+# The shared directory IS the arm. RSC's own first attempt gave each fire its
+# own runtime directory, so the second fire saw an empty trace, the dedup path
+# was never entered, and the arm passed against the live mutant. Everything
+# else here is scaffolding.
+
+
+def _declared_scan_argv(paths: dict) -> list[str]:
+    """The DECLARED SessionStart command, pointed at a throwaway runtime tree.
+
+    The command comes out of ``.claude/settings.json`` and is expanded the way
+    the harness expands it, so this enters through the same door the hook does.
+    The path overrides are appended rather than substituted: they are what keeps
+    a test process off the operator's live records, and this suite has already
+    paid once for a test that wrote fixture names into a real one.
+    """
+    argv = _expand_hook_command(_sessionstart_command(_settings()))
+    return [
+        *argv,
+        "--inbox",
+        str(paths["inbox"]),
+        "--state",
+        str(paths["state"]),
+        "--reported",
+        str(paths["reported"]),
+        "--trace",
+        str(paths["trace"]),
+        "--report-file",
+        str(paths["report"]),
+    ]
+
+
+class TestTheDeclaredCommandResolvesASessionAcrossTheProcessBoundary:
+    """Two real fires, one shared runtime directory, real stdin payloads."""
+
+    @staticmethod
+    def _paths(tmp_path: Path) -> dict:
+        inbox = tmp_path / "inbox"
+        inbox.mkdir()
+        _write(inbox, "2026-09-16-1200-from-RSC-live.md", "# From RSC\n\nsent to LL.\n")
+        runtime = tmp_path / "runtime"
+        runtime.mkdir()
+        return {
+            "inbox": inbox,
+            "state": runtime / "seen.json",
+            "reported": runtime / "reported.json",
+            "trace": runtime / "trace.json",
+            "report": runtime / "report.txt",
+        }
+
+    @staticmethod
+    def _fire(argv: list[str], session: str) -> None:
+        payload = json.dumps(
+            {"hook_event_name": "SessionStart", "session_id": session}
+        ).encode("utf-8")
+        proc = subprocess.run(
+            argv,
+            input=payload,
+            cwd=str(REPO_ROOT),
+            capture_output=True,
+            timeout=120,
+            check=False,
+        )
+        assert proc.returncode == 0, proc.stderr.decode("utf-8", "replace")
+        assert "moon_sync_inbox" in proc.stdout.decode("utf-8", "replace")
+
+    def test_each_real_session_is_resolved_and_recorded(self, tmp_path: Path) -> None:
+        paths = self._paths(tmp_path)
+        argv = _declared_scan_argv(paths)
+
+        self._fire(argv, "session-real-one")
+        self._fire(argv, "session-real-two")
+
+        rows, note = inbox_watch.load_trace(paths["trace"])
+        assert note == "", note
+        assert [row["session"] for row in rows] == [
+            "session-real-one",
+            "session-real-two",
+        ], f"session-id resolution did not survive the process boundary; rows={rows}"
+        assert {row["decision"] for row in rows} == {inbox_watch.TRIGGER_SCANNED}
+
+    def test_a_repeated_session_is_recorded_once_across_two_real_fires(
+        self, tmp_path: Path
+    ) -> None:
+        """The dedup path, which only a SHARED runtime directory can reach."""
+        paths = self._paths(tmp_path)
+        argv = _declared_scan_argv(paths)
+
+        self._fire(argv, "session-repeated")
+        self._fire(argv, "session-repeated")
+
+        rows, _note = inbox_watch.load_trace(paths["trace"])
+        assert [row["session"] for row in rows] == ["session-repeated"], rows
+
+    def test_a_real_fire_still_acknowledges_nothing(self, tmp_path: Path) -> None:
+        paths = self._paths(tmp_path)
+        self._fire(_declared_scan_argv(paths), "session-reports-only")
+
+        assert not paths["state"].exists(), "the scan path wrote the seen store"

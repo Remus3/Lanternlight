@@ -1299,6 +1299,57 @@ KNOWN_NON_HOSTS = frozenset(
         "CHANNEL.md",
         "CHARTER.md",
         "LICENSE.md",
+        # QUOTED BY `OPS-92`, `OPS-93`, `OPS-94` and `OPS-91`, all added
+        # 2026-09-16. Every name below is either a FILE BASENAME inside an
+        # external project, a DOTTED IDENTIFIER in someone else's source, an
+        # ATTRIBUTE of one of our own dataclasses, or a gitignored runtime
+        # path. The extractor reads each trailing dot-segment as a domain -
+        # `.md` as Moldova, `.js` as Jersey, `.py` as Paraguay - which is the
+        # same truncation class as every block above. Each was LOOKED AT
+        # individually rather than bulk-registered, and `git ls-files` matches
+        # zero paths for all of them, so the live tracked-file check cannot
+        # absorb any and the guard below will not object to the entry.
+        #
+        # This guard is the one that caught a real privacy failure in
+        # `LL-0170` by objecting to an UNREGISTERED domain, so widening it is
+        # done by hand and with the reason written down. The external sources
+        # these items actually cite - the three GitHub repositories and the npm
+        # registry - are registered by their own hosts and are NOT hidden here.
+        #
+        # From the context-mode evaluation, `OPS-93`: files inside that
+        # package, plus two dotted call names in its source.
+        "platform-bridge.mjs",
+        "session-loaders.mjs",
+        "postinstall.mjs",
+        "platform.json",
+        "plugins.json",
+        "cli.js",
+        "extract.js",
+        "pricing.js",
+        "os.homedir",
+        # From the archify and skills evaluations, `OPS-92` and `OPS-94`:
+        # files inside those repositories, and one field name printed by
+        # archify's own JSON output.
+        "buckets.json",
+        "openai.yaml",
+        "evidence.verified",
+        "CHANGELOG.md",
+        "NOTICES.md",
+        # OUR OWN, from `OPS-91`: two dataclass attributes added to
+        # `ops/inbox_watch.py` this session so that "newest" is measured rather
+        # than inferred, and the gitignored report path under `ops/runtime/`.
+        # None is a tracked file and none is external at all.
+        "Group.mtime",
+        "Drop.mtime",
+        "report.txt",
+        # A SIBLING's module name quoted in an inbox note, like `slots.py`
+        # above. Lanternlight has no such file.
+        "report.py",
+        # The FILENAME of an inbox note cited by `OPS-91` as the admissible
+        # evidence for its criterion 1. It is a note in the gitignored
+        # `moon_sync_inbox/`, not a source, and its trailing `.md` is read as a
+        # host for the same reason as every `.md` above.
+        "2026-09-16-0024-from-RC-FYI-amberstone-is-apache-2-0-and-channel-md-is-covered-license-named-for-your-gate.md",
         }
 )
 

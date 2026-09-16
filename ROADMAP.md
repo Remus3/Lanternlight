@@ -987,7 +987,151 @@ restored byte-exact by sha256 after every one.
   as the existing three-digit fixture. `_is_separator` is driven by real pixels
   only in its True direction.
 
-## OPS-36. Adopt CONVERGENCE CHARTER v4 as written - OPEN, criterion 1 MET 2026-09-15 by RC's answer
+## OPS-36. Adopt CONVERGENCE CHARTER v4 as written - OPEN, criteria 2 and 3 discharged 2026-09-16, criterion 4 SPLIT and half of it DONE
+
+### Criteria 2, 3 and 4 worked 2026-09-16 - one gap filed, one conflict found by a RE-sweep, and half of criterion 4 closed
+
+**Step 0, established before anything else: we DO hold the operative text.** All
+four RC charter broadcasts are in `moon_sync_inbox/` and their byte sizes
+reproduce exactly on this disk - v1 6299, v2 5409, v3 5168, v4 5712. v4 carries
+the worktree ordering invariant verbatim under its own "CHARTER TEXT" heading,
+replacing v3's three-step formulation. All four are operative broadcast text
+rather than summaries of something else, which is what makes discharging
+criterion 2 against them legitimate rather than a session grading a paraphrase.
+
+**What we do NOT hold**, stated rather than glossed: RC's consolidated
+`docs/CROSS_REPO_CONVERGENCE_CHARTER.md`. Byte-identity between these notes and
+that file is **UNVERIFIED and unverifiable from here**, because this project
+reads no sibling tree. `LL-0257` already records that RC's line number and
+timestamp are a POINTER a reader can hand back to RC, not a measurement taken
+here, and the same limit applies to the text itself.
+
+**Criterion 2 is DISCHARGED.** Every clause of v1 through v4 is listed against
+the concrete artifact that discharges it, or marked as imposing no obligation.
+32 cited paths were independently verified to exist and the 5 declared missing
+are genuinely missing, so no citation is fictional; an independent clause
+enumeration matched the lane's with no clause skipped. Two shared-file clauses
+impose nothing on this repository because it carries no byte-identical sibling
+file - `OPS-91` is the reason, and that is a refusal rather than an oversight.
+
+**ONE REAL GAP, and the practice claim is worse than the lane reported.** v2
+section 1's `FYI-` / `REVIEW-` / `ACTION-` subject classification has **no
+mechanism at all**: zero handling in `ops/outbox.py`. The lane cited two
+outgoing notes as evidence that the convention is followed in practice, and
+**both of them carry no prefix**. Measured across the whole channel **as of 2026-09-16 at the START of that
+session, and this figure is a SNAPSHOT rather than a standing fact**: ZERO of
+41 outgoing notes carried a prefix, while 17 incoming ones did. Those 17 were a
+clean positive control - the convention is real, siblings use it, and this
+project alone did not.
+
+**The snapshot went stale inside the same session, which is exactly why it
+carries a stamp now.** Our own wrap refutation re-counted the live directory
+hours later and got 45 outgoing with THREE carrying a prefix - all three sent
+by this project on 2026-09-16, because we started following the convention the
+moment we found the gap - and 34 incoming prefixed, the channel having been busy
+all evening. Neither recount contradicts the other: they are two different
+moments, and the headline sentence originally carried no as-of caveat, which
+made it read as a standing property of the channel. A count without a timestamp
+is a claim that quietly becomes false, and this one became false in under a day.
+Re-derive it rather than citing either figure.
+
+**Two of those denominators were published wrong and were WITHDRAWN in a note
+the same hour, so do not re-derive them from the outgoing copy.** The first
+delivery of 2026-09-16 said 40 and 14; re-measured on this disk immediately
+afterwards, counting top-level `.md` files and matching the prefix anywhere in
+the filename, the reproducible figures are 41 outgoing and 17 incoming. The
+ZERO reproduces exactly and was always the substantive claim. The correction
+went to all four siblings rather than being fixed quietly here, because a
+number published into another tree is one somebody else may design against -
+the rule recorded in `LL-0244`. The likely cause, offered as a guess and not as
+a finding, is that the two passes used different match positions.
+
+**Acceptance for that gap:** `ops.outbox.deliver` takes the classification as a
+required argument and REFUSES a note that names none; the prefix appears in the
+delivered filename spelled the way the 17 incoming examples spell it; and a test
+asserts both directions - a note delivered with a classification carries the
+prefix, and a delivery attempted without one raises rather than defaulting.
+Watch the red before trusting it, because a default-to-`FYI-` implementation
+would pass a presence-only test while silently mislabelling every ACTION note,
+which is worse than the gap it closes.
+
+**CRITERION 3 IS NOT THE CLEAN NEGATIVE THE FIRST SWEEP REPORTED, and this is
+the correction that matters most in this item.** The producing lane named one
+candidate on the PUBLIC axis and blanket-negated the rest. A re-sweep found a
+LIVE conflict inside v4 itself: **v4 asks adopters to take "RC's body, verbatim"
+- a full Python module - and the v4 note names NO LICENSE anywhere in its 5712
+bytes.** That is unlicensed sibling source proposed into a PUBLIC Apache-2.0
+tree: the identical shape this project already refused for RC's
+`docs/CHANNEL.md` under `OPS-91`, where "public is a visibility, not a grant".
+
+**The OUTCOME is a DECLINE of that clause, and it needs no escalation.**
+Declining is a session decision and always was - THE ONE ASYMMETRY in
+`CLAUDE.md` says so in as many words - and the third-party license gate is a
+RULE rather than a permission gate, which the FULL AUTHORITY directive lists
+among the rules no grant of authority reaches. Criterion 3 says a conflicting
+clause is escalated as a NEW question; a clause refused under a rule is
+ANSWERED rather than escalated, and the answer is recorded here.
+
+**What does NOT stand is the sweep that reported no conflict**, and that is
+written down separately from the outcome on purpose. A right answer reached by a
+search that missed the evidence is not a verified answer, and the next session
+needs to know that this axis was swept twice with different results rather than
+once cleanly.
+
+**CRITERION 4 SPLITS into two halves with opposite answers.**
+
+**(a) The caveman-wiring clause is NOT ESTABLISHED as already satisfied, and
+this half stays OPEN.** The advertised caveman skill is real, but it is a
+USER-LEVEL command outside this repository - its absolute path is deliberately
+not written here, because it carries an account name. Nothing is recorded in any
+TRACKED file: a case-insensitive `git grep` for the term returns `CLAUDE.md`
+line 326 and the two `ROADMAP.md` lines that are this problem statement itself,
+and nothing else. `CLAUDE.md` lines 324 to 342 do state the dialect, and it
+fires by construction because every session reads that file. But criterion 4
+demands a RECORD naming the FILE, and "it fires by construction" is not a
+record.
+
+**Acceptance for (a):** a tracked file in this repository names where the
+caveman dialect is defined, states that the definition in `CLAUDE.md` governs
+and that no user-level command is relied on, and `docs/INVENTORY.md` carries the
+row if the artifact is a command. A `git grep` for the term must then return at
+least one tracked file that is not this problem statement. If the answer is
+instead that this project DECLINES the clause because it already has its own
+dialect confirmed by the operator, that closes the criterion too and is a
+session decision - but it has to be WRITTEN, which is precisely the thing that
+is missing today.
+
+**(b) The worktree ordering invariant is NOW CLOSED, this session.** The
+invariant, verbatim from v4: "No worktree is removed until the work it holds
+exists somewhere durable that survives the removal." The only mechanism
+enforcing it here is that `ops/lane_launcher.py`'s `remove_worktree_argv` plans
+an UNFORCED removal, so git itself refuses on a dirty or untracked worktree.
+
+**The previous guard was PROVEN VACUOUS.** The argv
+`['git', 'worktree', 'remove', '--force', path]` survived BOTH of its
+assertions - and `--force` is exactly what defeats git's refusal, so the test
+was green on the one input that breaks the invariant it claimed to protect.
+
+**No source change was warranted and none was made.** `ops/lane_launcher.py` is
+byte-identical to `HEAD`; the whole defect was in the test.
+`tests/test_lane_launcher.py` gains a `_names_force` helper and a
+`TestTheWorktreeOrderingInvariant` class of 6 tests, taking that module from 20
+tests to 26.
+
+**Red was watched first**, under the proven survivor mutation, with the anchor
+asserted to have matched and `__pycache__` purged before the run per this
+repository's poisoned-`.pyc` rule: **3 failed, 3 passed, 20 deselected**. Under
+that same mutation the OLD `TestCommandPlanning` ran **5 passed**, which
+re-measures the vacuity independently rather than inferring it from the new
+result. Four separate mutations each drove RED and restored GREEN: the `--force`
+argv, a wrong target path, deleting the "Deliberately not forced" docstring
+line, and blinding the force detector to the `-f` spelling.
+
+**Also measured while reading v4, out of this item's scope but recorded so it is
+not discovered during an adoption:** v4's caveman hook text uses an ABSOLUTE
+repository root, which `tools/hook_command_guard.py` forbids under `OPS-61`. Any
+future adoption of that hook must reach its script through
+`$CLAUDE_PROJECT_DIR`. All six live hooks in this tree already do.
 
 ### Criterion 1 ANSWERED BY RC and MET - 2026-09-15
 
@@ -1108,7 +1252,232 @@ in chat and dropped from the artifact is a lie in the artifact:
 4. The worktree ordering invariant and the caveman-wiring clause are each either
    implemented with a test or recorded as already satisfied, naming the file.
 
-## OPS-92. Evaluate `archify` for this repository's diagrams - NEXT SESSION, operator-directed 2026-09-15
+## OPS-95. Four items this session generated, three of them commitments already made to siblings - READY
+
+Opened 2026-09-16. Each of these is either a defect measured here or a promise
+this project put in writing into four sibling inboxes. A commitment that lives
+only in an outgoing note is invisible to the next cold session, which is the one
+failure this project's continuity design exists to prevent.
+
+### 1. The licence gate needs a FIFTH trap: the wrapper does not clear the payload
+
+`CLAUDE.md`'s third-party licence gate lists four traps: a repo contradicting
+itself, a `LICENSE` naming nobody, the clearer not being the owner, and
+source-available licences being DO-NOT-VENDOR. It does NOT carry the one RSC
+named and this session walked into: **a permissively licensed wrapper can
+package payload data under different and stricter terms.**
+
+Measured here on archify: the root `LICENSE` is MIT with two copyright lines,
+and `THIRD_PARTY_NOTICES.md` records packaged brand-mark data under
+CC-BY-NC-SA-4.0, CC-BY-SA-3.0 and CC-BY-SA-4.0, plus a font under an open font
+licence embedded as subsets in EVERY delivered artifact rather than only in ones
+drawing a mark. This project PRACTISED the check and did not have it as a RULE -
+and then published an FYI describing archify as MIT with two copyright lines,
+which is a WRAPPER-level statement. A reader of that note would not have learned
+about the non-commercial mark.
+
+**The mechanism differs by outbound licence and both forms must be written
+down**, because a tree reasoning only about its own outbound misses the other.
+With a copyleft outbound a non-commercial term is a compatibility CONFLICT. With
+a permissive outbound like ours the bite is different: republishing
+non-commercial or share-alike bytes out of a PUBLIC permissive repository under
+a permissive label.
+
+**Acceptance:** a fifth trap is written into the licence gate section of
+`CLAUDE.md` in this project's own words - read the third-party notices and
+enumerate marks, icons, fonts, sample data and committed binaries with their own
+terms BEFORE recording a decision - citing the archify measurement as its
+instance, and naming both mechanisms. Not a vendored or shared document. This
+was promised to four siblings in the note delivered 2026-09-16 at 0800.
+
+### 2. A merge-gate baseline taken at HEAD is blind to uncommitted test work
+
+Measured this session and stated in an outgoing note, so it is on the record
+outside this tree already. The per-file baseline for `ops/merge_gate.py` was
+derived in a detached worktree at HEAD. That correctly measured HEAD - a control
+worktree reproduced 3439 across 70 files exactly, and exactly 2 of 70 files
+differed from the primary tree, both of them modified-but-uncommitted test
+files, with the deltas summing to the whole gap. CS's worktree divergence class
+did NOT corrupt it.
+
+**But a HEAD baseline is the wrong floor when work is already uncommitted.**
+Ours would have handed the gate a per-file floor of 46 for a file the working
+tree holds at 60, so a lane could delete 13 of the tests it added in the same
+session and still pass the per-file check. That is exactly the failure the
+per-file floor exists to prevent, one level down, and it is a property of
+measuring at HEAD rather than of the worktree.
+
+**Acceptance:** `ops/merge_gate.py` or its documented usage states that the
+per-file baseline is measured in the PRIMARY WORKING TREE immediately before
+dispatch, never at HEAD when uncommitted work exists; and a test pins the
+distinction by constructing a baseline that is lower than the working tree for
+one file and asserting the gate still reports the drop. Watch the red first.
+
+### 3. `tests/test_provenance.py` has a latent row-swallowing slice
+
+Found by a lane while reading for something else, probed in memory, and NOT
+patched because that lane did not own the file. Four sites use `block[2:]` to
+skip a Markdown table's header and separator rows - `tests/test_provenance.py`
+lines 191, 365, 376 and 392. If a separator row is ever deleted from a table the
+slice silently swallows **the first data row** instead, and the guard keeps
+passing over a table it is no longer fully reading.
+
+It is LATENT rather than a live false green: the consumers compare full
+dictionaries, so a missing row currently surfaces as a mismatch elsewhere. That
+makes it a trap waiting for a refactor rather than a present defect, which is
+exactly the kind this project writes down rather than leaves for rediscovery.
+
+**Acceptance:** the slice is replaced by something that locates the separator
+row rather than assuming its index, or asserts the row it is skipping IS a
+separator; and a test deletes a separator from a fixture table and fails. Prove
+it non-vacuous - break the table, watch the red, restore.
+
+### 4. The fleet position on a shared machine-wide skills directory is NO, and it is recorded here rather than only in an outgoing note
+
+LW and RSC each asked the fleet whether there should be a shared machine-wide
+agent-skills directory. **This project answered NO on 2026-09-16** and the
+answer is recorded here so a cold session does not have to re-derive it or,
+worse, answer differently.
+
+The grounds are this repository's own, not agreement with siblings: the
+standalone rule at the top of `CLAUDE.md` (no shared code, no shared ports, no
+shared keys, and a shared import is a shared failure); `OPS-48` question 3,
+which refuses granting an outside party access to this tree or this machine by
+default and says a SESSION may not grant it; and THE ONE ASYMMETRY, under which
+a session can say NO with full authority and cannot say YES at all.
+
+RSC's argument is stronger than our scope argument and is recorded as the better
+form: **the act is unreviewable AFTER the fact** - a directory every tree reads
+and no tree owns has no diff to inspect - and that holds even for a change all
+five trees would have approved.
+
+Measured here so the position rests on something: this repository has ZERO
+`SKILL.md` files, no `.claude/skills/` directory, and the skills this session can
+see under its own name are user-level and absent from a fresh clone. We already
+carry a small version of the invisibility being proposed at fleet scale, and it
+is already a cost.
+
+**What would change it:** an operator ruling in a session of ours, written into
+`CLAUDE.md` the way the three existing exceptions are, plus an owner, an
+allow-list, an admission rule, and a digest pin. Even then this project would
+want a local guard asserting that no file outside the repository root is
+load-bearing for its gates. **No session may adopt it without that ruling.**
+
+## OPS-92. Evaluate `archify` for this repository's diagrams - DECLINED 2026-09-16
+
+### DECLINED 2026-09-16 - the trial ran, and the producing lane's headline was struck by its own adversarial pass
+
+**The decision is DECLINE.** `archify` is not adopted. Nothing is vendored, no
+committed artifact here is generated by it, and no Node dependency enters this
+repository. Criteria 1 through 4 are discharged below; criterion 5 is moot
+because nothing was vendored. The reason is written out rather than left as a
+verdict, because a decline reason goes stale faster than a count does and the
+next session handed this link needs to re-check it rather than re-run it.
+
+**Criterion 1 is MET - the `LICENSE` was read directly, name and copyright
+lines.** It is MIT, and it carries **two** copyright lines rather than one:
+`Copyright (c) 2026 tt-a1i (Archify)` and `Copyright (c) 2025 Cocoon AI`. The
+file's sha256 is
+`b799ab081703e7821ae5096d2c1abdf14bbdc75e8ea1c4045998c36ed6db9706`. Nothing in
+the `LICENSE`, the README or the manifest contradicts the MIT name, so this
+repository's second license-gate trap does not fire - but the third one is live,
+because a second holder means the first cannot unilaterally relicense.
+`THIRD_PARTY_NOTICES.md` additionally records packaged brand-mark data under
+CC-BY-NC-SA-4.0, CC-BY-SA-3.0 and CC-BY-SA-4.0. Those bear on **vendoring** and
+not on **running**, and since the decision is to decline they are recorded
+rather than acted on.
+
+**Three premise corrections, so the next session does not repeat the search.**
+The npm package named `archify` is an unrelated squatter, `justin-calleja/archify`,
+and is not this project. This project is an agent **Skill**, installed through
+`npx skills add`. Its `archify/package.json` is marked `"private": true` and the
+repository has no root `package.json`, so an `npm install archify` reaches
+entirely different software.
+
+**Criterion 2 - the trial ran, and the producing lane's headline is STRUCK
+ENTIRELY rather than softened.** The lane reported an INVERSION: that archify
+passed the FALSE version of the `LL-0256` data-flow diagram and REJECTED the
+corrected one, which would have made the tool an active hazard. **That finding
+is refuted and must not be cited.** The adversarial pass reproduced the failure,
+then fixed it with four cosmetic layout edits, after which the truthful topology
+passes cleanly - 9 artifact checks, 0 errors, 0 warnings, exit 0,
+`evidence.verified` true, 4 references. The cause was the lane's own
+hand-authored geometry: it had placed the `ember` node at x=520, to the LEFT of
+`tail` and `readers`, which forces right-to-left edges. The corrected graph is
+simply DENSER than the false one - it contains a K2,2 where the false one is a
+funnel - and density is not falsity. The tool was never judging truth.
+
+Recorded here explicitly as a lane error caught by the adversarial pass, because
+it is this repository's own rule arriving live: a producer never grades its own
+output, and agreement between two agents is not evidence.
+
+**The graded answer to criterion 2, stated precisely, because the flat version
+of it is overstated in BOTH directions.**
+
+- archify's `validate` mode would **NOT** have caught the `LL-0256` renamed-node
+  repair, and the reason is STRUCTURAL rather than a tuning miss. In its typed
+  intermediate representation `sources` exists only on `components`;
+  `connections` carry `from`, `to`, `label` and geometry, and the schema sets
+  `additionalProperties: false`. So adding provenance to an EDGE is REFUSED by
+  the schema rather than merely unsupported, and no configuration reaches it.
+  Probed both ways: node citations deliberately pointed at the wrong modules
+  still return `verified` true, and an edge labelled "injects DLL" running from
+  the redactor to the game process - an `ADR-001` violation on its face - passes
+  the showcase clean. The negative controls DO fire (a missing file, a line
+  number out of range), so the checks are SCOPED rather than dead, which is the
+  distinction that matters when deciding whether the gap is fixable.
+- **But the flat claim "archify would not have caught it" is itself OVERSTATED,
+  and this is the half a cold session most needs.** A `compare` mode exists and
+  the producing lane never ran it. Run against the `LL-0256` defect itself - a
+  label-only rename - it prints `changedFields ["/label","/sublabel"]` with
+  `connections {added 0, changed 0, removed 0, rerouted 0}`. That is exactly the
+  discriminator for "a node was renamed and the topology did not move", which is
+  the shape of the defect. It does NOT fail: exit 0. And it diffs two AUTHORED
+  intermediate representations against each other rather than diffing a diagram
+  against the code. So `compare` SIGNALS the defect to a reader who runs it and
+  reads the field; it does not CATCH it mechanically. Adopting it would have
+  bought a signal that still depends on a human reading a line of output, not a
+  guard that turns something red.
+
+**Check counts, re-derived from source rather than from the README:** 11
+`addCheck` call sites producing **9 distinct check names**. Two of the nine,
+`single_svg` and `finite_svg`, are well-formedness checks rather than geometry
+checks, so "9 checks" over-describes what is actually verified about a diagram.
+
+**Criterion 3 - the decision and its grounds, each one re-checkable later.**
+
+1. **No edge provenance, by schema design.** The failure this repository
+   actually had - `LL-0256` and `LL-0254` - is a false EDGE, and edges are the
+   one thing archify's verification cannot reach. That is the hypothesis this
+   item was opened to test, and it fails.
+2. **A fresh clone could not reproduce a committed artifact without Node.** It
+   needs Node 18 or newer plus a bootstrap that is either a network fetch or
+   about 8.5M of vendored dependencies. `CLAUDE.md`'s continuity story is that a
+   cold session resumes from files alone, and this item named that cost before
+   the work started.
+3. **Artifact size, quoted as approximate on purpose.** About 810 KB of
+   self-contained HTML for an 11-node diagram. **Do NOT quote an exact byte
+   count**: the adversarial pass's own two artifacts measured 811,309 and
+   809,757 bytes, so an exact figure is not reproducible and saying so IS the
+   finding.
+4. **Committing the artifact would turn the suite red.** The generated HTML
+   carries 322 non-ASCII bytes, and `tests/test_ascii_hygiene.py` walks 221
+   files, treats `.html` as text, includes `third_party/` in scope and walks
+   UNTRACKED files as well. That is a measured mechanical consequence rather
+   than a preference.
+
+**Criterion 4 is discharged by the decline** - there is no integration shape to
+name because nothing is integrated, and no Node cost reaches `README.md` or
+`docs/OPERATIONS.md` because nothing runs. **Criterion 5 is moot**: nothing was
+vendored and the `OPS-84` shape was never reached.
+
+**What would reverse this, named so the decline can be revisited on evidence
+rather than re-argued from the README.** Edge-level `sources` in the IR schema,
+so a connection can cite the code that proves it, together with a `validate`
+exit code that is non-zero when an edge's citation does not hold. That is one
+named change and it is the only one that would make this tool address the
+failure this item was opened for. The Node cost and the artifact size would not
+need to change: those are costs, and the edge gap is the disqualifier.
 
 The operator named this in chat on 2026-09-15 and asked that the next session
 implement it: `https://github.com/tt-a1i/archify`. Written down here rather than
@@ -1194,7 +1563,179 @@ problem; a build step wired into the suite does.
    license, holder, digest and every change - and an operator ruling. Using it
    needs neither.
 
-## OPS-93. Evaluate `context-mode` for this project's context discipline - NEXT SESSION, operator-directed 2026-09-15
+## OPS-93. Evaluate `context-mode` for this project's context discipline - DECLINED 2026-09-16
+
+### DECLINED 2026-09-16 - and the grounds are CORRECTED from the ones the producing lane reported
+
+**The decision is DECLINE.** `context-mode` is not installed, nothing is
+vendored, no hook entry was written, and no `.claude/settings.json` was touched
+in this tree or outside it. The grounds below are NOT the grounds the producing
+lane reported: its headline safety finding was refuted by the adversarial pass,
+and the correction runs against the tool rather than for it.
+
+**Criterion 1 is MET, and criterion 2 is answered in one sentence.** The
+`LICENSE` file is 3840 bytes, sha256
+`92f11a867c41c9e575ccb978ff205ae2011c244a14aa3c576e914e537105caa0`, byte
+identical at `main`, at `master` and at `HEAD`. Line 1 reads
+`Elastic License 2.0 (ELv2)`; line 3 reads `Copyright 2026 Mert Koseoglu`.
+`package.json` declares `"license": "Elastic-2.0"`, the README badge says ELv2,
+and the GitHub API reports `spdx_id` `NOASSERTION` - which is the API declining
+to recognise the identifier, not a contradiction inside the repository. Full
+recursive trees at `main`, at tag `v1.0.169` and at branch `next` were scanned:
+exactly ONE license blob, no `NOTICE`, no `AUTHORS`, no second copyright holder.
+**DO-NOT-VENDOR, recorded explicitly so nobody re-derives it** - ELv2 is
+source-available rather than open source, the same category `CLAUDE.md` names
+for BUSL-1.1 and marks DO-NOT-VENDOR whatever anyone offers. The
+USE-versus-VENDOR sentence: **using it is permitted by its own grant clause, and
+copying any byte of it into this tree is refused permanently.**
+
+**THE FINDING THAT DECIDES THIS ITEM, and the producing lane had it backwards.**
+The lane reported "no upload, sync or telemetry found". That is REFUTED against
+the SHIPPED npm tarball. `hooks/platform-bridge.mjs` is a self-described
+fire-and-forget event forwarder: line 286 POSTs to a configured URL with the
+full event envelope as the body and a bearer `Authorization` header built from a
+configured `api_key`. It is WIRED IN rather than dead code -
+`hooks/session-loaders.mjs:161` calls `maybeForward`, and that loader is
+imported by the `sessionstart`, `posttooluse`, `userpromptsubmit`, `precompact`
+and `stop` hooks. It is **DORMANT rather than absent**: the forwarder is gated
+on a config file holding an `api_key` with a `ctxm_` prefix, and no writer for
+that file ships today. Lines 286 to 292 and line 30 were confirmed in the
+tarball by the merger independently rather than relayed from the report.
+
+**Why the lane missed it, which is the transferable lesson and the reason this
+paragraph exists at all.** The lane audited `src/`, 117 files. The forwarder
+lives in `hooks/`, 98 files. That is `CLAUDE.md`'s own anti-pattern - "an empty
+grep is a claim about your pattern, not about the codebase" - landing on a live
+safety question rather than on a count. A clean negative from a search is a
+claim about where you searched.
+
+**The published artifact is NOT reproducible from the repository.** Three
+measurements of the same nominal build: the tag at 673,945 bytes, `main` at
+674,733 bytes, and the npm tarball at 674,738 bytes, with 267 differing lines.
+**Auditing a published package means auditing the PACKAGE**, written down here
+so it is not learned again the expensive way.
+
+**But the CAUSAL half of that sentence was WRONG and is WITHDRAWN - 2026-09-16,
+on LW's refutation, re-measured here before conceding.** An earlier version of
+this paragraph said "so auditing the source would never have settled this", and
+this project published that claim to four sibling trees in two separate notes.
+It is false for the file that actually matters. `hooks/platform-bridge.mjs` is
+BYTE-IDENTICAL between the shipped tarball and the public repository: 12,160
+bytes in both, `sha256`
+`74d18338a4fbcc46c406f8791a819a213fd78551bbfbc99eba1f914692699294`, identical at
+`main`, `master` and `HEAD`, measured on this machine against our own copy of
+the tarball. Nit corrected 2026-09-16 on our own wrap refutation: `master` is NOT a separate branch upstream - only `main` and `next` exist and the raw host ALIASES `master` to the default - so "identical at main, master and HEAD" is two distinct refs wearing three names. The byte claim is unaffected and the digest reproduces; the ref count was loose. The forwarder was always readable on GitHub.
+
+**So the audit did not fail for the reason we published. It failed for the
+reason we had already written down one paragraph above, and only that one: it
+searched `src/` and the forwarder lives in `hooks/`.** Downloading the tarball
+is what the adversarial pass HAPPENED to do; it is not what made the difference,
+and a repository-wide read would have found the same file. The two facts are
+independent - package divergence is real at PACKAGE scope and is not a fact
+about this file - and we welded them into a causal claim that the evidence does
+not support. That is this repository's own "a rendered field is not evidence of
+a producer" in a new costume: a true observation next to a true observation does
+not make one the cause of the other.
+
+The correction went to all four siblings rather than being fixed quietly here,
+on the `LL-0244` rule. LW is credited for the refutation.
+
+**"Not the MSIX exposed shape" is REFUTED IN PART**, against this item's own
+point 3. The database path claim STANDS: the store resolves to
+`<resolveClaudeConfigDir()>/context-mode/{sessions,content}/<sha256-16>[suffix].db`,
+which lands under the user profile's `.claude` directory, and `os.homedir()`
+ignores `HOME` on win32 - measured here, not assumed. But
+`hooks/platform-bridge.mjs` writes its config under
+`%APPDATA%\context-mode\platform.json`, and `build/cli.js:312` uses
+`%LOCALAPPDATA%`. **Both are the exposed shape** named in the MSIX
+package-shadow section of `docs/OPERATIONS.md` and measured on this machine in
+`LL-0259`. One sub-claim survives intact: the shipped `build/session/extract.js`
+imports only `./pricing.js` and has no network at all, and its `sentry`,
+`apiKey` and `Authorization` hits are comments inside a redaction scrubber.
+
+**Criterion 3 is ANSWERED rather than left as a gap.** It asked for the store's
+gitignore status to be asserted by a test in the family of
+`tests/test_no_inbox_in_git.py`. Nothing lands inside the repository under this
+decision, so there is no path for such a test to assert about, and writing one
+would be decoration - a guard that cannot go red is not a guard. That is the
+answer, recorded as an answer so the criterion is not later read as skipped.
+
+**Criterion 4's PREMISE is REFUTED, and the real risk is the opposite of the one
+this item named.** The item said an installer rewriting `.claude/settings.json`
+"will trip those guards". It would not. The installer writes the USER-level
+`~/.claude/settings.json`, not this repository's, so
+`tools/hook_command_guard.py` never sees it. **The real risk is SILENCE, not a
+red suite** - a machine-wide hook this repository's guards are structurally
+unable to observe. There is no `--local`, `--scope` or `--global` flag that
+narrows it; `--project` affects index and search only.
+
+**It is worse than "writes a user-level file", and this was measured here on
+2026-09-16 rather than taken from a sibling.** RSC reported the shape in a note
+the same day; the standing rule is to re-measure a claim rather than relay it,
+so the shipped npm tarball's `scripts/postinstall.mjs` was read directly. It
+does three things at INSTALL time, none of them requested by the installing
+user:
+
+- resolves the user-level `.claude/settings.json` and REWRITES its
+  `enabledPlugins`, in a code path whose own comment calls that file "the file
+  Claude Code's plugin loader actually reads";
+- rewrites `.claude/plugins/installed_plugins.json`, twice, in two separate
+  repair passes;
+- runs `execSync` on `mklink /J` to create a filesystem DIRECTORY JUNCTION when
+  the resolved package directory is not where it expects.
+
+The script calls these "heal" operations and they are plainly meant as
+robustness rather than as anything hostile - no claim to the contrary is made
+here, and none is needed. The point is the BLAST RADIUS and who can see it. This
+is not a new file appearing beside our guards; it is an unprompted edit to the
+configuration that decides what loads into every agent session on this machine,
+for all seven repositories in the port registry at once, performed by a
+`postinstall` hook that runs before anyone has read anything. A repository-local
+guard cannot observe it, and the edit has no diff anybody reviews.
+
+That converts decline ground 3 below from "no local guard can see the file it
+writes" into something sharper: the install MUTATES the loader's own
+configuration, machine-wide, at install time.
+
+Two facts about the LOCAL guards were re-measured while establishing that, and
+one of them was undocumented. Pin-by-exact-string is CONFIRMED, and the pin is
+**BIDIRECTIONAL**: DELETING a pinned rule also turns the suite red, which
+nothing had recorded. And this item's claim that "a fourth turns the suite red"
+is OVERSTATED - only a fourth ABSOLUTE permission rule does. Verified by
+mutating a scratch COPY through `check_settings_text` with the anchor asserted
+to have matched first, and by `python -m pytest
+tests/test_hook_command_roots.py` -> 60 passed.
+
+**Criterion 5 is UNMET, and is recorded as unmet rather than quietly
+satisfied.** The context saving was not measured on this repository, because
+nothing was installed and measuring it would have required installing it. The
+vendor's 98 percent figure therefore stays attributed as a CLAIM and is never
+repeated here as a measurement. That is omit-rather-than-guess applied to a
+number somebody else published.
+
+**Criterion 6 - the decline grounds, with the date, each re-checkable.**
+
+1. **A default install is machine-wide.** Seven repositories share this box.
+   There is no per-project install mode, so an audit of this tool would be an
+   audit on behalf of every one of them, and this session speaks for one.
+2. **There is no version pin**, so the audit expires on every silent
+   self-update. What was audited today is not what runs tomorrow.
+3. **No local guard can see the file it writes.** The user-level settings file
+   sits outside every guard this repository has, so the failure mode is silence
+   rather than a red suite - and silence is the one failure this project's
+   whole guard design is built to avoid.
+4. **The dormant forwarder plus the non-reproducible published artifact.**
+   Dormant is a configuration state and not a property of the code, and the code
+   that would actually run is not the code that can be read in the repository.
+
+**THE REVERSAL CONDITION, so the decline can be revisited on evidence rather
+than re-argued.** Reverse this if ALL of the following hold: the project ships a
+documented per-project or per-directory install that does not write the
+user-level settings file; the event forwarder is either removed or made
+refusable by a configuration this repository can assert in a test of its own;
+and the published package is reproducible from a tagged source tree, so what is
+audited is what runs. A version pin and a different license would both be
+welcome and neither is sufficient on its own.
 
 The operator named this in chat on 2026-09-15 alongside `OPS-92` and asked that
 the next session implement it: `https://github.com/mksglu/context-mode`.
@@ -1295,7 +1836,172 @@ was.
 6. The decision is recorded either way, with the date and the reason, because a
    decline reason goes stale faster than a count does.
 
-## OPS-94. Review `timharris707/skills` for adoption - NEXT SESSION, operator-directed 2026-09-15
+## OPS-94. Review `timharris707/skills` for adoption - REVIEW COMPLETE 2026-09-16, three candidates recorded, nothing adopted
+
+### REVIEW COMPLETE 2026-09-16 - all 23 classified, three candidates, nothing adopted this session
+
+**Every count below was re-derived at commit
+`a9317e03733da7f54b5da0eaa8edcb2697495cf5`.** An unpinned count goes stale the
+moment upstream pushes, and this review's own producing lane filed five wrong
+counts, so the ref is part of the finding rather than a footnote to it.
+
+**THE COUNT IS 23 AND THE ROADMAP NEEDED NO CORRECTION.** The producing lane's
+headline was that the number is "24, not 23". That is REFUTED. The upstream
+README states at line 224 that only PROMOTED buckets ship and that nothing under
+`in-progress/` appears in the marketplace, and `buckets.json` and the CI
+configuration agree with it. `skills/in-progress/fit-audit` is therefore not one
+of the shipped skills. All 23 names this item listed from the README resolve to
+a real directory at the pinned sha, with no spurious name and none missing.
+**Recorded as the lane's own error**: a filed count is a hypothesis, and that
+rule applies to a subagent's count exactly as it applies to a document's.
+
+**Four subsidiary tallies from the same lane were also wrong and are corrected
+here**, because each would otherwise be cited later as a measurement:
+`references/` holds **14** files and not 8; `CHANGELOG.md` records **8** entries
+and not 4; `_conductor` is **29** and not 30; and `fit-audit` carries no
+`agents/openai.yaml`, so "every skill ships a Codex adapter" is wrong as stated
+- it is 23 of 24.
+
+**What the lane MISSED matters more than what it got wrong.** Repository-wide
+there are **48** `SKILL.md` files, not 24. The other 23 are a complete mirror at
+`plugins/clickai-codex/skills/`, with DIFFERENT blobs from the `skills/` tree
+and its own `LICENSE.md`. **Anyone adopting from this repository must say WHICH
+tree they copied from**, because a digest taken from one tree does not identify
+a file in the other.
+
+**Criterion 1 - the license chain, read directly at every hop.** The root
+`LICENSE.md` is MIT, `Copyright (c) 2026 Tim Harris`; a plain `LICENSE` at the
+root 404s, so the filename matters. MIT into Apache-2.0 clears this
+repository's gate. Each upstream holder was confirmed by fetching that project's
+own `LICENSE` rather than by reading a credit line: Matt Pocock (MIT), Lauren
+Tan (MIT), and Siqi Chen (MIT, `blader/humanizer`, credited upstream only by
+handle).
+
+**Two corrections to the lane on the license axis.** First,
+`human-copywrite`'s Apache-2.0 `LICENSE` DOES name a holder, at line 189 - the
+lane reported that it named nobody - and that name is **non-ASCII and therefore
+cannot be quoted verbatim in this repository**. That collision is itself worth
+recording: a license gate that requires reading the copyright LINE meets an
+authoring rule that forbids reproducing it, and the resolution is to record that
+a holder exists and to cite the line where it is. Second, the `cursor/plugins`
+scope worry is **CLOSED rather than left open**: that root is genuinely
+unlicensed (the API returns null and three filename spellings 404), but
+`pstack/README.md` states MIT and all 15 plugin directories carry their own
+`LICENSE`.
+
+**Two genuinely UNLICENSED sources exist and NO candidate depends on either**:
+an on-camera reviewer whose grading frame `fit-audit` credits, and two private
+repositories behind `ingest`. Both belong to skills that are DECLINED anyway.
+One hop the lane missed - `blader/humanizer` builds on Wikipedia content under
+CC BY-SA - likewise touches only DECLINED skills. And exactly three skills carry
+**no Attribution section at all**, despite the README claiming that section is
+the record: `advisory-board`, `handoff` and `orchestrate`. The README's promise
+about attribution is not true of its own tree.
+
+**Criterion 2 - the classification, all of them, so an unmentioned skill is not
+indistinguishable from an overlooked one.** 8 DUPLICATE, 3 CANDIDATE, 13
+DECLINED. That is 24 entries covering the 23 SHIPPED skills plus `fit-audit`,
+which is classified because it exists and is marked as not shipped so that it is
+never counted among the 23.
+
+| # | skill | class | reason |
+|---|---|---|---|
+| 1 | router | DUPLICATE | `docs/INVENTORY.md`'s command table plus `CLAUDE.md`'s living-docs header block are this project's orientation entry point. |
+| 2 | setup | DECLINED | A once-per-repo interview that asks the decider to confirm each answer. `CLAUDE.md` IS the binding doc, and FULL AUTHORITY item 2 forbids the question. |
+| 3 | domain-memory | DUPLICATE | `docs/adr/` for decisions, `docs/OBSERVED_IDS.md` and `docs/FINDINGS.md` for the glossary, with the observation method recorded - a stricter bar than the upstream's. |
+| 4 | grilling | DECLINED | Overturns the ROADMAP guess. A blocking interview - "Put each one to them and wait" - against `loop.md`'s "Never block on the operator". |
+| 5 | decision-map | DECLINED | Overturns the ROADMAP guess. "the round brief is the deliverable, never the answer" is the verbatim inverse of FULL AUTHORITY item 2. |
+| 6 | advisory-board | DECLINED | Overturns the ROADMAP guess. Shells out to `codex exec`, `gemini -p` and `grok` - egress plus an API key, refused under `ADR-004` and the no-shared-keys rule. |
+| 7 | research | DUPLICATE | `.claude/commands/lane-research.md` plus `CLAUDE.md`'s measurement doctrine, which fixes a trust order the upstream lacks. |
+| 8 | prototype | DECLINED | Its own text exempts prototype branches from test-first rules. TDD is a rule no authority here reaches. |
+| 9 | codebase-review | DECLINED | Its "defer-and-carry" disposition is a fourth destination for found work; `CLAUDE.md` names exactly three. |
+| 10 | ingest | DECLINED | No measured need, and its transcription pipeline would route operator-recorded audio through a path with no `redact.py` in it. Also not vendorable - two private upstreams. |
+| 11 | to-tickets | DECLINED | Overturns the ROADMAP guess. Targets a GitHub issue tracker - a second tracker beside `ROADMAP.md` - and carries an "iterate until they approve" gate. |
+| 12 | wizard | DECLINED | Generates interactive bash for human-only procedures. The one real instance here is a fresh clone, already covered by `scripts/install_hooks.py`. |
+| 13 | handoff | DUPLICATE | `.claude/commands/done.md` and `ops/handoff.py`, where the handoff is a tracked file rather than a chat message. |
+| 14 | show-me-your-work | DUPLICATE | `docs/LEDGER.md`, the lane fragments and `ops/stop_audit.py`. Its closing gate re-enters advisory-board's egress by a side door. |
+| 15 | orchestrate | DUPLICATE | `CLAUDE.md`'s Session Default, the eleven `lane-*.md` contracts and `ops/lane_contract.py`. |
+| 16 | adversarial-review | DUPLICATE | `CLAUDE.md`'s self-adversarial baseline, `lane-verify.md`, `.claude/agents/verifier.md` and `ops/merge_gate.py`. |
+| 17 | diagnose | **CANDIDATE** | Ranked second. No TRACKED local equivalent exists - see the criterion 3 correction below. Cannot be adopted as-is. |
+| 18 | implement | DUPLICATE, and it WEAKENS | "the seam-scoped bar lets code at no named seam ship with its tests in the same commit". `CLAUDE.md` permits none. Local rule wins. |
+| 19 | blast-radius | **CANDIDATE** | Ranked first. `ops/merge_gate.py` is a done-claim checker and says nothing about what a change breaks. |
+| 20 | writing-for-agents | **CANDIDATE** | Ranked third. `CLAUDE.md`'s authoring rules govern bytes; nothing local governs what to CUT from an agent-facing document. |
+| 21 | writing-for-humans | DECLINED | Aimed at public marketing prose. This repository's public surface is read by engineers and by cold sessions, and the register is already fixed. |
+| 22 | plainspoken | DECLINED | Overturns the ROADMAP guess. Always-on prose governance - a second answer to CAVEMAN ULTRA. |
+| 23 | huh | DECLINED | Overturns the ROADMAP guess. Triggered by a human reading chat and saying it did not land; the operator here cannot read chat while playing. |
+| - | fit-audit | DECLINED, and NOT one of the 23 | Lives under `skills/in-progress/`, which README line 224 excludes from what ships. Its grading frame is credited to an on-camera reviewer with no license statement. |
+
+**The ROADMAP's six guessed candidates are ALL OVERTURNED**, and the reasons
+were confirmed verbatim against the upstream bodies at the pinned sha, on
+whitespace-collapsed copies because a line-oriented grep is a claim about line
+breaks. Seven decline reasons were spot-checked verbatim and seven held.
+
+- `decision-map`'s hard guardrail reads "record the recommendation and stop
+  there: the round brief is the deliverable, never the answer". FULL AUTHORITY
+  item 2 says the best recommendation is taken IMMEDIATELY. A direct
+  contradiction rather than a near miss.
+- `advisory-board` literally shells out to `codex exec`, `gemini -p` and `grok`.
+  That is egress plus an API key, refused under `ADR-004` and under the
+  no-shared-keys rule that binds under every exception in `CLAUDE.md`.
+- `plainspoken` is an always-on prose governor and would be a second answer to
+  CAVEMAN ULTRA, which the operator confirmed in chat on 2026-09-06.
+- `huh` is triggered by a human reading chat. The operator here cannot.
+- `grilling` is a blocking interview whose Done-when requires the decider to
+  confirm, and `to-tickets` carries the same approval gate on top of a second
+  tracker.
+
+**The three CANDIDATES, with the gap each fills.**
+
+- **`blast-radius`**, ranked first, and it survives an adversarial check of the
+  gap it claims. This item said it "overlaps `ops/merge_gate.py`". Read at the
+  source: the gate is a **done-claim checker** by its own docstring - it asks
+  whether claimed files exist, re-runs the suite, and refuses a dropped test
+  count. It says nothing about what a change BREAKS elsewhere. The gap is real,
+  and it operationalises a `CLAUDE.md` rule that is stated and never mechanised:
+  "Proving your change happened is not the same as proving it matters."
+- **`diagnose`**, ranked second, and **this item's criterion 3 premise about it
+  is FALSE.** It says diagnose "is already a local skill in this tree". There
+  are **zero** `SKILL.md` files anywhere under the repository root and no
+  tracked diagnose command. The only copy is a USER-LEVEL command outside this
+  repository, absent from a fresh clone, which makes it a continuity gap of
+  exactly the kind this project's design exists to prevent. Its absolute path is
+  deliberately NOT written here: a user-profile path carries an account name,
+  and `tests/test_no_hardcoded_home_path.py` exists for that reason.
+- **`writing-for-agents`**, ranked third, filling the half of document design
+  that `CLAUDE.md`'s authoring rules do not cover - what to CUT, as against how
+  to spell it.
+
+**A caveat on `diagnose` that is NOT dropped**, because a caveat stated out loud
+and left out of the artifact is a lie in the artifact. The local user-level
+diagnose command contains the phrase "ask the operator" and holds 14 non-ASCII
+characters. Those are two non-starters here - FULL AUTHORITY item 2 and the
+7-bit ASCII rule. It is the USER-LEVEL copy rather than the upstream skill, so
+it does not by itself condemn the candidate. **But diagnose cannot be adopted
+as-is**, and any adoption must fix both defects and say that it did.
+
+**Criterion 4's guard was measured, and it does NOT cover what the criterion
+assumed.** `tests/test_inventory.py` matches **one directory deep**. Proven
+non-vacuously by calling `_group_of` directly rather than by reading it: a
+nested `.claude/skills/<name>/SKILL.md` returns `None` while a flat command
+returns `'commands'`, against six positive controls. **So a skill adopted at a
+nested path would be guarded by NOTHING and would turn nothing red** - the
+inventory row the criterion promises would simply never be required. Any
+adoption therefore goes in as `.claude/commands/*.md`, which the inventory's
+scope does cover.
+
+**Criterion 5 - the decision, with its date.** 2026-09-16: **nothing is adopted
+this session.** The three candidates are recorded as candidates with their
+adoption shape named, which is a decision about what an adoption would look like
+rather than a deferral of one.
+
+**Acceptance for a later adoption, so the next session does not re-derive it.**
+The file lands at `.claude/commands/<name>.md`; it carries BOTH attributions -
+the root MIT holder and the credited upstream holder for that specific skill,
+naming which of the two upstream trees the text came from; it is 7-bit ASCII
+with every "ask the operator" construction removed; and it gets its
+`docs/INVENTORY.md` row. Deleting that row must be watched turning
+`tests/test_inventory.py` RED before the adoption is called done, because the
+measurement above shows a nested path would stay green.
 
 The operator named this in chat on 2026-09-15, third after `OPS-92` and
 `OPS-93`, asking that it be reviewed for implementation next session:
@@ -1373,7 +2079,164 @@ is incompatible with written rules here, and the rule wins.
    so a new one that is not listed turns the suite red.
 5. The decision is recorded either way, with the date and the reason.
 
-## OPS-91. Vendoring RC's `docs/CHANNEL.md` is REFUSED at the license gate - BLOCKED on RC naming a license, and the conventions are adopted WITHOUT the file
+## OPS-91. Vendoring RC's `docs/CHANNEL.md` - RC NAMED THE LICENSE 2026-09-16, criteria 1 and 2 are MET, and the item is now BLOCKED ON AN OPERATOR RULING rather than on RC
+
+### 2026-09-16 LATER - RC ANSWERED, and criteria 1 and 2 are MET
+
+**This section supersedes the one below it, which was written earlier the same
+day and was correct when written.** The earlier section is left standing rather
+than rewritten, because this project does not quietly revise a record. Read them
+in order: RC had not answered at the time of the first, and answered afterwards.
+
+RC's note is
+`moon_sync_inbox/2026-09-16-0024-from-RC-FYI-amberstone-is-apache-2-0-and-channel-md-is-covered-license-named-for-your-gate.md`,
+8272 bytes measured on this disk. What it supplies, which is exactly what
+criterion 1 asked for and no more:
+
+- **The repository, by name: `Remus3/Amberstone`**, which RC states its own
+  `origin` remote resolves to. Criterion 1 required a named repository and a
+  statement that does not name one was explicitly declared insufficient.
+- **Visibility PUBLIC**, which RC says it probed live against the host rather
+  than asserting from a document.
+- **Root `LICENSE`: Apache License 2.0**, 219 lines.
+- **The copyright LINE and not merely the license name**, which is what this
+  repository's gate demands because a `LICENSE` can name nobody. RC reports it
+  as a rendered grant with a named grantor rather than an unfilled template.
+  **The holder's name is NOT recorded here, and that is deliberate.** It is the
+  operator's git identity, which `CLAUDE.md` names as an operator identifier and
+  forbids writing into a tracked file as a literal - the rule that already bit
+  this project once in `LL-0170`, when a session quoted `git log` output into
+  four sibling inboxes. A reader who needs the literal reads RC's note, which is
+  in a gitignored directory. Recording "one holder, sole, named in both `LICENSE`
+  and `NOTICE`" carries the whole legal fact and none of the exposure.
+
+  **One NUANCE measured while enforcing that, because a future session will
+  otherwise "fix" a file and break the licence.** A blunt check - "the
+  operator's git identity must appear in NO tracked file" - is FALSE here, and
+  it fired on `README.md:270` while this section was being written. The literal
+  appears deliberately in `LICENSE`, `NOTICE` (twice), `CITATION.cff` and that
+  README line, which is precisely where Apache-2.0 requires the copyright holder
+  to be NAMED. Removing it would not be redaction, it would be stripping the
+  attribution this repository's own licence depends on. The rule in `CLAUDE.md`
+  is about INCIDENTAL leakage - quoting `git` output into a note, hardcoding the
+  value inside a guard that exists to protect it, letting it cross off the
+  machine through an unredacted channel - and not about the copyright notice of
+  a public repository, where publication is the point. So the test to write, if
+  one is ever written, is scoped by LOCATION and DIRECTION rather than by the
+  value: the four attribution files are the allowed set, and anywhere else is a
+  finding. That distinction is the same one `CLAUDE.md` already makes when it
+  warns that a rule enforced by hardcoding the value it protects is scoped to
+  one VALUE, which is the defect one level down.
+- **Scope, stated inside `LICENSE` itself**: a `SCOPE OF THIS LICENSE` block
+  putting the repository's source code AND its authored documentation inside the
+  grant, with the README's licence paragraph saying the same.
+- **The only carve-out is third-party-sourced DATA under `data/`**, listed
+  source by source in `NOTICE` under a heading saying that material is NOT
+  covered. Documentation appears nowhere in that carve-out, and `docs/CHANNEL.md`
+  is authored documentation outside `data/`.
+- **Vendoring is intended**, which RC states plainly, and RC asks for nothing
+  beyond the attribution Apache-2.0 already requires.
+
+**The 2026-09-07 three-way contradiction is reported RESOLVED**, and RC gave the
+evidence rather than the conclusion: `Share/LICENSE.md` is absent from disk AND
+returns zero rows from `git ls-files`, so it is gone rather than merely
+untracked; the all-rights-reserved phrasing is absent from `README.md` and from
+`docs/CHANNEL.md`. RC also volunteered the incomplete half rather than claiming
+a clean tree - the phrase still occurs in append-only history records and in
+RC's own notes ABOUT other people's unlicensed repositories, neither of which is
+a competing grant over RC's files. That is the honest shape of the answer and it
+is worth more than a bare assertion of cleanliness would have been.
+
+**CRITERION 1: MET. CRITERION 2: MET.** Apache-2.0 into Apache-2.0 is exactly
+what the gate accepts. The refusal recorded below was never a judgement about
+RC and is now discharged on its own stated terms: this project refused an
+unlicensed drop, asked the owner to name a license and a repository, and the
+owner did. That is the second time this sequence has run to completion here -
+the first produced `third_party/lw_write_tracer/` under `OPS-84`.
+
+**WHAT THIS DOES NOT DO, and it is the whole of what remains.** It does not
+authorise vendoring. `CLAUDE.md`'s SECOND EXCEPTION permits a vendor when a
+license is named and accepted, and criterion 3 below says in its own words "on a
+yes AND AN OPERATOR RULING to vendor". THE ONE ASYMMETRY governs: declining was
+always a session decision, and ADOPTING is an operator ruling that no grant of
+authority reaches and that a session may not manufacture. RC says the same from
+its side and explicitly is not asking. So the item moves from BLOCKED-ON-RC to
+**BLOCKED ON AN OPERATOR RULING**, which is a real unblock of the question and
+not of the act. A ruling of NO VENDOR with the license in hand is a legitimate
+outcome and RC has already said it would record it as one.
+
+**If the operator rules VENDOR**, criterion 3 already fixes the shape and
+nothing in it is relaxed by the license being clean: hash the file against the
+digest RC published BEFORE a byte is copied, copy at the BYTE level and never
+through `write_text` - `.gitattributes` and Windows CRLF translation make a
+working-file hash a different fact from a git blob hash, measured here on
+2026-09-01e - place it at the same relative path under `third_party/`, and give
+it a NOTICE naming upstream, license, holder, the digest of what was licensed
+and every change made, per Apache-2.0 section 4(b). Criterion 4 also still
+stands: the seven portable assertions become OUR OWN test module, and RC's gate
+module is NOT vendored under any answer, because RC states it hard-imports
+RC-only tooling.
+
+### 2026-09-16 EARLIER - RC had NOT answered, a second silence was recorded, and the conformance gap is DONE
+
+**RC has not answered.** The newest item on this channel is still RC's
+2026-09-15 1858 FYI, which PREDATES this project's reply delivered
+2026-09-15T23:46:47 local. That was verified on a WHITESPACE-COLLAPSED copy of
+the note, 15063 bytes, because a line-oriented grep is a claim about the file's
+line breaks and this repository has already returned two false clean bills that
+way in a single session: **ZERO occurrences of "licen", "copyright", "apache" or
+"repositor".**
+
+**A false-positive class worth recording, because it would read as a hit.** The
+eight apparent "MIT" matches in that note are all substrings of **"commit"** and
+**"committed"**. A case-insensitive search for a three-letter license identifier
+inside English prose is a trap rather than a search, and the same trap is
+waiting in any future note that discusses commits.
+
+**Criterion 1 remains UNMET. The item stays BLOCKED and the refusal stands.** RC
+names a commit sha and the phrase "public tree"; a visibility is not a grant,
+and nothing in the note names a license, a copyright holder or a repository.
+Under the rule RC itself named as operative - v2 section 2, silence reads as
+DISSENT rather than as consent - **a SECOND silence is recorded here AS a
+silence**, which is what criterion 5 asks for. Nothing about the refusal changes
+and no criterion is quietly satisfied by the passage of time.
+
+### The conformance gap in the section below is CLOSED - 2026-09-16
+
+`ops/inbox_watch.py` now implements the clause. It gains `NAME_LIST_CAP = 10`,
+`REPORT_FILENAME`, `default_report_path()`, `write_report()`, a shared
+`_write_atomic` using temp-then-replace, `render(result, cap, report_path)`
+which caps ALL FOUR name lists, and `report_and_render()` which writes the file
+FIRST and then returns the capped text. On a write failure it prints everything
+plus a WARNING rather than leaving a dangling pointer to a file that does not
+exist - a pointer to a missing report is worse than no cap at all.
+
+`Group.mtime` and `Drop.mtime` are now `stat`ed in `scan` and in `_read_drops`,
+so "newest" is MEASURED rather than inferred from an ordering that nothing
+guarantees. A `--report-file` flag was added with `allow_abbrev=False`, and the
+report path derives from `--state`, so a fixture cannot reach live runtime
+state - `tests/test_inbox_live_state.py` exists because a fixture writing
+`ops/runtime/` marks the operator's real backlog as read.
+
+**No `.gitignore` edit was needed, and that was measured rather than assumed:**
+`git check-ignore -v ops/runtime/inbox_report.txt` answers
+`.gitignore:41:ops/runtime/`, exit 0.
+
+**THE VACUITY CAUGHT MID-TDD, and it is the most instructive thing in this
+item.** The first draft named the flag `--report`. **argparse PREFIX-EXPANDED it
+to `--reported`**, an existing flag, so two ordering and completeness tests
+passed GREEN against ZERO implementation - they were reading the reported-set
+JSON and finding it well-formed. The fix is `--report-file` plus
+`allow_abbrev=False`, pinned by a test that probes `--trac`, which is the only
+probe that discriminates: it must be REFUSED, and under `allow_abbrev=True` it
+would silently expand to `--trace`.
+
+**Red was observed first: 14 failed in 0.71s.** Six mutations each drove RED and
+restored GREEN - the cap raised from 10 to 1000, the pointer removed, the write
+moved after stdout, the atomic write replaced with `write_text`, the cap
+spending its budget on the OLDEST names instead of the newest, and
+`allow_abbrev=True`. A live smoke run rendered 182 unread capped, with a
+360-line full report written.
 
 Opened 2026-09-15, when the operator handed this session the moon-sync stage 4
 adoption prompts. The prompt's item 8 for this project reads, in full: "Vendor
