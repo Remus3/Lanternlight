@@ -1368,6 +1368,16 @@ KNOWN_NON_HOSTS = frozenset(
         # as a host tail for the same reason `.py` does - it is not a TLD, it
         # is the tail of a name this repository writes about constantly.
         "x.pyc",
+        # A DOTTED API PATH quoted by `LL-0269`, where a refuting agent used
+        # `inspect.getsource` to check which traversal `_manifest_digest`
+        # actually calls. Same class as `os.walk` above: a stdlib attribute
+        # path, never a filename.
+        "inspect.getsource",
+        # A SIBLING's module name quoted in `LL-0269` from the `diff --git`
+        # header of a stray patch found at the drive root during the machine
+        # sweep. Lanternlight has no `version.py`, so the tracked-file check
+        # cannot exempt it, and it is not a host.
+        "version.py",
         }
 )
 
