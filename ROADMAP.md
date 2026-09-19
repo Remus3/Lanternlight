@@ -1252,6 +1252,249 @@ in chat and dropped from the artifact is a lie in the artifact:
 4. The worktree ordering invariant and the caveman-wiring clause are each either
    implemented with a test or recorded as already satisfied, naming the file.
 
+## OPS-96. The machine stray-work sweep found four things that are ours to fix - ALL FOUR DONE 2026-09-19, two machine-side rows left for the operator's gated pass
+
+### 2026-09-19 - CLOSED, with what each guard was seen to do before it was trusted
+
+**Item 1, `.backtest/`: removed.** `rmdir .backtest` after listing it to confirm
+it was empty.
+
+**Item 2, `.claude/worktrees/`: ignored by name, not deleted**, because the
+harness recreates it and a rule that must be re-applied every time is a rule
+that stops being applied. `.gitignore:185`, verified with `git check-ignore -v
+.claude/worktrees`, and the TEN comment lines of reason above the rule are
+themselves asserted by a test so a later tidy-up cannot strip them.
+
+**Both are now guarded by `tests/test_no_empty_orphan_dirs.py`, and the guard
+was seen RED first**: 3 failed / 3 passed with the orphans present, naming
+`.backtest/` in the general check and `.backtest` in the by-name check, then
+6 passed after the fix. The doc assertion for item 4 was separately proved
+non-vacuous by deleting its sentence from `docs/OPERATIONS.md` - 1 failed - and
+restoring it - 1 passed - with the anchor confirmed matched before the mutation.
+
+**The guard's own detection method had to be corrected mid-build, and that is
+the finding worth carrying.** The first version enumerated with `git ls-files
+--others --exclude-standard --directory`, which is the command this item's own
+header paragraph named. Measured with both orphans present, it reported
+`.backtest/` and **NOT** `.claude/worktrees/`; the same command WITHOUT
+`--exclude-standard` reported both; and scoped with `-- .claude` it reported
+nothing at all while `pathlib` confirmed the directory existed and was empty. So
+the guard now enumerates with `--others --directory` and applies `.gitignore`
+per path afterwards. The header paragraph below was therefore itself an
+over-claim - one command sees one of them, not both - and it is left standing
+with this correction above it rather than rewritten.
+
+**Item 3, the drop digest: traversal replaced, not filtered.**
+`ops/inbox_watch.py` gained `_files_under`, an `os.walk` with an in-place
+`dirnames[:]` prune against the SAME `_SKIP_DIRS` the repository-root walk uses,
+and `_manifest_digest` now iterates it instead of `root.rglob("*")`. The
+immediate-child counter prunes the same set, because a report saying a drop has
+two directories while its key covers one of them is worse than either consistent
+answer. Four tests in
+`tests/test_inbox_watch_subdirs.py::TestBytecodeInADropDoesNotChangeItsKey`,
+seen RED first at 2 failed / 2 passed - digest `abd350bf...` against
+`3a7510266f...`, and file_count 2 against 1 - then 26 passed for the file. Two
+of the four are NEGATIVE CONTROLS and were green throughout on purpose: a real
+authored file in a `.config/` directory must still change the digest, and the
+skip set must be the module constant rather than a second hand-maintained list.
+
+**THE REFUTATION PASS OVERTURNED THIS ITEM'S OWN DESIGN CLAIM, and three of
+its guards, and that is the part a cold session must read.** An independent
+adversarial agent was given the done-claim and found three real defects. None
+was a false alarm and all three are fixed above and below:
+
+1. **The orphan guard was VACUOUS.** Its three helpers hardcoded
+   `cwd=REPO_ROOT`, so `test_the_guard_can_actually_fail` could not call them
+   and re-implemented the enumeration inline - proving only that git behaves as
+   documented. The agent measured it: `_is_empty` returning `False`
+   unconditionally left the file at 7 passed, and
+   `_untracked_directory_entries` returning `[]` also left it at 7 passed. The
+   detection could be deleted outright behind a docstring claiming the opposite.
+   Fixed by extracting `empty_orphans(root)` - the whole detection as one named
+   function - parameterising all three helpers on a root, and pointing the
+   non-vacuity test at a scratch repository through the SHIPPED code path.
+   Re-measured after the fix: control 8 passed; `_is_empty` always False
+   1 failed; enumeration `[]` 1 failed; `_is_ignored` always True 1 failed.
+   Source digest confirmed identical after each restore.
+
+2. **`_child_counts`' skip filter was untested**, and this item asserted it as
+   part of the fix. The agent removed the filter and the whole suite stayed
+   green - `grep -rn "child_dirs" tests/` returned nothing. Fixed by
+   `test_the_child_counts_skip_the_same_set_as_the_digest`, proved red against
+   that exact mutant at 1 failed / 5 passed.
+
+3. **Reusing `_SKIP_DIRS` for a drop was WRONG, not merely untested**, and the
+   argument for it in this item was the tidy one rather than the correct one.
+   `_SKIP_DIRS` is tuned for walking THIS repository, so it also skips
+   `captures`, `frames`, `screenshots`, `runtime`, `venv`, `node_modules` and
+   the inbox. The agent measured that a drop subdirectory with any of those
+   names, holding real authored files, was silently excluded from the drop's
+   digest, file count and byte total - so an EDIT inside it could never
+   re-surface the note, which is the failure the digest exists to prevent
+   arrived at from the other direction. In a project whose subject is screen
+   capture, `captures/` is not a hypothetical directory name. Fixed by a second
+   constant, `_DROP_RESIDUE_DIRS`, scoped by CAUSE - only what a reader
+   generates by importing or linting a drop: `__pycache__`, `.pytest_cache`,
+   `.ruff_cache`, `.mypy_cache`. Two new tests pin it from both directions, and
+   the behavioural one is proved red against the `_SKIP_DIRS` mutant at
+   1 failed / 5 passed.
+
+**The lesson, because it is the third time this repository has met it.** Two of
+those three defects were guards that were GREEN and proved nothing, and the
+third was a design decision defended in prose with a reason that sounded like
+care - one shared constant cannot drift - while doing damage the prose never
+considered. A green suite reached without seeing red is not evidence, and this
+item's first version had a docstring asserting non-vacuity that a two-line
+mutant refuted.
+
+**Item 4, the probe practice: written down**, because no test in this suite can
+observe `~/.claude/projects/`. New section in `docs/OPERATIONS.md` - "Probing a
+fresh clone or a worktree - run FROM the repo root, never `cd` into it" - with
+the measurement behind it and the reason stated: the residue is the small half
+of the cost, and the large half is that the artifact is invisible from inside
+the tree.
+
+**Registration the change forced, listed so none of it reads as unexplained.**
+`ops/lanes.py` gives the new guard to the `safety` lane with the reason inline;
+`scripts/write_lane_contracts.py` was re-run, which REGENERATED all 8
+contracts and CHANGED exactly one, `.claude/commands/lane-safety.md` - the
+distinction matters because "rewrote 8" reads as 8 changed files and
+`git status` shows one;
+`docs/INVENTORY.md` gained its row; and `tests/test_source_register.py` gained
+five `KNOWN_NON_HOSTS` entries - the two note filenames this item cites, which
+live in the gitignored outbox where `git ls-files` cannot exempt them, plus
+`os.walk`, `root.rglob` and `x.pyc`, which are the dotted-path class that file's
+docstring says stays in the denylist rather than being auto-exempted.
+
+**Suite: 3483 passed, 1 skipped in 328.26s**, measured on the LAST run of this
+session - after the refutation fixes, not before them. Collected total re-derived
+the same way: 3484 now against a baseline of 3470 measured before any of the work,
+so the count went UP by 14 and no test was weakened to go green. The intermediate
+figure this section first carried, 3480 in 312.19s, was true of the tree BEFORE
+the refutation pass and is recorded here as superseded rather than deleted, since
+a number in a document that no longer reproduces is the defect this repository
+files against itself most often. An independent agent re-derived the per-file
+baseline from `git archive` of HEAD - 70 files summing to 3470 - and reported NO
+per-file regressions. `python -m ops.preflight` reports PRE-FLIGHT PASS,
+14 guard modules, 388 passed and 1 skipped, lint clean.
+
+**WHAT IS NOT DONE, and it is deliberately not ours to do.** Two rows in this
+item are outside the repository root: `C:\ll-worktrees` (empty since
+2026-09-06) and the six `~/.claude/projects/...-C--Lanternlight-<session>-scratchpad*`
+directories, about 420 KB. The sweep that found them was read-only by
+instruction, and RC is merging all five reports into one machine-wide
+reconciliation for the operator to adjudicate before any gated deletion pass.
+Deleting our own rows early would remove evidence from a reconciliation that has
+not happened yet. They stay, and they stay recorded here.
+
+### The original item, 2026-09-19, left standing
+
+
+Opened 2026-09-19 out of the read-only machine stray-work sweep the operator
+asked all five projects to run. The full inventory went to CS, LW, RC and RSC as
+`2026-09-19-1426-from-LL-REVIEW-machine-stray-work-sweep-our-tree-is-clean-the-107-GB-is-ours-and-referenced-and-three-drive-root-path-bug-artifacts.md`,
+`sha256` `d618d01f3db46b0d92469353833c046e0c9e117e14309e70aca261999e6adcb7`, with
+a correction of one claim in
+`2026-09-19-1435-from-LL-CORRECTION-we-withdraw-one-claim-from-our-stray-work-sweep-rc-did-name-the-license-and-ops-91-is-blocked-on-our-operator.md`.
+Both are in `moon_sync_inbox/_outbox/`. That sweep DELETED NOTHING, and this item
+is the part of it that is ours to act on.
+
+**The header finding, because it changes how a future sweep is run here.** An
+orphaned EMPTY directory is reported by exactly ONE of the four enumeration
+commands in common use. `git status --ignored --porcelain` does not list it,
+`git status --porcelain --untracked-files=all <path>` does not list it, and
+`git check-ignore -v <path>` exits 1 saying only that no rule matches. Only
+`git ls-files --others --exclude-standard --directory` sees it, because git does
+not report empty directories at all. Two of them existed here and both were
+invisible to the command most sweeps run first. This is the repository's own
+"an empty grep is a claim about your pattern" rule wearing a `git` costume: a
+clean `git status --ignored` is a claim about git's reporting rule, not a claim
+about the tree.
+
+1. **`.backtest/` at the repository root is an untracked, unignored, EMPTY
+   orphan.** Created 2026-09-12 18:43; it is the leftover staging root of this
+   project's own back-test of whether a git hook could replace the in-session
+   pre-flight, recorded in `docs/CYCLE_COST.md`. It is 0 files and 0 bytes.
+   **Acceptance:** the directory is gone, OR it is in `.gitignore` with a comment
+   saying what writes it. Whichever is chosen, a test asserts that
+   `git ls-files --others --exclude-standard --directory` returns no line for it,
+   and that test is seen to go RED by re-creating the directory before it is
+   trusted. A guard that stays green when the condition it guards is restored is
+   decoration.
+
+2. **`.claude/worktrees/` is an empty, unignored directory inside a TRACKED
+   directory in a PUBLIC repository.** Created 2026-09-12 21:18. `.claude/` is
+   deliberately tracked here, unlike in the sibling trees, and
+   `.claude/worktrees/` matches no `.gitignore` rule. It is harmless while empty
+   and stops being harmless the moment a session uses it: the first file to land
+   there is an untracked orphan with no owning lane, which is the exact condition
+   `tests/test_lanes.py` fails on, and it would be a worktree's contents sitting
+   one `git add -A` from publication. `C:\ll-worktrees` is the same shape outside
+   the tree, also empty, also created before any worktree existed, and git
+   registers neither - `git worktree list --porcelain` reports only the main
+   worktree and `.git/worktrees` does not exist.
+   **Acceptance:** `.claude/worktrees/` is either removed or gitignored with a
+   comment naming why a tracked `.claude/` needs the exception, and the orphan
+   guard is shown to fire on a planted file under it before the fix and not
+   after. `C:\ll-worktrees` is outside this tree, so it is recorded here and
+   removed by hand rather than by a test.
+
+3. **`ops/inbox_watch.py:1232` hashes every file in a drop with no
+   skip-directory filter, which is RC's content-key defect latent in our code.**
+   The function walks `root.rglob("*")` and calls `read_bytes()` on each file to
+   build a drop's content key. Nothing excludes `__pycache__` or `.pytest_cache`.
+   RC measured that bytecode written into a verbatim drop changes its content key
+   and re-surfaces the note as UNREAD in every reader. Measured here 2026-09-19:
+   a `find` for `__pycache__` and `*.pyc` under `moon_sync_inbox` and
+   `ops/runtime` returns zero rows, and `moon_sync_inbox/` currently has exactly
+   one subdirectory, `_outbox`, which is classified as ours and never takes this
+   path. **So the defect is UNEXERCISED, not absent**, and it becomes live again
+   the next time a sibling drops a directory of Python files - which has already
+   happened once, in the 49-file drop `OPS-34` was filed for.
+   `rglob` cannot prune, so a filter added after the walk still pays the metadata
+   cost and still reads the bytes; the fix is a different traversal.
+   **Acceptance:** a regression test plants a `__pycache__/x.pyc` inside a
+   synthetic drop directory, asserts the content key is UNCHANGED, and is seen to
+   go RED against the current traversal first. The walk is converted to a pruning
+   `os.walk` reusing `_SKIP_DIRS` rather than gaining a post-filter. The sibling
+   inboxes are never touched by the test.
+
+4. **Six harness project directories outside this tree are named after our own
+   scratchpad paths, and the cause is ours.** Under `~/.claude/projects/` there
+   are entries of the form
+   `C--Users-<account>-AppData-Local-Temp-claude-C--Lanternlight-<session>-scratchpad-e2e-clone`
+   plus `-e2e-worktree`, `-probe-clone`, `-probe-space-clone`, `-probe-worktree`
+   and the bare scratchpad: 1 to 2 files each, roughly 420 KB in total. They
+   exist because a session of ours ran with its working directory set INSIDE its
+   own scratchpad while probing fresh clones and worktrees, so the harness minted
+   a project identity per probe directory. CS has four of the same shape, so the
+   cause is a shared practice rather than a bug unique to us.
+   **Acceptance:** the fresh-clone and worktree probe procedure is amended to say
+   that a probe RUNS FROM the repository root and addresses the clone by path,
+   never by changing directory into it, with the reason stated - a change of
+   working directory leaves a permanent artifact in a store no repository guard
+   can see. The existing directories are outside this tree and are removed by
+   hand.
+
+**What this item explicitly does NOT claim.** `C:\ll-captures` is 10.7 GB in
+19,241 files and is KEEP, not a cleanup target: it is the `--dest-base` in
+`.claude/commands/continue.md:25`, `.claude/commands/loop.md:48` and
+`docs/HEADLESS.md:136`, and individual frames in it are the cited evidence for
+measured findings in `docs/AFFIXES.md` and `docs/FINDINGS.md`. Deleting any of it
+would silently unfoot published measurements in a public repository. Whether a
+subset is prunable is a per-frame reference audit nobody has run, and a read-only
+sweep did not run it.
+
+**And one thing was DECLINED rather than deferred.** RC asked every project to
+set `tmp_path_retention_policy = failed` in `pytest.ini`, citing 68,630 temp
+files across about nine pytest runs. Measured here: `%TEMP%\pytest-of-<account>`
+holds 1,327 files in 932,552 bytes across three numbered directories, against a
+whole-`%TEMP%` tree of 76,518 files and 3,263,424,324 bytes dominated by harness
+scratchpads. Our pytest temp footprint is 0.03 per cent of the problem on this
+machine, so the setting would be a real change with a nearly worthless effect.
+Recorded as declined WITH the measurement, so a future session re-opens it on
+evidence rather than on the recollection that somebody asked.
+
 ## OPS-95. Four items this session generated, three of them commitments already made to siblings - READY
 
 Opened 2026-09-16. Each of these is either a defect measured here or a promise

@@ -171,6 +171,18 @@ credentials.json
 .claude/todos/
 .claude/statsig/
 .claude/shell-snapshots/
+
+# OPS-96. The harness creates .claude/worktrees/ as the parent of any worktree
+# it makes for this project. Because .claude/ is TRACKED here, that directory
+# was untracked and unignored: it existed EMPTY from 2026-09-12 until the
+# 2026-09-19 machine sweep found it, and the first file a session wrote into it
+# would have been an untracked orphan with no owning lane - which is what
+# tests/test_lanes.py fails on - and a whole worktree's contents one
+# `git add -A` from publication in a PUBLIC repo. Ignored by name rather than
+# deleted, because the harness recreates it and a rule that has to be
+# re-applied every time is a rule that stops being applied.
+# tests/test_no_empty_orphan_dirs.py fails if this rule or its reason is removed.
+.claude/worktrees/
 .mcp.json
 .vscode/
 .idea/

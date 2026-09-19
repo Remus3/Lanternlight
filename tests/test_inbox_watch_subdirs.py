@@ -530,3 +530,165 @@ class TestTheManifestDigestIsOverPathsAndContent:
 
         result = inbox_watch.scan(inbox=inbox, state=tmp_path / "seen.json")
         assert result.drops[0].digest == expected
+
+
+class TestBytecodeInADropDoesNotChangeItsKey:
+    """``OPS-96`` item 3, reported to this roster by RC on 2026-09-16.
+
+    A sibling measured that ``.pyc`` files written into a verbatim drop change
+    the drop's content key and re-surface the note as UNREAD in every reader.
+    The cause is that ``_manifest_digest`` walked the drop with
+    ``Path.rglob("*")`` and hashed every file it found, with no
+    skip-directory filter of any kind. The drop is somebody else's source tree;
+    the moment anything here or in a sibling imports a module out of it, Python
+    writes ``__pycache__/*.pyc`` beside it and the drop's IDENTITY changes
+    without a single authored byte changing.
+
+    The fix is a traversal, not a filter. ``rglob`` cannot prune: a test added
+    after the walk still pays the metadata cost on every file in a polluted
+    tree and still opens each one. ``os.walk`` with an in-place ``dirnames[:]``
+    assignment never descends, which is the same prune ``_SKIP_DIRS`` already
+    buys the repository-root walk at ``scan``'s own call site.
+
+    Measured when this was filed: the class was UNEXERCISED here rather than
+    absent. ``moon_sync_inbox/`` held exactly one subdirectory, ``_outbox``,
+    which is classified as ours and never reaches this function. It becomes
+    live again the next time a sibling drops a directory of Python files, which
+    has happened once already - the 49-file drop ``OPS-34`` was filed for.
+    """
+
+    def test_a_pycache_directory_does_not_change_the_drop_digest(self, tmp_path):
+        inbox = tmp_path / "moon_sync_inbox"
+        drop = inbox / "from-XX-verbatim"
+        _write(drop / "a.py", "AAA\n")
+        _write(drop / "sub" / "b.py", "BBB\n")
+
+        before = inbox_watch.scan(inbox=inbox, state=tmp_path / "s1.json")
+        assert len(before.drops) == 1, "the fixture must produce exactly one drop"
+
+        # Exactly what an import of the drop's own modules leaves behind.
+        _write(drop / "__pycache__" / "a.cpython-314.pyc", "not really bytecode\n")
+        _write(drop / "sub" / "__pycache__" / "b.cpython-314.pyc", "nor is this\n")
+
+        after = inbox_watch.scan(inbox=inbox, state=tmp_path / "s2.json")
+
+        assert after.drops[0].digest == before.drops[0].digest, (
+            "bytecode written beside a drop's own sources must not change the "
+            "drop's identity - it re-surfaces an already-read note as UNREAD"
+        )
+
+    def test_the_file_count_and_byte_total_also_ignore_bytecode(self, tmp_path):
+        """The count and the size are PRINTED, so a stale pair is visible.
+
+        A digest that ignores ``__pycache__`` while the rendered count still
+        includes it would be worse than either consistent choice: the report
+        would say a drop has five files on one line and be keyed on two.
+        """
+        inbox = tmp_path / "moon_sync_inbox"
+        drop = inbox / "from-XX-verbatim"
+        _write(drop / "a.py", "AAA\n")
+
+        before = inbox_watch.scan(inbox=inbox, state=tmp_path / "s1.json")
+        _write(drop / "__pycache__" / "a.cpython-314.pyc", "xxxx\n")
+        after = inbox_watch.scan(inbox=inbox, state=tmp_path / "s2.json")
+
+        assert after.drops[0].file_count == before.drops[0].file_count
+        assert after.drops[0].total_bytes == before.drops[0].total_bytes
+
+    def test_an_ordinary_dot_directory_inside_a_drop_is_still_hashed(self, tmp_path):
+        """The NEGATIVE control, without which the two tests above are vacuous.
+
+        A fix that pruned every directory beginning with a dot, or that simply
+        stopped descending, would pass both of them while quietly making a
+        rearranged drop look unchanged. Only the names in ``_SKIP_DIRS`` are
+        skipped, and a directory that merely looks like build residue is not.
+        """
+        inbox = tmp_path / "moon_sync_inbox"
+        drop = inbox / "from-XX-verbatim"
+        _write(drop / "a.py", "AAA\n")
+
+        before = inbox_watch.scan(inbox=inbox, state=tmp_path / "s1.json")
+        _write(drop / ".config" / "settings.toml", "k = 1\n")
+        after = inbox_watch.scan(inbox=inbox, state=tmp_path / "s2.json")
+
+        assert after.drops[0].digest != before.drops[0].digest, (
+            "a real authored file in a real subdirectory must still change the "
+            "drop's identity, whatever the directory is called"
+        )
+
+    def test_the_child_counts_skip_the_same_set_as_the_digest(self, tmp_path):
+        """An adversarial pass found this line untested, so here it is.
+
+        ``_child_counts`` renders the drop's immediate directory and file
+        counts, and those are PRINTED while the digest is not. Dropping its
+        skip filter left the whole suite green: a report would say a drop has
+        one subdirectory while its identity was computed over none of it, and
+        both numbers look individually plausible, which is what makes the
+        mismatch invisible.
+        """
+        inbox = tmp_path / "moon_sync_inbox"
+        drop = inbox / "from-XX-verbatim"
+        _write(drop / "a.py", "AAA\n")
+        _write(drop / "__pycache__" / "a.cpython-314.pyc", "xxxx\n")
+
+        result = inbox_watch.scan(inbox=inbox, state=tmp_path / "seen.json")
+
+        assert result.drops[0].child_dirs == 0, (
+            "__pycache__ is excluded from the drop's digest, so it must be "
+            "excluded from the directory count the report prints as well"
+        )
+        assert result.drops[0].child_files == 1
+
+    def test_an_authored_captures_directory_is_still_part_of_the_drop(self, tmp_path):
+        """The regression an adversarial pass found, and the reason for a second constant.
+
+        The first version of ``_files_under`` reused ``_SKIP_DIRS``, which is
+        tuned for walking THIS repository and therefore also skips
+        ``captures``, ``frames``, ``screenshots``, ``runtime``, ``venv``,
+        ``node_modules`` and the inbox. Measured against a synthetic drop, every
+        authored file inside a directory with one of those names was silently
+        excluded from the drop's digest, count and byte total - so an EDIT
+        inside it could never re-surface the note, which is the exact failure
+        the digest exists to prevent, arrived at from the other direction.
+
+        These are ordinary directory names in a project whose subject is screen
+        capture, and a sibling's tree is not ours to predict.
+        """
+        inbox = tmp_path / "moon_sync_inbox"
+        drop = inbox / "from-XX-verbatim"
+        _write(drop / "readme.txt", "hello\n")
+        for name in ("captures", "frames", "screenshots", "runtime", "venv"):
+            _write(drop / name / "authored.txt", f"content of {name}\n")
+
+        first = inbox_watch.scan(inbox=inbox, state=tmp_path / "s1.json")
+        assert first.drops[0].file_count == 6, (
+            "every authored file must be counted whatever its directory is "
+            "called - got "
+            f"{first.drops[0].file_count}"
+        )
+
+        _write(drop / "captures" / "authored.txt", "edited\n")
+        second = inbox_watch.scan(inbox=inbox, state=tmp_path / "s2.json")
+
+        assert second.drops[0].digest != first.drops[0].digest, (
+            "editing an authored file inside a directory named `captures` must "
+            "re-surface the drop"
+        )
+
+    def test_the_skip_set_is_scoped_to_reader_generated_residue(self):
+        """Pin what the constant may and may NOT contain.
+
+        The two assertions are opposite in direction on purpose. The first says
+        the defect RC reported is covered; the second says the over-broad fix
+        that covered it by accident stays out. Without the second, a future
+        session "simplifying" this back to ``_SKIP_DIRS`` restores the
+        regression above and only the behavioural test catches it.
+        """
+        assert "__pycache__" in inbox_watch._DROP_RESIDUE_DIRS
+        assert ".pytest_cache" in inbox_watch._DROP_RESIDUE_DIRS
+        for authored in ("captures", "frames", "screenshots", "runtime", "venv"):
+            assert authored not in inbox_watch._DROP_RESIDUE_DIRS, (
+                f"{authored} is a name a sibling may have AUTHORED; excluding it "
+                "makes an edit inside it invisible to the channel"
+            )
+        assert inbox_watch._DROP_RESIDUE_DIRS != inbox_watch._SKIP_DIRS

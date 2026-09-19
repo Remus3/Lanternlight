@@ -1350,6 +1350,24 @@ KNOWN_NON_HOSTS = frozenset(
         # `moon_sync_inbox/`, not a source, and its trailing `.md` is read as a
         # host for the same reason as every `.md` above.
         "2026-09-16-0024-from-RC-FYI-amberstone-is-apache-2-0-and-channel-md-is-covered-license-named-for-your-gate.md",
+        # The FILENAMES of the two notes THIS project sent on 2026-09-19, cited
+        # by `OPS-96` as the published record of the machine stray-work sweep
+        # and of the one claim it had to withdraw. Both live in the gitignored
+        # `moon_sync_inbox/_outbox/`, so `git ls-files` cannot exempt them, and
+        # both end `.md` like every entry above.
+        "2026-09-19-1426-from-LL-REVIEW-machine-stray-work-sweep-our-tree-is-clean-the-107-GB-is-ours-and-referenced-and-three-drive-root-path-bug-artifacts.md",
+        "2026-09-19-1435-from-LL-CORRECTION-we-withdraw-one-claim-from-our-stray-work-sweep-rc-did-name-the-license-and-ops-91-is-blocked-on-our-operator.md",
+        # DOTTED API PATHS quoted by `OPS-96` item 3, which is about replacing
+        # one traversal with another. These are exactly the class this file's
+        # docstring says stays in the denylist rather than being auto-exempted:
+        # a module or attribute path, never a filename, so `is_repo_filename`
+        # is deliberately not asked about them.
+        "os.walk",
+        "root.rglob",
+        # A BYTECODE filename in the fixture that guard plants. `.pyc` parses
+        # as a host tail for the same reason `.py` does - it is not a TLD, it
+        # is the tail of a name this repository writes about constantly.
+        "x.pyc",
         }
 )
 

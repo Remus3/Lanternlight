@@ -1205,14 +1205,89 @@ def _read_entries(inbox: Path) -> tuple[list[tuple[str, bytes]], str]:
     )
 
 
+# Build residue a READER creates by touching a drop - ``OPS-96`` item 3, and
+# NOT the same set as :data:`_SKIP_DIRS`. The two are deliberately different and
+# a refutation pass is what forced them apart.
+#
+# ``_SKIP_DIRS`` is tuned for walking THIS repository, so it also skips
+# ``captures``, ``frames``, ``runtime``, ``venv``, ``node_modules`` and the
+# inbox itself. Reusing it for a drop looked like the tidy choice - one
+# constant, no drift - and it was measured wrong: a sibling that drops a
+# directory named ``captures/`` or ``frames/`` full of authored files would have
+# had every one of them silently excluded from the drop's identity, so an EDIT
+# inside it could never re-surface the note. In a project whose whole subject is
+# screen capture that is not a hypothetical directory name.
+#
+# So this set is scoped by CAUSE rather than by convenience: it lists only what
+# a reader generates by importing or linting the drop, which is the class RC
+# actually reported. Everything a sibling AUTHORED stays in the digest whatever
+# its directory is called.
+_DROP_RESIDUE_DIRS = frozenset(
+    {
+        "__pycache__",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".mypy_cache",
+    }
+)
+
+
+def _files_under(root: Path) -> list[Path]:
+    """Every file beneath ``root``, pruning :data:`_DROP_RESIDUE_DIRS`.
+
+    ``OPS-96`` item 3. This used to be ``root.rglob("*")`` filtered to files,
+    and that is the defect RC reported to this roster on 2026-09-16: a drop is
+    somebody else's SOURCE TREE, so the moment anything imports a module out of
+    it Python writes ``__pycache__/*.pyc`` beside the sources. The drop's
+    content key then changes without one authored byte changing, and an
+    already-read note re-surfaces as UNREAD in every reader on the channel.
+
+    THE FIX IS THE TRAVERSAL AND NOT A FILTER, which is the part worth keeping.
+    ``rglob`` has no way to say "do not descend": a test added after the walk
+    still stats every file in a polluted tree and :func:`_manifest_digest`
+    would still open each one to hash it. ``os.walk`` with an in-place
+    ``dirnames[:]`` assignment never enters the directory at all - the same
+    mechanism that makes the repository-root walk in :func:`scan` see 223 files
+    instead of 2081.
+
+    THE SET IS NOT :data:`_SKIP_DIRS`, and the reason is written at that
+    constant. The first version of this function did reuse it, on the argument
+    that one shared list cannot drift; an adversarial pass measured that the
+    shared list silently drops a drop's ``captures/``, ``frames/``,
+    ``screenshots/``, ``runtime/``, ``venv/`` and ``moon_sync_inbox/``
+    directories, authored files and all.
+
+    Names are returned as paths for the caller to make relative; nothing here
+    renders one. A name from inside a drop is payload on an untrusted channel.
+    """
+    found: list[Path] = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [
+            name for name in dirnames if name not in _DROP_RESIDUE_DIRS
+        ]
+        base = Path(dirpath)
+        for name in filenames:
+            candidate = base / name
+            if candidate.is_file():
+                found.append(candidate)
+    return found
+
+
 def _manifest_digest(root: Path) -> tuple[str, int, int, str]:
     """Return ``(digest, file_count, total_bytes, problem)`` for one drop.
 
     THE RECIPE, pinned here in prose so a cold session can re-derive it without
-    reading this function: for every file anywhere beneath ``root``, take its
-    path relative to ``root`` rendered with forward slashes, a NUL byte, then
-    the hex SHA-256 of that file's bytes. Sort those lines, join them with
-    newlines, encode UTF-8, and hash the result with :func:`digest_of`.
+    reading this function: for every file beneath ``root`` that
+    :func:`_files_under` returns - every file anywhere under it EXCEPT inside a
+    directory named in :data:`_DROP_RESIDUE_DIRS` - take its path relative to ``root``
+    rendered with forward slashes, a NUL byte, then the hex SHA-256 of that
+    file's bytes. Sort those lines, join them with newlines, encode UTF-8, and
+    hash the result with :func:`digest_of`.
+
+    The skip set is part of the recipe and not an optimisation. ``OPS-96``
+    item 3: bytecode written beside a drop's own sources changed the drop's
+    identity and re-surfaced an already-read note as UNREAD, so build residue
+    is excluded by definition rather than tolerated.
 
     The path is part of each line on purpose. A digest over contents alone would
     call two files that swapped contents unchanged, and a rearranged drop is a
@@ -1229,9 +1304,7 @@ def _manifest_digest(root: Path) -> tuple[str, int, int, str]:
     failures: list[str] = []
     total = 0
     count = 0
-    for path in sorted(root.rglob("*")):
-        if not path.is_file():
-            continue
+    for path in sorted(_files_under(root)):
         count += 1
         rel = path.relative_to(root).as_posix()
         try:
@@ -1260,6 +1333,15 @@ def _child_counts(entry: Path) -> tuple[int, int]:
     dirs = 0
     files = 0
     for child in entry.iterdir():
+        # The SAME set :func:`_files_under` prunes - ``OPS-96`` item 3. A
+        # report saying a drop has two directories while its key is computed
+        # over one of them is worse than either consistent answer, because the
+        # mismatch is invisible: both numbers look plausible on their own.
+        # Asserted by
+        # ``TestBytecodeInADropDoesNotChangeItsKey::test_the_child_counts_skip_the_same_set``,
+        # which was added after a refutation pass found this line untested.
+        if child.name in _DROP_RESIDUE_DIRS:
+            continue
         if child.is_dir():
             dirs += 1
         else:

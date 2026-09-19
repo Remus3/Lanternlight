@@ -63,6 +63,37 @@ And if you want proof, test it end to end - stage something the hook should
 reject, attempt a real commit, and confirm `HEAD` did not move. A hook being
 present is not evidence that it fires.
 
+## Probing a fresh clone or a worktree - run FROM the repo root, never `cd` into it
+
+`OPS-96` item 4. When you verify hook installation, ASCII enforcement or the
+orphan guards against a throwaway clone or worktree, address it BY PATH from the
+repository root:
+
+```
+git -C "$probe" status --porcelain
+python "$probe/scripts/install_hooks.py"
+```
+
+**Do not change the session's working directory into the probe.** The harness
+derives a project identity from the working directory, so a session that runs
+from inside its own scratchpad mints a new project entry under
+`~/.claude/projects/` for every directory it visits - one that persists after
+the probe is deleted, in a store OUTSIDE the repository where no guard in this
+tree can see it.
+
+Measured 2026-09-19 during the machine stray-work sweep: six such entries
+existed for this project, named after a scratchpad path with a `-e2e-clone`,
+`-e2e-worktree`, `-probe-clone`, `-probe-space-clone` or `-probe-worktree` tail,
+holding one or two files each and roughly 420 KB in total. A sibling project had
+four of the same shape, so this is a shared practice rather than a bug unique to
+this tree.
+
+The residue is the small half of the cost. The large half is that the artifact
+is invisible from here: `git status` cannot see it, no test in this suite walks
+that directory, and a later sweep has to rediscover it from the machine side.
+Anything a probe leaves outside the tree is something a cold session cannot
+find.
+
 ## Run the tests
 
 ```

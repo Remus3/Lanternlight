@@ -266,6 +266,15 @@ LANES: tuple[Lane, ...] = (
             "tests/test_process_capability.py",
             "tests/test_source_register.py",
             "tests/test_gitignore_shadowing.py",
+            # OPS-96. Empty untracked, unignored directories - the class the
+            # 2026-09-19 machine sweep found, invisible to `git status` because
+            # git does not report empty directories. It sits with this lane for
+            # the same reason `test_gitignore_shadowing.py` does: the hazard it
+            # guards is a path becoming publishable in a PUBLIC repository, and
+            # the fix for one of its two cases is a `.gitignore` rule this lane
+            # already owns. It also asserts a paragraph in `docs/OPERATIONS.md`,
+            # which no other lane would think to keep.
+            "tests/test_no_empty_orphan_dirs.py",
             "tests/test_repo_surfaces.py",
             "tests/test_tracked_walker.py",
             # Guards the INDEX MODE of the tracked hooks this lane already
