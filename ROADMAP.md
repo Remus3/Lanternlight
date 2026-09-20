@@ -987,271 +987,6 @@ restored byte-exact by sha256 after every one.
   as the existing three-digit fixture. `_is_separator` is driven by real pixels
   only in its True direction.
 
-## OPS-36. Adopt CONVERGENCE CHARTER v4 as written - OPEN, criteria 2 and 3 discharged 2026-09-16, criterion 4 SPLIT and half of it DONE
-
-### Criteria 2, 3 and 4 worked 2026-09-16 - one gap filed, one conflict found by a RE-sweep, and half of criterion 4 closed
-
-**Step 0, established before anything else: we DO hold the operative text.** All
-four RC charter broadcasts are in `moon_sync_inbox/` and their byte sizes
-reproduce exactly on this disk - v1 6299, v2 5409, v3 5168, v4 5712. v4 carries
-the worktree ordering invariant verbatim under its own "CHARTER TEXT" heading,
-replacing v3's three-step formulation. All four are operative broadcast text
-rather than summaries of something else, which is what makes discharging
-criterion 2 against them legitimate rather than a session grading a paraphrase.
-
-**What we do NOT hold**, stated rather than glossed: RC's consolidated
-`docs/CROSS_REPO_CONVERGENCE_CHARTER.md`. Byte-identity between these notes and
-that file is **UNVERIFIED and unverifiable from here**, because this project
-reads no sibling tree. `LL-0257` already records that RC's line number and
-timestamp are a POINTER a reader can hand back to RC, not a measurement taken
-here, and the same limit applies to the text itself.
-
-**Criterion 2 is DISCHARGED.** Every clause of v1 through v4 is listed against
-the concrete artifact that discharges it, or marked as imposing no obligation.
-32 cited paths were independently verified to exist and the 5 declared missing
-are genuinely missing, so no citation is fictional; an independent clause
-enumeration matched the lane's with no clause skipped. Two shared-file clauses
-impose nothing on this repository because it carries no byte-identical sibling
-file - `OPS-91` is the reason, and that is a refusal rather than an oversight.
-
-**ONE REAL GAP, and the practice claim is worse than the lane reported.** v2
-section 1's `FYI-` / `REVIEW-` / `ACTION-` subject classification has **no
-mechanism at all**: zero handling in `ops/outbox.py`. The lane cited two
-outgoing notes as evidence that the convention is followed in practice, and
-**both of them carry no prefix**. Measured across the whole channel **as of 2026-09-16 at the START of that
-session, and this figure is a SNAPSHOT rather than a standing fact**: ZERO of
-41 outgoing notes carried a prefix, while 17 incoming ones did. Those 17 were a
-clean positive control - the convention is real, siblings use it, and this
-project alone did not.
-
-**The snapshot went stale inside the same session, which is exactly why it
-carries a stamp now.** Our own wrap refutation re-counted the live directory
-hours later and got 45 outgoing with THREE carrying a prefix - all three sent
-by this project on 2026-09-16, because we started following the convention the
-moment we found the gap - and 34 incoming prefixed, the channel having been busy
-all evening. Neither recount contradicts the other: they are two different
-moments, and the headline sentence originally carried no as-of caveat, which
-made it read as a standing property of the channel. A count without a timestamp
-is a claim that quietly becomes false, and this one became false in under a day.
-Re-derive it rather than citing either figure.
-
-**Two of those denominators were published wrong and were WITHDRAWN in a note
-the same hour, so do not re-derive them from the outgoing copy.** The first
-delivery of 2026-09-16 said 40 and 14; re-measured on this disk immediately
-afterwards, counting top-level `.md` files and matching the prefix anywhere in
-the filename, the reproducible figures are 41 outgoing and 17 incoming. The
-ZERO reproduces exactly and was always the substantive claim. The correction
-went to all four siblings rather than being fixed quietly here, because a
-number published into another tree is one somebody else may design against -
-the rule recorded in `LL-0244`. The likely cause, offered as a guess and not as
-a finding, is that the two passes used different match positions.
-
-**Acceptance for that gap:** `ops.outbox.deliver` takes the classification as a
-required argument and REFUSES a note that names none; the prefix appears in the
-delivered filename spelled the way the 17 incoming examples spell it; and a test
-asserts both directions - a note delivered with a classification carries the
-prefix, and a delivery attempted without one raises rather than defaulting.
-Watch the red before trusting it, because a default-to-`FYI-` implementation
-would pass a presence-only test while silently mislabelling every ACTION note,
-which is worse than the gap it closes.
-
-**CRITERION 3 IS NOT THE CLEAN NEGATIVE THE FIRST SWEEP REPORTED, and this is
-the correction that matters most in this item.** The producing lane named one
-candidate on the PUBLIC axis and blanket-negated the rest. A re-sweep found a
-LIVE conflict inside v4 itself: **v4 asks adopters to take "RC's body, verbatim"
-- a full Python module - and the v4 note names NO LICENSE anywhere in its 5712
-bytes.** That is unlicensed sibling source proposed into a PUBLIC Apache-2.0
-tree: the identical shape this project already refused for RC's
-`docs/CHANNEL.md` under `OPS-91`, where "public is a visibility, not a grant".
-
-**The OUTCOME is a DECLINE of that clause, and it needs no escalation.**
-Declining is a session decision and always was - THE ONE ASYMMETRY in
-`CLAUDE.md` says so in as many words - and the third-party license gate is a
-RULE rather than a permission gate, which the FULL AUTHORITY directive lists
-among the rules no grant of authority reaches. Criterion 3 says a conflicting
-clause is escalated as a NEW question; a clause refused under a rule is
-ANSWERED rather than escalated, and the answer is recorded here.
-
-**What does NOT stand is the sweep that reported no conflict**, and that is
-written down separately from the outcome on purpose. A right answer reached by a
-search that missed the evidence is not a verified answer, and the next session
-needs to know that this axis was swept twice with different results rather than
-once cleanly.
-
-**CRITERION 4 SPLITS into two halves with opposite answers.**
-
-**(a) The caveman-wiring clause is NOT ESTABLISHED as already satisfied, and
-this half stays OPEN.** The advertised caveman skill is real, but it is a
-USER-LEVEL command outside this repository - its absolute path is deliberately
-not written here, because it carries an account name. Nothing is recorded in any
-TRACKED file: a case-insensitive `git grep` for the term returns `CLAUDE.md`
-line 326 and the two `ROADMAP.md` lines that are this problem statement itself,
-and nothing else. `CLAUDE.md` lines 324 to 342 do state the dialect, and it
-fires by construction because every session reads that file. But criterion 4
-demands a RECORD naming the FILE, and "it fires by construction" is not a
-record.
-
-**Acceptance for (a):** a tracked file in this repository names where the
-caveman dialect is defined, states that the definition in `CLAUDE.md` governs
-and that no user-level command is relied on, and `docs/INVENTORY.md` carries the
-row if the artifact is a command. A `git grep` for the term must then return at
-least one tracked file that is not this problem statement. If the answer is
-instead that this project DECLINES the clause because it already has its own
-dialect confirmed by the operator, that closes the criterion too and is a
-session decision - but it has to be WRITTEN, which is precisely the thing that
-is missing today.
-
-**(b) The worktree ordering invariant is NOW CLOSED, this session.** The
-invariant, verbatim from v4: "No worktree is removed until the work it holds
-exists somewhere durable that survives the removal." The only mechanism
-enforcing it here is that `ops/lane_launcher.py`'s `remove_worktree_argv` plans
-an UNFORCED removal, so git itself refuses on a dirty or untracked worktree.
-
-**The previous guard was PROVEN VACUOUS.** The argv
-`['git', 'worktree', 'remove', '--force', path]` survived BOTH of its
-assertions - and `--force` is exactly what defeats git's refusal, so the test
-was green on the one input that breaks the invariant it claimed to protect.
-
-**No source change was warranted and none was made.** `ops/lane_launcher.py` is
-byte-identical to `HEAD`; the whole defect was in the test.
-`tests/test_lane_launcher.py` gains a `_names_force` helper and a
-`TestTheWorktreeOrderingInvariant` class of 6 tests, taking that module from 20
-tests to 26.
-
-**Red was watched first**, under the proven survivor mutation, with the anchor
-asserted to have matched and `__pycache__` purged before the run per this
-repository's poisoned-`.pyc` rule: **3 failed, 3 passed, 20 deselected**. Under
-that same mutation the OLD `TestCommandPlanning` ran **5 passed**, which
-re-measures the vacuity independently rather than inferring it from the new
-result. Four separate mutations each drove RED and restored GREEN: the `--force`
-argv, a wrong target path, deleting the "Deliberately not forced" docstring
-line, and blinding the force detector to the `-f` spelling.
-
-**Also measured while reading v4, out of this item's scope but recorded so it is
-not discovered during an adoption:** v4's caveman hook text uses an ABSOLUTE
-repository root, which `tools/hook_command_guard.py` forbids under `OPS-61`. Any
-future adoption of that hook must reach its script through
-`$CLAUDE_PROJECT_DIR`. All six live hooks in this tree already do.
-
-### Criterion 1 ANSWERED BY RC and MET - 2026-09-15
-
-RC answered, unprompted, in an FYI note delivered to all four sibling inboxes on
-2026-09-15 at 1858 local. The note is
-`moon_sync_inbox/2026-09-15-1858-from-RC-FYI-899f6eb957cc-channel-md-v1-conventions-and-charter-v4-is-current.md`,
-15063 bytes, `sha256`
-`38e749ddfc3e17812925102b3b582666ece5f44900a61dc5c3298597a52fba24` measured on
-this disk. RC states that it wrote nothing else in this tree, and a listing of
-this tree agrees.
-
-**The answer, recorded here verbatim in substance and in our own words, which is
-what criterion 1 asks for.** Charter **v4 is current**. RC places it at
-`docs/CROSS_REPO_CONVERGENCE_CHARTER.md:358` in RC's own tree and dates it
-`2026-09-07T00:35` local. It is the worktree-invariant amendment that answered
-RSC's second ask. **There is no v5 and there has been no append since.** v1
-through v4 are all tracked in that one file, in order. RC also retracts a
-fleet-wide statement that only v1 was tracked, and names it STALE.
-
-That is the version this project already recorded as adopted. Our 2026-09-14
-note to RC lists v4 under what this project accepted, so nothing here changes
-what was adopted - what changed is that the version is now CONFIRMED BY ITS
-AUTHOR rather than chosen by us under the stated fallback below. Criterion 1 is
-**MET**. The fallback was never exercised and no criterion was quietly
-satisfied by a session picking a version.
-
-**What is NOT established by this, stated so it is not read as more than it
-is.** The line number and the timestamp are RC's report of RC's tree. This
-project has not opened that file and will not: `docs/REPLY_PATHS.md` records
-that we write a note INTO a sibling inbox and read nothing out of the tree
-around it. So the citation is a POINTER a reader can hand back to RC, not a
-measurement taken here. What was measured here is the note, its size and its
-digest.
-
-**One clause this project had recorded WRONG, and the correction runs in our
-favour.** The section below accepts, with its consequences named, that "a draft
-asserts that silence is agreement". RC now states that the silence rule IN
-FORCE is **v2 section 2: silence is never agreement, hardened to silence reads
-as DISSENT.** Those are opposite rules. The acceptance below was of a draft
-clause that is not the operative one, and the operative one is strictly safer
-for a project whose watcher was provably blind to inbox subdirectories for a
-period - the fact reported to RC under `OPS-34` and never claimed here as an
-exemption. The paragraph below is left standing rather than rewritten, because
-this project does not quietly revise a record; read it together with this
-correction, which supersedes it. Ledger `LL-0257`.
-
-**Criteria 2, 3 and 4 are still open** and are now unblocked to be discharged
-against a version whose identity is settled.
-
-### Criterion 1 UNBLOCKED as a question and RE-ASKED - 2026-09-14
-
-This item sat still for a week for a reason that no longer exists. Criterion 1
-needs RC to say which charter version is CURRENT, and asking RC was SOLICITING
-RC, which `OPS-48` held. The operator confirmed the cross-project FULL AUTHORITY
-directive in chat on 2026-09-14 - recorded in `CLAUDE.md` and in ledger
-`LL-0253` - and it removes the operator as the gate on a decision this project
-is competent to make. Asking a sibling a question is such a decision.
-
-A re-ask went to RC on 2026-09-14 through `ops.outbox.deliver`, delivered, none
-failed. It names one question - which version, and its timestamp - and it names
-what this project does WITHOUT an answer, so the item cannot park again:
-
-- Discharge criteria 2, 3 and 4 against the LAST version we hold, name that
-  version and its timestamp here, and mark criterion 1 **BLOCKED ON RC** rather
-  than met. A criterion that cannot be met is recorded as unmet, never quietly
-  satisfied by a session picking a version.
-- Do not invent a version number and do not treat our choice as authoritative.
-  If RC later names a different one, the work is re-run against it.
-
-**The item is still OPEN and criterion 1 is still NOT MET.** Authority does not
-manufacture another project's answer. What changed is that the question is now
-in RC's inbox instead of waiting for permission to be asked.
-
-
-**The operator ruled ADOPT AS WRITTEN on 2026-09-07**, over adopting with
-Lanternlight-specific carve-outs and over declining. The decision is settled.
-
-**What still has to be established before anything is implemented, and why this
-item is not simply "done".** Four charter versions arrived on this channel
-inside roughly four hours, several superseding each other, alongside a repo-key
-scheme, a command and CI inventory exchange, a worktree ordering invariant and a
-caveman-wiring clause. "The charter" is not currently one document. A
-consolidated request went to RC on 2026-09-07 asking which version is CURRENT,
-which clauses require an answer from us, what changes in our tree for each, and
-which of them presuppose the lock in `OPS-35`.
-
-**Two clauses accepted with their consequences named**, because a caveat stated
-in chat and dropped from the artifact is a lie in the artifact:
-
-- **RC holds deadlock tiebreak authority.** We accept that. It means a
-  disagreement we cannot settle is settled against us by another project's
-  session, and the operator ruled to accept that cost.
-- **A draft asserts that silence is agreement.** Accepted as written. No
-  Lanternlight session may soften this into "accepted going forward only" - the
-  operator was offered adoption WITH carve-outs and chose adoption WITHOUT them,
-  and a session inventing a carve-out afterwards is overriding the ruling it
-  claims to be implementing. An earlier draft of this section did exactly that
-  and is corrected here.
-
-  There is one FACT that RC needs and that is not a carve-out: notes sat unread
-  on this channel while our watcher was structurally blind to subdirectories -
-  see `OPS-34`, closed 2026-09-07. Whether a silence clause reaches a period in
-  which the channel provably did not reach us is RC's call under the charter's
-  own tiebreak authority, which we have accepted. It has been reported to them
-  as a fact, not claimed as an exemption.
-
-### Acceptance
-
-1. The CURRENT charter version is identified by RC and recorded here verbatim in
-   substance, in our own words, with its version and timestamp.
-2. Each clause that imposes an obligation on this repository is listed with the
-   concrete artifact that discharges it - a file, a hook, a ritual step in
-   `.claude/commands/done.md` - or is marked as imposing none.
-3. Any clause that conflicts with the hard boundary in `CLAUDE.md`, with
-   redaction, or with this repository being PUBLIC is escalated to the operator
-   as a NEW question rather than resolved by a session. Adoption of a charter is
-   not adoption of a rule that would put the operator's game account at risk.
-4. The worktree ordering invariant and the caveman-wiring clause are each either
-   implemented with a test or recorded as already satisfied, naming the file.
-
 ## OPS-98. A SIXTH project joined the machine and the channel - DONE 2026-09-20 for everything that is ours, one question left open for the channel
 
 Substrate announced itself on 2026-09-20 in two notes: it exists at
@@ -1426,60 +1161,6 @@ and it is left standing rather than quietly restated.
 
 **Acceptance: MET** for every part that is this project's. The open roster
 question is recorded above and is the channel's to answer.
-
-## OPS-101. The hard-boundary guards cover the NATIVE tier and not the SPAWN tier - OPEN, with an acceptance criterion
-
-Declared 2026-09-20 by the slice that gave the severity-1 guards a runtime arm,
-and filed rather than fixed because it is a second tier rather than a defect in
-the first.
-
-**The gap.** Every guard protecting THE HARD BOUNDARY reasons about NATIVE
-reach: `ctypes`, `winreg`, `win32*`, and the process rights a handle can ask
-for. The new runtime arm watches `ctypes.dlopen`, `ctypes.dlsym`,
-`ctypes.call_function` and `os.kill`, and its positive scope is derived from
-which published modules import something in `NATIVE_REACH_ROOTS`.
-
-**None of that sees a subprocess.** Eighteen published modules outside `tests/`
-import `subprocess` today, and a subprocess needs no `ctypes` at all to reach a
-process: `taskkill /F /PID`, `wmic`, `powershell -c "Stop-Process"`, or any
-launcher that starts or stops something. `CLAUDE.md` already treats
-`Stop-Process` as forbidden and `taskkill /F /PID` as the sanctioned form for a
-process WE started - so the rule exists and the guard does not.
-
-**Why this is not hypothetical here.** This project runs `taskkill` by hand, and
-`CLAUDE.md` records a measured incident where MSYS path conversion rewrote the
-`/F` flag into `F:/`, the command killed NOTHING, and the only evidence was
-reading `taskkill`'s own output. A tier the guards cannot see is a tier where
-that class of mistake is invisible to the suite as well.
-
-**What is NOT claimed.** No violation is alleged. The eighteen modules run
-`git`, `pytest`, `ruff` and this repository's own tools, and nothing here says
-otherwise. The claim is about COVERAGE: if one of them grew a call that reached
-a process, no severity-1 guard would fire.
-
-### Acceptance
-
-1. A SPAWN tier is derived POSITIVELY, the way the native tier now is: every
-   published module importing `subprocess`, `os.system`, `os.popen`,
-   `os.spawn*`, `shutil.which` or `multiprocessing` is IN SCOPE by default, and
-   leaving requires a written exclusion with a reason that a test reddens on
-   when it goes stale.
-2. A RUNTIME arm, not a better static check. `subprocess.Popen` raises an audit
-   event carrying the executable and the full argument vector, so the arm sees
-   `taskkill` however the string was assembled - which is the property the
-   static tier cannot have. **MEASURE which event actually fires and what it
-   carries before building on it**, exactly as the native arm measured that
-   `ctypes.dlsym` carries the real symbol name after assembly, and that
-   `importlib.import_module` does NOT raise the `import` event.
-3. The arm distinguishes a process WE started from any other, because killing
-   our own child is permitted and `CLAUDE.md` names `taskkill /F /PID` as the
-   way to do it. A guard that forbids both is a guard that will be turned off.
-4. It fires on the CAPABILITY and not on the spelling: a defeat sketch building
-   the executable name at run time must redden it. Prove it by planting the
-   sketch, watching the red, restoring, and watching the green.
-5. Nothing written for this touches the game process, in any tier, at any point.
-   If a check cannot be written without doing so, it is not written - the
-   feature is rejected, not the rule.
 
 ## OPS-100. A sibling's question found a relative-path defect in our own pre-commit hook - FIXED 2026-09-20
 
@@ -1906,7 +1587,7 @@ machine, so the setting would be a real change with a nearly worthless effect.
 Recorded as declined WITH the measurement, so a future session re-opens it on
 evidence rather than on the recollection that somebody asked.
 
-## OPS-95. Four items this session generated, three of them commitments already made to siblings - ITEMS 1, 3 and 4 DONE 2026-09-20, item 2 in flight
+## OPS-95. Four items this session generated, three of them commitments already made to siblings - ALL FOUR DONE, items 1, 3 and 4 on 2026-09-20 and item 2 the same night
 
 ### 2026-09-20 - items 1 and 3 are DONE, and item 3's own description was WRONG
 
@@ -1957,7 +1638,16 @@ did not drop.
 the NO on a shared machine-wide skills directory is recorded in this repository
 rather than only in an outgoing note, and it is.
 
-**Item 2 is in flight** in the same cycle.
+**Item 2 is DONE**, in the same cycle. `ops/merge_gate.py` gained
+`take_per_file_baseline()` - a working-tree measurement under a name that
+says so - and `check_baseline_floor()`, which reports `stale-baseline` and
+`baseline-missing-file`. It is deliberately NOT wired into `verify`, because
+after the work `baseline < current` is simply what a lane that added tests
+looks like, so checking it there would redden every honest lane. It is a
+DISPATCH-time check, and the rule is now written where the ritual is: in
+`CLAUDE.md` beside the gate snippet and in `ops/lane_contract.py`, whose
+template drives the eight generated lane contracts, all regenerated.
+Evidence in `LL-0284`.
 
 ### One process failure from this cycle, recorded because it cost a CI run
 
@@ -5281,3 +4971,5 @@ links to that item's full original text.
 - **OPS-89** - The single-instance loop guard is INERT when the loop is driven from a conversation rather than from one long-lived process - RE-CLOSED 2026-09-13 after the first close was REFUTED - [full text](docs/ROADMAP_ARCHIVE.md#ops-89-the-single-instance-loop-guard-is-inert-when-the-loop-is-driven-from-a-conversation-rather-than-from-one-long-lived-process---re-closed-2026-09-13-after-the-first-close-was-refuted)
 - **OPS-90** - The lane slot is held only for the length of one command, so a conversational session rations with nobody - and the fix is a PROTOCOL change we may not make alone - CLOSED 2026-09-13 - [full text](docs/ROADMAP_ARCHIVE.md#ops-90-the-lane-slot-is-held-only-for-the-length-of-one-command-so-a-conversational-session-rations-with-nobody---and-the-fix-is-a-protocol-change-we-may-not-make-alone---closed-2026-09-13)
 - **OPS-99** - Our git-installation-root figure was WRONG and the pattern that produced it was broken - WITHDRAWN and corrected 2026-09-20, CLOSED 2026-09-21 when LW's list agreed member by member - [full text](docs/ROADMAP_ARCHIVE.md#ops-99-our-git-installation-root-figure-was-wrong-and-the-pattern-that-produced-it-was-broken---withdrawn-and-corrected-2026-09-20-closed-2026-09-21-when-lws-list-agreed-member-by-member)
+- **OPS-36** - Adopt CONVERGENCE CHARTER v4 as written - CLOSED 2026-09-21, criterion 4(a) answered by a written DECLINE rather than an adoption - [full text](docs/ROADMAP_ARCHIVE.md#ops-36-adopt-convergence-charter-v4-as-written---closed-2026-09-21-criterion-4a-answered-by-a-written-decline-rather-than-an-adoption)
+- **OPS-101** - The hard-boundary guards cover the NATIVE tier and not the SPAWN tier - CLOSED 2026-09-21, and measuring the events first contradicted two of these criteria - [full text](docs/ROADMAP_ARCHIVE.md#ops-101-the-hard-boundary-guards-cover-the-native-tier-and-not-the-spawn-tier---closed-2026-09-21-and-measuring-the-events-first-contradicted-two-of-these-criteria)

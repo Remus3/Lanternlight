@@ -480,6 +480,13 @@ LANES: tuple[Lane, ...] = (
             # tooling no sibling has. It checks ops/inbox_watch.py, which
             # ops/** already assigns to this lane.
             "tests/test_channel_contract.py",
+            # `OPS-36` criterion 4(a), 2026-09-21. The RECORD of where this
+            # project's chat dialect is defined, and of the fact that the
+            # charter's proposed WIRING for it was DECLINED rather than
+            # adopted. Declining is a session decision under THE ONE
+            # ASYMMETRY; the guard exists so the decline cannot quietly
+            # become an adoption by nobody re-reading it.
+            "tests/test_caveman_dialect_record.py",
             # OPS-45, the Stop-hook claim auditor. ops/** already covers
             # ops/stop_audit.py; the test module matches no glob here. It is
             # this lane's work for the same reason the merge gate is: both

@@ -1497,6 +1497,13 @@ KNOWN_NON_HOSTS = frozenset(
         "winapi.CreateProcess",
         "os.getpid",
         "os.spawnv",
+        # `OPS-36` criterion 4(a), 2026-09-21. `caveman.md` is the second
+        # document the charter's wiring clause asks adopters to create.
+        # This project DECLINED that wiring, so no such file exists here
+        # and the tracked-file oracle cannot exempt it - the item has to
+        # name the thing it refused. Same `.md`-as-Moldova reading as
+        # `SKILL.md` and `status.md` further up.
+        "caveman.md",
         # `OPS-99` closed, 2026-09-21. THREE more stray-file names from the
         # Git installation root, now that the item lists all eleven rather
         # than a count. Same class as `mutate2.py` and `tlg.bak` above:

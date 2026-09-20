@@ -359,3 +359,48 @@ authority for it and for the machine-wide registry.
 
 Both are checked by the hooks you installed in the first step. If you skipped
 that step, neither is checked at all.
+
+## The chat output dialect - where CAVEMAN ULTRA is defined
+
+This section is the tracked record `ROADMAP.md` `OPS-36` criterion 4 asks for.
+It names the file, it is guarded by `tests/test_caveman_dialect_record.py`, and
+it exists because "the rule fires by construction" is something a cold session
+cannot find.
+
+**`CLAUDE.md` defines the dialect, under its "Output constraints" heading, and
+the definition in `CLAUDE.md` governs.** The operator confirmed CAVEMAN ULTRA
+in chat on 2026-09-06. The mechanism is that every session reads `CLAUDE.md`,
+so the dialect arrives by being READ rather than by being announced. There is
+no hook, no banner and no generated context behind it, and that is a decision
+rather than an omission.
+
+**No user-level command is relied on.** A caveman command does exist on this
+machine, outside this repository and outside this tree's control. It is not the
+mechanism here. Its location is deliberately written into no tracked file,
+because that path carries an account name - the same reason the interpreter's
+absolute path is not hardcoded anywhere. A fresh clone under a different
+account loses nothing by not having it: the dialect is in `CLAUDE.md`, which is
+tracked, so it clones.
+
+**The cross-project charter's proposed wiring is DECLINED.** Declining is a
+session decision and always was - `CLAUDE.md` says so in as many words under
+THE ONE ASYMMETRY - so this closes the clause rather than escalating it. The
+charter proposes a `SessionStart` hook that prints a dialect banner, and asks
+adopters to take a sibling's module body verbatim. Three reasons, any one of
+which is sufficient on its own:
+
+1. **The body is unlicensed sibling source offered into a PUBLIC Apache-2.0
+   tree.** The note carrying it names no license anywhere. The third-party
+   license gate refuses that, and the gate is a RULE rather than a permission
+   gate, so no grant of authority reaches it.
+2. **The wiring reaches its script through an absolute repository root**, which
+   `tools/hook_command_guard.py` forbids under `OPS-61`. Every live hook in
+   this tree reaches its script through `$CLAUDE_PROJECT_DIR` instead.
+3. **It would be a second copy of a rule `CLAUDE.md` already carries**, and two
+   copies of a rule is two chances to drift. That is the same reasoning that
+   put the shared file walker in one module instead of two.
+
+What is declined is the WIRING, not the dialect. This project already runs the
+dialect the clause is about, and the charter's own description of what the
+dialect is - terse 7-bit ASCII, never classical Chinese, never applied to
+byte-exact content - matches what `CLAUDE.md` has said since 2026-09-06.

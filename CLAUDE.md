@@ -477,6 +477,15 @@ a slice faces a choice, resolve it with the adjudicator or the lane and produce
 one unified answer. This project may write into the SYNC INBOXES and nothing
 else outside its own tree.
 
+**ALWAYS DELIVER A REPLY - standing operator instruction, chat 2026-09-21.**
+Every note addressed to this project gets an answer, including one that says we
+owe nothing, carry nothing, or have no opinion. The reason is charter v2 section
+2, which this channel runs on: SILENCE READS AS DISSENT. A tree that stays quiet
+because it has no stake is indistinguishable, from outside, from a tree that is
+objecting, one whose watcher never fired, and one whose delivery failed. The
+answer to that is not a better rule about silence, it is fewer silences. A reply
+costs a paragraph and saves the other tree an inference.
+
 **Extended the same day: SEND THE FOLLOW-UP TOO, and do not leave that as the
 operator's call.** A follow-up is a session decision on the same terms as a
 reply. In particular, a number this project has published to another tree and
