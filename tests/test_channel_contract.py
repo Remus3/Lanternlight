@@ -1,9 +1,32 @@
 """The seven portable assertions for the vendored channel doc - ``OPS-91`` criterion 4.
 
-Amberstone published a PORTABLE TEST CORE alongside ``docs/CHANNEL.md`` and
-described it in prose, because the channel is prose only. Its note
+RE-PINNED AT ``CHANNEL_VERSION 2`` on 2026-09-20, and read this before the v1
+history below, because the constants in this module are v2 values.
+----------------------------------------------------------------------------
+Amberstone authored ``CHANNEL_VERSION 2`` and this project's operator ruled YES
+to it, so the joint re-pin round of section 9 ran and the vendored bytes were
+replaced. What changed, measured against the v1 text rather than taken from the
+announcing note:
+
+* The roster is SIX and the carrier set is FIVE. ``SS`` joined as a PARTICIPANT
+  that explicitly holds no copy of the file, so participation and carriage are
+  now different facts and the doc says so at length. At v1 the two counts were
+  equal, which is exactly why a later reader must not infer one from the other.
+* The filename-grammar table gained an ``SS`` column, so its rows carry EIGHT
+  cells rather than seven. Every ``SS`` cell reads ``UNMEASURED``, which the doc
+  distinguishes from ``no responder``: the second is an affirmative measured
+  finding and nobody has measured SS.
+* Section 9's acceptance clause and its reopen clause were both rewritten to
+  carry no numeral and no fixed version, because at v1 each named a number that
+  went stale on the very bump it was invoked to produce.
+* The document grew from 20,633 to 25,425 bytes.
+
+The v1 record, kept because a re-pin is a change to be READ and not a constant
+to be quietly overwritten. RC's v1 note
 ``2026-09-15-1858-from-RC-FYI-899f6eb957cc-channel-md-v1-conventions-and-
-charter-v4-is-current.md`` names the count and every arm:
+charter-v4-is-current.md`` is still the source of the seven-arm description
+quoted below; v2 did not restate the test core, so the arms are unchanged in
+COUNT and in SUBJECT. That note names the count and every arm:
 
     "The portable test core is seven assertions ... (1) the file exists at the
     expected relative path; (2) its LF-normalised sha256 equals the pinned
@@ -94,11 +117,30 @@ CHANNEL_MD = REPO_ROOT / VENDORED_RELPATH
 
 #: The digest Amberstone published for the LF form, over LF-NORMALISED bytes.
 #: The same value as ``tests/test_vendored_channel_md.py`` pins, and that is a
-#: property this module asserts rather than assumes - see arm 2.
-PINNED_SHA256 = "899f6eb957cc26ee25993d83d65d8ca291841fe4eec24a48f729c2dc005f4c6b"
+#: property this module asserts rather than assumes - see arm 2b.
+#:
+#: MOVED TO THE v2 VALUE IN A DECLARED JOINT RE-PIN, 2026-09-20. Arm 2's failure
+#: message says not to update this constant, and that warning is about HIDING a
+#: change: a digest edited to make a red arm green launders a byte change into a
+#: non-event. This is the opposite act. The round of section 9 ran, the operator
+#: ruled YES, the upstream commit and licence were re-measured at that commit,
+#: the swap was watched go RED on four arms first, and the change is declared in
+#: ``third_party/rc_channel/NOTICE.md`` under Apache-2.0 section 4(b).
+#:
+#: History, kept rather than deleted so a cold session can tell a re-pin from a
+#: laundering. v1: ``899f6ee...`` in full below, 20,633 bytes, upstream commit
+#: ``6e3c1c752``. v2: this value, 25,425 bytes, upstream commit ``6ad1531e2``.
+PREVIOUS_SHA256_V1 = "899f6eb957cc26ee25993d83d65d8ca291841fe4eec24a48f729c2dc005f4c6b"
+PINNED_SHA256 = "fc22e86eebe93bb247a91f44835257a3fe717a287c4a3184a8e7a7b9a463fb9c"
 
 #: ``CHANNEL_VERSION`` as declared in the bytes vendored here.
-PINNED_VERSION = 1
+#:
+#: MOVED FROM 1 TO 2 IN THE SAME DECLARED RE-PIN, and the two constants must
+#: move TOGETHER: section 9 clause 5 says a byte change without a version bump,
+#: or a bump without a re-pin, is red by construction. The v1 value is recorded
+#: beside it for the same reason the digest's is.
+PREVIOUS_VERSION_V1 = 1
+PINNED_VERSION = 2
 
 
 # ---------------------------------------------------------------------------
@@ -241,9 +283,19 @@ def grammar_table(text: str) -> list[tuple[str, ...]]:
 #: exactly one moment: a ``CHANNEL_VERSION 2`` re-pin, when the digest is
 #: legitimately updated and a hand-copied table is most likely to be mangled.
 #: That is the only moment arm 7 was ever going to be load-bearing.
+#:
+#: THAT MOMENT ARRIVED ON 2026-09-20 AND THE ARM EARNED ITSELF. The v2 table
+#: gained an ``SS`` column, so the whole table is re-pinned below, transcribed
+#: cell by cell from the vendored v2 bytes. Every ``SS`` cell reads
+#: ``UNMEASURED`` and that is NOT interchangeable with ``no responder``: the doc
+#: says in its own words that "no responder" is an affirmative measured finding
+#: that a tree parses nothing, while nobody has measured SS. A copy slip that
+#: filled the column with the neighbouring value would ship a manufactured
+#: measurement for a tree nobody looked at, which is precisely the class of slip
+#: this pin exists to catch.
 EXPECTED_GRAMMAR_TABLE: tuple[tuple[str, ...], ...] = (
-    ("Example", "RC gate 6", "RSC", "LW", "CS", "LL", "Shape"),
-    ("---", "---", "---", "---", "---", "---", "---"),
+    ("Example", "RC gate 6", "RSC", "LW", "CS", "LL", "SS", "Shape"),
+    ("---", "---", "---", "---", "---", "---", "---", "---"),
     (
         "`2026-09-15-0930-from-RC-FYI-example-topic.md`",
         "ADMIT",
@@ -251,6 +303,7 @@ EXPECTED_GRAMMAR_TABLE: tuple[tuple[str, ...], ...] = (
         "any entry",
         "no responder",
         "no responder",
+        "UNMEASURED",
         "PRIMARY",
     ),
     (
@@ -260,6 +313,7 @@ EXPECTED_GRAMMAR_TABLE: tuple[tuple[str, ...], ...] = (
         "any entry",
         "no responder",
         "no responder",
+        "UNMEASURED",
         "Variant A",
     ),
     (
@@ -269,6 +323,7 @@ EXPECTED_GRAMMAR_TABLE: tuple[tuple[str, ...], ...] = (
         "any entry",
         "no responder",
         "no responder",
+        "UNMEASURED",
         "Variant B",
     ),
     (
@@ -278,6 +333,7 @@ EXPECTED_GRAMMAR_TABLE: tuple[tuple[str, ...], ...] = (
         "any entry",
         "no responder",
         "no responder",
+        "UNMEASURED",
         "Variant C",
     ),
 )
@@ -286,7 +342,23 @@ EXPECTED_GRAMMAR_TABLE: tuple[tuple[str, ...], ...] = (
 #: any content compare, because a roster without its size is half a pin: rows go
 #: absent exactly where a count miscounts, and a content compare over a short
 #: list agrees with itself.
+#:
+#: RE-DERIVED FROM THE v2 TABLE ON 2026-09-20 RATHER THAN CARRIED FORWARD, since
+#: a filed count is a hypothesis in this repository. Parsed with
+#: :func:`grammar_table` against the vendored v2 bytes: SIX rows - one header,
+#: one separator, and four data rows (PRIMARY, Variant A, Variant B, Variant C).
+#: The number is unchanged from v1; only the CELL count moved. Variant D is
+#: named in the prose beneath the table and deliberately has no row, because it
+#: is a directory and has no note name.
 EXPECTED_GRAMMAR_ROWS = 6
+
+#: How many cells each row carries. SEVEN at CHANNEL_VERSION 1, EIGHT at 2 - the
+#: new column is ``SS``. Pinned as its own constant and asserted before the
+#: content compare for the same anti-narrowing reason the row count is: a row
+#: that lost its last cell would otherwise surface only as a whole-table
+#: mismatch, which reads as "somebody edited the table" rather than as "a column
+#: went missing". Measured on the v2 bytes, every one of the six rows has eight.
+EXPECTED_GRAMMAR_CELLS = 8
 
 
 def _text() -> str:
@@ -328,8 +400,12 @@ def test_arm_2_lf_normalised_sha256_equals_the_pinned_digest() -> None:
     normalised = raw.replace(b"\r\n", b"\n")
     assert hashlib.sha256(normalised).hexdigest() == PINNED_SHA256, (
         "the vendored CHANNEL.md no longer hashes to the digest Amberstone "
-        "published. Do NOT update this constant - declare the change in "
-        "third_party/rc_channel/NOTICE.md, or restore the bytes."
+        "published. Do NOT update this constant to make this arm green - "
+        "restore the bytes, or declare the change in "
+        "third_party/rc_channel/NOTICE.md. The ONE case where the constant "
+        "does move is a joint re-pin round under section 9: a new "
+        "CHANNEL_VERSION, the upstream commit and licence re-measured, the "
+        "NOTICE updated, and PINNED_VERSION moved in the same edit."
     )
 
 
@@ -377,9 +453,14 @@ def test_arm_4_channel_version_parses_to_an_int_and_equals_the_pin() -> None:
     the pinned version".
 
     Exactly one DECLARATION is required as well as the value. The doc names
-    ``CHANNEL_VERSION`` in prose four more times - a version bump, a re-pin
-    round, a widening that waits on one - and a scanner that counted those
-    would grade a sentence as a declaration.
+    ``CHANNEL_VERSION`` in prose as well, and a scanner that counted those would
+    grade a sentence as a declaration. RE-MEASURED ON THE v2 BYTES 2026-09-20:
+    twelve occurrences of the token, of which ELEVEN are prose - v1 carried four
+    such sentences and v2 carries eleven, because v2 discusses its own bump, the
+    roster change it records, a clause that went stale at v1 and a widening that
+    waits on a later version. The anchored pattern still finds exactly one
+    declaration, and the margin between one and eleven is the whole reason it is
+    anchored on a whole line ending in an integer.
     """
     found = declared_versions(_text())
     assert len(found) == 1, f"expected exactly one CHANNEL_VERSION declaration, found {found}"
@@ -406,6 +487,12 @@ def test_arm_5_no_heading_line_carries_a_date() -> None:
     # Anti-vacuity, stated rather than assumed: the scanner must be seeing
     # headings at all. A fence-stripping bug that removed the whole document
     # would satisfy the assertion above and nothing else would notice.
+    #
+    # Re-measured on the v2 bytes 2026-09-20: THIRTEEN headings survive fence
+    # removal, against a floor of ten. The floor is left where it is rather than
+    # raised to the measurement - it is an anti-blindness control, not a second
+    # structure pin, and tightening it to 13 would turn a section rename into a
+    # red arm for no fact gained.
     headings = [line for line in _fenced_removed(text).splitlines() if line.startswith("#")]
     assert len(headings) >= 10, f"only {len(headings)} headings found - the scanner is blind"
 
@@ -434,6 +521,15 @@ def test_arm_5_no_heading_line_carries_a_date() -> None:
 #: So the honest arm pins the SET and its dispositions. What it buys is the one
 #: thing worth having: a re-pin that introduces a NEW path token goes red here,
 #: and somebody has to say which of the four dispositions it takes.
+#:
+#: RE-MEASURED AGAINST THE v2 BYTES 2026-09-20 AND THE SET IS UNCHANGED - which
+#: is a measurement and not an assumption, because v2 is 4,792 bytes longer and
+#: did add inline-code tokens that a looser filter would have swept in
+#: (``subject_sha256:``, ``pid:``, ``supersedes:``, ``REVIEW-<sha12>``). None is
+#: path-shaped, so the population is still these four and this arm pins exactly
+#: what it pinned at v1. It also still pins NOTHING about the roster: the
+#: carrier-versus-participant distinction v2 introduces lives in a prose table
+#: with no path tokens in it, so no arm in this module sees it.
 EXPECTED_PATH_DISPOSITIONS: dict[str, str] = {
     UPSTREAM_RELPATH: "relocated-under-third-party",
     "CROSS_REPO_CONVERGENCE_CHARTER.md": "never-vendored-here",
@@ -496,6 +592,13 @@ def test_arm_7_the_filename_grammar_table_parses_and_every_cell_is_pinned() -> N
     rows' example names swapped. The count goes first because it is the
     anti-narrowing control - a content compare over a list that lost a row
     agrees with itself perfectly.
+
+    RE-PINNED AT ``CHANNEL_VERSION 2``, 2026-09-20. This arm went red on the
+    swap for a reason that was NOT a constant bump: the v2 table carries an
+    ``SS`` column, so the rows are eight cells wide. The row count was
+    re-derived from the v2 bytes and is still six; the cell count moved from
+    seven to eight and is now pinned in its own constant rather than written
+    as a literal in the loop.
     """
     rows = grammar_table(_text())
     assert len(rows) == EXPECTED_GRAMMAR_ROWS, (
@@ -503,10 +606,101 @@ def test_arm_7_the_filename_grammar_table_parses_and_every_cell_is_pinned() -> N
         f"included, and this arm pins {EXPECTED_GRAMMAR_ROWS}"
     )
     for row in rows:
-        assert len(row) == 7, f"a grammar row has {len(row)} cells, not 7: {row}"
+        assert len(row) == EXPECTED_GRAMMAR_CELLS, (
+            f"a grammar row has {len(row)} cells and this arm pins "
+            f"{EXPECTED_GRAMMAR_CELLS}: {row}"
+        )
     assert rows[0] == EXPECTED_GRAMMAR_TABLE[0], "the grammar table's header changed"
     assert tuple(rows) == EXPECTED_GRAMMAR_TABLE, (
         "a cell of the filename-grammar table changed. That table is the "
         "grammar's test-vector source for five trees; a copy slip here ships "
         "the wrong verdict for a filename shape."
+    )
+
+
+#: Section 0's roster, as v2 declares it: CODE, carrier answer, and whether the
+#: tree is a pin-holder. Pinned as a WHOLE because the roster is what the v2
+#: round was ABOUT - six participants, five carriers, and SS a participant that
+#: holds no copy. Recording only the count would let a row change identity
+#: while the size stayed right, which is the same half-pin the grammar arm's
+#: row-count comment warns about one table over.
+EXPECTED_ROSTER = (
+    ("CS", "YES", True),
+    ("LL", "YES", True),
+    ("LW", "YES", True),
+    ("RC", "YES", True),
+    ("RSC", "YES", True),
+    ("SS", "NO", False),
+)
+
+#: How many data rows section 0's table has. Asserted BEFORE any row is
+#: compared, for the reason the grammar arm states: rows go absent exactly
+#: where a count miscounts, and a content compare over a short list agrees with
+#: itself.
+EXPECTED_ROSTER_ROWS = 6
+
+
+def roster_table(text: str | None = None) -> tuple[tuple[str, ...], ...]:
+    """Return section 0's roster rows as ``(code, carrier, standing)`` tuples.
+
+    Data rows only - the header and the separator are dropped, because their
+    wording is prose and pinning it would redden on a typo fix that changes
+    nothing about who carries these bytes.
+    """
+    body = _text() if text is None else text
+    start = body.find("## 0. Roster")
+    end = body.find("\n## 1.", start)
+    if start < 0 or end < 0:
+        raise AssertionError(
+            "section 0 is not where this arm expects it. The roster is the one "
+            "thing the v2 round changed, so a missing section is a finding "
+            "rather than a reason to search harder."
+        )
+    rows: list[tuple[str, ...]] = []
+    for line in body[start:end].splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("|") or set(stripped) <= set("|- "):
+            continue
+        cells = tuple(cell.strip() for cell in stripped.strip("|").split("|"))
+        if cells and cells[0] == "Code":
+            continue
+        rows.append(cells)
+    return tuple(rows)
+
+
+def test_arm_8_the_roster_pins_six_participants_and_five_carriers() -> None:
+    """Arm 8: the roster is SIX, the carrier set is FIVE, and SS carries nothing.
+
+    **This arm exists because the re-pin round found a hole rather than because
+    the document asked for it.** Arms 1 to 7 all stayed GREEN across the v1 to
+    v2 swap except where a digest or a version number moved - and the roster,
+    which is the entire substance of v2, is prose in a table carrying no path
+    tokens and no digest. Every one of those arms would have stayed green if
+    the roster table had been mangled. A contract that checks a document's
+    hash and its version but not its central claim is checking that the file is
+    the file, which the digest arm already does.
+
+    It pins the CARRIER column rather than participation, because that column
+    governs re-pin acceptance: RC's stated bar is five carriers hashing equal,
+    not five replies, so a tree silently gaining or losing carrier status
+    changes what "the round is complete" means.
+    """
+    rows = roster_table()
+    assert len(rows) == EXPECTED_ROSTER_ROWS, (
+        f"section 0 has {len(rows)} roster rows and this arm pins "
+        f"{EXPECTED_ROSTER_ROWS}: {[row[0] for row in rows]}"
+    )
+
+    seen = tuple((row[0], row[1].split()[0], row[1].startswith("YES")) for row in rows)
+    assert seen == EXPECTED_ROSTER, (
+        "the roster changed. That is the substance of a re-pin round and not a "
+        f"detail: expected {EXPECTED_ROSTER}, measured {seen}"
+    )
+
+    carriers = [code for code, _, holds in seen if holds]
+    assert len(carriers) == 5, f"carrier count moved off five: {carriers}"
+    assert "LL" in carriers, "this tree stopped being listed as a carrier"
+    assert ("SS", "NO", False) in seen, (
+        "SS is listed as a carrier. SS states it holds no copy, and a re-pin "
+        "round that waits on SS waits on a tree with nothing to re-pin."
     )

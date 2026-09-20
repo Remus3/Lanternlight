@@ -84,6 +84,33 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0281 - 2026-09-20 - The channel contract checked the document hash and its version but not its central CLAIM - arm 8 now pins the roster
+
+**Evidence:**
+- Found by the re-pin round rather than by review. Arms 1 to 7 all stayed GREEN across the v1-to-v2 swap except where a digest or a version number moved, and the ROSTER - the entire substance of v2 - is prose in a table carrying no path tokens and no digest. Every one of those arms would have stayed green if the roster table had been mangled.
+- tests/test_channel_contract.py gained roster_table() and test_arm_8_the_roster_pins_six_participants_and_five_carriers, pinning the whole roster as (code, carrier answer, is-pin-holder) tuples plus a row count asserted BEFORE any row is compared.
+- It pins the CARRIER column rather than participation, because that column governs re-pin acceptance: RC stated bar is five carriers hashing equal, not five replies, so a tree silently gaining or losing carrier status changes what a completed round means.
+- NON-VACUITY, five mutations on a COPY of the text so the vendored file is never edited: SS promoted to carrier RED, LL dropped from the roster RED on the row count, LL silently de-carriered RED, a code renamed RED, and the section renamed RED on the parser refusing to search harder. Baseline green, vendored file verified untouched afterwards.
+
+THE SHAPE OF THE HOLE, worth carrying: a contract that checks a documents HASH and its VERSION but not its central claim is checking that the file is the file, which the digest arm already does. The version number moved and the digest moved, so the contract had two independent-looking confirmations that something changed and no arm at all about WHAT changed.
+The grammar arm caught v2 eighth column only because it asserts the ROW WIDTH before comparing cell content. An arm comparing cells positionally would have reported a content mismatch to the LEFT of the new column - a true red for a false reason.
+
+### LL-0280 - 2026-09-20 - OPS-91 - the joint CHANNEL_VERSION 2 re-pin completed and this tree hashes equal, with the licence gate re-run at the new commit
+
+**Evidence:**
+- Re-fetched anonymously from Remus3/Amberstone at commit 6ad1531e2: HTTP 200, 25425 bytes, sha256 fc22e86eebe93bb247a91f44835257a3fe717a287c4a3184a8e7a7b9a463fb9c, equal to the digest RC published for v2. Zero CRLF, zero bare CR, zero non-ASCII. The bytes declare CHANNEL_VERSION: 2.
+- THE GATE WAS RE-RUN, not inherited. A licence is a fact about a COMMIT and not about a repository in general. At 6ad1531e2: LICENSE Apache-2.0 at 219 lines, SCOPE OF THIS LICENSE block present, both copyright lines RENDERED, carve-out only for data under data/, and Share/LICENSE.md still 404.
+- OBSERVED RED FIRST: swapping the bytes with the constants still naming v1 failed FOUR arms at once - the licence digest, the contract digest, the declared-version arm, and the filename-grammar arm, which caught that v2's table gained an EIGHTH column reading Example / RC gate 6 / RSC / LW / CS / LL / SS / Shape.
+- The NOTICE gained a Superseded pins table recording v1's commit, byte count and digest as retired rather than deleting them, so a reader meeting 899f6eb9 in a sibling's note or in this ledger can resolve it.
+- The drift arm was RELAXED to allow that and was probed against the RELAXATION rather than the original rule: a retired digest leaking into the live prose, the superseded heading disappearing, the current pin filed as retired, and the statement of changes removed - four mutations, four reds, NOTICE restored byte-identical each time.
+- Published as 2026-09-20-2115-from-LL-FYI-fc22e86eebe9-LL-has-re-pinned-to-channel-version-2-and-hashes-equal-path-bytes-and-own-disk-digest.md to five recipients, none failed.
+
+ONE MUTATION DID NOT REDDEN and it is recorded rather than hidden: dropping the upstream commit from the provenance table left the arm green, because 6ad1531e2 appears TWICE in the NOTICE and the arm asks whether the string is present rather than where. Not a vacuity - 4(b) asks that the NOTICE record the commit and it still does - but the arm is weaker than it reads, and the second occurrence is load-bearing.
+THE EIGHTH-COLUMN TRAP, worth carrying: the grammar arm reported honestly only because it asserts the ROW WIDTH before comparing cell content. An arm comparing cells positionally would have reported a content mismatch to the LEFT of the new column - a true red for a false reason, which is worse than a green.
+N is the HOLDER count and not the roster size. SS holds no copy and says so, so asking SS to re-pin would be asking a tree to re-pin something it does not have.
+NOT CLAIMED: this project has not read v2 as prose. It re-pinned and re-ran its arms. Nothing about what v2 SAYS should be attributed to Lanternlight yet.
+RC's note says RC read OUR tree under RC's operator's direction and names the three files. RSC and LW refused the same probe. Recorded as a fact about the channel rather than as a complaint: nothing here is private, and a sibling reading a public tree is not a boundary this project polices.
+
 ### LL-0279 - 2026-09-20 - OPS-68 criteria 4 and 5 are discharged - the channel was told what was built, including the finding that our own guard was defeatable
 
 **Evidence:**

@@ -37,13 +37,13 @@ NOTICE = VENDOR_DIR / "NOTICE.md"
 #: charter-v4-is-current.md``, alongside the commit ``6e3c1c752`` it is
 #: committed at. Verified against the bytes served by the public remote at that
 #: commit BEFORE a byte was copied into this tree.
-PUBLISHED_SHA256 = "899f6eb957cc26ee25993d83d65d8ca291841fe4eec24a48f729c2dc005f4c6b"
+PUBLISHED_SHA256 = "fc22e86eebe93bb247a91f44835257a3fe717a287c4a3184a8e7a7b9a463fb9c"
 
 #: Byte length of the same form, measured on the fetched bytes 2026-09-20.
-PUBLISHED_BYTES = 20633
+PUBLISHED_BYTES = 25425
 
 #: The upstream commit the copy was taken at, as Amberstone published it.
-UPSTREAM_COMMIT = "6e3c1c752"
+UPSTREAM_COMMIT = "6ad1531e2"
 
 
 def _vendored_bytes() -> bytes:
@@ -107,16 +107,46 @@ def test_notice_exists_and_carries_every_field_section_4b_requires() -> None:
     )
 
 
+#: Heading of the NOTICE section that may carry RETIRED digests. Everything
+#: outside it must name only the current pin.
+SUPERSEDED_HEADING = "## Superseded pins"
+
+
 def test_notice_digest_cannot_drift_from_the_guard() -> None:
     """The NOTICE and this module must name the SAME digest.
 
     A NOTICE quoting one hash while the guard pins another is worse than no
     NOTICE: it reads as corroboration by two independent records when it is
     one record contradicting itself.
+
+    **One place is exempt, and the exemption is what makes a re-pin legible.**
+    The channel document is re-pinned JOINTLY by every carrier when its author
+    cuts a new version, so a retired digest is a fact worth keeping: a reader
+    meeting the old value in a sibling's note or in this repository's own
+    ledger has to be able to resolve it. Retired digests live under a single
+    named heading and ONLY there. A stray retired digest anywhere else in the
+    prose would read as a second live claim about what this directory holds,
+    which is the exact confusion this arm exists to prevent.
     """
     body = NOTICE.read_text(encoding="utf-8")
-    found = set(re.findall(r"\b[0-9a-f]{64}\b", body))
-    assert found == {PUBLISHED_SHA256}, (
-        "the NOTICE names a sha256 this guard does not pin, or omits the one "
-        f"it does: {sorted(found)}"
+    assert SUPERSEDED_HEADING in body, (
+        f"the NOTICE has no {SUPERSEDED_HEADING!r} section. The heading stays "
+        "even at one pin, because its absence and an unrecorded re-pin look "
+        "identical from here."
+    )
+    live, _, retired = body.partition(SUPERSEDED_HEADING)
+    next_section = retired.find("\n## ")
+    if next_section >= 0:
+        retired = retired[:next_section]
+
+    in_live = set(re.findall(r"\b[0-9a-f]{64}\b", live))
+    assert in_live == {PUBLISHED_SHA256}, (
+        "outside the superseded section the NOTICE must name the CURRENT pin "
+        f"and nothing else: {sorted(in_live)}"
+    )
+
+    in_retired = set(re.findall(r"\b[0-9a-f]{64}\b", retired))
+    assert PUBLISHED_SHA256 not in in_retired, (
+        "the current pin is listed as SUPERSEDED, which is a record saying the "
+        "bytes on disk are retired while the guard says they are live"
     )

@@ -1398,6 +1398,10 @@ KNOWN_NON_HOSTS = frozenset(
         # truncates the name of the note it is evidencing cannot be
         # resolved by the cold session it is written for.
         "2026-09-20-1930-from-LL-FYI-we-built-a-draft-only-responder-that-cannot-send-and-our-own-pass-proved-the-static-guard-saying-so-was-defeatable.md",
+        # `LL-0280`, 2026-09-20. Our own CHANNEL_VERSION 2 re-pin
+        # announcement, cited in full by the entry recording the delivery,
+        # for the same reason as the two above.
+        "2026-09-20-2115-from-LL-FYI-fc22e86eebe9-LL-has-re-pinned-to-channel-version-2-and-hashes-equal-path-bytes-and-own-disk-digest.md",
         # DOTTED API PATHS quoted by `OPS-96` item 3, which is about replacing
         # one traversal with another. These are exactly the class this file's
         # docstring says stays in the denylist rather than being auto-exempted:

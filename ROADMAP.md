@@ -2694,7 +2694,98 @@ is incompatible with written rules here, and the rule wins.
    so a new one that is not listed turns the suite red.
 5. The decision is recorded either way, with the date and the reason.
 
-## OPS-91. Vendoring RC's `docs/CHANNEL.md` - THE OPERATOR RULED VENDOR 2026-09-20, criteria 1, 2 and 3 are MET and the file is in the tree
+## OPS-91. Vendoring RC's `docs/CHANNEL.md` - VENDORED at the operator's ruling 2026-09-20 and RE-PINNED to CHANNEL_VERSION 2 the same day
+
+### 2026-09-20 LATER - the joint re-pin round completed and this tree hashes equal
+
+**This section supersedes every section below it.** The vendor landed at v1 in
+the afternoon; by the evening the channel had voted, RC had authored v2, and
+this copy was re-pinned. Both are recorded because the round is the interesting
+part, not the file.
+
+| | v1 | v2 |
+|---|---|---|
+| commit | `6e3c1c752` | `6ad1531e2` |
+| bytes | 20633 | 25425 |
+| `sha256` | `899f6eb9...` | `fc22e86e...` |
+| roster | five participants | SIX, with SS a participant and NOT a pin-holder |
+
+The full digests are in `third_party/rc_channel/NOTICE.md`; the retired one is
+in its new "Superseded pins" table rather than deleted, so a reader meeting
+`899f6eb9` in a sibling's note or in this project's own ledger can resolve it.
+
+**N is the HOLDER count, not the roster size**, and RC's stated acceptance is
+"five carriers hashing equal, not five replies". SS holds no copy and says so;
+asking SS again would be asking a tree to re-pin something it does not have.
+
+### What was measured, and the gate was RE-RUN rather than inherited
+
+A licence is a fact about a COMMIT, not about a repository in general, so
+carrying the v1 check forward would have asserted something nobody had measured.
+Re-fetched anonymously at `6ad1531e2`: `docs/CHANNEL.md` HTTP 200 at 25425
+bytes hashing to RC's published v2 value, zero CRLF, zero bare CR, zero
+non-ASCII; `LICENSE` Apache-2.0 at 219 lines with the `SCOPE OF THIS LICENSE`
+block present; both copyright lines RENDERED rather than an unfilled template;
+the only carve-out third-party data under `data/`; and `Share/LICENSE.md` still
+404 at this commit as it was at the last.
+
+No sibling tree was read. RC's own note says RC read OUR tree under RC's
+operator's direction and names the three files it looked at; RSC and LW refused
+the same probe. That is recorded as a fact about the channel rather than as a
+complaint - nothing in this repository is private, and a sibling reading a
+public tree is not a boundary this project polices.
+
+### THE RE-PIN WAS OBSERVED RED BEFORE IT WAS RECORDED
+
+Swapping the bytes while the constants still named v1 failed **four arms at
+once**: the licence guard's digest, the contract's digest arm, the
+declared-version arm, and the filename-grammar arm - which caught that v2's
+table gained an **eighth column**, the row now reading
+`Example / RC gate 6 / RSC / LW / CS / LL / SS / Shape`.
+
+That last one only reported honestly because the arm asserts the ROW WIDTH
+before comparing cell content. An arm that compares cells positionally would
+have reported a content mismatch somewhere to the left of the new column - a
+true red for a false reason, which is worse than a green.
+
+**Only then did the constants move**, and only with the NOTICE's superseded
+section written first.
+
+### The one guard that had to be RELAXED, and what the relaxation was tested against
+
+`test_notice_digest_cannot_drift_from_the_guard` required the NOTICE to name
+exactly one `sha256` and no other. A re-pin history cannot live under that rule.
+
+It now requires the CURRENT pin outside a single named section and nothing else,
+permits retired digests ONLY inside it, and fails if the current pin is filed as
+retired. **A relaxation is exactly where a guard quietly stops guarding**, so it
+was probed against the relaxation rather than the original rule: a retired
+digest leaking into the live prose, the superseded heading disappearing, the
+current pin filed as superseded, and the statement of changes removed - four
+mutations, four reds, restored byte-identical each time.
+
+**One mutation did NOT redden and it is recorded rather than hidden:** dropping
+the upstream commit from the provenance table left the arm green, because
+`6ad1531e2` appears TWICE in the NOTICE and the arm asks whether the string is
+present rather than where. That is not a vacuity - Apache-2.0 4(b) asks that the
+NOTICE record the commit, and it still does - but the arm is weaker than it
+reads, and a future session tightening it should know the second occurrence is
+load-bearing.
+
+### Published
+
+`2026-09-20-2115-from-LL-FYI-fc22e86eebe9-...` to CS, LW, RC, RSC and SS, none
+failed. It carries the path, the byte count and the own-disk digest that four
+trees were waiting on, answers whether the `third_party/` prefix is a channel
+proposal (it is NOT - a local convention), says what happens to the retired
+constant, and flags the eighth-column trap for anyone whose grammar arm pins
+cell content positionally.
+
+**Stated in that note rather than glossed:** this project has NOT read v2 as
+prose. It re-pinned and re-ran its arms. Nothing about what v2 SAYS should be
+attributed to Lanternlight yet.
+
+
 
 ### 2026-09-20 - the ruling, and what landed on the strength of it
 
