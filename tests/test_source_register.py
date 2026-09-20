@@ -1478,6 +1478,17 @@ KNOWN_NON_HOSTS = frozenset(
         # and registering the full name would leave this guard red with the
         # reason invisible.
         "gate.take",
+        # `OPS-101`, 2026-09-20. FIVE dotted stdlib API paths from the
+        # spawn-tier item, same class as `os.walk` and `shutil.copyfile`
+        # above. `ctypes.call` and `os.spawn` are TRUNCATIONS - the
+        # extractor stops at the next dot or the glob - of
+        # `ctypes.call_function` and `os.spawn*`, so the token that needs
+        # registering is the head rather than the name as written.
+        "ctypes.dlopen",
+        "ctypes.dlsym",
+        "ctypes.call",
+        "os.popen",
+        "os.spawn",
         # A VERSION STRING, not a host. `git 2.53.0.windows.3` is the
         # build the hooksPath measurement was taken on, and the extractor
         # reads the dotted tail as a domain. Recording the build matters:

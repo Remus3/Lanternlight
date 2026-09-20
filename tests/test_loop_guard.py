@@ -1016,6 +1016,21 @@ def test_guard_exposes_no_termination_path() -> None:
 
     This is a structural check, not a style one - a terminate path added here
     would let an unattended loop kill a process nobody was watching it choose.
+
+    WHAT IT CANNOT SEE, AND WHAT DOES. Everything below collects a
+    ``Call.func`` that is a ``Name`` or an ``Attribute``. ``getattr(...)(...)``
+    is neither, so a call through it records no name, and the literal-zero
+    signal arm further down only inspects calls a name WAS collected for -
+    meaning the same move voids both arms at once. Measured 2026-09-20:
+    ``_k = (os,)[0]`` followed by ``getattr(_k, "kill")(pid, 9)`` planted in
+    ``_windows_pid_is_alive`` left all 95 of this repository's static
+    capability tests green, because the subscript hides the target from
+    ``tests/test_process_capability.py``'s symbol table and a literal name on
+    an unresolved target is allowed there by design.
+    ``tests/test_process_capability_at_runtime.py`` reddens on it: the
+    ``os.kill`` audit event carries the SIGNAL as a value, so it is judged by
+    what it asked the kernel for rather than by how it was spelled. That file
+    also refuses the operation, so the signal is never delivered.
     """
     exported = set(guard_mod.__all__)
     forbidden = {"kill", "terminate", "stop", "stop_process", "taskkill", "signal"}

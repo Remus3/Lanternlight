@@ -690,6 +690,18 @@ def test_watch_exposes_no_termination_path() -> None:
     ``ops/loop/guard.py`` may import and call, rather than a list of what
     they may not. Read the two tests together; this one alone is not the
     whole guard.
+
+    AND A FOURTH SPELLING, WHICH DEFEATS BOTH OF THEM AND IS COVERED
+    ELSEWHERE. ``_alias = (kernel32,)[0]`` followed by
+    ``getattr(_alias, "TerminateProcess")`` binds the handle through a
+    subscript the allowlist's symbol table does not follow, so the literal
+    name lands on a target it cannot resolve - which that file's blind list
+    says plainly is ALLOWED. Measured 2026-09-20: planted in
+    ``_windows_pid_open_denied``, every capability test in this repository
+    stayed green. What reddens is
+    ``tests/test_process_capability_at_runtime.py``, which runs the probe and
+    reads the ``ctypes.dlsym`` audit event - the event carries
+    ``TerminateProcess`` however the name reached the loader.
     """
     exported = set(watch_mod.__all__)
     assert not (exported & {"kill", "terminate", "stop", "stop_watcher", "taskkill", "disarm"})

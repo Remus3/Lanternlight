@@ -84,6 +84,36 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0286 - 2026-09-20 - The census's two severity-2 findings are fixed: a guard that stayed green while the SHARED file corpus narrowed, and the missing guard over the one door every outgoing note passes through
+
+**Evidence:**
+- PROBLEM 1, and the defect was confirmed EMPIRICALLY rather than reasoned about: tests/test_no_hardcoded_home_path.py asserted 'git' in inspect.getsource(...), and a DOCSTRING is part of a function's source. Swapping the body to an rglob walk left the old guard at 2 passed while the corpus silently grew to 802 entries, 324 of them under the gitignored note channel.
+- That corpus is SHARED - it feeds test_no_pii, test_ports, test_ascii_hygiene and the process-capability scope - so a narrowing is not a failing test, it is four guards each checking fewer files and all reporting success.
+- WHAT ACTUALLY DISCRIMINATES a git corpus from a walk, measured across four candidates rather than assumed: a gitignored file on disk DISCRIMINATES, and so does a file inside a gitignored directory. An untracked-but-not-ignored file does NOT, because the corpus adds --others --exclude-standard deliberately; nor does a tracked file deleted from disk, because both corpora drop non-files.
+- The three new arms redden against the same mutant: 2 failed against the rglob swap, 2 failed against an extension allowlist, each a different pair. One vacuous test was REMOVED and three added: 25 collected to 27.
+- PROBLEM 2 was a GAP rather than a weak guard - nothing asserted that a write into a sibling inbox goes through ops.outbox.deliver. New tests/test_sibling_inbox_choke_point.py asserts at RUN TIME, in a subprocess with fake inboxes under tmp_path, that the local copy and manifest row are written BEFORE any sibling write - the ORDER read off the event stream rather than from what exists afterwards - and that a refused note produces ZERO write events.
+- Non-vacuity by transient mutation of ops/outbox.py, restored immediately and its digest checked: dropping the local-record-first writes reddened both ordering arms, and moving the redaction gate after the local write reddened the refusal arm.
+- python -m ops.preflight: PRE-FLIGHT PASS, 14 guard modules, 390 passed and 1 skipped, lint clean.
+
+WHAT THE CHOKE-POINT GUARD CANNOT SEE is in its own docstring and is the honest limit: any run it does not make - it is three runs, not a session-wide watch - and anything written outside this repository's Python, by a shell, an editor, or an agent writing the file directly. That last one is what LL-0170 ACTUALLY was, so the guard does not close the case it was written from. Worth doing next: wire its predicate into the session-wide audit hook conftest.py already installs, which converts a three-run claim into a whole-suite one.
+A REDACTION GUARD CAUGHT THE NEW RUNTIME MODULE and the fix was to remove the number, not to teach the redactor an exception. The docstring had pasted an observed ctypes.call_function tuple verbatim, and a 15-digit run-time address matches LONG_ID. It is not an operator identifier, but the guard cannot know that from the digits, and a pointer from one run is unreproducible anyway - the literal carried no information the shape does not.
+A temporary ops.lane_state claim was reverted in favour of real roster entries in ops/lanes.py for both new modules, under the safety lane: a lane that may not weaken a hygiene guard must not be able to weaken half of one either, and the lane that owns redaction owns the guard over the one door redaction sits behind.
+
+### LL-0285 - 2026-09-20 - A census of guards that read SOURCE to assert a RUNTIME property found FOUR protecting THE HARD BOUNDARY with no runtime counterpart, and a module that no severity-1 guard had ever examined
+
+**Evidence:**
+- 110 modules surveyed - 74 tests/, 25 ops/, 11 tools/ - 21 read in detail, 15 in-scope entries covering 24 individual guards. Eight independent grep patterns; never grep -iF, which crashes on this machine and reads as a clean negative. Pattern 6 found a guard the AST sweep missed, which is why more than one pattern was used.
+- SEVERITY 1, all four protecting THE HARD BOUNDARY and none with any runtime counterpart: the process-capability scope decided by a name DENYLIST; the two termination-path guards, whose matcher records a Call.func that is a Name or an Attribute and so misses getattr(...)(...); and the wider-right guard, which inherits the scope hole.
+- A LIVE GAP, not a hypothetical: overlay/window.py imports ctypes and had never been examined by ANY severity-1 guard, because a denylist of module names cannot see a module nobody added to it.
+- THE MEASUREMENT THAT MAKES A RUNTIME ARM POSSIBLE: ctypes.dlsym fires with the REAL symbol name after assembly, so 'Open' + 'Process' is a BinOp in the source with the literal nowhere in the text, and the event still carries OpenProcess. ctypes.call_function carries the FOLDED access mask. os.kill carries the signal as a VALUE. A raising audit hook ABORTS the audited operation, which is what lets the probe be safe.
+- Three of the four defeat sketches were applied to the real tree: the static guards stayed ALL GREEN at 99 and 95 passed while the new runtime arm went RED. The fourth was PARTIALLY REFUTED and is recorded as such - both computed-mask spellings that could be constructed were caught by the existing static text arm.
+- The scope is now POSITIVE: every published module outside tests/ is IN by default and leaves only by importing nothing that can reach native code, or by a written exclusion with a reason that a test reddens on when it goes stale. One exclusion today, overlay/window.py.
+- Collected per file: test_process_capability.py 94 (was 94), test_loop_watch.py 171 (171), test_loop_guard.py 88 (88), new test_process_capability_at_runtime.py 28. No file dropped. git diff ops/ is empty - production code is byte-identical.
+
+A CORRECTION TO THIS PROJECT'S OWN BELIEF, caught before it was published: the responder runner's audit-hook guard was NOT this tree's only runtime counterpart. tests/conftest.py already installs one recording real .md opens, compared against a static derivation with pre-commit refusing on disagreement - OPS-31, and OLDER than OPS-68. Four more exist. The outbox was checked before assuming, and no note carrying the wrong claim had gone out.
+NOT EXECUTED, and stated plainly: every defeat in the census itself was read off the matcher's semantics rather than demonstrated. The four that WERE demonstrated are the four above. The .githooks/* shell bodies were not swept at all, because the census's patterns are Python-shaped - a real hole in the sweep rather than a scoping decision.
+The SPAWN tier is declared and NOT closed: 18 published modules import subprocess, and a subprocess needs no ctypes to reach a process. Filed as OPS-101 with an acceptance criterion rather than left as a sentence in a report.
+
 ### LL-0284 - 2026-09-20 - OPS-95 item 2 - the merge gate now has a NAMED working-tree baseline and a dispatch-time floor check, and the rule is written where the ritual is
 
 **Evidence:**

@@ -1427,6 +1427,60 @@ and it is left standing rather than quietly restated.
 **Acceptance: MET** for every part that is this project's. The open roster
 question is recorded above and is the channel's to answer.
 
+## OPS-101. The hard-boundary guards cover the NATIVE tier and not the SPAWN tier - OPEN, with an acceptance criterion
+
+Declared 2026-09-20 by the slice that gave the severity-1 guards a runtime arm,
+and filed rather than fixed because it is a second tier rather than a defect in
+the first.
+
+**The gap.** Every guard protecting THE HARD BOUNDARY reasons about NATIVE
+reach: `ctypes`, `winreg`, `win32*`, and the process rights a handle can ask
+for. The new runtime arm watches `ctypes.dlopen`, `ctypes.dlsym`,
+`ctypes.call_function` and `os.kill`, and its positive scope is derived from
+which published modules import something in `NATIVE_REACH_ROOTS`.
+
+**None of that sees a subprocess.** Eighteen published modules outside `tests/`
+import `subprocess` today, and a subprocess needs no `ctypes` at all to reach a
+process: `taskkill /F /PID`, `wmic`, `powershell -c "Stop-Process"`, or any
+launcher that starts or stops something. `CLAUDE.md` already treats
+`Stop-Process` as forbidden and `taskkill /F /PID` as the sanctioned form for a
+process WE started - so the rule exists and the guard does not.
+
+**Why this is not hypothetical here.** This project runs `taskkill` by hand, and
+`CLAUDE.md` records a measured incident where MSYS path conversion rewrote the
+`/F` flag into `F:/`, the command killed NOTHING, and the only evidence was
+reading `taskkill`'s own output. A tier the guards cannot see is a tier where
+that class of mistake is invisible to the suite as well.
+
+**What is NOT claimed.** No violation is alleged. The eighteen modules run
+`git`, `pytest`, `ruff` and this repository's own tools, and nothing here says
+otherwise. The claim is about COVERAGE: if one of them grew a call that reached
+a process, no severity-1 guard would fire.
+
+### Acceptance
+
+1. A SPAWN tier is derived POSITIVELY, the way the native tier now is: every
+   published module importing `subprocess`, `os.system`, `os.popen`,
+   `os.spawn*`, `shutil.which` or `multiprocessing` is IN SCOPE by default, and
+   leaving requires a written exclusion with a reason that a test reddens on
+   when it goes stale.
+2. A RUNTIME arm, not a better static check. `subprocess.Popen` raises an audit
+   event carrying the executable and the full argument vector, so the arm sees
+   `taskkill` however the string was assembled - which is the property the
+   static tier cannot have. **MEASURE which event actually fires and what it
+   carries before building on it**, exactly as the native arm measured that
+   `ctypes.dlsym` carries the real symbol name after assembly, and that
+   `importlib.import_module` does NOT raise the `import` event.
+3. The arm distinguishes a process WE started from any other, because killing
+   our own child is permitted and `CLAUDE.md` names `taskkill /F /PID` as the
+   way to do it. A guard that forbids both is a guard that will be turned off.
+4. It fires on the CAPABILITY and not on the spelling: a defeat sketch building
+   the executable name at run time must redden it. Prove it by planting the
+   sketch, watching the red, restoring, and watching the green.
+5. Nothing written for this touches the game process, in any tier, at any point.
+   If a check cannot be written without doing so, it is not written - the
+   feature is rejected, not the rule.
+
 ## OPS-100. A sibling's question found a relative-path defect in our own pre-commit hook - FIXED 2026-09-20
 
 CS asked every tree on the channel a question about ITS OWN tree: is any hook

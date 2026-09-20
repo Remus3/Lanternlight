@@ -126,6 +126,16 @@ did not have. Nothing below is claimed without a test above it.
 
 * **It reads SOURCE. It runs nothing.** Every statement it makes is about what
   the text says, never about what the process did.
+
+  THAT SENTENCE IS STILL TRUE OF THIS FILE AND IS NO LONGER TRUE OF THE
+  PROPERTY. ``tests/test_process_capability_at_runtime.py`` runs the in-scope
+  modules' own probes in a child interpreter under ``sys.addaudithook`` and
+  judges the events - ``ctypes.dlopen`` carries the library name,
+  ``ctypes.dlsym`` carries the REAL entry-point name after any assembly, and
+  ``ctypes.call_function`` carries the access mask as a folded value. A
+  spelling built at run time is invisible here and visible there. Read the two
+  together; neither replaces the other, because that file is a claim about the
+  runs it makes and this one is a claim about every line of the text.
 * **It is scoped to the modules in :data:`SCOPE`.** A call into any OTHER
   module that does the killing is invisible to it.
 
@@ -149,6 +159,20 @@ did not have. Nothing below is claimed without a test above it.
     an assembled attribute name, an undocumented NT entry point nobody wrote
     down, a C extension - is not refused, it is simply never examined. Widening
     this set is how that gap closes, and it is a set a human reviews.
+
+    THAT GAP IS NOW COVERED FROM THE OTHER SIDE, and the coverage is stated
+    here rather than left for a reader to find, because a guard that
+    mis-states its own reach is THE SECOND BUG above.
+    ``tests/test_process_capability_at_runtime.py`` derives a scope
+    POSITIVELY - every published ``.py`` outside ``tests/`` is in it by
+    default, and a module leaves only by importing nothing that can reach
+    native code, or by being written into that file's
+    ``NATIVE_SCOPE_EXCLUSIONS`` WITH A REASON. An assembled API name does not
+    help there: ``ctypes`` still has to be imported by name before anything
+    can be spelled at all. Measured 2026-09-20 by planting a module doing
+    ``getattr(ctypes.WinDLL("kernel32"), "Open" + "Process")`` - all four of
+    this repository's SEVERITY-1 static guards stayed green at 99 passed and
+    the positive derivation reddened.
   - The TEST TREE is excluded, because these files quote every forbidden
     spelling as fixture source. A test that opened a real process handle would
     therefore not be examined.

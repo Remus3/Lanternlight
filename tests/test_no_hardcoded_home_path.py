@@ -500,16 +500,174 @@ class TestTheCorpusCoversProseNotJustCode:
             "again, exactly as OPS-39 found"
         )
 
-    def test_the_corpus_is_built_from_git_not_an_extension_list_or_a_bare_walk(self):
-        import inspect
+    @staticmethod
+    def _ignored_probe_name() -> str:
+        """A name this repository's own ``.gitignore`` suppresses.
 
-        source = inspect.getsource(_tracked.iter_authored_files) + inspect.getsource(
-            _tracked._git_tracked
+        ``*.log`` is ignored by the Logs block of ``.gitignore``, so a file
+        with this name is INVISIBLE to a corpus built from git and VISIBLE to
+        any bare filesystem walk. That asymmetry is the whole discriminator.
+
+        The process id is in the name because two concurrent suites planting
+        one fixed name unlink each other's evidence mid-scan -
+        ``tests/_tracked.py::probe_path`` records what that cost in ``OPS-8``.
+        The ``_guard_probe_`` prefix is deliberately NOT reused here:
+        ``_tracked._own_probes`` adds a process's OWN probes back into the
+        corpus by name, which would erase exactly the difference this test
+        depends on.
+        """
+        return f"corpus_discriminator_{os.getpid()}.log"
+
+    def test_a_gitignored_file_on_disk_is_absent_from_the_real_corpus(self):
+        """BEHAVIOUR, replacing a substring test over reflected source text.
+
+        THE DEFECT THIS REPLACES, measured rather than argued. This test used
+        to call ``inspect.getsource`` on ``_tracked.iter_authored_files`` and
+        ``_tracked._git_tracked``, concatenate the two, and assert the words
+        "git" and "ls-files" appeared somewhere in the result. A DOCSTRING IS
+        PART OF A FUNCTION'S SOURCE, so a body swapped for a bare
+        ``root.rglob("*")`` keeps both words and the guard stays green. On
+        2026-09-20 exactly that mutation was applied to ``tests/_tracked.py``
+        and this class reported ``2 passed``, while the corpus grew from the
+        tracked set to 802 entries - 324 of them under the gitignored note
+        channel. That corpus is SHARED: ``tests/test_no_pii.py``,
+        ``tests/test_ports.py``, ``tests/test_ascii_hygiene.py`` and
+        ``tests/test_process_capability.py``'s scope derivation all consume
+        it, so one silent change there moves four guards at once and none of
+        them goes red.
+
+        WHAT ACTUALLY DISCRIMINATES A GIT CORPUS FROM A BARE WALK IN THIS
+        TREE. Four candidate cases were measured, and only two of them
+        separate the two corpora - the other two are the trap:
+
+        * A GITIGNORED file present on disk. ``git ls-files`` never lists it
+          and ``--others --exclude-standard`` excludes it, so the git corpus
+          omits it; a filesystem walk finds it. DISCRIMINATES, and is what
+          this test plants.
+        * A file inside a gitignored DIRECTORY. Same answer, same mechanism.
+        * An UNTRACKED but NOT ignored file. ``_git_tracked`` adds
+          ``--others --exclude-standard`` deliberately - see its docstring and
+          the 2026-08-09 measurement behind it - so BOTH corpora contain it.
+          Does NOT discriminate, and a test built on it would be green against
+          the mutant.
+        * A TRACKED file deleted from disk. ``git ls-files`` still lists it,
+          but ``iter_authored_files`` drops anything failing ``is_file()``, so
+          BOTH corpora omit it. Does NOT discriminate either.
+
+        The planted file is gitignored, so a CONCURRENT suite cannot see it in
+        its own git corpus and this assertion is safe to run in parallel.
+        """
+        _toolguard.require("git")
+        planted = REPO_ROOT / self._ignored_probe_name()
+        rel = planted.name
+        try:
+            planted.write_text("planted by a guard\n", encoding="ascii")
+            # ANCHOR 1: git really does ignore it. Without this, the absence
+            # asserted below would also be satisfied by a walker that never ran.
+            ignored = subprocess.run(
+                ["git", "check-ignore", "-q", rel],
+                cwd=REPO_ROOT,
+                capture_output=True,
+                timeout=60,
+                check=False,
+            )
+            assert ignored.returncode == 0, (
+                f"{rel!r} is NOT gitignored in this tree, so it cannot tell a "
+                "git corpus apart from a filesystem walk and this test would "
+                "prove nothing. Check the Logs block of .gitignore."
+            )
+            # ANCHOR 2: the file is genuinely on disk, so a walk WOULD find it.
+            assert planted.is_file()
+            corpus = tracked_text_files()
+            # ANCHOR 3: the corpus is not simply empty.
+            assert len(corpus) > 100, f"corpus looks wrong: {len(corpus)} files"
+            assert rel not in corpus, (
+                f"{rel!r} is gitignored and present on disk, and the shared "
+                "corpus contains it anyway - so the corpus is a filesystem "
+                "walk rather than git's answer. Four guards consume this "
+                "walker and none of them would have reported the change"
+            )
+        finally:
+            planted.unlink(missing_ok=True)
+
+    def test_the_corpus_is_not_an_extension_allowlist(self):
+        """The other half of the old test's NAME, now actually asserted.
+
+        ``tests/_tracked.py``'s own docstring records the hole an extension
+        allowlist had: ``LICENSE``, ``NOTICE``, ``.gitignore``,
+        ``.gitattributes``, ``.claude/settings.json`` and the ``.githooks``
+        scripts carry no recognised suffix, so neither hygiene guard ever
+        opened them. A corpus narrowed back to a suffix list would be GREEN on
+        the planted-ignored-file test above - a suffix filter excludes a
+        gitignored ``.log`` just as thoroughly - so this is a second,
+        independent direction rather than a restatement of the first.
+        """
+        corpus = set(tracked_text_files())
+        suffixless = {rel for rel in corpus if not Path(rel).suffix}
+        assert suffixless, (
+            "the corpus contains no file without a suffix at all, which is "
+            "what an extension allowlist looks like from the outside"
         )
-        assert "git" in source and "ls-files" in source, (
-            "iter_authored_files no longer reads through git ls-files - a "
-            "corpus built any other way is exactly the failure mode this "
-            "test exists to catch"
+        for rel in ("LICENSE", "NOTICE"):
+            assert (REPO_ROOT / rel).is_file(), f"{rel} is missing from the tree"
+            assert rel in corpus, (
+                f"{rel} is tracked and on disk but absent from the shared "
+                "corpus - the walker has narrowed to a suffix list, which is "
+                "the exact hole tests/_tracked.py exists to have closed"
+            )
+
+    def test_the_corpus_of_a_throwaway_repository_is_exactly_gits_answer(
+        self, tmp_path: Path
+    ) -> None:
+        """All three properties at once, in a tree nobody else is using.
+
+        The two tests above are claims about THIS repository and can only
+        plant what its own ``.gitignore`` already suppresses. This one builds
+        a git repository from nothing and pins the whole shape: tracked IN,
+        untracked-but-not-ignored IN, ignored OUT, ignored directory OUT.
+
+        No commit is made and no identity is configured - ``git ls-files``
+        reads the INDEX, which ``git add`` populates on its own. Configuring
+        an identity here would put the operator's git identity into a test's
+        environment for no gain, and ``ADR-004`` names that identity as an
+        operator identifier.
+        """
+        _toolguard.require("git")
+
+        def run(*args: str) -> None:
+            proc = subprocess.run(
+                ["git", *args],
+                cwd=tmp_path,
+                capture_output=True,
+                text=True,
+                timeout=60,
+                check=False,
+            )
+            assert proc.returncode == 0, f"git {args[0]} failed: {proc.stderr[:300]}"
+
+        (tmp_path / ".gitignore").write_text(
+            "ignored_dir/\n*.ignoredsuffix\n", encoding="ascii"
+        )
+        (tmp_path / "tracked.md").write_text("tracked\n", encoding="ascii")
+        (tmp_path / "untracked.md").write_text("untracked\n", encoding="ascii")
+        (tmp_path / "also.ignoredsuffix").write_text("ignored\n", encoding="ascii")
+        (tmp_path / "ignored_dir").mkdir()
+        (tmp_path / "ignored_dir" / "secret.md").write_text(
+            "ignored\n", encoding="ascii"
+        )
+
+        run("init")
+        run("add", ".gitignore", "tracked.md")
+
+        corpus = {
+            path.relative_to(tmp_path).as_posix()
+            for path in _tracked.iter_authored_files(tmp_path)
+        }
+        assert corpus == {".gitignore", "tracked.md", "untracked.md"}, (
+            "the walker did not return git's answer for a throwaway "
+            f"repository, it returned {sorted(corpus)}. Tracked and "
+            "untracked-but-not-ignored are both published; an ignored file "
+            "and an ignored directory are not"
         )
 
 

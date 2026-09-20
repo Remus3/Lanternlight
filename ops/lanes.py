@@ -264,6 +264,23 @@ LANES: tuple[Lane, ...] = (
             # property belongs with the lane that may not weaken one.
             "tests/test_spawn_no_window.py",
             "tests/test_process_capability.py",
+            # The RUNTIME half of the same guard, 2026-09-20. The static module
+            # above reads source and concludes what the code will DO; this one
+            # runs it under an audit hook and watches what it DOES. They are
+            # separate files because they make different KINDS of claim, and
+            # they are one lane's because a lane that may not weaken a hygiene
+            # guard must not be able to weaken half of one either.
+            "tests/test_process_capability_at_runtime.py",
+            # The egress choke point, 2026-09-20. It asserts that every write
+            # into a sibling inbox goes through ops.outbox.deliver - the path
+            # that keeps a local copy and a manifest row BEFORE attempting
+            # delivery and refuses a payload carrying an operator identifier.
+            # `LL-0170` is why it exists: a session quoted raw git output into
+            # four sibling directories, the redactor was never consulted, and
+            # no commit-time guard fired because the channel is gitignored.
+            # This lane owns redaction, so it owns the guard over the one door
+            # redaction sits behind.
+            "tests/test_sibling_inbox_choke_point.py",
             "tests/test_source_register.py",
             "tests/test_gitignore_shadowing.py",
             # OPS-96. Empty untracked, unignored directories - the class the
