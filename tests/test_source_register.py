@@ -1489,6 +1489,25 @@ KNOWN_NON_HOSTS = frozenset(
         "ctypes.call",
         "os.popen",
         "os.spawn",
+        # `OPS-101`, 2026-09-20. A dotted private-module API path, same
+        # class as the block above. The leading underscore of
+        # `_winapi.CreateProcess` is not a host-name character, so the
+        # extractor starts the token at `winapi`. The spawn-tier inventory
+        # row cannot state what it measured without naming it.
+        "winapi.CreateProcess",
+        "os.getpid",
+        "os.spawnv",
+        # `OPS-99` closed, 2026-09-21. THREE more stray-file names from the
+        # Git installation root, now that the item lists all eleven rather
+        # than a count. Same class as `mutate2.py` and `tlg.bak` above:
+        # scratch files in a shared OS directory, not ours to track, so the
+        # tracked-file oracle cannot exempt them. `roadmap.py` and
+        # `stopgap.py` are TRUNCATIONS at the underscore of
+        # `edit_roadmap.py` and `arm_stopgap.py`, which is the same trap
+        # `backup.md` and `ph.py` carry further up this block.
+        "blind.py",
+        "roadmap.py",
+        "stopgap.py",
         # A VERSION STRING, not a host. `git 2.53.0.windows.3` is the
         # build the hooksPath measurement was taken on, and the extractor
         # reads the dotted tail as a domain. Recording the build matters:

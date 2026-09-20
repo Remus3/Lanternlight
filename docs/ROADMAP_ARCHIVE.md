@@ -9,7 +9,7 @@ the original text, verbatim, in its original order, and the live roadmap
 carries a one-line stub linking to each one. If an item here turns out to
 matter again, move the section back rather than rewriting it.
 
-Sections in this archive: 96.
+Sections in this archive: 97.
 
 ---
 
@@ -12145,4 +12145,118 @@ here at all. That is why this is filed rather than fixed in place.
 - **Mutation:** two mutants - the scope note removed, and the scope note leaked
   onto the BUSY branch where there is no hold to scope - both KILLED, anchors
   asserted, restore digest-verified.
+
+## OPS-99. Our git-installation-root figure was WRONG and the pattern that produced it was broken - WITHDRAWN and corrected 2026-09-20, CLOSED 2026-09-21 when LW's list agreed member by member
+
+**This project published SEVEN files and 10361 bytes to five other trees and the
+answer is ELEVEN and 45,189 bytes.** LW's row was right and ours was wrong, on a
+number we were more confident about than LW was. Withdrawn on the channel in
+`2026-09-20-1830-from-LL-CORRECTION-27b181617a8f-...` rather than restated
+quietly at home, per `LL-0244`.
+
+Nine name a Lanternlight root outright, 12,042 bytes - the seven already
+published plus `probe_ph.py` (979 bytes, 2026-08-13) and `mutate2.py` (702
+bytes, 2026-09-08). Two more name NO root at all and are certainly ours,
+settled from our OWN git history rather than by eye: `inventory_backup.md`
+(10,407 bytes) is an earlier revision of tracked `docs/INVENTORY.md`, and
+`tlg.bak` (22,740 bytes) is an earlier revision of a tracked test module - a
+`git log -S` on the distinctive class name inside it returns EXACTLY ONE commit,
+`0eb6217`, which is ours. 12,042 + 10,407 + 22,740 = 45,189, which is LW's byte
+figure to the byte.
+
+### THE MECHANISM, which is why this is an item and not a typo
+
+The predicate asked for `C:` then a separator then a Lanternlight root. The
+separator was a character class meant to hold a backslash or a forward slash.
+**It held a forward slash only.** Two independent defects, each sufficient alone:
+
+1. **Inside a regex character class, ONE backslash before a slash is an ESCAPED
+   FORWARD SLASH.** `[\/]` is the one-character class `/`. A literal
+   backslash needs TWO backslash characters in the pattern, `[\\/]`.
+2. **The pattern reached `re.compile` through a shell heredoc, and the heredoc
+   collapsed the doubled backslash to one.** Measured afterwards by LENGTH: six
+   characters arrived where the source had seven. A `repr` of the string prints
+   the same thing either way, which is why the first probe of this returned an
+   inconclusive answer that looked conclusive.
+
+Seven of the nine root-namers happen to write a forward slash. So the broken
+pattern returned a clean, plausible, internally consistent attribution. **There
+was no error message.** That is what made it publishable.
+
+**The claim made about the method was the exact inverse of the truth.** Our note
+said the figure was attributed "by content, not by name and not by date, because
+a name proves nothing in a bucket six trees write into", and offered it as more
+rigorous than a grep. LW matched the project word anywhere and got the right
+answer. Our extra rigour was a filter we had broken.
+
+This is `CLAUDE.md`'s own `grep -iF` lesson one level down - an empty result is a
+claim about the TOOL before it is a claim about the world - and it is the second
+instance in this repository's record. The first CRASHED and read as "no
+matches". This one did not crash and read as a finding.
+
+### The fix that stuck, and it is a practice rather than a patch
+
+The re-measurement was written to a FILE, not passed through a heredoc, and it
+**self-tests before it walks anything**: it asserts the pattern matches a
+backslash path AND a forward-slash path, and dies if either fails. A mangled
+pattern now fails loudly instead of returning a tidy number.
+
+**Carry this into any sweep that greps for a Windows path.** The failure is not
+exotic - every tree on this channel writes absolute Windows paths into its notes
+and its scratch files, and every one of them is one backslash away from it.
+
+### Not claimed, and deliberately
+
+- **Eleven is a FLOOR, not a total.** Two of the eleven name no root and were
+  found through history, so any file of ours that mentions nothing identifiable
+  is still uncounted. No root-marker sweep produces a total, LW's included.
+- `win.md`, 175,732 bytes, names both a Lanternlight string and a Clockspeed
+  root. NOT claimed and NOT assigned - the string that would discriminate
+  appears in our own history 13 times, because we write about CS constantly.
+- Five files at that level were never decoded; they are Git's own installer
+  artifacts.
+- Top level only; the installation's subdirectories are unwalked.
+- **LW's "eleven under both methods" is NOT an independent check**, and we said
+  so rather than accept a corroboration that flatters us: the same file,
+  `win.md`, is excluded by each method for a DIFFERENT reason, so the two runs
+  agree by coincidence at the one file where they could have disagreed.
+
+### Still ours to do
+
+The eleven files stay where they are. The sweep was read-only by operator
+instruction and RC is merging a machine-wide reconciliation; removing our own
+rows early takes evidence out of it. LW has been asked for the eleven filenames
+it actually counted, because ours were RECONSTRUCTED from LW's published row and
+a reconstruction that lands on the right total can still be the wrong eleven.
+
+**Acceptance: MET, and the item is CLOSED 2026-09-21.** LW answered with the
+list, and the two sets were compared file by file rather than by total.
+
+**They agree exactly: the same eleven names, and every one the same size on
+disk.** Set difference is empty in both directions, no member disagrees, and the
+disk sum is 45,189 - so the agreeing total was not a coincidence, which is the
+thing LW asked us to check and said it would rather know about.
+
+```
+tlg.bak              22740      probe_ph.py       979
+inventory_backup.md  10407      arm_stopgap.py    797
+edit_roadmap.py       4413      mutate2.py        702
+blind.py              1681      gate.py           449
+ascii_probe.py        1575      json_check.py     322
+gate_probe.py         1124      ---------------------
+                                total          45189
+```
+
+**The comparison was done programmatically, not by eye**, and that is not
+fussiness: eleven names and eleven numbers read side by side is exactly the task
+a reader performs badly and confidently. The check re-`stat`ed every file on
+disk rather than comparing two published tables to each other, so it can tell a
+transcription error from a real difference.
+
+**LW corroborates both halves of our diagnosis from outside**, which is worth
+more than the agreement itself: `probe_ph.py` and `mutate2.py` DO carry a root
+path written with BACKSLASHES, confirming the heredoc defect on named files; and
+`tlg.bak` and `inventory_backup.md` carry no root path at all and were reachable
+only by LW's cruder bare-word marker, confirming our own caveat that a
+root-marker predicate can never produce a total.
 

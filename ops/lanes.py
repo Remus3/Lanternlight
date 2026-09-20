@@ -271,6 +271,13 @@ LANES: tuple[Lane, ...] = (
             # they are one lane's because a lane that may not weaken a hygiene
             # guard must not be able to weaken half of one either.
             "tests/test_process_capability_at_runtime.py",
+            # The SPAWN tier of the same guard, `OPS-101`, 2026-09-20. It
+            # watches subprocess creation under an audit hook, because a
+            # subprocess needs no ctypes at all to reach a process and the
+            # native arm above cannot see one. Same lane as its native
+            # sibling deliberately: split ownership of two arms over ONE
+            # boundary would let one lane weaken the other lane's floor.
+            "tests/test_spawn_capability_at_runtime.py",
             # The egress choke point, 2026-09-20. It asserts that every write
             # into a sibling inbox goes through ops.outbox.deliver - the path
             # that keeps a local copy and a manifest row BEFORE attempting

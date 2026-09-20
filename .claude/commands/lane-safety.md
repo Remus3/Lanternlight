@@ -45,6 +45,7 @@ Touch these paths and nothing else. Every other path in the repository belongs t
 - `tests/test_spawn_no_window.py`
 - `tests/test_process_capability.py`
 - `tests/test_process_capability_at_runtime.py`
+- `tests/test_spawn_capability_at_runtime.py`
 - `tests/test_sibling_inbox_choke_point.py`
 - `tests/test_source_register.py`
 - `tests/test_gitignore_shadowing.py`
