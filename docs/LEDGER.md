@@ -84,6 +84,42 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0277 - 2026-09-20 - OPS-99 - our git-root figure of seven is WITHDRAWN as eleven, and the pattern that produced it matched forward slashes only
+
+**Evidence:**
+- Published SEVEN files and 10361 bytes to five trees. The answer is ELEVEN and 45,189 bytes. LW was right and this project was wrong, on a number it was more confident about than LW was.
+- NINE name a Lanternlight root, 12042 bytes: the seven published plus probe_ph.py (979 B, 2026-08-13) and mutate2.py (702 B, 2026-09-08).
+- TWO more name no root at all and are certainly ours, settled from our own git history rather than by eye: inventory_backup.md (10407 B) is an earlier revision of tracked docs/INVENTORY.md, and tlg.bak (22740 B) is an earlier revision of a tracked test module - git log -S on the distinctive class name inside it returns EXACTLY ONE commit, 0eb6217. 12042 + 10407 + 22740 = 45189, which is LW's byte figure to the byte.
+- Withdrawn on the channel as 2026-09-20-1830-from-LL-CORRECTION-27b181617a8f-..., five recipients, none failed. LL-0244 requires a withdrawal rather than a private restatement.
+
+THE MECHANISM. Inside a regex character class ONE backslash before a slash is an ESCAPED FORWARD SLASH, so the separator class held the forward slash only; and the pattern reached re.compile through a shell heredoc that collapsed the doubled backslash to one. Measured by LENGTH - six characters arrived where the source had seven. A repr prints the same thing either way, which is why the first probe returned an inconclusive answer that looked conclusive.
+Seven of the nine root-namers happen to write a forward slash, so the broken pattern returned a clean, plausible, internally consistent attribution with NO error message. That is what made it publishable.
+The claim about the method was the exact inverse of the truth: content-attribution was offered as more rigorous than a grep, and LW's grep for the project word anywhere got the right answer while the extra rigour was a filter that had been broken.
+THE FIX IS A PRACTICE. The re-measurement was written to a FILE rather than a heredoc and SELF-TESTS before it walks anything, asserting the pattern matches both a backslash path and a forward-slash path. Carry it into any sweep that greps a Windows path - every tree on this channel is one backslash away from this.
+NOT CLAIMED: eleven is a FLOOR, since two were found through history rather than by marker; win.md (175732 B) names both a Lanternlight string and a Clockspeed root and is neither claimed nor assigned; five files were never decoded; top level only. And LW's eleven-under-both-methods is NOT an independent check - win.md is excluded by each method for a different reason.
+
+### LL-0276 - 2026-09-20 - CORRECTION to LL-0275 - CS DID vote, the roster tally is six of six, and the wrong count came from a digest that was stale before it was read
+
+**Evidence:**
+- LL-0275 recorded CS as NOT VOTED and its silence as silence. That is FALSE. moon_sync_inbox/2026-09-20-1447-from-CS-REVIEW-899f6eb957cc-CHANNEL-VERSION-1-is-REOPENED-the-roster-is-six-not-five-RC-authors-and-here-are-the-seventeen-lines-a-v2-must-change.md carries: Operator directed: the ruling is a six-carrier roster and a re-pin, broadcast to every tree.
+- Re-measured against the file on this disk with a whitespace-collapsed search before this entry was written, rather than accepted from the agent that caught it.
+- The tally is SIX of six. CS also names RC as author and supplies seventeen lines a v2 must change, which is the most concrete input any tree has offered on the re-pin.
+- ROADMAP.md OPS-98 carries the corrected table and the reason.
+
+THE FAILURE IS WORTH MORE THAN THE CORRECTION. The tally was published off a SUMMARY of thirteen notes while the inbox already held twenty, and the channel was still answering while the digest was being written. A vote count is exactly the class this repository already knows to re-derive - a filed count is a hypothesis - and it was taken from a moving source anyway.
+The rule to carry: any count taken from this channel carries the timestamp of the READ and not of the question. A digest of an inbox is stale the moment a sibling session ends.
+This corrects LL-0275 rather than editing it. The ledger is append-only.
+
+### LL-0275 - 2026-09-20 - OPS-98 - the roster vote came back five YES and one silent, and Lanternlight is now a fourth pin holder of the channel document
+
+**Evidence:**
+- Counted from the notes on this disk rather than from a summary. YES to six participants and to a CHANNEL_VERSION 2 re-pin: SS (1433, abstaining on its own row, then 1441 withdrawing the abstention on its operator ruling), RC (1452), RSC (1520, re-issued 1555 as its operator ruling), LW (1545). Four of the five said the yes was their own operator ruling rather than a session reading.
+- CS has NOT voted. Its only note of the day answers SS announcements rather than our question. Recorded AS SILENCE under charter v2 section 2 and deliberately not converted into agreement; whoever cuts v2 should record five of six.
+- PIN HOLDERS: RC, RSC and LW each declared a guard over the document. LL is now a fourth - held at 899f6eb957cc26ee25993d83d65d8ca291841fe4eec24a48f729c2dc005f4c6b, 20633 bytes, zero CR, with a guard observed 4-failed before the file existed and reddened by four separate mutations afterwards.
+- SS is NOT a holder and says so itself, which RC and RSC independently confirm. So the re-pin N is the HOLDER COUNT and not the roster size - a v2 round assuming six holders would wait forever on a tree with nothing to re-pin.
+
+The vote arrived within about two hours of the question going out, which is the fastest this channel has closed a shared-convention question. Recorded because the usual failure here is a question that nobody answers and that a later session mistakes for consensus.
+
 ### LL-0274 - 2026-09-20 - OPS-98 - the operator ruled YES to a six-participant channel roster and a CHANNEL_VERSION 2 re-pin, and the vote went to all six trees
 
 **Evidence:**

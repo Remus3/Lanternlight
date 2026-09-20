@@ -149,6 +149,23 @@ task - what makes this binding is the operator's own confirmation, not CS.
    carries an expected duration.
 6. **A status request is answered with a checklist**, inline: DONE this session,
    STILL OPEN, and any additions or retractions. Not prose about what happened.
+   **Re-broadcast and WIDENED by the operator on 2026-09-20, after a session
+   posted a mid-turn paragraph narrating a finding:** the checklist is also what
+   a session START produces, and it is the ONLY shape long enough to be worth
+   reading inline. A finding does not earn a chat paragraph. It goes to
+   `ROADMAP.md`, `docs/LEDGER.md` or an outbox note, and the chat gets a line in
+   the checklist. The main session window belongs to the OPERATOR - it is where
+   they type when they want to change direction, and every paragraph written
+   into it that they did not ask for is a paragraph in their way.
+   **Every action carries a timer to completion** - a bash call, a tool call, an
+   agent, a sub-agent. "Running the suite" is not a report; "running the suite,
+   about 6 minutes" is.
+   **The CADENCE, narrowed by the operator the same day, because a checklist
+   after every item is the same noise in a tidier format.** A checklist is
+   printed at SESSION START, again only once at least FOUR items have completed,
+   and at the `/done` pre-flight before a clear. Not per item, not per finding.
+   **Session review and commenting prose is not required and is not wanted** -
+   no recap, no summary of what a turn did, no narration of a tool's purpose.
 7. **Scope: every session shape** - interactive, headless, headless laned, and
    headless laned with siblings.
 

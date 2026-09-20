@@ -1384,6 +1384,13 @@ KNOWN_NON_HOSTS = frozenset(
         # gitignored outbox, so `git ls-files` cannot exempt it, and it
         # ends `.md` like every other entry here.
         "2026-09-20-1420-from-LL-ACTION-899f6eb957cc-our-operator-ruled-YES-to-a-six-participant-roster-and-a-channel-version-2-re-pin.md",
+        # `LL-0276`, 2026-09-20. A SIBLING'S note filename, cited in full by
+        # the entry that corrects our vote tally. It is quoted in full for
+        # the same reason as the entry above - a correction that truncates
+        # the name of the evidence overturning it cannot be resolved by the
+        # cold session it is written for - and it is a note in the
+        # gitignored inbox, so the tracked-file oracle cannot exempt it.
+        "2026-09-20-1447-from-CS-REVIEW-899f6eb957cc-CHANNEL-VERSION-1-is-REOPENED-the-roster-is-six-not-five-RC-authors-and-here-are-the-seventeen-lines-a-v2-must-change.md",
         # DOTTED API PATHS quoted by `OPS-96` item 3, which is about replacing
         # one traversal with another. These are exactly the class this file's
         # docstring says stays in the denylist rather than being auto-exempted:
@@ -1405,6 +1412,31 @@ KNOWN_NON_HOSTS = frozenset(
         # sweep. Lanternlight has no `version.py`, so the tracked-file check
         # cannot exempt it, and it is not a host.
         "version.py",
+        # `OPS-99`, 2026-09-20. SIX tokens from the stray-file attribution
+        # at the Git installation root. Five are FILENAMES of scratch files
+        # sitting in a shared OS directory - not ours to track, so the live
+        # tracked-file oracle cannot exempt them, and every one ends in a
+        # two-or-three letter tail the extractor reads as a domain.
+        #
+        # Two of them are worth a second look before anyone "tidies" this
+        # block: `backup.md` and `ph.py` are NOT the filenames the prose
+        # names. The real files are `inventory_backup.md` and `probe_ph.py`,
+        # and the extractor split both at the UNDERSCORE, so the token that
+        # needs registering is the tail rather than the name. Registering the
+        # full names would leave this guard red and the reason invisible.
+        "backup.md",
+        "ph.py",
+        "mutate2.py",
+        "tlg.bak",
+        # `win.md` is the 175,732-byte file OPS-99 explicitly declines to
+        # attribute, because it names a Lanternlight string AND a Clockspeed
+        # root. It is named here so the guard stops asking, not because the
+        # attribution question is settled.
+        "win.md",
+        # A DOTTED API PATH, same class as `os.walk` and `shutil.copyfile`
+        # above: `re.compile` is what the broken character class was handed to,
+        # and the item cannot state the defect without naming it.
+        "re.compile",
         # A DOTTED API PATH quoted by `LL-0270`, `OPS-91` and the
         # vendored file's own NOTICE, all of which record that the
         # copy was made at the BYTE level rather than through
