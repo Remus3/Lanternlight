@@ -421,6 +421,11 @@ LANES: tuple[Lane, ...] = (
             # it records where this project's own replies go, which is the
             # thing a cold session was found re-deriving by listing the disk.
             "tests/test_outbox.py",
+            # OPS-68, the DRAFTING half of the same channel. ``ops/**`` already
+            # covers ops/responder.py; this module matches neither the
+            # test_inbox_* glob nor test_outbox.py, so it arrived as an orphan
+            # exactly as the four inbox modules did above.
+            "tests/test_responder.py",
             "docs/REPLY_PATHS.md",
             # OPS-82. Replies that are WRITTEN but HELD pending an operator
             # ruling, because OPS-68 put cross-project propagation on standby.

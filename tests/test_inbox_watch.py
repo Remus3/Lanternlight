@@ -2067,3 +2067,152 @@ class TestTheOutboxSummaryDoesNotCountBytecode:
         assert exists
         assert notes == before[1] + 1
         assert total == before[2] + 50
+
+
+class TestTheDraftsDirectoryIsClassifiedRatherThanSkipped:
+    """`OPS-68`. The responder runner writes drafts INSIDE the inbox.
+
+    The operator ruled on 2026-09-07 that this watcher covers the ENTIRETY of
+    the inbox folder, so a directory placed there is watched whether or not we
+    put it there. `moon_sync_inbox/_drafts/` is therefore about to surface as an
+    unread sibling DROP at every session start, and re-surface every time a
+    draft changes - which is exactly what `OUTBOX_DIRNAME`'s own comment says
+    happened one directory over.
+
+    **Skipping it silently would be the `OPS-34` defect again**, so it is
+    CLASSIFIED the same way the outbox is: counted, named in the report as ours,
+    and kept out of the unread drops. The test that matters is the second one -
+    a skip that reports nothing is indistinguishable from a watcher that is not
+    looking.
+    """
+
+    DRAFT = b"# From LL - draft\n"
+    SIDECAR_NAME = "pending.json"
+    SIDECAR = b'{"threads": 2}\n'
+
+    def _inbox(self, tmp_path: Path) -> Path:
+        inbox = tmp_path / "moon_sync_inbox"
+        inbox.mkdir()
+        (inbox / "2026-09-20-1200-from-RC-FYI-real-mail.md").write_text(
+            "# From RC - FYI: real mail\n", encoding="utf-8"
+        )
+        drafts = inbox / inbox_watch.DRAFTS_DIRNAME
+        drafts.mkdir()
+        # write_bytes, not write_text. On Windows write_text turns the LF into
+        # CRLF and read_text hides it, so a byte total asserted against
+        # len(<str>) fails by one per line for a reason that has nothing to do
+        # with the code under test. CLAUDE.md records this trap, and the first
+        # draft of this fixture walked straight into it.
+        (drafts / "reply-to-RC.md").write_bytes(self.DRAFT)
+        (drafts / "reply-to-LW.md").write_bytes(self.DRAFT)
+        # A NON-Markdown file, and it is not decoration. Without it the
+        # ``.md`` filter in drafts_summary is vacuous: a mutation counting
+        # EVERY file as a draft passed all four arms of this class green, which
+        # is how it was found. Its bytes still count toward the total, exactly
+        # as the outbox summary treats its delivery manifest - the figure
+        # describes the directory rather than a subset of it.
+        (drafts / self.SIDECAR_NAME).write_bytes(self.SIDECAR)
+        return inbox
+
+    def test_drafts_never_become_an_unread_drop(self, tmp_path: Path) -> None:
+        inbox = self._inbox(tmp_path)
+        drops, problem = inbox_watch._read_drops(inbox)
+
+        assert not problem, problem
+        assert [d.name for d in drops] == [], (
+            "the drafts directory was read as a sibling's drop, so every draft "
+            "we write comes back to us as unread mail"
+        )
+
+    def test_the_drafts_are_COUNTED_and_not_silently_dropped(
+        self, tmp_path: Path
+    ) -> None:
+        """A silent skip and an honest classification look identical here.
+
+        This is the arm that tells them apart, and it is why the summary exists
+        at all rather than a bare `continue`.
+        """
+        inbox = self._inbox(tmp_path)
+        present, count, total = inbox_watch.drafts_summary(inbox)
+
+        assert present is True
+        assert count == 2, (
+            "the non-Markdown sidecar was counted as a draft; the .md "
+            "filter is not doing anything"
+        )
+        assert total == len(self.DRAFT) * 2 + len(self.SIDECAR), (
+            "the byte total must describe the DIRECTORY, not just the "
+            "drafts in it - the outbox summary makes the same promise"
+        )
+
+    def test_an_absent_drafts_directory_reports_absent_rather_than_empty(
+        self, tmp_path: Path
+    ) -> None:
+        """Nothing written yet and an emptied directory are different facts."""
+        inbox = tmp_path / "moon_sync_inbox"
+        inbox.mkdir()
+
+        assert inbox_watch.drafts_summary(inbox) == (False, 0, 0)
+
+    def test_bytecode_beside_a_draft_does_not_move_the_figure(
+        self, tmp_path: Path
+    ) -> None:
+        """`OPS-97` again, one directory over.
+
+        The summary reuses the pruning traversal rather than a bare ``rglob``,
+        so a ``__pycache__`` under the drafts directory cannot inflate a number
+        printed at every session start.
+        """
+        inbox = self._inbox(tmp_path)
+        before = inbox_watch.drafts_summary(inbox)
+        cache = inbox / inbox_watch.DRAFTS_DIRNAME / "__pycache__"
+        cache.mkdir()
+        (cache / "x.cpython-314.pyc").write_bytes(b"\x00" * 2048)
+
+        assert inbox_watch.drafts_summary(inbox) == before
+
+
+class TestTheReportNAMESTheDrafts:
+    """`OPS-68`. Counting is half of a classification; naming is the other half.
+
+    `_read_drops` skips the drafts directory, and a skip that never appears in
+    the report is the `OPS-34` defect wearing a tidier coat - the report says
+    nothing is new while a directory inside the watched folder goes unmentioned.
+    These arms fail if the drafts stop being named, in EITHER report shape: the
+    quiet one a cold session sees most often, and the loud one.
+    """
+
+    def _scan(self, tmp_path: Path, drafts: int) -> object:
+        inbox = tmp_path / "moon_sync_inbox"
+        inbox.mkdir()
+        (inbox / "2026-09-20-1200-from-RC-FYI-mail.md").write_text(
+            "# From RC - FYI: mail\n", encoding="utf-8"
+        )
+        if drafts:
+            folder = inbox / inbox_watch.DRAFTS_DIRNAME
+            folder.mkdir()
+            for index in range(drafts):
+                (folder / f"draft-{index}.md").write_bytes(b"# From LL - draft\n")
+        return inbox_watch.scan(
+            inbox, state=tmp_path / "seen.json", reported=tmp_path / "rep.json"
+        )
+
+    def test_the_loud_report_names_the_drafts_and_says_they_were_sent_to_nobody(
+        self, tmp_path: Path
+    ) -> None:
+        text = inbox_watch.render(self._scan(tmp_path, drafts=3))
+
+        assert "UNSENT DRAFTS (3)" in text
+        assert inbox_watch.DRAFTS_DIRNAME in text
+        assert "DELIVERED TO NOBODY" in text
+
+    def test_no_drafts_directory_means_no_line_at_all(self, tmp_path: Path) -> None:
+        """Absent is not zero, and the report must not invent a heading.
+
+        Without this arm the naming test above passes just as happily against a
+        render that prints the heading unconditionally, which would tell a cold
+        session it has a draft backlog it does not have.
+        """
+        text = inbox_watch.render(self._scan(tmp_path, drafts=0))
+
+        assert "UNSENT DRAFT" not in text

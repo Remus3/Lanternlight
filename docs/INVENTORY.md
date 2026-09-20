@@ -228,6 +228,7 @@ is about.
 | `tests/test_overlay_render.py` | The overlay panel's no-reflow property - a missing value must not shift every row below it. |
 | `tests/test_paths_avgprice.py` | The AvgPrice path resolution defect, measured against a live install. |
 | `tests/test_precommit_gate.py` | The commit gate blocking even when it cannot say why (`OPS-15`). |
+| `tests/test_responder.py` | The draft-only responder runner (`OPS-68`) - that it cannot reach a delivery path, that no draft carries a number absent from the note it answers, and that a human's edit is never overwritten. |
 | `tests/test_precommit_hook_globbing.py` | The pre-commit hook not letting the shell rewrite a staged path (`OPS-56`), end to end through a real commit. |
 | `tests/test_provenance.py` | Provenance travelling with the ROW and not only with the document (`OPS-28`), because a consumer lifts a table. |
 | `tests/test_redact.py` | `lanternlight/redact.py`. Every identifier in it is invented and assembled at run time, never pasted from a log. |

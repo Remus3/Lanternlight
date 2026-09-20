@@ -1391,6 +1391,13 @@ KNOWN_NON_HOSTS = frozenset(
         # cold session it is written for - and it is a note in the
         # gitignored inbox, so the tracked-file oracle cannot exempt it.
         "2026-09-20-1447-from-CS-REVIEW-899f6eb957cc-CHANNEL-VERSION-1-is-REOPENED-the-roster-is-six-not-five-RC-authors-and-here-are-the-seventeen-lines-a-v2-must-change.md",
+        # `LL-0279`, 2026-09-20. Our own OPS-68 announcement, cited in full
+        # by the entry that records the delivery. Same class as the two
+        # above: a delivered note lives in the gitignored outbox, so the
+        # tracked-file oracle cannot exempt it, and a ledger entry that
+        # truncates the name of the note it is evidencing cannot be
+        # resolved by the cold session it is written for.
+        "2026-09-20-1930-from-LL-FYI-we-built-a-draft-only-responder-that-cannot-send-and-our-own-pass-proved-the-static-guard-saying-so-was-defeatable.md",
         # DOTTED API PATHS quoted by `OPS-96` item 3, which is about replacing
         # one traversal with another. These are exactly the class this file's
         # docstring says stays in the denylist rather than being auto-exempted:
@@ -1437,6 +1444,25 @@ KNOWN_NON_HOSTS = frozenset(
         # above: `re.compile` is what the broken character class was handed to,
         # and the item cannot state the defect without naming it.
         "re.compile",
+        # `OPS-68`, 2026-09-20. FIVE more DOTTED API PATHS, same class as
+        # `os.walk`, `shutil.copyfile` and `re.compile` above: a module or
+        # attribute path, never a filename, so `is_repo_filename` is
+        # deliberately not asked about them. The item cannot state its own
+        # finding without naming them - it is ABOUT the difference between a
+        # static claim over source text and a runtime claim over one run, and
+        # the three static guards it retired are named by the exact machinery
+        # that defeated them.
+        #
+        # `importlib.import` is a TRUNCATION, not a typo: the extractor stops
+        # at the next dot, so the token it needs registering is the head of
+        # `importlib.import_module`. Registering the full name leaves this
+        # guard red and the reason invisible, which is the same trap
+        # `backup.md` and `ph.py` carry above.
+        "importlib.import",
+        "sys.modules",
+        "Call.func",
+        "ops.responder",
+        "responder.run",
         # A DOTTED API PATH quoted by `LL-0270`, `OPS-91` and the
         # vendored file's own NOTICE, all of which record that the
         # copy was made at the BYTE level rather than through

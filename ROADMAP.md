@@ -4617,7 +4617,191 @@ them are stdin hooks whose wiring passes no argv at all and two are
 manually-invoked tools whose numbers get quoted - a real difference in stakes
 that deserves a decision rather than one uniform change.
 
-## OPS-68. The operator directed a RESPONDER RUNNER and cross-project propagation, then put both decisions on STANDBY - STANDBY LIFTED 2026-09-14, scope ADJUDICATED, build still OPEN
+## OPS-68. The operator directed a RESPONDER RUNNER - BUILT 2026-09-20 in the DRAFT-ONLY shape, refuted on its load-bearing property, repaired, and criteria 1 to 3 are MET
+
+### 2026-09-20 - BUILT, then REFUTED on the one property that mattered, then repaired
+
+**This section supersedes the ones below it**, which are left standing because
+this project does not quietly revise a record.
+
+**Criterion 2 said nothing is built before the scope is decided.** The scope was
+adjudicated on 2026-09-14 and is written out below; the build follows it and
+widens it nowhere.
+
+**The shape chosen is DRAFT-ONLY - option 4 of the four recorded - and the
+reason is MEASURED rather than cautious.** On 2026-09-20 this project published
+two wrong numbers to five sibling trees inside four hours and withdrew both: a
+six that was five (`LL-0271`) and a seven that was eleven (`LL-0277`, produced
+by a regex character class that matched forward slashes only). A runner that
+sends would have amplified those faster, not caught them. **Delivery therefore
+stays a session act**, and that is a new acceptance criterion rather than a
+permanent limit - criterion 6 below.
+
+### What was built
+
+`ops/responder.py` plus `tests/test_responder.py`. Per unread note addressed to
+us it extracts the sender code, the classification prefix, the subject, the
+note's own timestamp and its `## Reply` target, pulls out every question put to
+us, and writes ONE draft per thread into `moon_sync_inbox/_drafts/` following
+the vendored channel document's skeleton, with each question left as an explicit
+UNANSWERED placeholder. It never overwrites a draft that has been edited - it
+compares a recorded digest - and it writes atomically. A `--dry-run` prints what
+it would write and writes nothing.
+
+`git check-ignore -v moon_sync_inbox/_drafts/<name>` exits 0 on
+`.gitignore:208:moon_sync_inbox/`, and that is RE-ASKED by a test on every run
+rather than trusted once.
+
+### THE REFUTATION, and it is the most valuable thing in this item
+
+An independent adversarial pass was handed the done-claim and **REFUTED it on
+axis 1, which is the whole point of the draft-only shape.** The runner had three
+guards asserting it could not send. All three are STATIC, and the refuter
+defeated every one of them at once with two lines inside `run()`:
+
+```
+_mod = importlib.import_module("ops." + "out" + "box")
+_fn = getattr(_mod, "deli" + "ver")
+```
+
+The suite stayed GREEN at 50 of 50 while the runner could reach `deliver`. Each
+guard missed it for its own reason and the reasons compose into one lesson: the
+AST import check finds no import node because the module name is assembled at
+run time; the `sys.modules` probe covers IMPORT TIME and not a lazy import
+inside a function; and the `deliver`-call check records a `Call.func` that is a
+`Name` or an `Attribute`, and `getattr(...)(...)` is neither.
+
+**A static check is a claim about the SOURCE TEXT and will always lose to a name
+built at run time.** That sentence is the item.
+
+### The repair - a claim about the RUN, not about the source
+
+`tests/test_responder.py` gained `TestTheRunnerCannotSendAtRUNTIME`. It runs
+`responder.run()` in a `python -B` SUBPROCESS with `sys.addaudithook` installed
+BEFORE `ops.responder` is imported, and fails on any audited `import`, `open`,
+`compile`, `exec` or `os.rename` naming `outbox`, or any write outside the
+fixture drafts directory. The inbox, the drafts directory and the seen set are
+all under `tmp_path`, so the real channel and `ops/runtime/` are never touched.
+
+**One thing was MEASURED rather than assumed, and it would have made the guard
+vacuous:** the `import` audit event is NOT raised by `importlib.import_module`,
+which calls the bootstrap directly. The FILE-level events are what carry this
+guard. That is written into the constant's own comment, because a future reader
+will otherwise "simplify" it to the obvious event and silently lose the arm.
+
+The static checks are kept as defence in depth, and each docstring now says what
+it can and cannot see.
+
+**Verified by the merger independently rather than taken from the repair
+report.** The refuter's exact mutation was re-applied, with `importlib` bound so
+the mutated runner still WORKS rather than crashing - a crashing mutant proves
+nothing, because the guard could be red for the wrong reason. Result: exactly
+**2 failed, 55 passed**, and one of the two is the runtime audit guard. The 55
+passing arms prove the runner was functional while it was able to send.
+Restored byte-identical, digest checked. `ops/responder.py` was staged with
+`git add -N`, so its index blob is the EMPTY blob and a `git checkout` restore
+would have replaced 47 KB of source with nothing - the probe restores by COPY,
+and that is written into it.
+
+### The SECOND refutation: the question extractor is not as good as it looked
+
+Graded against five REAL notes rather than its own fixtures: **precision 75.0
+per cent, recall 54.5 per cent** - 6 true positives, 2 false positives, 5 false
+negatives. A 34,807-byte note addressed to this project yielded ZERO questions,
+because its two question marks sit in `###` HEADINGS that the paragraph scanner
+never reads. A bolded imperative was missed purely because the request-verb
+rule is anchored at the start of a line and the emphasis marker is not stripped.
+**Neither limit appeared in the docstring that claims to list what the extractor
+cannot see.**
+
+After repair, on the SAME five notes: **precision 77.8 per cent, recall 63.6 per
+cent** - 7 true positives, 2 false positives, 4 false negatives.
+
+**A change that HURT is recorded rather than hidden.** Stripping underscore and
+backtick as emphasis added TWO false positives and zero true positives, because
+`_read on a truncated write` and a backticked `State : Ready` both begin with a
+request verb once the marker is gone. It was narrowed to asterisks only.
+Heading scanning is rule-one only and is never sentence-split: rule two on
+headings would invent one false positive per note from `## Reply`, and splitting
+would fire on a heading of the form `### Is X? NO.` On these five notes heading
+scanning gained nothing and cost nothing, so it is proved by unit test rather
+than by the sample, and that distinction is stated rather than glossed.
+
+Every remaining limit is in `extract_questions.__doc__` and a test asserts the
+docstring names them: the four remaining false negatives are all conditional or
+non-anchored openings, the two false positives are narrative imperatives, and a
+figure hard-wrapped as `45,` / `189` is quoted as `45, 189` because the raw text
+tokenises identically.
+
+### One reported number that was NOT a defect, measured rather than assumed
+
+The dry run reports `addressed elsewhere: 0` across 248 notes, which reads like
+a classifier that excludes nothing. Measured over 251 notes: OURS 83, POSSIBLY
+OURS 150, **NOT OURS 18**. `run()` short-circuits acknowledged notes before it
+classifies, and every one of the currently unread notes is OURS or POSSIBLY
+OURS. The figure describes the UNREAD WINDOW, not the classifier.
+
+### The watcher had to change too, and it is the same defect one directory over
+
+`moon_sync_inbox/_drafts/` sits INSIDE the watched folder, and the operator
+ruled on 2026-09-07 that the watcher covers the entirety of it. Left alone,
+every draft would have surfaced as an unread sibling DROP at session start and
+RE-SURFACED whenever a draft changed, because a drop's identity is a digest over
+its contents - exactly what `OUTBOX_DIRNAME`'s own comment documents happening
+one directory away.
+
+It is CLASSIFIED rather than skipped silently, which is the distinction `OPS-34`
+was filed over: a skip that reports nothing is indistinguishable from a watcher
+that is not looking. `DRAFTS_DIRNAME`, `drafts_summary`, three new fields on
+`Scan`, and a line in BOTH report shapes saying the drafts were DELIVERED TO
+NOBODY.
+
+**Six mutations, six reds, six restores** - removing the skip, reporting absent
+as present, counting every file as a draft, printing the heading
+unconditionally, dropping the name from the loud report, and walking unpruned so
+bytecode inflates the byte figure. **Two of those six were added after one of
+the merger's own arms was caught GREEN under mutation**: the fixture held only
+Markdown, so the `.md` filter was untested and a mutation counting every file
+passed all four original arms. A non-Markdown sidecar now sits in the fixture
+and the comment beside it says why.
+
+### Criteria
+
+1. **MET** by adjudication 2026-09-14. The operator confirmed the FULL AUTHORITY
+   directive, whose whole content is that they are no longer the one who decides
+   this class of question.
+2. **MET.** Nothing was built before the scope was decided, and the build widens
+   it nowhere: the runner reads this tree, writes only into
+   `moon_sync_inbox/_drafts/`, sends nothing, adopts nothing, and executes
+   nothing a note asks for.
+3. **MET, vacuously and deliberately.** The adjudicated scope adopts NOTHING
+   cross-project, so there is nothing to write into `CLAUDE.md` beside the
+   `OPS-35` / `OPS-36` exception. That was the point: criterion 2 warned against
+   a session choosing a permissive default and calling it the safe version, and
+   the defence is a scope that changes nothing about what this project can
+   already do.
+4. **MET.** Delivered to CS, LW, RC, RSC and SS as
+   `2026-09-20-1930-from-LL-FYI-we-built-a-draft-only-responder-that-cannot-send-...`,
+   five recipients, none failed. The note states the scope, the draft-only
+   decision and the evidence for it, and it carries the static-guard finding in
+   full, because a sibling with a "cannot do X" guard of its own is one runtime
+   name away from the same hole. It also publishes the extractor's real recall,
+   64 per cent, and says plainly that a silence from us may be a miss rather
+   than a decline - a number nobody would have asked for and that they need.
+5. **MET.** `OPS-48` is CLOSED and archived, and its question 1 already delegates
+   the scope question to this item. It gains a dated subsection saying question
+   1 now has an ARTIFACT, that what was declined is still declined, and that a
+   reader arriving at "auto-responder: NO" should follow it here rather than
+   conclude nothing was built. **Nothing in the closure was edited or
+   reordered** - a closed record is superseded, never rewritten.
+6. **NEW, and it is the condition on delivery.** The runner gains the ability to
+   send only after a MEASURED record: a stated number of drafts a session
+   reviewed, how many were sent unchanged, and how many were corrected before
+   sending. Until that record exists, delivery is a session act. The evidence
+   for this criterion is in this repository's own ledger - `LL-0271` and
+   `LL-0277`, two wrong figures published to five trees in four hours.
+
+
 
 ### The standby is LIFTED, and criterion 1 is MET by adjudication - 2026-09-14
 

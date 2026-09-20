@@ -300,6 +300,8 @@ __all__ = [
     "NOT_OURS",
     "UNSURE",
     "INBOX_DIRNAME",
+    "DRAFTS_DIRNAME",
+    "drafts_summary",
     "OUTBOX_DIRNAME",
     "outbox_summary",
     "STATE_FILENAME",
@@ -372,6 +374,20 @@ INBOX_DIRNAME = "moon_sync_inbox"
 #: ``ops.`` import here would fail exactly where the module must not.
 #: ``tests/test_outbox.py`` asserts the two constants agree.
 OUTBOX_DIRNAME = "_outbox"
+
+#: Our own DRAFT replies, written by ``ops/responder.py`` - ``OPS-68``.
+#:
+#: Same problem as :data:`OUTBOX_DIRNAME` and the same answer. The operator
+#: ruled on 2026-09-07 that this watcher covers the ENTIRETY of the inbox
+#: folder, so a directory we put there is watched exactly like one a sibling
+#: drops. Left alone, every draft we write would surface as an unread DROP at
+#: session start and RE-SURFACE whenever a draft changed, because a drop's
+#: identity is a digest over its contents.
+#:
+#: It is CLASSIFIED rather than skipped silently, which is the distinction
+#: ``OPS-34`` was filed over: a skip that reports nothing is indistinguishable
+#: from a watcher that is not looking.
+DRAFTS_DIRNAME = "_drafts"
 
 #: Acknowledged-set file name, under ops/runtime/ which is gitignored. Written
 #: ONLY by an acknowledging run.
@@ -1134,6 +1150,13 @@ class Scan:
     outbox_present: bool = False
     outbox_notes: int = 0
     outbox_bytes: int = 0
+    #: ``OPS-68``. Our own DRAFT replies, on the same terms as the three above
+    #: and separate from them for the same reason: a draft has not been sent, so
+    #: folding it into the outbox figures would report a reply this project has
+    #: not made.
+    drafts_present: bool = False
+    drafts_count: int = 0
+    drafts_bytes: int = 0
     withdrawn: list[str] = field(default_factory=list)
     acknowledged: bool = False
     state_note: str = ""
@@ -1387,6 +1410,40 @@ def outbox_summary(inbox: Path) -> tuple[bool, int, int]:
     return True, notes, total
 
 
+def drafts_summary(inbox: Path) -> tuple[bool, int, int]:
+    """Return ``(present, drafts, total_bytes)`` for our own draft replies.
+
+    ``OPS-68``. The counterpart of :func:`outbox_summary`, and deliberately the
+    same shape: PRESENT is reported separately from a count of zero, because
+    "the responder has never run" and "the backlog is clear" are different
+    facts and collapsing them would hide a runner that stopped working.
+
+    ``drafts`` counts Markdown at any depth. ``total_bytes`` covers every file
+    the pruning traversal returns, so bytecode written beside a draft cannot
+    move a figure printed at every session start - ``OPS-97``, one directory
+    over from where it was first found.
+
+    Never raises. A directory we cannot walk reports what it managed to count,
+    because this feeds a heading and not a decision.
+    """
+    root = inbox / DRAFTS_DIRNAME
+    if not root.is_dir():
+        return False, 0, 0
+    drafts = 0
+    total = 0
+    try:
+        for path in _files_under(root):
+            if path.suffix.lower() == ".md":
+                drafts += 1
+            try:
+                total += path.stat().st_size
+            except OSError:
+                continue
+    except OSError:
+        pass
+    return True, drafts, total
+
+
 def _read_drops(inbox: Path) -> tuple[list[Drop], str]:
     """Return one :class:`Drop` per immediate subdirectory, plus a listing error.
 
@@ -1403,6 +1460,15 @@ def _read_drops(inbox: Path) -> tuple[list[Drop], str]:
     problems: list[str] = []
     for entry in sorted(inbox.iterdir()):
         if not entry.is_dir():
+            continue
+        if entry.name == DRAFTS_DIRNAME:
+            # OURS, not a drop - ``OPS-68``. Drafts the responder runner wrote,
+            # which have never left this machine and are not mail. Skipped HERE
+            # and nowhere else, exactly like the outbox below: it never becomes
+            # a Drop, so it cannot enter the seen set, the unread list or the
+            # withdrawal baseline, and an edited draft does not re-surface as
+            # new mail. :func:`drafts_summary` is what keeps this a
+            # classification rather than a silent skip.
             continue
         if entry.name == OUTBOX_DIRNAME:
             # OURS, not a drop. Counted by outbox_summary and reported under its
@@ -1597,6 +1663,16 @@ def scan(
         result.outbox_notes,
         result.outbox_bytes,
     ) = outbox_summary(inbox_path)
+
+    # OUR OWN DRAFTS, same treatment - OPS-68. Counted here so the report can
+    # NAME them, which is what makes _read_drops' skip a classification rather
+    # than the OPS-34 defect: a directory that is skipped and never mentioned
+    # is indistinguishable from a watcher that is not looking.
+    (
+        result.drafts_present,
+        result.drafts_count,
+        result.drafts_bytes,
+    ) = drafts_summary(inbox_path)
 
     # Subdirectory drops. Keyed on the same PAIR shape as the notes, with the
     # name carrying a trailing slash so a drop can never collide with a note of
@@ -2060,6 +2136,12 @@ def render(result: Scan, cap: int | None = None, report_path: Path | None = None
                 f" OUR OWN OUTGOING NOTES ({result.outbox_notes}) are in "
                 f"{INBOX_DIRNAME}/{OUTBOX_DIRNAME}/ - not mail, and not unread."
             )
+        if result.drafts_present:
+            line += (
+                f" {result.drafts_count} UNSENT DRAFT(S) are in "
+                f"{INBOX_DIRNAME}/{DRAFTS_DIRNAME}/ - written by the responder "
+                "runner, delivered to nobody."
+            )
         for problem in (result.state_error, result.reported_error):
             if problem:
                 line += f"\nWARNING: {problem}"
@@ -2172,6 +2254,19 @@ def render(result: Scan, cap: int | None = None, report_path: Path | None = None
         lines.append(
             "  Who we replied to and when is in that directory's delivery "
             "manifest. Read it instead of listing a sibling's inbox - OPS-43."
+        )
+
+    if result.drafts_present:
+        lines.append("")
+        lines.append(
+            f"OUR OWN UNSENT DRAFTS ({result.drafts_count}), not mail and not "
+            f"unread: {result.drafts_bytes} bytes in "
+            f"{INBOX_DIRNAME}/{DRAFTS_DIRNAME}/"
+        )
+        lines.append(
+            "  Written by ops/responder.py and DELIVERED TO NOBODY. The runner "
+            "cannot send - OPS-68. A draft leaves this machine only when a "
+            "session reads it, finishes it and calls ops.outbox.deliver."
         )
 
     if new_drops:

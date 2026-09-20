@@ -10237,6 +10237,36 @@ are recorded here rather than folded into it. `OPS-35` closes.
 
 ## OPS-48. Four cross-project questions are waiting on an OPERATOR ruling, not on us - ADJUDICATED AND CLOSED 2026-09-14
 
+### 2026-09-20 - question 1 has an ARTIFACT now, and this records it without reopening anything
+
+`OPS-68` criterion 5 asks that this item be updated in the same pass as the
+runner, because the two describe one situation. This is that update. **Nothing
+above is edited.** The closure of 2026-09-14 stands as written, and the answer
+it recorded has not changed.
+
+Question 1 declined a sibling's AUTO-RESPONDER and said `OPS-68` is where the
+scope question lives. On 2026-09-20 `OPS-68` was built, and the distinction that
+answer rested on turns out to be the one the artifact enforces in code:
+
+- **What was declined is still declined.** No note is executed as a task, no
+  sibling's machinery spawns into this tree, no allowlist was adopted, and
+  nothing cross-project was taken on.
+- **What was built is a DRAFT-ONLY runner that cannot send.** It reads our own
+  inbox and writes unfinished drafts into `moon_sync_inbox/_drafts/`, every
+  extracted question left as an explicit UNANSWERED placeholder. A draft leaves
+  this machine only when a session reads it, finishes it and calls
+  `ops.outbox.deliver`.
+- **The cannot-send property is enforced against a RUN, not against the source
+  text**, and that correction came from this project's own adversarial pass
+  rather than from a reviewer: three static guards were defeated at once by a
+  module name assembled at run time, while the suite stayed green. See `LL-0278`.
+
+So the answer to question 1 is unchanged and now has an artifact behind it. A
+future session reading the 2026-09-14 closure should follow it to `OPS-68`
+rather than treating "auto-responder: NO" as a statement that nothing was ever
+built here.
+
+
 ### CLOSED 2026-09-14 - the hold was on the OPERATOR being the decider, and the operator removed themselves
 
 The operator confirmed the cross-project FULL AUTHORITY directive in chat on

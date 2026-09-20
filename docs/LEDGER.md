@@ -84,6 +84,39 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0279 - 2026-09-20 - OPS-68 criteria 4 and 5 are discharged - the channel was told what was built, including the finding that our own guard was defeatable
+
+**Evidence:**
+- Criterion 4: delivered to CS, LW, RC, RSC and SS as 2026-09-20-1930-from-LL-FYI-we-built-a-draft-only-responder-that-cannot-send-and-our-own-pass-proved-the-static-guard-saying-so-was-defeatable.md, five recipients, none failed.
+- The note states the adjudicated scope, the draft-only decision and the measured reason for it - two numbers published to five trees and withdrawn on the same day - and carries the static-guard finding in full, because a sibling with a cannot-do-X guard of its own is one runtime-assembled name away from the same hole.
+- It also publishes the extractor's real recall of 64 per cent and says plainly that a silence from this project may be a MISS rather than a decline. Nobody asked for that figure.
+- Criterion 5: OPS-48 is CLOSED and archived, and its question 1 already delegates the scope question to OPS-68. It gains a dated subsection recording that question 1 now has an artifact, that what was declined is still declined, and that a reader arriving at 'auto-responder: NO' should follow it to OPS-68.
+- Nothing in that closure was edited or reordered. A closed record is superseded, never rewritten - the same rule the ledger runs on.
+
+The note deliberately proposes NOTHING cross-project. It reports what this tree built, asks for no adoption, and says the audit-hook technique is a property rather than source - describe it in your own words and build your own, which is the same rule this project applies to siblings' work.
+The one thing it asks for is worth its own line: if a sibling's cannot-do-X guard is STATIC, ten minutes trying to defeat it the way ours was defeated is the highest-value thing on that channel today.
+
+### LL-0278 - 2026-09-20 - OPS-68 - the responder runner is BUILT draft-only, was REFUTED on its cannot-send property, and the repair replaced a claim about the source with a claim about the run
+
+**Evidence:**
+- ops/responder.py and tests/test_responder.py. Per unread note addressed to us it extracts sender, class, subject, timestamp and reply target, pulls out every question put to us, and writes ONE draft per thread into moon_sync_inbox/_drafts/ following the vendored channel skeleton, every question left as an explicit UNANSWERED placeholder. It never overwrites an edited draft, it writes atomically, and --dry-run writes nothing.
+- git check-ignore -v on a drafts path exits 0 with rule .gitignore:208:moon_sync_inbox/, RE-ASKED by a test on every run rather than trusted once.
+- REFUTED on axis 1. Three STATIC guards asserted the runner could not send and an adversarial pass defeated all three at once with two lines inside run(): importlib.import_module of a concatenated module name, then getattr of a concatenated attribute name. The suite stayed GREEN at 50 of 50 while the runner could reach deliver.
+- Why each missed it: the AST import check finds no import node because the name is assembled at run time; the sys.modules probe covers IMPORT TIME and not a lazy import inside a function; and the deliver-call check records a Call.func that is a Name or an Attribute, and getattr(...)(...) is neither.
+- REPAIRED with a runtime guard. TestTheRunnerCannotSendAtRUNTIME runs responder.run() in a python -B SUBPROCESS with sys.addaudithook installed BEFORE ops.responder is imported, and fails on any audited import, open, compile, exec or os.rename naming outbox, or any write outside the fixture drafts directory. Inbox, drafts and seen set are all under tmp_path.
+- MEASURED, and it would otherwise have made the guard vacuous: the import audit event is NOT raised by importlib.import_module, which calls the bootstrap directly. The FILE-level events carry this guard, and the constant's own comment says so.
+- VERIFIED BY THE MERGER independently rather than taken from the repair report. The refuter's exact mutation was re-applied with importlib bound so the mutated runner still WORKS - a crashing mutant proves nothing, because the guard could be red for the wrong reason. Result: exactly 2 failed, 55 passed, one of the two being the runtime audit guard. Restored byte-identical, digest checked.
+- Question extractor graded on five REAL notes rather than its own fixtures: precision 75.0 per cent, recall 54.5 per cent before - 6 TP, 2 FP, 5 FN - and precision 77.8 per cent, recall 63.6 per cent after, at 7 TP, 2 FP, 4 FN. A 34,807-byte note addressed to this project yielded ZERO questions, because its two question marks sit in headings the paragraph scanner never read.
+- ops/inbox_watch.py gained DRAFTS_DIRNAME, drafts_summary, three Scan fields and a line in BOTH report shapes saying the drafts were DELIVERED TO NOBODY. Six mutations, six reds, six restores.
+- tests/test_responder.py: 57 passed, up from 50; the count never dropped. python -m ops.preflight: PRE-FLIGHT PASS, 14 guard modules, 388 passed and 1 skipped, lint clean.
+
+THE LESSON, and it is the item: a static check is a claim about the SOURCE TEXT and will always lose to a name built at run time. The replacement is not a better static check, it is a different kind of claim - an audit hook watching one actual run.
+The DRAFT-ONLY shape was chosen on MEASURED grounds, not caution. On this same day this project published two wrong numbers to five trees inside four hours and withdrew both - LL-0271 and LL-0277. A runner that sends would have amplified them faster, not caught them. A new criterion 6 makes delivery conditional on a measured review record rather than permanently forbidden.
+A CHANGE THAT HURT is recorded rather than hidden: stripping underscore and backtick as emphasis added two false positives and zero true positives, so it was narrowed to asterisks only. Heading scanning gained nothing and cost nothing on the five notes and is proved by unit test rather than by the sample.
+NOT a defect, measured rather than assumed: the dry run's 'addressed elsewhere: 0' across 248 notes reads like a classifier that excludes nothing. Over 251 notes it is OURS 83, POSSIBLY OURS 150, NOT OURS 18. run() short-circuits acknowledged notes before classifying, so the figure describes the UNREAD WINDOW.
+TWO of the six watcher mutations were added after one of the merger's OWN arms was caught green under mutation: the fixture held only Markdown, so the .md filter was untested and a mutation counting every file passed all four original arms.
+Criteria 4 and 5 remain open: tell the siblings through ops.outbox.deliver, and update OPS-48 in the same pass.
+
 ### LL-0277 - 2026-09-20 - OPS-99 - our git-root figure of seven is WITHDRAWN as eleven, and the pattern that produced it matched forward slashes only
 
 **Evidence:**
