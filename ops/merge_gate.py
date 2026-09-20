@@ -151,6 +151,7 @@ __all__ = [
     "MEASUREMENT_HEADER",
     "RunResult",
     "SummaryResult",
+    "check_baseline_floor",
     "check_claimed_paths",
     "describe_store_drift",
     "read_store_drift",
@@ -164,6 +165,7 @@ __all__ = [
     "parse_summary",
     "suite_output",
     "suite_result",
+    "take_per_file_baseline",
     "total_collected",
     "verify",
 ]
@@ -569,6 +571,81 @@ def check_per_file_counts(
     return findings
 
 
+def check_baseline_floor(
+    baseline: Mapping[str, int], tree: Mapping[str, int]
+) -> list[Finding]:
+    """Refuse a per-file floor that already sits BELOW the working tree.
+
+    ``ROADMAP`` item ``OPS-95`` item 2, measured on 2026-09-16. A per-file
+    baseline for this repository was derived in a detached worktree AT HEAD.
+    The worktree was sound - a control reproduced HEAD exactly across seventy
+    files, and the only two that differed from the primary tree were
+    modified-but-uncommitted test files whose deltas summed to the whole gap.
+    The defect is the CHOICE OF TREE, and it is not specific to worktrees: any
+    route that measures HEAD while uncommitted test work exists has it.
+
+    What it costs is a floor that gives coverage away before the work starts.
+    The measured instance would have handed :func:`check_per_file_counts` a
+    floor of 46 for a file the working tree already held at 60, so a lane could
+    have deleted 13 of the tests it added in the same session and still passed
+    the per-file check - the exact failure that check exists to prevent, one
+    level down.
+
+    Two accidents, kept apart because their fixes differ:
+
+    ``stale-baseline``
+        The floor for a file is lower than what the tree collects. Every test
+        between the two numbers is unprotected.
+    ``baseline-missing-file``
+        The tree collects a file the baseline has no row for at all.
+        :func:`check_per_file_counts` treats an unknown file as NEW and
+        therefore clean, which is correct when the baseline came from this tree
+        and wrong when it did not: there the whole file is unprotected rather
+        than part of it.
+
+    A floor ABOVE the tree is not reported here. That is an ordinary
+    regression, it is :func:`check_per_file_counts`'s answer at merge time, and
+    reporting it in both places would make a deleted test and a mis-taken
+    baseline indistinguishable in one report.
+
+    **Call this when the floor is TAKEN, not at merge time.** After the work,
+    ``baseline < current`` is the healthy case - it is what a lane that added
+    tests looks like - so the same inequality is evidence of nothing then. It
+    is evidence of a stale floor only in the window before anything has been
+    written, which is why :func:`verify` does not call it and the dispatch
+    ritual does.
+    """
+    findings: list[Finding] = []
+    for path, now in sorted(tree.items()):
+        was = baseline.get(path)
+        if was is None:
+            findings.append(
+                Finding(
+                    kind="baseline-missing-file",
+                    detail=(
+                        f"{path} collects {now} test(s) in the working tree and has no "
+                        "row in the baseline at all - an unknown file is treated as NEW "
+                        "and therefore clean, so all "
+                        f"{now} are unprotected; this baseline was not measured in this "
+                        "tree"
+                    ),
+                )
+            )
+        elif was < now:
+            findings.append(
+                Finding(
+                    kind="stale-baseline",
+                    detail=(
+                        f"{path} has a floor of {was} but the working tree already "
+                        f"collects {now} - the floor gives away {now - was} test(s) "
+                        "before any work starts; measure the baseline in the PRIMARY "
+                        "WORKING TREE immediately before dispatch, never at HEAD"
+                    ),
+                )
+            )
+    return findings
+
+
 def _claim_parts(claim: object) -> tuple[str, tuple[str, ...]]:
     """Split a claim into (path, required fragments).
 
@@ -686,6 +763,27 @@ def collect_output(root: Path = REPO_ROOT, timeout: int = 300) -> str:
 def suite_output(root: Path = REPO_ROOT, timeout: int = 900) -> str:
     """Run the full suite and return its raw output."""
     return suite_result(root=root, timeout=timeout).text
+
+
+def take_per_file_baseline(root: Path = REPO_ROOT, timeout: int = 300) -> dict[str, int]:
+    """Measure the per-file floor in the tree at ``root``, whatever is on disk.
+
+    The sanctioned way to take the baseline, and it exists so the rule has one
+    call rather than a ritual. ``root`` defaults to the PRIMARY WORKING TREE -
+    the checkout this module lives in - and collection reads the files as they
+    are, uncommitted edits included.
+
+    That is the whole point. ``ROADMAP`` item ``OPS-95`` item 2: a floor
+    measured at HEAD, in a detached worktree or anywhere else that ignores
+    uncommitted test work, is already below the tree it will be compared
+    against and hands coverage away before dispatch. Pass this to
+    :func:`check_baseline_floor` alongside a baseline of unknown provenance to
+    find out whether that happened.
+
+    The total is the sum of these counts, so one call still feeds both count
+    checks and there is no second collect to disagree with.
+    """
+    return parse_collect_counts(collect_output(root=root, timeout=timeout))
 
 
 #: Said in the report when the caller supplied no per-file baseline. Named as
@@ -834,6 +932,23 @@ def verify(
 
     Both are parameters and neither may become a stored constant: a count
     checked into the repository goes stale and becomes a confident lie.
+
+    **Both baselines are measured in the PRIMARY WORKING TREE immediately
+    before dispatch, never at HEAD when uncommitted work exists** - ``OPS-95``
+    item 2. The call above does that by default, because ``collect_output``
+    reads the files as they are on disk in the checkout this module lives in;
+    :func:`take_per_file_baseline` is the same measurement under a name that
+    says so. A floor taken at HEAD, in a detached worktree, or from a stored
+    reading is already BELOW the tree it will be compared against whenever
+    uncommitted test work exists, and the gap is coverage handed away before
+    the work starts: the measured instance would have given a file a floor of
+    46 that the working tree held at 60, letting a lane delete 13 of its own
+    new tests and still pass :func:`check_per_file_counts`. When the floor's
+    provenance is not certain, run :func:`check_baseline_floor` against a fresh
+    :func:`take_per_file_baseline` BEFORE dispatching. It is not checked here,
+    and that is deliberate rather than an omission: after the work
+    ``baseline < current`` is what a lane that added tests looks like, so the
+    inequality carries no signal at merge time.
 
     **A gate that reports OK after checking nothing is the exact failure this
     module exists to prevent**, so the two weak defaults are loud rather than

@@ -269,6 +269,20 @@ constant - measure it with `python -m pytest --collect-only -q` before
 dispatching work, because a count checked into a file goes stale and becomes a
 confident lie.
 
+**Take the baseline in the PRIMARY WORKING TREE, immediately before dispatch -
+never at HEAD and never in a detached worktree while uncommitted test work
+exists.** `merge_gate.take_per_file_baseline()` is that measurement under a name
+that says so. A floor measured at HEAD is already BELOW the tree it will be
+compared against: the instance measured 2026-09-16 would have given a file a
+floor of 46 that the working tree held at 60, so a lane could have deleted 13 of
+the tests it added in the same session and still passed the per-file check -
+which is the exact failure the per-file floor exists to prevent, one level down.
+Where the floor's provenance is uncertain, run
+`merge_gate.check_baseline_floor(before, merge_gate.take_per_file_baseline())`
+BEFORE dispatching. It is deliberately NOT checked at merge time, because after
+the work `baseline < current` is simply what a lane that added tests looks like.
+`OPS-95` item 2.
+
 **Pass `per_file_baseline` and not only `baseline`.** A repository TOTAL is safe
 for one worker and unsafe for several: a lane that deletes 15 tests from its own
 file is completely hidden by a sibling lane adding 20 elsewhere, because the
@@ -701,6 +715,26 @@ Traps worth knowing, all previously measured:
 - The person who cleared it may not own it. A repo crediting prior authors has
   multiple copyright holders and its maintainer cannot unilaterally relicense it.
 - BUSL-1.1 is source-available, not copyleft, and still DO-NOT-VENDOR.
+- **THE WRAPPER DOES NOT CLEAR THE PAYLOAD.** A permissively licensed repository
+  can PACKAGE data under different and stricter terms, and the root `LICENSE`
+  says nothing about it. Before recording a decision, read the third-party
+  notices and ENUMERATE what ships inside: marks, icons, fonts, sample data and
+  committed binaries, each with its own terms. Measured here on `archify` -
+  root `LICENSE` MIT with two copyright lines, while
+  `THIRD_PARTY_NOTICES.md` records packaged brand-mark data under
+  CC-BY-NC-SA-4.0, CC-BY-SA-3.0 and CC-BY-SA-4.0 plus a font embedded as
+  subsets in EVERY delivered artifact rather than only in ones drawing a mark.
+  This project PRACTISED that check and did not have it as a RULE, then
+  published a note describing that repository as "MIT with two copyright
+  lines" - a WRAPPER-level statement from which no reader would have learned
+  about the non-commercial mark.
+  **Both mechanisms are written down, because a tree reasoning only about its
+  own outbound licence misses the other.** With a COPYLEFT outbound, a
+  non-commercial term is a compatibility CONFLICT. With a PERMISSIVE outbound
+  like ours the bite is different and easier to miss: republishing
+  non-commercial or share-alike bytes out of a PUBLIC permissive repository
+  under a permissive label. `OPS-95` item 1, promised to four siblings in the
+  note delivered 2026-09-16.
 
 Techniques and protocol facts are not copyrightable; source is. The always-legal
 path is to re-implement from observed behaviour.

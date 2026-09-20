@@ -138,11 +138,19 @@ in the set.
 ## Verify before you claim anything
 
 Never relay a sub-agent's claim. Measure the per-file test counts BEFORE
-dispatching work, then re-probe:
+dispatching work, then re-probe.
+
+**Measure in the PRIMARY WORKING TREE, not at HEAD and not in a detached
+worktree.** A floor taken at HEAD while uncommitted test work exists is
+already BELOW the tree it will be compared against, so a lane can delete
+tests it added in the same session and still pass. Measured 2026-09-16: a
+floor of 46 for a file the working tree held at 60, which is 13 deletable
+tests. `OPS-95` item 2. Inside a lane worktree this matters twice over,
+because `merge_gate`'s default root is the checkout it is running FROM.
 
 ```python
 from ops import merge_gate
-before = merge_gate.parse_collect_counts(merge_gate.collect_output())
+before = merge_gate.take_per_file_baseline()  # names the tree it measures
 report = merge_gate.verify(
     claimed_paths=["files/the/agent/said/it/wrote.py"],
     baseline=sum(before.values()),

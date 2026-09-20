@@ -1249,3 +1249,103 @@ class TestEndToEndAgainstARealStashInAThrowawayRepository:
         rendered = report.format()
         assert "STASH-SHAPED COMMITS" not in rendered, rendered
         assert "did not move" in rendered, rendered
+
+
+class TestABaselineTakenAtHEADIsBelowTheWorkingTreeFloor:
+    """``OPS-95`` item 2. A floor measured at HEAD gives away uncommitted work.
+
+    Measured on 2026-09-16: a per-file baseline for this repository was derived
+    in a detached worktree AT HEAD. That worktree was not corrupt - a control
+    reproduced HEAD exactly, and the only two files of seventy that differed
+    from the primary tree were modified-but-uncommitted test files whose deltas
+    summed to the whole gap. The defect is the CHOICE OF TREE, not the worktree
+    machinery.
+
+    What it costs is a silently lowered floor. The measured instance handed the
+    gate a floor of 46 for a file the working tree already held at 60, so a lane
+    could have deleted 13 of the tests it added in the same session and still
+    passed :func:`merge_gate.check_per_file_counts` - the exact failure the
+    per-file floor exists to prevent, one level down.
+
+    **Why this is a DISPATCH-time probe and not another arm of ``verify``.**
+    At merge time ``baseline < current`` is the healthy case: it is what a lane
+    that added tests looks like, and
+    ``TestCountRegressionGuard.test_a_higher_count_is_clean_because_agents_add_tests``
+    pins that as clean on purpose. A gate that reported it after the work would
+    be red on every well-behaved lane. The same inequality is only evidence of a
+    stale floor at the moment the floor is TAKEN, when nothing has been written
+    yet, so that is where it is checked.
+    """
+
+    def test_a_baseline_below_the_working_tree_is_a_finding(self, tmp_path):
+        _write_two_file_project(tmp_path, a_count=1, b_count=5)
+        tree = merge_gate.take_per_file_baseline(root=tmp_path)
+        findings = merge_gate.check_baseline_floor(
+            {"tests/test_a.py": 1, "tests/test_b.py": 2}, tree
+        )
+        assert [f.kind for f in findings] == ["stale-baseline"], findings
+        assert "tests/test_b.py" in findings[0].detail
+        assert "tests/test_a.py" not in findings[0].detail
+
+    def test_the_finding_names_both_numbers_and_the_give_away(self, tmp_path):
+        _write_two_file_project(tmp_path, a_count=1, b_count=5)
+        tree = merge_gate.take_per_file_baseline(root=tmp_path)
+        baseline = {"tests/test_a.py": 1, "tests/test_b.py": 2}
+        detail = merge_gate.check_baseline_floor(baseline, tree)[0].detail
+        assert "2" in detail and "5" in detail, detail
+        assert "3" in detail, "the count of tests the floor gives away is not named"
+
+    def test_a_file_the_baseline_never_saw_is_its_own_finding(self, tmp_path):
+        """A HEAD baseline has no row at all for a test file added this session.
+
+        ``check_per_file_counts`` treats a file absent from the baseline as new
+        and therefore clean, which is right when the baseline came from this
+        tree and wrong when it did not: every test in that file is then below
+        the floor rather than merely some of them.
+        """
+        _write_two_file_project(tmp_path, a_count=1, b_count=5)
+        tree = merge_gate.take_per_file_baseline(root=tmp_path)
+        findings = merge_gate.check_baseline_floor({"tests/test_a.py": 1}, tree)
+        assert [f.kind for f in findings] == ["baseline-missing-file"], findings
+        assert "tests/test_b.py" in findings[0].detail
+
+    def test_a_baseline_measured_in_the_working_tree_is_clean(self, tmp_path):
+        """The companion that stops the three above passing for the wrong reason.
+
+        If :func:`check_baseline_floor` refused every baseline it was shown,
+        each assertion above would be satisfied by a probe that says the same
+        thing about a correctly measured floor.
+        """
+        _write_two_file_project(tmp_path, a_count=1, b_count=5)
+        tree = merge_gate.take_per_file_baseline(root=tmp_path)
+        assert merge_gate.check_baseline_floor(tree, tree) == []
+
+    def test_a_baseline_ABOVE_the_tree_is_not_this_probe_s_business(self, tmp_path):
+        """A floor higher than the tree is a real regression - and a different one.
+
+        That is what :func:`check_per_file_counts` reports at merge time. If
+        this probe fired on it too, the two would be indistinguishable in a
+        report and a merger would read a deleted test as a mis-taken baseline.
+        """
+        _write_two_file_project(tmp_path, a_count=1, b_count=5)
+        tree = merge_gate.take_per_file_baseline(root=tmp_path)
+        baseline = {"tests/test_a.py": 1, "tests/test_b.py": 9}
+        assert merge_gate.check_baseline_floor(baseline, tree) == []
+
+    def test_take_per_file_baseline_measures_the_tree_it_is_pointed_at(self, tmp_path):
+        _write_two_file_project(tmp_path, a_count=3, b_count=4)
+        assert merge_gate.take_per_file_baseline(root=tmp_path) == {
+            "tests/test_a.py": 3,
+            "tests/test_b.py": 4,
+        }
+
+    def test_the_documented_usage_names_the_tree_the_baseline_comes_from(self):
+        """``OPS-95`` item 2's first clause, pinned as TEXT because it is text.
+
+        The rule cannot be a behaviour: nothing inside ``verify`` can see which
+        tree a mapping handed to it was measured in. What it can do is refuse to
+        let the rule go unwritten where the ritual is quoted.
+        """
+        doc = merge_gate.verify.__doc__ or ""
+        assert "PRIMARY WORKING TREE" in doc
+        assert "never at HEAD" in doc

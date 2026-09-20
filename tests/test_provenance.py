@@ -83,6 +83,47 @@ def cells(row: str) -> list[str]:
     return [c.strip() for c in row.strip().strip("|").split("|")]
 
 
+#: A markdown separator CELL: dashes, with an optional alignment colon at
+#: either end. Measured 2026-09-20 across every table in `docs/AFFIXES.md` and
+#: `docs/OBSERVED_IDS.md` - the two documents this file reads - and all 71
+#: separators there are plain `---` runs with no colon anywhere. The colon arms
+#: are tolerance for a future alignment marker, not something observed here.
+SEPARATOR_CELL = re.compile(r"^:?-+:?$")
+
+
+def is_separator_row(row: str) -> bool:
+    """True when every cell of `row` is made only of dashes and colons.
+
+    Deliberately not "contains a dash": the affix ladders carry a literal `-`
+    cell for an unmeasured column, so `| Lv. 1 | +1.6% | +1.6% | - |` must not
+    read as a separator.
+    """
+    parts = cells(row)
+    return bool(parts) and all(SEPARATOR_CELL.fullmatch(c) for c in parts)
+
+
+def data_rows(block: list[str]) -> list[str]:
+    """Every row of `block` after its header and its separator.
+
+    `OPS-95` item 3. This used to be a bare `block[2:]` at four call sites. That
+    is an assumption about an INDEX: delete a separator row from a table and the
+    slice silently swallows the first DATA row instead, leaving every guard
+    built on it green over a table it is no longer fully reading.
+
+    ASSERTS rather than searches, and the choice is deliberate. Markdown puts
+    the separator at index 1 by definition, so a search that found one further
+    down would be quietly ACCEPTING a malformed table, and a search that found
+    none would still have to invent a rule for how much to skip. Asserting the
+    invariant fails loudly at the row that broke it.
+    """
+    assert len(block) >= 2, f"table block has no separator row at all: {block!r}"
+    assert is_separator_row(block[1]), (
+        "row 1 of this table is not a separator, so skipping two rows would "
+        f"swallow a DATA row: {block[1]!r}"
+    )
+    return block[2:]
+
+
 #: Full header rows, because a FIRST cell is not unique in either document.
 #: `docs/OBSERVED_IDS.md` has three tables whose first header cell is `classId`
 #: and `docs/AFFIXES.md` has five whose first cell is `Level`, so slicing on the
@@ -188,7 +229,7 @@ class TestTheExtractionLossIsReal:
         block = block_with_header(observed_ids_md, CLASS_ID_HEADER)
         dateless = [
             cells(row)[0]
-            for row in block[2:]
+            for row in data_rows(block)
             if not QUESTION_PATTERNS["date"].search(row)
         ]
         assert dateless == ["12", "15"], (
@@ -362,7 +403,7 @@ class TestTheMarkdownStaysAuthoritative:
 
     def test_the_affix_ladder_round_trips_cell_for_cell(self, affixes_md, emitted):
         block = block_with_header(affixes_md, LADDER_HEADER)
-        from_markdown = {cells(r)[0]: cells(r) for r in block[2:]}
+        from_markdown = {cells(r)[0]: cells(r) for r in data_rows(block)}
         from_file = {
             r["source_row"][0]: r["source_row"]
             for r in records_from(emitted, "Affix Level ladder, stated")
@@ -373,7 +414,7 @@ class TestTheMarkdownStaysAuthoritative:
         self, observed_ids_md, emitted
     ):
         block = block_with_header(observed_ids_md, CLASS_ID_HEADER)
-        from_markdown = {cells(r)[0]: cells(r) for r in block[2:]}
+        from_markdown = {cells(r)[0]: cells(r) for r in data_rows(block)}
         from_file = {
             r["source_row"][0]: r["source_row"]
             for r in records_from(emitted, "Class ids")
@@ -389,7 +430,7 @@ class TestTheMarkdownStaysAuthoritative:
         mutated = affixes_md.replace(anchor, "| Lv. 5 | +9% | +8% | +12% |")
         assert mutated != affixes_md
         block = block_with_header(mutated, LADDER_HEADER)
-        from_markdown = {cells(r)[0]: cells(r) for r in block[2:]}
+        from_markdown = {cells(r)[0]: cells(r) for r in data_rows(block)}
         from_file = {
             r["source_row"][0]: r["source_row"]
             for r in records_from(emitted, "Affix Level ladder, stated")
@@ -559,3 +600,72 @@ class TestTheEmissionIsSafeToPublish:
     def test_it_says_which_documents_are_authoritative(self, emitted):
         documents = {entry["document"] for entry in emitted["generated_from"]}
         assert documents == {"docs/AFFIXES.md", "docs/OBSERVED_IDS.md"}
+
+
+
+
+# --------------------------------------------------------------------------
+# `OPS-95` item 3 - the header/separator skip cannot swallow a data row
+# --------------------------------------------------------------------------
+
+
+WELLFORMED_FIXTURE = [
+    "| Level | Physical Damage |",
+    "|---|---|",
+    "| Lv. 1 | +1.6% |",
+    "| Lv. 2 | +3.2% |",
+]
+
+#: The same table with its SEPARATOR deleted. A bare `block[2:]` returns
+#: `["| Lv. 2 | +3.2% |"]` here - one row, no error, no sign anything is wrong.
+SEPARATORLESS_FIXTURE = [WELLFORMED_FIXTURE[0], *WELLFORMED_FIXTURE[2:]]
+
+
+class TestTheHeaderSkipCannotSwallowADataRow:
+    """`OPS-95` item 3. Four sites used `block[2:]` to drop a header and a
+    separator. That is an assumption about an INDEX, and if a separator is ever
+    deleted the slice quietly eats the first DATA row while every guard built on
+    it keeps reporting green over a table it is no longer fully reading."""
+
+    def test_a_wellformed_table_yields_every_data_row(self):
+        assert data_rows(WELLFORMED_FIXTURE) == WELLFORMED_FIXTURE[2:]
+
+    def test_deleting_the_separator_fails_instead_of_swallowing_a_row(self):
+        """The acceptance criterion, encoded: delete a separator from a fixture
+        table and the skip must FAIL."""
+        with pytest.raises(AssertionError):
+            data_rows(SEPARATORLESS_FIXTURE)
+
+    def test_the_old_slice_swallowed_that_row_in_silence(self):
+        """Pins WHY this is a defect rather than a style preference. The bare
+        slice returns a short list and raises nothing, so the loss is invisible
+        at the point it happens."""
+        swallowed = SEPARATORLESS_FIXTURE[2:]
+        assert swallowed == ["| Lv. 2 | +3.2% |"]
+        assert "| Lv. 1 | +1.6% |" not in swallowed
+
+    def test_a_data_row_is_not_mistaken_for_a_separator(self):
+        """The affix tables carry literal `-` cells for an unmeasured column,
+        so the predicate has to reject a row that merely CONTAINS dashes."""
+        assert not is_separator_row("| Lv. 1 | +1.6% | +1.6% | - |")
+        assert not is_separator_row("| Level | Physical Damage |")
+
+    def test_the_separator_forms_are_measured_not_assumed(self):
+        """Measured 2026-09-20 against the two documents this file reads: every
+        separator is a run of `---` cells and no colon alignment marker appears
+        in either. The colon arm is tolerance for a future one."""
+        assert is_separator_row("|---|---|---|---|")
+        assert is_separator_row("| :--- | ---: | :---: |")
+
+    @pytest.mark.parametrize("document", ["affixes", "observed_ids"])
+    def test_every_lifted_block_in_both_documents_separates_at_index_one(
+        self, document, affixes_md, observed_ids_md
+    ):
+        """The assertion is only safe if the real documents actually satisfy it.
+        If this reddens, a table in one of them is malformed and the skip above
+        is right to refuse it."""
+        text = affixes_md if document == "affixes" else observed_ids_md
+        blocks = lift_table_blocks(text)
+        assert blocks, "no table blocks lifted - this test is measuring nothing"
+        offenders = [b[1] for b in blocks if not is_separator_row(b[1])]
+        assert offenders == [], f"table rows at index 1 that are not separators: {offenders}"

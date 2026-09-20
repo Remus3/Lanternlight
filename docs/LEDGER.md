@@ -84,6 +84,49 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0284 - 2026-09-20 - OPS-95 item 2 - the merge gate now has a NAMED working-tree baseline and a dispatch-time floor check, and the rule is written where the ritual is
+
+**Evidence:**
+- What the gate did TODAY, measured rather than taken from the roadmap: verify() accepts per_file_baseline as a caller-supplied mapping and only ever compares downward, with no notion of WHERE the mapping was measured. The documented ritual already defaults to the checkout the module lives in, so the default call was correct - but nothing STATED the rule and nothing detected a floor obtained any other way.
+- ops/merge_gate.py gained take_per_file_baseline(root), a working-tree measurement under a name that says so, and the pure check_baseline_floor(baseline, tree) which reports stale-baseline when the floor is below the tree and baseline-missing-file when the tree collects a file the baseline has no row for - the second because check_per_file_counts treats that as new and clean, leaving the whole file unprotected.
+- DELIBERATELY NOT WIRED INTO verify. At merge time baseline < current is the HEALTHY case and is already pinned as clean by an existing test, so wiring it there would redden every well-behaved lane. It is a DISPATCH-time check.
+- Red observed first: 7 failed, AttributeError on take_per_file_baseline for six of them and a missing PRIMARY WORKING TREE docstring assertion for the seventh.
+- Non-vacuity, five mutations each restored: the floor comparison disabled (2 failed), the missing-file branch disabled (1 failed), the comparison loosened to != (1 failed), take_per_file_baseline returning empty (4 failed), and the rule removed from verify.__doc__ (1 failed). Restored: 7 passed.
+- tests/test_merge_gate.py: 86 collected before, 93 after, zero deletions in the diff. python -m ops.preflight: PRE-FLIGHT PASS, 388 passed and 1 skipped, lint clean.
+- The rule is now written where the ritual is: CLAUDE.md beside the gate snippet, and ops/lane_contract.py, whose template drives the eight generated lane contracts - regenerated with scripts/write_lane_contracts.py so no contract carries the old wording.
+
+THE MEASUREMENT THAT MAKES IT CONCRETE: a floor of 46 for a file the working tree held at 60. That is 13 tests a lane could have deleted in the same session and still passed the per-file check, which is the exact failure the per-file floor exists to prevent, one level down.
+A STRUCTURAL FINDING recorded rather than fixed: inside a lane worktree, merge_gate default root resolves to THAT worktree, so a contract following the ritual measures the worktree base rather than the primary tree. ops/lanes.py already provides a main-checkout resolver. No in-tree code creates lane worktrees today - the only git worktree add is in a back-test tool that takes no test-count baseline - so this is latent.
+
+### LL-0283 - 2026-09-20 - OPS-95 items 1 and 3 are DONE, and item 3's own description of its defect as LATENT was refuted - two of the four sites were live blind spots
+
+**Evidence:**
+- ITEM 1: CLAUDE.md's third-party licence gate now carries a fifth trap, THE WRAPPER DOES NOT CLEAR THE PAYLOAD, in this project's own words, with the archify measurement as its instance - root LICENSE MIT with two copyright lines while THIRD_PARTY_NOTICES.md records packaged brand-mark data under CC-BY-NC-SA-4.0, CC-BY-SA-3.0 and CC-BY-SA-4.0 plus a font embedded as subsets in EVERY delivered artifact.
+- It names BOTH mechanisms, because a tree reasoning only about its own outbound licence misses the other: against a copyleft outbound a non-commercial term is a compatibility CONFLICT, and against a permissive outbound like ours the bite is republishing non-commercial or share-alike bytes out of a PUBLIC permissive repository under a permissive label.
+- ITEM 3: tests/test_provenance.py gained data_rows(block) and is_separator_row. The slice ASSERTS that block[1] is a separator rather than searching for one, because a search would quietly ACCEPT a malformed table if it found a separator further down.
+- is_separator_row requires every cell to match a dashes-and-colons pattern, measured against all 71 separators in docs/AFFIXES.md and docs/OBSERVED_IDS.md - every one a plain dash run, no colons. Deliberately not 'contains a dash': affix data rows carry a literal dash cell.
+- Red observed first: NameError on is_separator_row and data_rows, 6 failed and 1 passed. All four sites then proved non-vacuous - separator deleted from the real table IN MEMORY, each reddening with 'row 1 of this table is not a separator', each restored to green, and the tracked documents never edited.
+- tests/test_provenance.py: 53 collected before, 60 after. The count did not drop. python -m ops.preflight: PRE-FLIGHT PASS, 388 passed and 1 skipped, lint clean.
+
+THE ITEM'S OWN DESCRIPTION WAS WRONG and that is worth more than the fix. It said the defect was LATENT 'because the consumers compare full dictionaries'. Two of the four sites do not compare dictionaries: one only asks which rows LACK a date and stays GREEN and silent when the row it swallowed carries one, and one asserts != so swallowing a row makes it MORE likely to pass and it can never redden. Both were live blind spots.
+A filed claim is a hypothesis, including a claim this repository filed about its own defect, and 'latent' was the comfortable reading of it.
+OUT OF SLICE, recorded not fixed: tests/test_overlay_render.py lines 191 and 298 use lines[2:], but that is a rendered panel's fixed two-line header rather than a Markdown table - a different shape, listed only so the next sweep does not re-find it as new. And tests/test_provenance.py is not `ruff format` clean at HEAD, which is a pre-existing repository-wide fact rather than something this slice introduced; `ruff check` passes either way.
+A PROCESS FAILURE from the same cycle: a commit was launched while a slice was still editing tests/test_provenance.py. The hook linted a half-written file, found 7 errors and refused - correctly, after spending 128 seconds on a suite to tell the merger something the merger should not have needed telling. The merger owns the merge, and a merge that overlaps a live slice is not a merge.
+
+### LL-0282 - 2026-09-20 - OPS-100 - a sibling's question about ITS OWN tree found a relative-path defect in our pre-commit hook, and it would have failed CLOSED as a guard finding
+
+**Evidence:**
+- .claude/settings.json PARSES, asserted first. All six hook entries are anchored with $CLAUDE_PROJECT_DIR/..., and the interpreters are bare python and pythonw, which is PATH resolution - a THIRD category that must not be collapsed into 'absolute'.
+- All five hook scripts RUN from a foreign working directory behaved correctly; the watcher's output from the repo root and from the foreign directory is byte-identical at 3078 bytes. POSITIVE CONTROL: unsetting CLAUDE_PROJECT_DIR collapses the path and exits 2, so the probe can see a failure when there is one.
+- THE DEFECT: .githooks/pre-commit computes repo_top at line 225 and uses it absolutely at 242, 373 and 378, but two lines ran "$py_bin" -m ops.docguards with no anchor, and -m resolves the package from the CURRENT directory. Measured both ways: from a foreign cwd the bare form exits 1 with ModuleNotFoundError and the anchored form succeeds.
+- Fixed with cd "$repo_top" && ... in a subshell at both sites, with the reason written beside the first.
+- VERIFIED THE ONLY WAY A HOOK CAN BE: a file carrying a banned glyph was staged and a real commit attempted. pre-commit REFUSED the commit and HEAD was unchanged across the attempt. The probe file was unstaged and removed.
+
+IT WAS LATENT, NOT LIVE - git always chdirs to the worktree top before running a hook - and it was fixed anyway because of HOW it would have failed. It fails CLOSED, and the hook reports it as 'the doc-guard selector failed to run', which reads as a guard finding rather than as a path bug. The first symptom would have been a commit refused for a reason nobody could reproduce, in a file whose own comments say it anchors everything to repo_top.
+The finding came from a sibling asking every tree a question about ITS OWN tree. Nobody reading this repository's documents would have found it, because the documents say the hook anchors itself and they are 90 per cent right.
+RECORDED AND NOT CHANGED: core.hooksPath is absolute here, but scripts/install_hooks.py sets it RELATIVE, so every fresh clone gets the relative form. On git 2.53.0.windows.3 it fires from the toplevel, a subdirectory, git -C and a linked worktree, with a control showing a missing hooksPath lets a commit land silently. It works, so it is written down rather than tidied.
+NOT CHECKED: the harness-dispatched hooks end to end, because the harness's working directory cannot be set from here; and .githooks/commit-msg, because pre-commit refuses first.
+
 ### LL-0281 - 2026-09-20 - The channel contract checked the document hash and its version but not its central CLAIM - arm 8 now pins the roster
 
 **Evidence:**

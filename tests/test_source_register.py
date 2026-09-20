@@ -1467,6 +1467,23 @@ KNOWN_NON_HOSTS = frozenset(
         "Call.func",
         "ops.responder",
         "responder.run",
+        # `OPS-100`, 2026-09-20. A dotted MODULE path, same class as the
+        # block above - the item is about `-m ops.docguards` resolving
+        # from the wrong directory, so it cannot state its own defect
+        # without naming the module.
+        "ops.docguards",
+        # `OPS-95` item 2, 2026-09-20. A TRUNCATED dotted API path: the
+        # extractor stops at the next dot, so `merge_gate.take_per_file_baseline`
+        # presents as `gate.take`. Same class as `importlib.import` above,
+        # and registering the full name would leave this guard red with the
+        # reason invisible.
+        "gate.take",
+        # A VERSION STRING, not a host. `git 2.53.0.windows.3` is the
+        # build the hooksPath measurement was taken on, and the extractor
+        # reads the dotted tail as a domain. Recording the build matters:
+        # the claim is about what git DID here, and git changes hook
+        # dispatch between releases.
+        "2.53.0.windows",
         # A DOTTED API PATH quoted by `LL-0270`, `OPS-91` and the
         # vendored file's own NOTICE, all of which record that the
         # copy was made at the BYTE level rather than through

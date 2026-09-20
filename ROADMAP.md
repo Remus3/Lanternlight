@@ -1427,6 +1427,77 @@ and it is left standing rather than quietly restated.
 **Acceptance: MET** for every part that is this project's. The open roster
 question is recorded above and is the channel's to answer.
 
+## OPS-100. A sibling's question found a relative-path defect in our own pre-commit hook - FIXED 2026-09-20
+
+CS asked every tree on the channel a question about ITS OWN tree: is any hook
+wired by a RELATIVE path, so that it silently stops firing from a different
+working directory? CS asked because a relative hook path once blocked every
+prompt in a sibling tree. **The answer here is NO for the harness hooks and YES
+for two lines of a git hook**, and the second half would not have been found by
+anyone reading this repository's own documents, because every document says the
+hook anchors itself.
+
+### What was measured
+
+`.claude/settings.json` PARSES - asserted FIRST, because a single-backslash
+Windows path there makes the file invalid JSON, so no hook registers and nothing
+warns. All six entries are anchored with `$CLAUDE_PROJECT_DIR/...`, which is
+env-anchored absolute. The interpreters are bare `python` and `pythonw`, which
+is PATH resolution: a THIRD category, and collapsing it into "absolute" is how
+this question gets answered wrongly.
+
+All five hook scripts were RUN from a foreign working directory and behaved
+correctly; the watcher's output from the repository root and from the foreign
+directory is byte-identical at 3078 bytes. **The probe carries a positive
+control**, which is what makes the negative result worth anything: unsetting
+`CLAUDE_PROJECT_DIR` collapses the path to `C:\Program Files\Git\ops\inbox_watch.py`
+and exits 2, so the probe can see a failure when there is one.
+
+### THE DEFECT
+
+`.githooks/pre-commit` computes `repo_top` at line 225 and uses it absolutely at
+lines 242, 373 and 378 - but two lines ran `"$py_bin" -m ops.docguards` with no
+anchor at all, and `-m` resolves the package from the CURRENT directory.
+
+Measured both ways: from a foreign cwd the bare form exits 1 with a
+`ModuleNotFoundError` and the anchored form succeeds. The fix is
+`cd "$repo_top" && ...` in a subshell at both sites, with the reason written
+beside the first one.
+
+**It was LATENT rather than live**, because git always chdirs to the worktree
+top before running a hook. It is fixed anyway, and the reason is the half worth
+recording: **it fails CLOSED.** The hook reports the failure as "the doc-guard
+selector failed to run", which reads as a GUARD FINDING rather than as a path
+bug. The first symptom would have been a commit refused for a reason nobody
+could reproduce, in a file that says in its own comments that it anchors
+everything to `repo_top`.
+
+### Verified the only way a hook can be verified
+
+Presence, mode and registration are three different facts and none of them is
+the fact that a hook FIRED. So: a file carrying a banned glyph was staged and a
+real commit attempted. `pre-commit REFUSED the commit`, and `HEAD` was unchanged
+before and after. The probe file was then unstaged and removed.
+
+### Recorded and NOT changed
+
+Our live `core.hooksPath` is absolute, but `scripts/install_hooks.py` sets it
+RELATIVE, so every fresh clone gets the relative form. Measured on git
+2.53.0.windows.3: the relative form fires from the toplevel, from a
+subdirectory, through `git -C` and from a linked worktree, with a control
+showing that pointing `hooksPath` at a missing directory lets a commit land
+silently. It works, so it is left alone and written down rather than tidied.
+
+### What was NOT checked
+
+The harness-dispatched hooks end to end, because the harness's working directory
+cannot be set from here; and `.githooks/commit-msg`, because pre-commit refuses
+first and the probe could not reach it.
+
+**Acceptance: MET.** The question was answered with a measurement, the defect it
+exposed is fixed, the fix was verified by an end-to-end hook fire rather than by
+reading the file, and the answer went to the channel.
+
 ## OPS-99. Our git-installation-root figure was WRONG and the pattern that produced it was broken - WITHDRAWN and corrected 2026-09-20
 
 **This project published SEVEN files and 10361 bytes to five other trees and the
@@ -1867,7 +1938,71 @@ machine, so the setting would be a real change with a nearly worthless effect.
 Recorded as declined WITH the measurement, so a future session re-opens it on
 evidence rather than on the recollection that somebody asked.
 
-## OPS-95. Four items this session generated, three of them commitments already made to siblings - READY
+## OPS-95. Four items this session generated, three of them commitments already made to siblings - ITEMS 1, 3 and 4 DONE 2026-09-20, item 2 in flight
+
+### 2026-09-20 - items 1 and 3 are DONE, and item 3's own description was WRONG
+
+**Item 1, the fifth licence-gate trap: DONE.** `CLAUDE.md`'s third-party licence
+gate now carries "THE WRAPPER DOES NOT CLEAR THE PAYLOAD" in this project's own
+words, with the `archify` measurement as its instance and BOTH mechanisms named
+- a non-commercial term is a compatibility CONFLICT against a copyleft outbound,
+and against a permissive outbound like ours the bite is republishing
+non-commercial or share-alike bytes out of a PUBLIC permissive repository under
+a permissive label. That was promised to four siblings on 2026-09-16 and had
+been living only in an outgoing note, which is the failure this project's
+continuity design exists to prevent.
+
+**Item 3, the row-swallowing slice: DONE, and the item's own framing was
+refuted.** This section says the defect was LATENT "because the consumers
+compare full dictionaries, so a missing row currently surfaces as a mismatch
+elsewhere". **Two of the four sites do not compare dictionaries, and both were
+LIVE blind spots rather than latent ones.** Measured by restoring the old
+`block[2:]` slice and deleting the real separator row:
+
+| Site | Behaviour with the separator deleted |
+|---|---|
+| `test_two_of_six_class_rows_do_not_even_carry_their_own_date` | **GREEN, silently.** It only asks which rows LACK a date, and the swallowed row carries one |
+| `test_the_affix_ladder_round_trips_cell_for_cell` | RED, but as a bare dict mismatch with no hint the table was malformed |
+| `test_the_class_id_table_round_trips_cell_for_cell` | RED, same wrong reason |
+| `test_a_changed_markdown_cell_would_be_caught` | **GREEN, and it can never redden.** Its assertion is `!=`, so swallowing a row makes it MORE likely to pass |
+
+That is worth more than the fix. A filed claim is a hypothesis, including a
+claim this repository filed about its own defect, and "latent" was the
+comfortable reading.
+
+**The fix ASSERTS rather than locates.** `data_rows(block)` requires `block[1]`
+to be a separator instead of searching for one, because a search would quietly
+ACCEPT a malformed table if it found a separator further down, and would still
+have to invent a skip rule when it found none. `is_separator_row` requires every
+cell to match a dashes-and-colons pattern, measured against all 71 separators in
+`docs/AFFIXES.md` and `docs/OBSERVED_IDS.md` - every one a plain dash run, no
+colons. Deliberately NOT "contains a dash": affix data rows carry a literal `-`
+cell.
+
+**All four sites proved non-vacuous**, each reddening with
+"row 1 of this table is not a separator" when the separator was deleted from the
+real table in memory, and each restored to green. The tracked documents were
+never edited. `tests/test_provenance.py` went from 53 collected to 60; the count
+did not drop.
+
+**Item 4 was already MET** by being written down here - its acceptance was that
+the NO on a shared machine-wide skills directory is recorded in this repository
+rather than only in an outgoing note, and it is.
+
+**Item 2 is in flight** in the same cycle.
+
+### One process failure from this cycle, recorded because it cost a CI run
+
+A commit was launched while an implementing slice was still editing
+`tests/test_provenance.py`. The pre-commit hook linted a half-written file,
+found 7 errors, and refused - correctly. Nothing was broken and nothing was
+lost, but the hook ran a 128-second suite to tell the merger something the
+merger should not have needed telling. **The merger owns the merge, and a merge
+that overlaps a live slice is not a merge.** `ruff check .` was clean before the
+dispatch and clean again after the slice landed; only the window between them
+was red.
+
+
 
 Opened 2026-09-16. Each of these is either a defect measured here or a promise
 this project put in writing into four sibling inboxes. A commitment that lives

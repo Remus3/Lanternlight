@@ -274,7 +274,18 @@ if [ "$fail" -eq 0 ] && [ -n "$staged_md" ] && [ -f "$repo_top/ops/docguards.py"
     if [ "$fail" -eq 0 ]; then
         # b. The selector. Derived at run time; see ops/docguards.py. It reads
         # the staged set itself, so no quoting mistake here can narrow it.
-        selected=$("$py_bin" -m ops.docguards select-staged 2>&1)
+        #
+        # The `cd "$repo_top"` is LOAD-BEARING and was added 2026-09-20.
+        # `-m ops.docguards` resolves the package from the CURRENT
+        # directory, while every other use of the repository in this file
+        # goes through $repo_top absolutely. git always chdirs to the
+        # worktree top before running a hook, so this was latent rather
+        # than live - but it fails CLOSED, with a ModuleNotFoundError
+        # reported as "the selector failed to run", which reads as a
+        # guard finding rather than as a path bug. A sibling asked
+        # whether any hook here is wired relatively; this was the one
+        # place the answer was yes.
+        selected=$(cd "$repo_top" && "$py_bin" -m ops.docguards select-staged 2>&1)
         if [ $? -ne 0 ]; then
             report ".githooks/pre-commit" "the doc-guard selector failed to run"
             printf '        %s\n' "$selected" >&2
@@ -288,7 +299,7 @@ if [ "$fail" -eq 0 ] && [ -n "$staged_md" ] && [ -f "$repo_top/ops/docguards.py"
 
     if [ "$fail" -eq 0 ]; then
         # c. The coverage guard - the second, independent derivation.
-        observed=$("$py_bin" -m ops.docguards check-observed 2>&1)
+        observed=$(cd "$repo_top" && "$py_bin" -m ops.docguards check-observed 2>&1)
         if [ $? -ne 0 ]; then
             report ".githooks/pre-commit" "the observed doc-open map is absent, stale or has a coverage gap"
             printf '%s\n' "$observed" | tr -d '\r' | while IFS= read -r line; do
