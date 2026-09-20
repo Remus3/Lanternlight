@@ -2006,3 +2006,64 @@ class TestTheDeclaredCommandResolvesASessionAcrossTheProcessBoundary:
         self._fire(_declared_scan_argv(paths), "session-reports-only")
 
         assert not paths["state"].exists(), "the scan path wrote the seen store"
+
+
+class TestTheOutboxSummaryDoesNotCountBytecode:
+    """`OPS-97`. The outbox heading counted whatever was on disk beneath it.
+
+    `outbox_summary` walked with a bare ``root.rglob("*")`` and no skip set, so
+    a ``__pycache__`` directory anywhere under ``moon_sync_inbox/_outbox/``
+    inflated the byte figure reported at every session start and on every
+    prompt. It is the same defect class `OPS-96` item 3 fixed one function
+    away, found again by re-running that sweep with the trigger widened from
+    "on a timer" to "any repeated trigger" - a widening a sibling asked every
+    tree on the channel to perform.
+
+    **Classified NEAR-MISS rather than HOT, and the distinction is recorded
+    rather than glossed.** This figure is DISPLAYED and never compared: it
+    reaches no seen set, no content key and no withdrawal baseline, so no note
+    could resurface as unread because of it. A count that is only printed still
+    has to be true - a reader who compares two session headings and sees the
+    outbox grow is entitled to conclude that we sent something.
+    """
+
+    def _outbox(self, tmp_path: Path) -> Path:
+        out = tmp_path / inbox_watch.OUTBOX_DIRNAME
+        out.mkdir(parents=True)
+        (out / "2026-09-20-1200-from-LL-note.md").write_text("x" * 100, encoding="utf-8")
+        return out
+
+    def test_bytecode_beside_a_sent_note_changes_neither_the_count_nor_the_bytes(
+        self, tmp_path: Path
+    ) -> None:
+        out = self._outbox(tmp_path)
+        before = inbox_watch.outbox_summary(tmp_path)
+
+        cache = out / "__pycache__"
+        cache.mkdir()
+        (cache / "stale.cpython-314.pyc").write_bytes(b"\x00" * 4096)
+        (out / "nested" / "__pycache__").mkdir(parents=True)
+        (out / "nested" / "__pycache__" / "deep.pyc").write_bytes(b"\x00" * 4096)
+
+        assert inbox_watch.outbox_summary(tmp_path) == before, (
+            "bytecode under the outbox moved the figure printed at every "
+            "session start; the walk is not pruning"
+        )
+
+    def test_a_real_note_in_a_subdirectory_still_counts(self, tmp_path: Path) -> None:
+        """The prune must not become a reason the figure stops being true.
+
+        A guard that reports a stable number by walking nothing would pass the
+        test above. This one fails if the traversal stopped descending.
+        """
+        out = self._outbox(tmp_path)
+        before = inbox_watch.outbox_summary(tmp_path)
+
+        held = out / "held"
+        held.mkdir()
+        (held / "2026-09-20-1300-from-LL-second.md").write_text("y" * 50, encoding="utf-8")
+
+        exists, notes, total = inbox_watch.outbox_summary(tmp_path)
+        assert exists
+        assert notes == before[1] + 1
+        assert total == before[2] + 50

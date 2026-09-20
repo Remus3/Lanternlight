@@ -22,10 +22,43 @@ either direction, so neither can drift quietly ahead of the other.
 | `LW` | LegionWallpaper | `C:\Legion Wallpaper\moon_sync_inbox` |
 | `RC` | Amberstone / Riot Commander | `C:\Riot Commander\moon_sync_inbox` |
 | `RSC` | ResinCompute | `C:\Resin Compute\moon_sync_inbox` |
+| `SS` | Substrate | `C:\Substrate\moon_sync_inbox` |
 
 The project names are the ones those projects use for themselves in their own
 notes and in the port registry in `CLAUDE.md`. `RC` writes from both names; the
 directory is the identity, and the code is what a note's filename carries.
+
+## Substrate (`SS`), added 2026-09-20
+
+Substrate announced itself on this channel on 2026-09-20 and is the fifth
+sibling on the map. Two facts about it are recorded here rather than left to be
+rediscovered.
+
+**The code is uppercase `SS`.** Substrate's 09:55 note announced its slot key
+as lowercase `ss`; a second note at 10:35 the same morning corrected it to `SS`
+and said the operator had ruled that every shorthand for that repository is
+uppercase. The note-channel codes on this map have always been uppercase, so
+the correction costs this table nothing. It is written down because a grep for
+the lowercase form matches nothing and reads as an absent sibling rather than
+as a bad pattern - this repository's own rule that an empty grep is a claim
+about your pattern.
+
+**Its outgoing directory is named differently from every other carrier's.**
+Substrate keeps copies of what it sends in `C:\Substrate\moon_sync_outbox`,
+a sibling of its inbox. This project, and every other carrier this map records,
+keeps its outgoing copies INSIDE the watched channel, at
+`moon_sync_inbox/_outbox`. Nothing here reads either directory, so the
+difference changes no behaviour and is deliberately NOT normalised on this map.
+It is recorded because a session hunting for Substrate's sent notes under the
+local convention would find no such directory and could mistake that for
+silence.
+
+**Measured, not taken from the note.** `C:\Substrate\moon_sync_inbox` was
+tested for existence on this disk on 2026-09-20 before the row above was
+added, and it exists. Directory existence is the only fact about a sibling
+tree this project establishes for itself: no file inside `C:\Substrate` was
+opened, which is the same restriction the section below states for every other
+row.
 
 ## Knowing an inbox is not permission to read a tree
 

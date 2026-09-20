@@ -769,3 +769,72 @@ class TestTheFleetIsANameRatherThanARetypedList:
         )
         assert set(delivery.delivered) == set(outbox.SIBLING_INBOXES)
         assert delivery.failed == ()
+
+
+class TestSubstrateIsOnTheReplyPathMap:
+    """SS joined the note channel on 2026-09-20 and had no inbox recorded here.
+
+    WHY THIS IS A GUARD AND NOT A ONE-LINE EDIT. A sibling this project cannot
+    address is a sibling a broadcast silently omits, and ``OPS-87`` recorded
+    that exact failure: the consensus request of 2026-09-12 reached three trees
+    of four, and the delivery manifest faithfully said every ADDRESSED
+    recipient got it. ``fleet()`` derives from :data:`ops.outbox.SIBLING_INBOXES`
+    precisely so a new sibling joins the broadcast the moment its inbox is
+    recorded - which means the row itself is now the thing worth pinning.
+
+    THE CODE IS UPPERCASE ``SS``, AND THAT IS A MEASURED CORRECTION RATHER THAN
+    A STYLE CHOICE. Substrate's first note of 2026-09-20 announced its slot key
+    as lowercase ``ss`` and a second note the same morning corrected it to
+    ``SS``, so a reader arriving from the earlier note will have the wrong
+    string. The note channel's codes here have always been uppercase, so the
+    correction costs this map nothing; it is recorded because a grep for the
+    wrong case reads as an absent sibling rather than as a bad pattern.
+
+    THE PATH IS MEASURED ON THIS DISK, not taken from the note. ``CLAUDE.md``
+    requires re-measuring every claim a note makes, and directory existence is
+    the one fact about a sibling tree this project may establish for itself -
+    it tests a path and opens nothing.
+
+    ONE ASYMMETRY WORTH RECORDING RATHER THAN NORMALISING. Substrate's own note
+    names its outgoing directory ``C:\\Substrate\\moon_sync_outbox``, a sibling
+    of its inbox. Every other carrier here, this project included, keeps its
+    outgoing copies INSIDE the watched channel at ``moon_sync_inbox/_outbox``.
+    Nothing in this repository reads either one, so the difference changes no
+    behaviour; it is written down because a later session looking for SS's sent
+    notes under the local convention would find nothing and could mistake that
+    for silence.
+    """
+
+    #: Where SS says its inbox is. Measured below rather than trusted.
+    SUBSTRATE_INBOX = r"C:\Substrate\moon_sync_inbox"
+
+    def test_ss_has_an_inbox_recorded(self) -> None:
+        assert "SS" in outbox.SIBLING_INBOXES
+        assert outbox.SIBLING_INBOXES["SS"] == self.SUBSTRATE_INBOX
+
+    def test_the_code_is_uppercase_and_the_lowercase_form_is_not_a_key(
+        self,
+    ) -> None:
+        """The 0955 note said ``ss``; the 1035 note corrected it to ``SS``."""
+        assert "ss" not in outbox.SIBLING_INBOXES
+
+    def test_ss_is_in_the_fleet_so_a_broadcast_reaches_it(self) -> None:
+        assert "SS" in outbox.fleet()
+
+    def test_the_document_carries_the_same_row(self) -> None:
+        """The drift guard above is generic; this pins the row by name."""
+        text = (REPO_ROOT / "docs" / "REPLY_PATHS.md").read_text(encoding="utf-8")
+        assert re.search(r"\|\s*`SS`\s*\|", text)
+        assert self.SUBSTRATE_INBOX in text
+        assert "Substrate" in text
+
+    def test_the_outbox_naming_difference_is_recorded_and_not_normalised(
+        self,
+    ) -> None:
+        """SS keeps its sent copies beside its inbox, not inside it.
+
+        A difference nobody wrote down is a difference the next session
+        rediscovers as a missing directory.
+        """
+        text = (REPO_ROOT / "docs" / "REPLY_PATHS.md").read_text(encoding="utf-8")
+        assert "moon_sync_outbox" in text

@@ -646,6 +646,19 @@ KNOWN_NON_HOSTS = frozenset(
         # `reserved-ds.lock` is the same family, quoted in `OPS-73` as the
         # example of a widening this project's key set cannot currently see.
         "reserved-ds.lock",
+        # `OPS-98`, 2026-09-20. FOUR more of the same family, and the
+        # CASE is the whole reason they are listed separately rather than
+        # folded into the two above. `LL-0273` records that our reserved
+        # name detection was case-SENSITIVE while NTFS is not - measured,
+        # `reserved-SS.lock` and `reserved-ss.lock` are ONE FILE on this
+        # volume - so the prose has to quote both spellings to state the
+        # defect at all, and `reserved-DS.lock` and `reserved-LL.lock` are
+        # the worked examples. Registering the lowercase form only would
+        # make this denylist repeat the exact bug it is documenting.
+        "reserved-ss.lock",
+        "reserved-SS.lock",
+        "reserved-DS.lock",
+        "reserved-LL.lock",
         # `slot.REPO` is the truncation of `lane_slot.REPO_KEYS`, the third in
         # this module's `lane_slot.*` set after `slot.STALE` and `slot.default`.
         "slot.REPO",
@@ -1296,7 +1309,13 @@ KNOWN_NON_HOSTS = frozenset(
         "SKILL.md",
         "CLAUDE.md.bak",
         "status.md",
-        "CHANNEL.md",
+        # `CHANNEL.md` WAS here and is deliberately gone, 2026-09-20,
+        # `OPS-91`. Amberstone's copy is now vendored at
+        # `third_party/rc_channel/docs/CHANNEL.md`, so the filename is a
+        # TRACKED filename of this repository and the live tracked-file
+        # check absorbs it. This guard said so itself rather than being
+        # told: the denylist-redundancy check named the entry the moment
+        # the vendor landed, which is the behaviour that check exists for.
         "CHARTER.md",
         "LICENSE.md",
         # QUOTED BY `OPS-92`, `OPS-93`, `OPS-94` and `OPS-91`, all added
@@ -1357,6 +1376,14 @@ KNOWN_NON_HOSTS = frozenset(
         # both end `.md` like every entry above.
         "2026-09-19-1426-from-LL-REVIEW-machine-stray-work-sweep-our-tree-is-clean-the-107-GB-is-ours-and-referenced-and-three-drive-root-path-bug-artifacts.md",
         "2026-09-19-1435-from-LL-CORRECTION-we-withdraw-one-claim-from-our-stray-work-sweep-rc-did-name-the-license-and-ops-91-is-blocked-on-our-operator.md",
+        # `OPS-98`, 2026-09-20. The note carrying the operator's ruling on
+        # the six-participant roster, cited IN FULL by `LL-0274` because a
+        # ledger entry that truncates the name of the note it is
+        # evidencing cannot be resolved by the cold session it is written
+        # for. Same class as the two above: a delivered note lives in the
+        # gitignored outbox, so `git ls-files` cannot exempt it, and it
+        # ends `.md` like every other entry here.
+        "2026-09-20-1420-from-LL-ACTION-899f6eb957cc-our-operator-ruled-YES-to-a-six-participant-roster-and-a-channel-version-2-re-pin.md",
         # DOTTED API PATHS quoted by `OPS-96` item 3, which is about replacing
         # one traversal with another. These are exactly the class this file's
         # docstring says stays in the denylist rather than being auto-exempted:
@@ -1378,6 +1405,13 @@ KNOWN_NON_HOSTS = frozenset(
         # sweep. Lanternlight has no `version.py`, so the tracked-file check
         # cannot exempt it, and it is not a host.
         "version.py",
+        # A DOTTED API PATH quoted by `LL-0270`, `OPS-91` and the
+        # vendored file's own NOTICE, all of which record that the
+        # copy was made at the BYTE level rather than through
+        # `Path.write_text`. Same class as `os.walk` and `root.rglob`
+        # above: a stdlib attribute path, never a filename, so
+        # `is_repo_filename` is deliberately not asked about it.
+        "shutil.copyfile",
         }
 )
 
@@ -1478,7 +1512,30 @@ def _present_in_register(host: str, section: str) -> bool:
 #: coverage of them ended when they were archived rather than when the scope
 #: widened. That is the trade `OPS-57` chose deliberately and `OPS-63` re-read
 #: without reversing.
-UNSCANNED_DOCS = frozenset({"docs/ROADMAP_ARCHIVE.md"})
+UNSCANNED_DOCS = frozenset(
+    {
+        "docs/ROADMAP_ARCHIVE.md",
+        # `OPS-91`, 2026-09-20. A VENDORED document, not one of ours.
+        # This register answers "which external sources does THIS
+        # project cite, and at what trust tier" - a question a sibling's
+        # file cannot be made to answer, because its citations are its
+        # upstream's provenance rather than ours.
+        #
+        # The exclusion is forced as well as principled, and that is the
+        # part worth knowing. `CLAUDE.md` forbids editing a vendored file
+        # and `tests/test_vendored_channel_md.py` fails if any byte moves,
+        # so the usual remedy - register the token or exempt it at the
+        # source - is unavailable here by design. Scanning it produced 12
+        # findings on the day it landed, every one of them a NOTE FILENAME
+        # ending `.md` read as a Moldovan host tail.
+        #
+        # Scoped to the ONE file rather than to `third_party/**`, so the
+        # next vendored document fails this guard loudly and gets its own
+        # decision instead of inheriting this one. `third_party/rc_channel/NOTICE.md`
+        # is OURS and stays in scope.
+        "third_party/rc_channel/docs/CHANNEL.md",
+    }
+)
 
 #: The file extensions :func:`scanned_documents` reads. Prose only - see the
 #: "reads DOCUMENTS, never CODE" bullet in the module docstring for why a

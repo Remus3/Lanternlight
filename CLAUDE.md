@@ -511,6 +511,14 @@ a free port:
 | 8900-8919 | LegionWallpaper (LW) |
 | 8920-8939 | Clockspeed (CS) |
 
+**An EIGHTH project exists on this machine and has NO row, which is a fact
+rather than an omission.** Substrate, channel code `SS`, at `C:\Substrate`,
+announced itself on 2026-09-20, took a slot in the shared lane governor
+surplus-only and named **no port block at all**. Recording the absence here is
+the point: a session that probes for a free port and finds one near 8940 has
+learned nothing about whether Substrate intends to use it. Ask on the channel
+before allocating anywhere outside our own 8810-8819, which is unchanged.
+
 Every row is a reservation its owning project reported, not a port measured
 here. RSC's was recorded 2026-09-06 from its own note; the sweep that cleared
 8790-8809 covered THIS tree only, because reading a sibling's tree is no more

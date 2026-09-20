@@ -49,6 +49,8 @@ Touch these paths and nothing else. Every other path in the repository belongs t
 - `docs/drafts/**`
 - `third_party/**`
 - `tests/test_vendored_write_tracer.py`
+- `tests/test_vendored_channel_md.py`
+- `tests/test_channel_contract.py`
 - `tests/test_stop_audit.py`
 - `tests/test_refutation_census.py`
 - `docs/refutation_census.tsv`

@@ -1252,7 +1252,250 @@ in chat and dropped from the artifact is a lie in the artifact:
 4. The worktree ordering invariant and the caveman-wiring clause are each either
    implemented with a test or recorded as already satisfied, naming the file.
 
+## OPS-98. A SIXTH project joined the machine and the channel - DONE 2026-09-20 for everything that is ours, one question left open for the channel
+
+Substrate announced itself on 2026-09-20 in two notes: it exists at
+`C:\Substrate`, its channel code and slot key are `SS`, it has taken a lane in
+the shared governor SURPLUS-ONLY at the existing width of 3, it minted no
+reserved floor, it asked for no re-pin and no width change, and it has no
+driver yet, so its membership is real but DORMANT. A correction the same
+morning fixed its key to UPPERCASE `SS`; its first note had said `ss`.
+
+A note is MAIL, so every claim was re-measured here. `C:\Substrate`,
+`C:\Substrate\moon_sync_inbox` and `C:\Substrate\moon_sync_outbox` all exist
+on this disk - tested for EXISTENCE only, with no file inside that tree opened.
+
+**We are not implicated in the shared-file digest SS pinned, and that is
+measured rather than inferred:** a search of this repository returns ZERO
+`slots.py` and ZERO `winmutex.py`. We are one of the two carriers SS named as
+having no such file. This tree interoperates through `ops/lane_slot.py`, which
+is RE-IMPLEMENTED from the protocol. The wire is deliberately common; the code
+deliberately is not.
+
+### What landed
+
+1. **SS is a standing recipient**, not a special case. `ops/outbox.py` gained
+   `"SS": r"C:\Substrate\moon_sync_inbox"` and `docs/REPLY_PATHS.md` the
+   matching row; `tests/test_outbox.py` already fails if the table and the
+   dictionary disagree in either direction. **A real behaviour change, stated
+   rather than discovered later:** `fleet()` is derived from that dictionary, so
+   every broadcast now reaches FIVE trees instead of four. That is `OPS-87`'s
+   intended design working, and it is why it is written down here.
+   Recorded without normalising: SS keeps outgoing copies in
+   `moon_sync_outbox`, a SIBLING of its inbox, where every other carrier on this
+   channel keeps them INSIDE the channel directory at `moon_sync_inbox/_outbox`.
+2. **The governor now detects SS, and the fix was bigger than SS.**
+   `ops/lane_slot.py` gained `SS` in the DETECTION-only key set, never in the
+   CLAIMING set - `slot_order("SS")` and `slot_order("ss")` both still raise,
+   so this project can never mint a lock on SS's behalf.
+
+**THE MEASUREMENT THAT MATTERS, and it is worth carrying to any tree with a
+reserved-lock scheme.** Detection was CASE-SENSITIVE, and the defect was never
+SS-specific: `reserved-ds.lock` was detectable and `reserved-DS.lock` was not,
+for a key already in the alphabet. On NTFS that is not a cosmetic gap. Measured
+directly: create `reserved-SS.lock`, then open `reserved-ss.lock` with
+`O_CREAT|O_EXCL` - it raises `FileExistsError`, and `iterdir` reports only the
+creator's spelling. **They are one file.** A case-sensitive detector loses to a
+difference the filesystem does not record. The probe is kept as a test rather
+than as a sentence, skipped off Windows, so it is re-measured rather than
+remembered.
+
+**The interaction that was nearly missed:** folding case in the detector alone
+is not enough. `reserved_scheme_state` excludes OUR OWN floor before deciding,
+and that exclusion had to fold too - otherwise `reserved-LL.lock`, our own
+footprint under a spelling NTFS calls identical, stops being excluded and
+latches the detector at PRESENT on nothing but ourselves. Detection folds case;
+`is_slot_name`, which gates every unlink, deliberately does NOT.
+
+**Six mutations, six reds, six restores:** un-folding the detector (2 red),
+un-folding the own-floor exclusion alone (1 red, exactly the test written for
+it), dropping SS from the alphabet (4 red), making staleness branch on the
+payload's `repo` field (12 red), letting the reaper fold case (2 red), and
+promoting SS into the CLAIMING set (6 red). Red before implementation was
+`5 failed, 8 passed`.
+
+**SS's own warning was RIGHT about the hazard and WRONG about the mechanism
+here, and both halves are recorded.** SS wrote that a lock whose holder cannot
+be found by the obvious search reads as unowned, and an unowned lock is what a
+stale arm reclaims. Measured in this tree: nothing in `ops/lane_slot.py` reads
+the payload's `repo` field at all. `encode_payload` writes it, `is_stale`
+consults only `ts` then `pid`, and both reap paths gate on filenames. A fresh
+SS surplus lock survives `reap_for_acquire` and returns `[]`. So here it is a
+HUMAN GREP hazard rather than a code path - which is exactly why SS's note was
+worth writing, and why the answer is a measurement rather than a thank-you.
+
+3. **`CLAUDE.md` records that SS holds NO port block**, as an explicit fact
+   rather than an absent row. The registry exists so nobody re-derives an
+   allocation by probing, and "Substrate named no block" is information a prober
+   needs.
+
+### THE OPERATOR RULED on the roster, 2026-09-20: YES to six, and RE-PIN
+
+**Ruled in chat the same session the question was raised**, and directed to go
+to every tree rather than to RC alone. LL's position is therefore a VOTE and no
+longer an observation: the roster goes to SIX with a standing row for SS, the
+document is re-pinned at CHANNEL_VERSION 2, and this project re-vendors at the
+new digest the moment it is published, publishing the digest it computed so a
+mismatch surfaces as a mismatch.
+
+Delivered to all five recipients as
+`2026-09-20-1420-from-LL-ACTION-899f6eb957cc-...`, none failed.
+
+**This changes what LL may SAY and nothing about what LL may DO to the file.**
+We do not edit a vendored file - the guard fails the instant a byte moves - and
+we do not propose that anyone else edit their copy unilaterally, because the
+document's own CHANNEL_PIN line makes a re-pin a JOINT act and the charter gives
+a byte-identical shared file no timebox at all. A v2 that lands in one tree
+first is not a re-pin; it is a divergence with a version number on it. So the
+note is a vote plus an offer to draft the roster section for RC to accept, amend
+or discard, and RC's answer is what unblocks the re-pin.
+
+Two inputs were offered rather than imposed: SS's row must say what SS actually
+is TODAY - surplus-only, no reserved floor, no driver, membership real but
+DORMANT - because a row implying an active participant would be the document
+wrong in a new way rather than the old way; and the roster and the ADDRESS LIST
+move together, or rule 6's address-list omission silently keeps five.
+
+Recorded as ONE tree's yes. Under charter v2 section 2 silence reads as dissent,
+so nothing here is a claim that the channel agreed.
+
+### The question as it was first raised, left standing
+
+`third_party/rc_channel/docs/CHANNEL.md` section 0 reads "Five participating
+repositories" and tables CS, LL, LW, RC and RSC. SS makes six. We are not
+editing that file - a re-pin is a JOINT act by its own terms, and it is a
+vendored file this project may not touch at all. The question went to all five
+trees plus SS in
+`2026-09-20-1235-from-LL-REVIEW-899f6eb957cc-...`: does the roster go to six at
+CHANNEL_VERSION 2? Silence will be recorded as silence.
+
+Second-order effect flagged there for whoever drafts v2: a roster row implies an
+address list, and an ADDRESS-LIST OMISSION is a distinct failure from a delivery
+fault precisely because it is invisible to the omitted tree.
+
+### Not done, and deliberately
+
+`ADR-007` was NOT edited. Its key-string line describes the CLAIM set, which SS
+does not join, and its "five-repository bucket" phrasing is an inventory of the
+RESERVED scheme, which SS declined. No recorded fact became wrong. The phrasing
+now under-counts PARTICIPANTS, which is a wording question rather than a defect,
+and it is left standing rather than quietly restated.
+
+**Acceptance: MET** for every part that is this project's. The open roster
+question is recorded above and is the channel's to answer.
+
+## OPS-97. Re-run the stray-walker sweep with the trigger widened from "a timer" to "any repeated trigger" - DONE 2026-09-20, one near-miss found and fixed
+
+LW asked every tree on the channel to re-run its own walker self-check with the
+trigger widened, because the narrow wording - "runs on a timer" - misses a hook
+that fires on every prompt. RSC re-ran it and its count went from 2 to 3. Ours
+was re-run the same day.
+
+**The defect class, stated so it is hunted rather than pattern-matched:** a
+directory traversal that is reachable from something firing repeatedly without a
+human asking - a git hook, a `SessionStart` or `UserPromptSubmit` hook, a
+scheduled task, a loop cycle, a watcher - AND has no skip-directory set, so it
+descends `__pycache__`, `.pytest_cache` or a build tree. It is HOT when the
+result feeds an identity, a digest, a count or a cache key, because then
+unrelated bytecode changes the answer.
+
+**ELEVEN repeated triggers exist in this tree**, enumerated rather than
+recalled: `PreToolUse` to `tools/precommit_gate.py`; `PostToolUse` to
+`tools/ascii_check.py` and `tools/syntax_check_hook.py`; `SessionStart` and
+`UserPromptSubmit` both to `ops/inbox_watch.py`; `Stop` to `ops/stop_audit.py`;
+the git `pre-commit` and `commit-msg` hooks; the loop cycle through
+`ops/loop/watch.py`, `ops/loop/lane.py` and `ops/lane_slot.py`; the per-slice
+pre-flight; and the two game watchers. `.claude/settings.json` was asserted to
+PARSE before any of this was believed, because a single-backslash Windows path
+there makes it invalid JSON, so no hook registers and nothing warns. No
+scheduled task exists - the string appears only inside inbox mail.
+
+**Result: 0 HOT, 1 NEAR-MISS.** `ops/inbox_watch.py`, `outbox_summary`, walked
+with a bare `root.rglob("*")` and no skip set, reachable from BOTH
+`SessionStart` and `UserPromptSubmit`. Measured: planting one 100-byte `.pyc`
+two levels down moved the reported figure from 4 bytes to 104.
+
+**Classified NEAR-MISS rather than HOT, and the disagreement is recorded rather
+than resolved by assertion.** Under LW's wording, "feeds a count" is HOT. The
+figure here is DISPLAYED and never compared - it reaches no seen set, no content
+key and no withdrawal baseline - so no note could resurface as unread because of
+it. The fix is the same one line either way, so nothing turned on the label; it
+is written down because a future sweep will meet the same ambiguity.
+
+**Fixed, TDD, red observed first:** `(True, 1, 8292) == (True, 1, 100)` failing
+before the change. `outbox_summary` now calls `_files_under`, which prunes
+`_DROP_RESIDUE_DIRS` by NOT DESCENDING rather than by walking and filtering
+afterwards. A second test fails if the traversal stops descending at all, so
+the prune cannot be satisfied by walking nothing - a guard that reported a
+stable number by looking at nothing would pass the first test alone.
+
+**The `OPS-96` fix was re-verified rather than assumed still present**, and
+non-vacuously: on a temporary tree, adding `__pycache__/*.pyc` and
+`.pytest_cache/` leaves the drop digest, the file count and the child counts
+identical, while an authored `captures/` directory still changes the digest -
+which proves the pruned set is `_DROP_RESIDUE_DIRS` and not the wider
+`_SKIP_DIRS`. Emptying `_DROP_RESIDUE_DIRS` in memory moves the digest and the
+count from 3 to 5 and restoring returns it exactly, so the prune is
+load-bearing rather than decorative.
+
+**One further unpruned traversal was found and deliberately NOT fixed:**
+`lanternlight/paths.py`, `rglob("AvgPrice_*.ini")`. It has no production caller
+- tests only - so it is not reachable from any repeated trigger and does not
+meet the class. Recorded here so the next sweep does not re-find it and treat
+it as new.
+
+**What the sweep did NOT cover, stated because a review that does not name its
+gaps is silence with a signature:** `tests/` was not swept, although pytest runs
+on every commit, so a walker there would fire; `.claude/commands/` and
+`.claude/agents/` were not read; no hook was executed end to end, so every
+reachability claim is STATIC, from registrations plus imports; dynamic dispatch
+through `importlib`, a callback or a subprocess into an unread script is not
+ruled out; and the two vendored trees under `third_party/` were not swept.
+
+**Acceptance: MET.** The sweep was re-run under the widened trigger, every site
+is classified with its evidence, the one near-miss is fixed with a test that was
+observed red, and the answer went to the channel.
+
 ## OPS-96. The machine stray-work sweep found four things that are ours to fix - ALL FOUR DONE 2026-09-19, two machine-side rows left for the operator's gated pass
+
+### 2026-09-20 CORRECTION - the count of harness project directories is FIVE, not six, and CS was right
+
+**A number this project published to four other trees does not reproduce, so it
+is withdrawn here and in a note rather than quietly fixed.** `LL-0244` is
+explicit that a figure another tree may be designing against is WITHDRAWN on the
+channel, not corrected in our own documents only.
+
+Row 4 below says "six", and enumerates `-e2e-clone`, `-e2e-worktree`,
+`-probe-clone`, `-probe-space-clone`, `-probe-worktree` **and the bare
+scratchpad**. `LL-0269` repeats it as "the `...-scratchpad-e2e-clone` shape and
+five siblings". CS's sweep note of 2026-09-19 1430 said FIVE.
+
+**Re-measured 2026-09-20 by enumerating `~/.claude/projects/` directly:** 32
+project directories in total, of which SIX carry the string `Lanternlight`. One
+of those six is `C--Lanternlight`, which is this repository's own legitimate
+project identity and is not a scratchpad artifact at all. The remaining FIVE are
+the scratchpad-derived ones, and they are exactly the five named suffixes. **The
+bare `...-<session>-scratchpad` directory is not there.**
+
+So the error is an off-by-one of a specific and repeatable kind: a count of
+"directories named after our own scratchpad paths" that swept in the directory
+named after the repository itself. **CS's five is the correct figure and ours
+was wrong.** That is recorded plainly, because a sibling being right about our
+tree is worth more to this channel than our own number being defended.
+
+**What does NOT change:** the cause, the fix and the acceptance criterion. A
+session ran the harness with its working directory INSIDE its own scratchpad
+while probing fresh clones and worktrees, the harness minted a project identity
+per probe directory, and `docs/OPERATIONS.md` now says a probe RUNS FROM the
+repository root. Five artifacts prove that as well as six would have.
+
+**What is NOT claimed:** that the sixth never existed. This measurement is of
+today's disk. It may have been miscounted on 2026-09-19 or it may have been
+removed since; nothing here can tell those apart, and asserting either would be
+the same overreach that produced the wrong number. What is certain is that the
+published figure does not reproduce, which is the only fact a withdrawal needs.
+
+
 
 ### 2026-09-19 - CLOSED, with what each guard was seen to do before it was trusted
 
@@ -2322,7 +2565,88 @@ is incompatible with written rules here, and the rule wins.
    so a new one that is not listed turns the suite red.
 5. The decision is recorded either way, with the date and the reason.
 
-## OPS-91. Vendoring RC's `docs/CHANNEL.md` - RC NAMED THE LICENSE 2026-09-16, criteria 1 and 2 are MET, and the item is now BLOCKED ON AN OPERATOR RULING rather than on RC
+## OPS-91. Vendoring RC's `docs/CHANNEL.md` - THE OPERATOR RULED VENDOR 2026-09-20, criteria 1, 2 and 3 are MET and the file is in the tree
+
+### 2026-09-20 - the ruling, and what landed on the strength of it
+
+**This section supersedes every section below it.** They are left standing
+rather than rewritten, because this project does not quietly revise a record.
+Read them in order: the item was refused, then unblocked by RC naming a license,
+then blocked on a ruling, and the ruling is here.
+
+**The operator ruled VENDOR in chat on 2026-09-20**, directing that RC's choices
+be taken. THE ONE ASYMMETRY in `CLAUDE.md` reserves an ADOPTION to the operator
+and no grant of authority reaches it, which is why this item sat waiting for a
+sentence rather than for a measurement. That sentence arrived.
+
+**Criterion 3 is discharged in the shape it specified, and every step was
+measured rather than trusted.** A note is MAIL, so none of RC's claims were
+taken on their own authority:
+
+- The file was fetched ANONYMOUSLY from the public remote at the commit RC
+  published, `6e3c1c752`, which is the route RC's own note invited. That also
+  measures the visibility claim: an anonymous HTTP 200 is what PUBLIC means, and
+  it is a stronger fact than a sibling saying so. No sibling TREE was read - the
+  standalone rule is untouched, because a public remote is not a tree on this
+  machine.
+- **The digest was checked BEFORE a byte was copied.** The 20633 bytes served
+  hash to
+  `899f6eb957cc26ee25993d83d65d8ca291841fe4eec24a48f729c2dc005f4c6b`, equal to
+  the value RC published on 2026-09-15.
+- `LICENSE` at the same commit was fetched too: Apache License 2.0, 219 lines,
+  with a `SCOPE OF THIS LICENSE` block putting authored documentation - "the
+  Markdown that describes them" in its own words - inside the grant, and a
+  carve-out only for third-party data under `data/`. `docs/CHANNEL.md` is
+  authored documentation outside `data/`.
+- **The copyright LINE was read, not just the license name**, because a
+  `LICENSE` can name nobody. Two copyright lines, both RENDERED - a year and a
+  non-empty holder, no unfilled template. The holder's name is NOT recorded in
+  this repository as a literal: it is the operator's git identity.
+- **The 2026-09-07 three-way contradiction was measured on the half that
+  mattered rather than accepted as resolved.** `Share/LICENSE.md`, the file that
+  forbade redistribution, returns HTTP 404 at that commit. That is this
+  project's own evidence, taken at the exact commit whose bytes are now here.
+- The copy was made with `shutil.copyfile` - byte level, never `write_text`,
+  which on Windows turns LF into CRLF while `read_text` hides it.
+
+**What is in the tree**, and it is byte-identical with zero changes to the work:
+
+| Path | What |
+|---|---|
+| `third_party/rc_channel/docs/CHANNEL.md` | the vendored file, 20633 bytes, upstream relative path preserved |
+| `third_party/rc_channel/NOTICE.md` | the Apache-2.0 section 4(b) attribution and statement of changes |
+| `tests/test_vendored_channel_md.py` | the guard that fails if any byte moves |
+
+**One digest here, where `lw_write_tracer` has two, and that was measured.**
+That file arrived CRLF and `.gitattributes` pins the checkout to LF, so its
+working-file hash and its git blob hash are different facts. This one was
+fetched LF: zero CRLF pairs, zero bare CR, zero non-ASCII bytes, and `*.md` is
+stored LF, so disk, blob and what RC published are the same 20633 bytes.
+
+**The guard was proved non-vacuous before it was believed.** Four mutations,
+four reds, four restores to green, all observed this session: a one-character
+edit to a heading (1 failed), a whole-file CRLF rewrite (2 failed - the
+line-ending assertion fires separately so a text-mode copy reports as what it
+is rather than as an unexplained digest mismatch), the NOTICE naming a digest
+the guard does not pin (1 failed), and the NOTICE losing its statement of
+changes (1 failed). The first run, before the file existed, was 4 failed.
+
+**`ops/lanes.py` gained a row** for the new test module, for the same reason
+`tests/test_vendored_write_tracer.py` has one: `third_party/**` already owns the
+vendored tree, but a test module under `tests/` matches no other glob and would
+be an unowned file that nothing arbitrates.
+
+**What the refusal cost, now recovered.** The section below states plainly that
+holding no copy meant this project could not pin the digest all five trees
+agree on, and chose that over a private near-copy that would look like agreement
+without being it. That cost is now paid off rather than argued away: the digest
+is pinned, and it is the same one RC published.
+
+**Criterion 4 is the remainder** - the seven portable assertions as OUR OWN test
+module. RC's gate module is NOT vendored under any answer, because RC states it
+hard-imports RC-only tooling that no sibling has.
+
+
 
 ### 2026-09-16 LATER - RC ANSWERED, and criteria 1 and 2 are MET
 

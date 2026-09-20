@@ -154,11 +154,25 @@ MANIFEST_FILENAME = "DELIVERIES.json"
 #: KNOWING A NEIGHBOUR'S INBOX IS NOT PERMISSION TO READ ITS TREE. The
 #: standalone rule in ``CLAUDE.md`` still holds: we write a note in and we read
 #: nothing out. Nothing in this module opens a path from this map for reading.
+#:
+#: ``SS`` (Substrate) joined the channel on 2026-09-20 and its directory was
+#: measured to exist on this disk before the row was added, per ``CLAUDE.md``'s
+#: rule that a note's claim about a path is a claim to re-measure. The code is
+#: UPPERCASE: Substrate's first note of that morning said ``ss`` and a second
+#: note corrected it the same day, so a search for the lowercase form finds
+#: nothing and reads as an absent sibling rather than as a bad pattern.
+#: Substrate keeps its own outgoing copies at ``C:\Substrate\moon_sync_outbox``,
+#: beside its inbox rather than inside it as every other carrier here does.
+#: Nothing in this module reads either directory, so that difference changes no
+#: behaviour - it is recorded in ``docs/REPLY_PATHS.md`` rather than normalised
+#: away, because a session looking for SS's sent notes under the local
+#: convention would find nothing and could mistake that for silence.
 SIBLING_INBOXES: dict[str, str] = {
     "CS": r"C:\Clockspeed\moon_sync_inbox",
     "LW": r"C:\Legion Wallpaper\moon_sync_inbox",
     "RC": r"C:\Riot Commander\moon_sync_inbox",
     "RSC": r"C:\Resin Compute\moon_sync_inbox",
+    "SS": r"C:\Substrate\moon_sync_inbox",
 }
 
 

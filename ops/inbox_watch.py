@@ -1367,9 +1367,15 @@ def outbox_summary(inbox: Path) -> tuple[bool, int, int]:
     notes = 0
     total = 0
     try:
-        for path in root.rglob("*"):
-            if not path.is_file():
-                continue
+        # ``OPS-97``. NOT ``root.rglob("*")``. That counted every byte on disk
+        # beneath the outbox, so a ``__pycache__`` left there inflated the
+        # figure printed at every session start and on every prompt. It is the
+        # same defect ``OPS-96`` item 3 fixed one function away, found again by
+        # re-running that sweep with the trigger widened from "on a timer" to
+        # "any repeated trigger". :func:`_files_under` prunes
+        # :data:`_DROP_RESIDUE_DIRS` by not descending, rather than by walking
+        # and filtering afterwards.
+        for path in _files_under(root):
             if path.suffix.lower() == ".md":
                 notes += 1
             try:

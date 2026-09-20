@@ -754,9 +754,12 @@ class TestDetectionAlphabetIsWiderThanClaiming:
         claim = set(lane_slot.REPO_KEYS)
         assert claim < detect
 
-    def test_the_detection_only_keys_are_exactly_red_moon_and_daemon_slayer(self):
+    def test_the_detection_only_keys_are_red_moon_daemon_slayer_and_substrate(self):
+        # `SS` joined on 2026-09-20 when Substrate announced itself on the note
+        # channel. Its provenance is first-party and unlike the other two, and
+        # `TestSubstrateJoinedTheBucketSurplusOnly` carries that reasoning.
         extra = set(lane_slot.DETECTION_REPO_KEYS) - set(lane_slot.REPO_KEYS)
-        assert extra == {"rm", "ds"}
+        assert extra == {"rm", "ds", "SS"}
 
     def test_the_provenance_of_the_detection_only_keys_is_written_down_beside_them(
         self,
@@ -769,8 +772,16 @@ class TestDetectionAlphabetIsWiderThanClaiming:
         # The DEFINITION, not the export list entry of the same spelling. An
         # anchor that matches the wrong occurrence reads the wrong preamble and
         # passes for the wrong reason.
-        marker = "DETECTION_REPO_KEYS: tuple"
-        assert marker in source
+        #
+        # Anchored on DETECTION_ONLY_REPO_KEYS rather than on the superset
+        # DETECTION_REPO_KEYS, because `rm` and `ds` are DEFINED there and that
+        # is where "beside them" means. The looser anchor happened to work only
+        # while nothing sat between the two constants; on 2026-09-20 the
+        # first-party provenance for `SS` landed in that gap and this guard went
+        # red, which is the guard doing its job at the wrong address. Moving the
+        # anchor to the definition narrows it rather than widening it.
+        marker = "DETECTION_ONLY_REPO_KEYS: tuple"
+        assert marker in source, "anchor did not match - the check would be vacuous"
         preamble = source[: source.index(marker)][-2000:].lower()
         assert "ports table" in preamble
         assert "claude.md" in preamble
@@ -1702,3 +1713,198 @@ class TestAZeroSurplusWidthIsAnOptOutAndNeverABusyBucket:
             "is_contention_opt_out",
         ):
             assert name in lane_slot.__all__
+
+
+class TestSubstrateJoinedTheBucketSurplusOnly:
+    """A SIXTH participant, ``Substrate``, joined the shared bucket on 2026-09-20.
+
+    What it told the channel, in two notes on the same day. Its slot key is
+    ``SS`` and the second note is a CORRECTION: the first announced ``ss``
+    lowercase and the operator then ruled every shorthand for that repository is
+    uppercase. It is SURPLUS-ONLY - it takes no ``reserved-<key>.lock``, it asks
+    for no width change, and the bucket width stays 3. It writes ``"repo": "SS"``
+    into the payload.
+
+    Two separate questions come out of that, and they have different answers.
+
+    THE PAYLOAD question is already answered correctly here and these tests
+    exist to PIN that rather than to change it. ``repo`` is an opaque label:
+    :func:`ops.lane_slot.holders` reports it verbatim and no branch in this
+    module reads it, so a lock naming ``SS`` is attributed exactly as one naming
+    ``ll`` is, and no staleness decision can turn on the spelling. The hazard
+    Substrate's correction names - a lock whose holder cannot be found by the
+    obvious search reads as an unowned lock, and an unowned lock is what the
+    stale arm reclaims - is a HUMAN grep hazard, not a code path here. Our stale
+    arm is payload-blind to ``repo``.
+
+    THE NAME question was a real defect, and it is wider than Substrate.
+    Detection was CASE-SENSITIVE: measured 2026-09-20, ``reserved-ds.lock`` read
+    as present while ``reserved-DS.lock`` - a key already in the alphabet - read
+    as absent. On NTFS those are THE SAME FILE. Measured the same day in a temp
+    directory on this machine: creating ``reserved-SS.lock`` and then asking for
+    ``reserved-ss.lock`` with ``O_CREAT | O_EXCL`` raises ``FileExistsError``,
+    and ``iterdir`` reports back whichever spelling the CREATOR used. So the
+    case in a listing is the writer's choice, the filesystem itself treats the
+    spellings as one name, and a case-sensitive detector is defeated by a
+    difference the volume does not even record as a difference.
+    """
+
+    # ---- the payload side: already correct, pinned so it stays that way ----
+
+    def test_a_surplus_lock_naming_substrate_is_attributed_verbatim(
+        self, bucket: Path
+    ):
+        (bucket / "0.lock").write_text(
+            lane_slot.encode_payload(
+                pid=os.getpid(), repo="SS", run_id="ss-run", cycle=1
+            ),
+            encoding="utf-8",
+        )
+        report = lane_slot.holders(bucket)
+        assert report["0.lock"]["repo"] == "SS", (
+            "the holder is not attributed - a reader cannot tell who owns this"
+        )
+
+    def test_no_staleness_decision_keys_off_the_repo_field(self):
+        # The refutation this class exists to make available: if nothing
+        # branches on `repo`, the correction changes no behaviour here. Same
+        # pid, same ts, four spellings of the label, one verdict.
+        common = {"pid": 4242, "run_id": "r", "cycle": 1, "ts": 1_000_000.0}
+        verdicts = {
+            label: lane_slot.is_stale(
+                lane_slot.decode_payload(
+                    lane_slot.encode_payload(repo=label, **common)
+                ),
+                now=1_000_001.0,
+                pid_alive=lambda _pid: True,
+            )
+            for label in ("SS", "ss", "ll", "")
+        }
+        assert set(verdicts.values()) == {False}, verdicts
+
+    def test_a_fresh_surplus_lock_written_by_substrate_is_not_reclaimed(
+        self, bucket: Path
+    ):
+        (bucket / "0.lock").write_text(
+            lane_slot.encode_payload(
+                pid=os.getpid(), repo="SS", run_id="ss-run", cycle=1
+            ),
+            encoding="utf-8",
+        )
+        assert lane_slot.reap_for_acquire(bucket, "ll") == []
+        assert (bucket / "0.lock").exists()
+
+    def test_a_surplus_lock_from_substrate_does_not_flip_the_reserved_detector(
+        self, bucket: Path
+    ):
+        # Substrate is surplus-only by its own declaration. A surplus lock is
+        # not evidence that the reserved widening landed.
+        (bucket / "0.lock").write_text(
+            lane_slot.encode_payload(pid=1, repo="SS", run_id="r", cycle=1),
+            encoding="utf-8",
+        )
+        assert lane_slot.reserved_scheme_state(bucket) == lane_slot.RESERVED_ABSENT
+
+    def test_substrate_is_not_a_claiming_key_in_either_case(self):
+        # We must never mint a lock on another participant's behalf, and
+        # Substrate asked for no floor. The detection widening must not leak
+        # into the CLAIM alphabet.
+        for spelling in ("SS", "ss"):
+            assert spelling not in lane_slot.REPO_KEYS
+            with pytest.raises(lane_slot.UnknownRepoKey):
+                lane_slot.slot_order(spelling)
+
+    # ---- the name side: the defect ----
+
+    def test_an_uppercase_substrate_reserved_name_reads_as_present(
+        self, bucket: Path
+    ):
+        (bucket / "reserved-SS.lock").write_text("{}", encoding="utf-8")
+        assert lane_slot.reserved_scheme_state(bucket) == lane_slot.RESERVED_PRESENT
+
+    def test_a_lowercase_substrate_reserved_name_reads_as_present(self, bucket: Path):
+        (bucket / "reserved-ss.lock").write_text("{}", encoding="utf-8")
+        assert lane_slot.reserved_scheme_state(bucket) == lane_slot.RESERVED_PRESENT
+
+    def test_detection_is_case_blind_for_every_key_in_the_alphabet(self):
+        # Not a Substrate special case. `reserved-DS.lock` read as absent while
+        # `reserved-ds.lock` read as present, and on this volume they are one
+        # file. Every key, and the prefix and suffix as well as the key.
+        for key in lane_slot.DETECTION_REPO_KEYS:
+            for name in (
+                f"reserved-{key.lower()}.lock",
+                f"reserved-{key.upper()}.lock",
+                f"RESERVED-{key.upper()}.LOCK",
+            ):
+                assert lane_slot.is_detectable_reserved_name(name), name
+
+    def test_our_own_floor_does_not_count_whatever_case_it_is_spelled_in(
+        self, bucket: Path
+    ):
+        # The interaction a case-blind detector creates if only half of it is
+        # made case-blind. `reserved_scheme_state` excludes OUR OWN floor
+        # because evidence we produced is not evidence about the world. If the
+        # name test folds case and the exclusion does not, our own footprint
+        # under any other spelling latches the detector at PRESENT.
+        (bucket / "reserved-LL.lock").write_text("{}", encoding="utf-8")
+        assert lane_slot.reserved_scheme_state(bucket, "ll") == (
+            lane_slot.RESERVED_ABSENT
+        )
+
+    def test_folding_case_for_detection_does_not_widen_what_the_reaper_deletes(
+        self, bucket: Path
+    ):
+        # The asymmetry the module already states: seeing a name is cheaper than
+        # deleting one. Detection may fold case; `is_slot_name`, which gates
+        # every unlink, may not.
+        names = ("reserved-SS.lock", "reserved-Ss.lock", "reserved-DS.lock")
+        for name in names:
+            assert not lane_slot.is_slot_name(name), name
+            assert not lane_slot.is_ours_to_reclaim(name, "ll"), name
+        (bucket / "reserved-SS.lock").write_text("{}", encoding="utf-8")
+        (bucket / "reserved-DS.lock").write_text("{}", encoding="utf-8")
+        stale_now = time.time() + lane_slot.STALE_SECONDS * 2
+        assert lane_slot.reap(bucket, now=stale_now) == []
+        assert sorted(p.name for p in bucket.iterdir()) == [
+            "reserved-DS.lock",
+            "reserved-SS.lock",
+        ]
+
+    def test_the_substrate_key_is_in_the_detection_alphabet_not_the_claim_one(self):
+        extra = set(lane_slot.DETECTION_REPO_KEYS) - set(lane_slot.REPO_KEYS)
+        assert "SS" in extra
+        assert set(lane_slot.REPO_KEYS) < set(lane_slot.DETECTION_REPO_KEYS)
+
+    def test_the_substrate_provenance_is_written_down_beside_the_key(self):
+        # Same discipline `rm` and `ds` carry, and the provenance is DIFFERENT
+        # in kind, so saying so is the point. Those two were read off a ports
+        # table and never confirmed by the projects they name. `SS` came from
+        # Substrate itself, in a note, corrected by a second note - and the same
+        # notes declare it surplus-only, so the comment has to record that this
+        # name is recognised in advance rather than expected to appear.
+        source = (REPO_ROOT / "ops" / "lane_slot.py").read_text(encoding="utf-8")
+        marker = "DETECTION_ONLY_REPO_KEYS: tuple"
+        assert marker in source, "anchor did not match - the check would be vacuous"
+        preamble = source[: source.index(marker)][-3000:].lower()
+        for phrase in ("substrate", "surplus-only", "2026-09-20", "first-party"):
+            assert phrase in preamble, phrase
+
+    @pytest.mark.skipif(
+        sys.platform != "win32", reason="the case-folding volume fact is NTFS's"
+    )
+    def test_the_two_spellings_are_one_file_on_this_volume(self, bucket: Path):
+        # The measurement the case-blind detector rests on, kept as a test so it
+        # is re-measured rather than remembered. If this ever fails, the
+        # reasoning above changes and the fold has to be re-argued.
+        (bucket / "reserved-SS.lock").write_text("{}", encoding="utf-8")
+        with pytest.raises(FileExistsError):
+            os.close(
+                os.open(
+                    bucket / "reserved-ss.lock",
+                    os.O_CREAT | os.O_EXCL | os.O_WRONLY,
+                )
+            )
+        assert [p.name for p in bucket.iterdir()] == ["reserved-SS.lock"], (
+            "the listing reports the CREATOR's spelling, which is why a "
+            "case-sensitive detector cannot be relied on here"
+        )

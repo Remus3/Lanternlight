@@ -115,9 +115,17 @@ Detection reads a WIDER alphabet than claiming does
   as ``RESERVED_ABSENT``, so the reserved-floor widening could have landed
   without our noticing, and the miss looked exactly like correct pre-widening
   behaviour.
+* DETECTION also FOLDS CASE, and claiming does not. See
+  :func:`is_detectable_reserved_name` for the measurement: on this volume
+  ``reserved-SS.lock`` and ``reserved-ss.lock`` are one file, so the case in a
+  directory listing is whatever the writer happened to type and a
+  case-sensitive detector is beaten by a difference the filesystem does not
+  record. Claiming stays exact and lowercase, because the one name we ever
+  CREATE is our own and we control its spelling.
 
 The reaper's alphabet is NOT widened with it. :func:`is_slot_name` stays narrow
-so a reaper never removes a file it does not understand.
+so a reaper never removes a file it does not understand, and it does not fold
+case either - seeing a name is a cheaper act than deleting one.
 
 Busy is not the same as unusable
 --------------------------------
@@ -260,7 +268,22 @@ REPO_KEYS: tuple[str, ...] = ("rc", "lw", "rsc", "cs", "ll")
 #: agreed by those two projects. Nobody from either has told us what short code
 #: their governor would write. They are a reasonable reading of the only roster
 #: this machine keeps, and that is all they are.
-DETECTION_ONLY_REPO_KEYS: tuple[str, ...] = ("rm", "ds")
+#:
+#: ``SS`` (Substrate) has DIFFERENT provenance and it is worth stating the
+#: difference rather than letting three keys sit here looking equally sourced.
+#: It is FIRST-PARTY: Substrate announced itself on the note channel on
+#: 2026-09-20 and named its own key, then corrected that note the same day to
+#: say the operator had ruled the spelling uppercase ``SS`` rather than
+#: lowercase ``ss``. Both spellings are recognised here, because detection folds
+#: case - and on this volume they are the same filename anyway.
+#:
+#: What those notes ALSO say, recorded so this entry is not read as more than it
+#: is: Substrate is SURPLUS-ONLY. It declared that it takes no reserved floor,
+#: asked for no width change, and has no driver calling the governor yet. So
+#: ``reserved-SS.lock`` is a name we recognise IN ADVANCE, not one we expect to
+#: appear. Recognising it costs nothing while it never appears, and not
+#: recognising it would cost us our floor on the day it did.
+DETECTION_ONLY_REPO_KEYS: tuple[str, ...] = ("rm", "ds", "SS")
 
 #: The DETECTION alphabet: a strict superset of :data:`REPO_KEYS`.
 #:
@@ -274,7 +297,16 @@ DETECTION_ONLY_REPO_KEYS: tuple[str, ...] = ("rm", "ds")
 #: the detector, which a wide-open pattern would let it do.
 #:
 #: Widening this does NOT widen :func:`is_slot_name`, and must not: the reaper
-#: stays narrow so it never deletes a file it does not understand.
+#: stays narrow so it never deletes a file it does not understand. The same
+#: applies to the CASE FOLD in :func:`is_detectable_reserved_name`: detection
+#: folds case, the reaper does not.
+#:
+#: Entries are compared case-insensitively, so the spelling stored here is the
+#: one its owner uses rather than a normalised one. ``rm`` and ``ds`` are read
+#: off a ports table that writes them lowercase; ``SS`` is the spelling
+#: Substrate itself published, and keeping it means an operator grepping this
+#: tree for ``SS`` finds it - which is the exact failure Substrate's correction
+#: note warned about.
 DETECTION_REPO_KEYS: tuple[str, ...] = (*REPO_KEYS, *DETECTION_ONLY_REPO_KEYS)
 
 RESERVED_PREFIX = "reserved-"
@@ -717,13 +749,31 @@ def is_detectable_reserved_name(name: str) -> bool:
     what we may DELETE stays narrower than the set that decides what we may
     NOTICE. It is also not an arbitrary token, because a false PRESENT is the
     expensive direction - see :data:`DETECTION_REPO_KEYS`.
+
+    IT FOLDS CASE, and that is a measurement rather than a preference. Measured
+    on this machine 2026-09-20, in a temporary directory on the same kind of
+    volume the shared bucket lives on: ``reserved-SS.lock`` was created, and an
+    ``O_CREAT | O_EXCL`` create of ``reserved-ss.lock`` then raised
+    ``FileExistsError`` while ``iterdir`` reported back only the spelling the
+    CREATOR used. The two names are ONE FILE here. A case-sensitive detector is
+    therefore defeated by a difference the filesystem does not even record as a
+    difference, and the defect was never Substrate-specific - in the same
+    measurement ``reserved-ds.lock`` read as detectable while
+    ``reserved-DS.lock``, a key already in this alphabet, did not.
+
+    The fold does not widen the alphabet. It recognises the SAME keys under a
+    spelling this volume already considers identical, so the false-PRESENT
+    surface gains nothing an operator could call a new name: ``reserved-zz.lock``
+    and ``reserved-ZZ.lock`` are both still invisible here.
     """
-    if not name.endswith(LOCK_SUFFIX):
+    folded = name.casefold()
+    if not folded.endswith(LOCK_SUFFIX.casefold()):
         return False
-    stem = name[: -len(LOCK_SUFFIX)]
-    if not stem.startswith(RESERVED_PREFIX):
+    stem = folded[: -len(LOCK_SUFFIX)]
+    if not stem.startswith(RESERVED_PREFIX.casefold()):
         return False
-    return stem[len(RESERVED_PREFIX) :] in DETECTION_REPO_KEYS
+    tail = stem[len(RESERVED_PREFIX) :]
+    return any(tail == candidate.casefold() for candidate in DETECTION_REPO_KEYS)
 
 
 def reserved_scheme_state(root: Path | str, key: str = REPO_KEY) -> str:
@@ -758,7 +808,7 @@ def reserved_scheme_state(root: Path | str, key: str = REPO_KEY) -> str:
     Creates nothing. A bucket that is not there stays not there.
     """
     bucket = Path(root)
-    ours = reserved_name(key) if key in REPO_KEYS else None
+    ours = reserved_name(key).casefold() if key in REPO_KEYS else None
     try:
         entries = list(bucket.iterdir())
     except OSError:
@@ -766,7 +816,14 @@ def reserved_scheme_state(root: Path | str, key: str = REPO_KEY) -> str:
         # here, and all three mean the same thing to a caller: we did not look.
         return RESERVED_UNKNOWN
     for entry in entries:
-        if entry.name == ours:
+        # Case-folded for the same volume reason `is_detectable_reserved_name`
+        # folds, and this half MUST fold with it. If the name test is case-blind
+        # and the own-floor exclusion is not, `reserved-LL.lock` - our own floor
+        # under a spelling this filesystem treats as identical - stops being
+        # excluded and starts reading as somebody else's evidence. The detector
+        # would then latch at PRESENT on our own footprint, which is precisely
+        # what excluding our floor exists to prevent.
+        if ours is not None and entry.name.casefold() == ours:
             continue
         if is_detectable_reserved_name(entry.name):
             return RESERVED_PRESENT

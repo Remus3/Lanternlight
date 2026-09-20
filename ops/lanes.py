@@ -437,6 +437,20 @@ LANES: tuple[Lane, ...] = (
             # tests/test_vendored_write_tracer.py, which fails if it is.
             "third_party/**",
             "tests/test_vendored_write_tracer.py",
+            # OPS-91, the vendored copy of Amberstone's docs/CHANNEL.md and its
+            # NOTICE. "third_party/**" above already owns the vendored tree
+            # itself; this line is here because the test module lives under
+            # tests/ and matches no other glob, exactly as the write tracer's
+            # does. The channel conventions it pins are this lane's concern -
+            # the note channel is continuity machinery, not feature work - and
+            # the vendored document must not be edited by ANY lane.
+            "tests/test_vendored_channel_md.py",
+            # OPS-91 criterion 4, the channel's portable assertions written as
+            # OUR OWN test module rather than vendored - RC's gate module is
+            # not vendored under any answer, because it hard-imports RC-only
+            # tooling no sibling has. It checks ops/inbox_watch.py, which
+            # ops/** already assigns to this lane.
+            "tests/test_channel_contract.py",
             # OPS-45, the Stop-hook claim auditor. ops/** already covers
             # ops/stop_audit.py; the test module matches no glob here. It is
             # this lane's work for the same reason the merge gate is: both
