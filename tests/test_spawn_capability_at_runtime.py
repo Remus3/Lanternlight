@@ -319,6 +319,11 @@ SPAWN_RUNTIME_ENTRY_POINTS: dict[str, tuple[tuple[str, str], ...]] = {
     "ops/store_drift.py": (("ops.store_drift", "snapshot"),),
     # OPS-103. Lists this repository's staged set with one git call - a read.
     "tools/secret_scan.py": (("tools.secret_scan", "staged_paths"),),
+    # OPS-106. Lists every object reachable from every ref with one git
+    # rev-list - a read, and the first spawn the full-history scan makes.
+    "scripts/history_scan.py": (("scripts.history_scan", "reachable_objects"),),
+    # OPS-107. Lists this repository's published set with git - a read.
+    "ops/scratch_path_guard.py": (("ops.scratch_path_guard", "population"),),
 }
 
 #: Modules that CAN reach a spawn and are deliberately not probed, each with

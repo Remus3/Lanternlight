@@ -59,6 +59,7 @@ Touch these paths and nothing else. Every other path in the repository belongs t
 - `docs/refutation_census.tsv`
 - `docs/REFUTATION_CENSUS.md`
 - `tests/test_preflight.py`
+- `tests/test_scratch_path_guard.py`
 - `tests/test_suite_recorder.py`
 - `tests/test_cycle_cost.py`
 - `docs/CYCLE_COST.md`
@@ -96,6 +97,21 @@ Touch these paths and nothing else. Every other path in the repository belongs t
 - `tests/test_lane_*.py`
 - `scripts/write_lane_contracts.py`
 - `lanes/ops.*`
+
+## Scratch files - the session scratchpad only
+
+The session scratchpad directory your harness names in its system prompt
+is the ONLY scratch destination. Every temporary file, captured command
+output, throwaway repository and sub-agent report goes under it, and you
+pass that absolute path on to every sub-agent you dispatch.
+
+Never build a scratch path from a temp-directory environment variable, and
+never from a root path whose first component only begins with the temp
+directory's name. Under Git Bash the usual variable is unset, so the path
+silently collapses into the Git for Windows install root, and so does the
+look-alike root path; seventeen of this project's files landed there that
+way (`OPS-107`). `python -m ops.preflight` refuses both in any tracked
+command, and neither is the scratchpad even where it happens to resolve.
 
 
 ## Session shape - the default, not an escalation

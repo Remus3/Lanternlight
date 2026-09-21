@@ -1,139 +1,90 @@
 LANTERNLIGHT - NEXT SESSION PROMPT
-Written at the wrap of 2026-09-20. Assume you have zero context; everything you
-need is here or in the files this names.
+Written at the wrap of 2026-09-20 (second session that day). Assume zero
+context; everything you need is here or in the files this names.
 
-YOUR JOB THIS SESSION: work OPS-103, and keep the sync inbox answered.
-OPS-102 and OPS-104 are both open and both blocked on the operator PLAYING.
-OPS-103 is not blocked - it is about this repository's own guards.
+YOUR JOB THIS SESSION: keep the sync inbox answered. Every other open ROADMAP
+item needs the game client (OPS-102). If the operator is PLAYING, OPS-104
+(retake the destroyed capture ground truth) comes first.
 
 READ FIRST, in this order:
   CLAUDE.md                - the rules. THE HARD BOUNDARY is not negotiable.
-  ROADMAP.md               - OPS-103, then OPS-104, then OPS-102's amendment.
-  docs/LEDGER.md           - newest entry is LL-0297.
+  ROADMAP.md               - OPS-102, OPS-104, then the OPS-103 and
+                             OPS-105/106/107 closure sections (search
+                             "Closure").
+  docs/LEDGER.md           - newest entry is LL-0303.
   docs/HEADLESS.md         - its STOP CONDITIONS, before starting any loop.
-  docs/REPLY_PATHS.md      - where a reply actually goes. FIVE sibling codes.
+  docs/REPLY_PATHS.md      - where a reply goes. Five sibling codes.
 
 STATE AT THE WRAP
-  Branch main, clean, pushed. HEAD 7fb999d.
-  Full suite, observed this run: 3695 passed, 22 skipped in 168.31s.
-    Collected 3717, measured separately with a BARE `--collect-only`.
-    22 SKIPPED IS THE HONEST NUMBER NOW, NOT A REGRESSION - 21 of them are the
-    vision tests disabled because their ground truth was destroyed (below).
-    Do NOT carry either number forward; re-measure. `-q` is already in
-    pytest.ini addopts, so a second one prints NO summary line and exits 0.
-  Ruff: All checks passed. `python -m ops.preflight`: PRE-FLIGHT PASS.
-  Loop state: cycle 97, item OPS-103, 100 completed.
-  CAPTURE WATCHER: NO_RECORD, NOT re-armed - seventh wrap in a row. The
-    operator's 2026-09-11 disarm has not been lifted and overrides the ritual.
-    NEW, AND IT MATTERS IF THE DISARM IS EVER LIFTED: the watcher's --dest-base
-    was C:/ll-captures, which no longer exists. Re-arming it as written would
-    recreate that root from empty. Decide the destination before re-arming.
+  Branch main, pushed. Loop state: cycle 99, item None, OPS-103/105/106/107
+  credited.
+  Full suite, observed this run UNDER GIT BASH: 3896 passed, 22 skipped in
+    348.58s. Re-measure; do not carry this forward.
+  RUN THE SUITE FROM GIT BASH, NOT POWERSHELL. From PowerShell the same tree
+    gave 3833 passed, 85 skipped: PowerShell's PATH lacks Git's usr/bin, so 55
+    posix-userland tests and 7 bash tests SKIP and the run still exits 0. A
+    rising skip count is not a regression signal you can read off exit codes.
+  Ruff: All checks passed. Preflight: PASS, 15 guard modules.
+  CAPTURE WATCHER: NO_RECORD, and ensure_armed_at_wrap REFUSED with
+    "OPERATOR DISARM" - correct. See below.
 
-THE MOST IMPORTANT THING THAT HAPPENED: THE CAPTURE GROUND TRUTH IS GONE
-  C:\ll-captures was PERMANENTLY DELETED on 2026-09-20 - 10.6 GB, 19,241 files.
-  Not in the Recycle Bin, no volume shadow copy, and the operator confirmed
-  there is no backup and it is unrecoverable, and that the captures needed
-  retaking anyway. It was NOT this project: no rmtree near any capture path in
-  this tree, watcher disarmed since 2026-09-11.
+THE WATCHER DISARM IS NOW IN CODE - DO NOT WORK AROUND IT
+  At this session's start, /continue armed the watcher over the operator's
+  2026-09-11 disarm (LL-0234). It recreated C:\ll-captures and copied 17 files
+  into it. Undone within a minute: own pid killed, copies moved to that
+  session's scratchpad (not deleted), empty dirs removed, record renamed.
+  lanternlight/armwatch.py now holds OPERATOR_DISARM; ensure_armed,
+  session_armed, ensure_armed_at_wrap AND `python -m lanternlight.armwatch`
+  all refuse. An "OPERATOR DISARM" refusal is the correct answer. Only the
+  operator lifts it, by a tracked edit to that constant. LL-0298.
 
-  267 references in 32 files; 132 are CITED EVIDENCE in this public repo.
-  The citations were deliberately NOT stripped - they record HOW each reading
-  was taken, which is the one thing still recoverable. docs/AFFIXES.md,
-  docs/FINDINGS.md and docs/OBSERVED_IDS.md carry a notice at the top, and
-  tests/test_capture_evidence_notice.py FAILS IN BOTH DIRECTIONS: the notice
-  must stay while the tree is gone and must GO if it ever returns.
-  ONE CAPTURE SET SURVIVES - the 2026-08-09 set of 218 PNGs in OBSERVED_IDS is
-  OUTSIDE that tree. Do not annotate it as lost.
-  Retaking is OPS-104. Two SHIPPED constants - VALUE_WINDOW (48, 92) and the
-  glyph templates in lanternlight/vision_meter_templates.py - were derived
-  from those frames and can no longer be audited. They still work.
+WHAT LANDED THIS SESSION
+  - OPS-103 CLOSED (LL-0299): tools/secret_scan.py (13 credential classes) runs
+    at commit time over staged blobs; ops/outside_scan.py runs at SessionStart
+    over the Git install root and temp top level. 17 of our stray Git-root files
+    redacted in place (ten PII hits, not nine). TMPDIR root cause -> OPS-107.
+  - OPS-107 CLOSED (LL-0303): ops/scratch_path_guard.py in preflight. PREMISE
+    CORRECTED: in Git Bash a bare tmp-slash path maps to the user Temp folder
+    and is SAFE; the look-alikes (tmp followed by underscore, hyphen or
+    letters) land in the Git install root, and PowerShell's env TMPDIR is
+    unset. Use the session scratchpad for all scratch files. This file is
+    scanned by that guard line by line, so describe the hazard in words here.
+  - OPS-106 CLOSED (LL-0302): scripts/history_scan.py. One true identifier in
+    history (split git identity, tests/test_source_register.py) - already public
+    in every commit's author metadata (OPS-52), so rewrite DECLINED. The other
+    row is a false positive.
+  - OPS-105 CLOSED (LL-0301): withdrawn tmp-retention figures corrected in the
+    test docstring; LL-0301 corrects LL-0295.
+  - pytest.ini empty_parameter_set_mark = fail_at_collect; test_cycle_cost no
+    longer ages out of a fixed 40-commit window (LL-0300).
 
-THE ITEM YOU ARE PICKING UP - OPS-103
-  This repository has NO provider-credential detection anywhere in its
-  tracked tree, and NO control whose population includes a file outside the
-  repository root. Six acceptance criteria are in ROADMAP.md.
-  CRITERION 3 IS THE HARD HALF AND MUST NOT BE QUIETLY DROPPED. Criteria 1
-  and 2 are repository-scoped and would leave the second gap exactly where it
-  is. A scan a session runs by hand is NOT a control.
-  CRITERION 4 is unstarted: nine PII-class occurrences in three of our eleven
-  files in the shared bucket at C:\Program Files\Git. Ours are ours.
+PROVENANCE CAVEAT, carried because the wrap refutation pass raised it
+  The mutation red-counts in LL-0302 ("5 of 9 survived") and LL-0303 ("14, 3,
+  4, 2, 1 red") are LANE figures. The 5-of-9 was found by an independent
+  verifier's harness, not the producing lane; the killed-mutant counts after
+  the fix and the LL-0303 counts were reported by the producing lane and NOT
+  re-run by the wrap pass. Treat them as unreproduced until someone re-runs.
 
-THE FINDINGS WORTH CARRYING, all measured here
-  1. A SAFE LIST IS WHERE THE HOLES ARE. The environment guard shipped this
-     session was corrected THREE times. Every defect was a SAFE-LIST entry
-     admitted on reasoning; every POSITIVE specimen had been measured and no
-     NEGATIVE one had. It now has NO exemptions and an arm that fails if one
-     comes back. Before you add ANY entry to ANY allowlist in this repo,
-     measure that it is actually safe.
-  2. THE ENVIRONMENT HAZARD IS THE OPERATOR, NOT THE OPERAND. pytest emits an
-     `E + where` chain for some comparisons and not others, and that chain
-     reprs every sub-expression including os.environ. So
-     `os.environ.get(ABSENT) == x` LEAKS while `.get(PRESENT) == x` is clean:
-     the SAME LINE is safe or unsafe depending on runtime state. The only safe
-     shape binds first - `value = os.environ.get(N)` then `assert value == x`.
-  3. A SKIPPED TEST IS STILL A COLLECTED TEST. 21 vision tests went from
-     passing to skipping and the suite exited 0; the merge gate's
-     collected-count floor never moved. A count-based guard cannot see a test
-     that starts skipping.
-  4. THE SPLIT ARCHIVES HELD A THIRD OF THE ANSWER. 86 of 267 references were
-     in docs/LEDGER_ARCHIVE.md and docs/ROADMAP_ARCHIVE.md. Search both halves.
-  5. A COUNT FROM A SHARED DIRECTORY CARRIES THE TIMESTAMP OF THE READ, and a
-     DIRECTORY'S DATE IS NOT ITS CONTENTS' DATE. Both corrected a relayed temp
-     finding; pytest.ini now pins tmp retention and the shared temp base fell
-     from 266,336 files to about 65,000.
-  6. A CONFIG ASSERTION THAT READS THE CONFIG FILE IS TESTING YOUR TEXT
-     EDITOR. Ask the live pytestconfig. See tests/test_tmp_retention.py.
+SECURITY - OPERATOR RULING, BINDING
+  The outside scan's first run found live provider credentials in plain text
+  in files that are NOT ours (third-party installer logs in temp, a sibling's
+  suite log in the Git install root). The operator ROTATED them and ruled:
+  never read or compare credential environment-variable values, and never
+  re-scan those files to verify - reading secrets is itself the leak vector.
+  Report findings as class, count and path only.
 
 WHAT IS OWED ON THE CHANNEL
-  Nothing outstanding. FIVE notes sent this session, each to all five
-  siblings, none failed. Expect replies, especially to the three sent late:
-   - 2140 FOLLOW-UP: told four trees their reads of our pin test were stale.
-   - 2320 CORRECTION: the form we twice called SAFE leaks. If a tree says it
-     applied our earlier advice, point it at this note.
-   - 2350 WITHDRAWAL: our 10.7 GB figure and KEEP recommendation for the
-     destroyed tree are withdrawn.
-  RE-PIN STATE, re-derived from the notes: v2 is carried by LL, CS, LW, RC and
-  RSC - five of five. SS holds no copy and is NOT a pin-holder; do not ask it
-  again. LL is a NON-CARRIER for slots.py and winmutex.py; do not let anyone
-  count us in ROUND B's N.
-  ALWAYS DELIVER A REPLY, and SEND THE FOLLOW-UP TOO. Both are in CLAUDE.md.
-  FILENAME CLOCKS ON THIS CHANNEL ARE NOT ON ONE AXIS - at least one tree
-  stamps UTC and one stamps local on the same machine. A sort by filename is
-  not a sort by time.
+  Nothing outstanding. 0930 ANSWER and 0935 WITHDRAWAL delivered to CS, LW,
+  RC, RSC and SS. Expect replies. LL is a NON-CARRIER of slots.py and
+  winmutex.py - never count us in ROUND B's N. SS is not a pin-holder.
+  ALWAYS DELIVER A REPLY and SEND THE FOLLOW-UP TOO (CLAUDE.md). Filename
+  clocks on the channel are not on one axis (UTC and local both occur).
 
-CORRECTIONS THIS SESSION MADE TO ITS OWN PUBLISHED WORK
-  - The environment advice, twice. Withdrawn at 2320. LL-0296.
-  - The "three renderings" figure: environment-specific, does not travel.
-  - The previous hand-off said CS was the sole outstanding v1 carrier. CS
-    re-pinned to v2 at c820cc6. Superseded.
-  - The previous hand-off at b01f54b quoted 3697 passed / 1 skipped. That was
-    true before the captures were destroyed and is not true now.
-  - CLAUDE.md claimed ONE vendored work while holding two; a cold analysis
-    pass then called four siblings' correct reports a fabrication. Fixed and
-    guarded both directions by tests/test_vendored_inventory_is_declared.py.
-
-THE WRAP-TIME REFUTATION PASS broke four of this session's claims, and every
-one is corrected above - the .get() leak, the alias-of-alias hole, the suite
-count, and the capture loss it noticed mid-run. Its remaining findings that
-were NOT acted on are in the session scratchpad and are not load-bearing:
-minor directory-count variance (398 vs 401 in one measurement) that does not
-change any conclusion.
-
-HOW TO START
-  python ops/inbox_watch.py          # if no MAIL block appeared, a hook missed
-  python -m ops.preflight            # about 12-20s, before dispatching anything
-  Then read OPS-103 and take criterion 3 seriously before 1 and 2.
-
-DO NOT
-  - re-arm the capture watcher without the operator lifting the 2026-09-11
-    disarm, AND without choosing a destination - its old one is gone
-  - remove a CAPTURE-EVIDENCE-DESTROYED notice before OPS-104 re-verifies the
-    citations it covers; its guard fails if you do
-  - strip a dangling capture citation; it is the record of how a reading was
-    taken
-  - edit anything under third_party/ - it is byte-pinned and its guard fails
-  - adopt anything cross-project; declining is yours, adopting is a ruling
-  - edit another tree's file or scheduled task
-  - raise a doc size budget - re-run `python scripts/apply_doc_split.py --apply`
-  - add an entry to any allowlist without measuring that it is actually safe
-  - trust a subagent's count, a digest of the inbox, or your own heredoc
+FINDINGS WORTH CARRYING
+  1. A RULING THAT LIVES ONLY IN PROSE LOSES TO AN INSTRUCTION CLOSER TO
+     EXECUTION. The hand-off said "disarmed"; the command file said "arm".
+     Put a ruling where the action is.
+  2. Every adversarial pass this session refuted something real: a second
+     arming route, raw filenames leaking the account name, a guard that
+     flagged the safe temp path and missed the unsafe one, and a history scan whose
+     tests let --all be narrowed to HEAD. Keep dispatching them.

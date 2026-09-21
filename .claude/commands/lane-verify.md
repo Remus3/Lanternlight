@@ -19,6 +19,21 @@ You are given **no worktree**. Read the primary checkout - the directory
 
 **This lane owns no files at all, and that is deliberate.** It has no write tools. It reports a verdict.
 
+## Scratch files - the session scratchpad only
+
+The session scratchpad directory your harness names in its system prompt
+is the ONLY scratch destination. Every temporary file, captured command
+output, throwaway repository and sub-agent report goes under it, and you
+pass that absolute path on to every sub-agent you dispatch.
+
+Never build a scratch path from a temp-directory environment variable, and
+never from a root path whose first component only begins with the temp
+directory's name. Under Git Bash the usual variable is unset, so the path
+silently collapses into the Git for Windows install root, and so does the
+look-alike root path; seventeen of this project's files landed there that
+way (`OPS-107`). `python -m ops.preflight` refuses both in any tracked
+command, and neither is the scratchpad even where it happens to resolve.
+
 **This lane holds a veto.** If it reports red, no other lane may commit anything derived from a game log. That is a block, not an opinion, and no lane may talk its way past it.
 
 **This lane is read-only.** It has no Edit or Write tools and is given no worktree. If you find yourself wanting to fix what you found, report it instead - the fix belongs to the lane that owns the file.

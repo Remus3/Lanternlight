@@ -84,6 +84,35 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0303 - 2026-09-20 - Close OPS-107: preflight refuses scratch paths that land in the Git install root, after the adversarial pass showed the item's own premise was wrong
+
+**Evidence:**
+- ops/scratch_path_guard.py + tests/test_scratch_path_guard.py (77 tests), registered in ops/preflight.py (15 guard modules). Zero findings over the tracked tree, no exemptions; the guard's own pattern was split rather than exempted.
+- Flags $TMPDIR / ${TMPDIR} / $TMP / $TEMP in shell, /tmp look-alikes (/tmp_x, /tmp-x, /tmpfile), PowerShell $env:TMPDIR and bare $TEMP, Python environ TMPDIR reads and /tmp strings, %TMPDIR% in cmd.
+- All eight .claude/commands/lane-*.md regenerated from ops/lane_contract.py and naming the session scratchpad as the only scratch destination.
+- Undoing each of the five refutation fixes turned 14, 3, 4, 2 and 1 tests red.
+
+PREMISE CORRECTED BY MEASUREMENT: Git Bash mounts the user Temp folder on /tmp, so bare /tmp/x is safe there. /tmp_x resolves to the Git install root, and PowerShell $env:TMPDIR is unset and collapses to the drive root. The first guard flagged the safe form and missed both real ones.
+Known gap: prose and inline code in Markdown outside CLAUDE.md, docs/HEADLESS.md and the lane contracts.
+
+### LL-0302 - 2026-09-20 - Close OPS-106: a full-history scan found one true operator identifier in history, already public in commit metadata, so the rewrite is declined
+
+**Evidence:**
+- scripts/history_scan.py walks every blob from every ref (1771 blobs, 4 refs), with redact.py detection, the 13 credential classes and the ASCII rule; output is class, count, path and sha only.
+- tests/test_history_scan.py, 14 passed. An adversarial mutation harness found 5 of 9 mutants surviving the first 9 tests (--all narrowed to HEAD among them); every mutant is killed now, and the unmutated control passes.
+- Findings, reproduced independently by a pickaxe search: split git identity in tests/test_source_register.py, 8442072 to 1978cfc, TRUE positive; PERSONA in lanes/safety.STATE.json, e5d66f6 to 41a2c5b, FALSE positive (English prose).
+
+REWRITE DECLINED: the identity is the author address on every commit, already public under OPS-52, so rewriting one blob's history removes nothing a reader cannot see. Declining is a session decision; a rewrite of a public history would not be.
+Blind spots, written in the docstring: older stash entries, dangling objects, staged blobs, commit messages, author fields.
+
+### LL-0301 - 2026-09-20 - Close OPS-105: correct LL-0295's tmp-retention figures in the test docstring, which we had already withdrawn in public
+
+**Evidence:**
+- tests/test_tmp_retention.py docstring: cites only the controlled 589 to 175 files measurement; 'stale by roughly 74,000' removed; the 46 to 12 run-directory and 266,336 to about 65,000 file drops marked CONFOUNDED (machine sweep inside the window; pinned count equals pytest's default). No assertion changed.
+- python -m pytest tests/test_tmp_retention.py tests/test_ascii_hygiene.py: 12 passed.
+
+THIS ENTRY CORRECTS LL-0295, which stays as written because the ledger is append-only. Read LL-0295's 74,000 and 46 to 12 figures as WITHDRAWN.
+
 ### LL-0300 - 2026-09-20 - Answer the 2026-09-21 channel batch with a reply and a four-point withdrawal, make an empty parameter set a collection error, and stop test_cycle_cost ageing out of its own window
 
 **Evidence:**

@@ -1,7 +1,11 @@
 """This suite must delete its own ``tmp_path`` directories when a test PASSES.
 
-WHY, and the numbers below were measured on this machine rather than reasoned
-about.
+WHY, and the ONLY figure below still standing as evidence is the controlled
+before/after measurement in THE EFFECT. Earlier drafts of this docstring also
+cited a machine-wide temp-base file count and a run-directory count as
+evidence for this setting; both were WITHDRAWN on the cross-project channel
+(``moon_sync_inbox/_outbox/2026-09-21-0935-from-LL-WITHDRAWAL-...md``,
+OPS-105) and are recorded here as confounded, not as support.
 
 A session overlooking the machine from ``C:/`` reported that a scheduled
 hygiene sweep deletes ``pytest`` run directories older than TWO DAYS, and that
@@ -12,10 +16,12 @@ walking the shared temp root directly:
 - The OLDEST was 1.22 days old. **Zero were older than two days**, so a
   two-day cutoff removes zero of 46 - the sweep was correct in its own terms
   and simply never had a candidate.
-- The same walk counted 266,336 files under that one base. The relayed figure
-  was 192,202, which was already stale by roughly 74,000 files when it reached
-  us. A count from a shared directory carries the timestamp of the read, and
-  two of this session's own suite runs are inside that difference.
+- The same walk counted 266,336 files under that one base. A relayed figure of
+  192,202 was compared against this count and the difference was described as
+  staleness - WITHDRAWN. The two counts were different POPULATIONS (one shared
+  root against the whole pytest family across all roots), not the same count
+  taken at different times, so the subtraction never meant anything. Neither
+  266,336 nor 192,202 is evidence for this file's setting; both are snapshots.
 
 **The relayed diagnosis needed one correction, and it changes where the fix
 belongs.** The report said that base had been "accumulating since 2026-04-22".
@@ -32,8 +38,25 @@ project, and ``CLAUDE.md`` permits this project to write into the sync inboxes
 and nowhere else outside its own root. Our contribution, and only ours, is
 controlled here.
 
-THE EFFECT, measured before it was believed. The same two modules, the same 88
-tests, run twice into isolated base directories:
+**CONFOUNDED, not evidence: the 46-to-12 run-directory drop and the
+266,336-to-about-65,000 file drop on the shared base.** Both were previously
+reported as the effect of this file's setting. They are not usable that way,
+for two independent reasons, either of which alone would be enough:
+
+- A machine-level sweep ran INSIDE the before/after measurement window, so any
+  fall in run-directory or file counts on that shared base cannot be
+  attributed to this repository's setting alone - the sweep may have done all
+  of it, some of it, or none of it, and the two effects were never isolated.
+- The retention COUNT this file pins (``3``) equals pytest's own stock
+  default. A value equal to the default cannot be the cause of a drop in the
+  number of RUN DIRECTORIES kept, because it changes nothing about how many
+  directories are kept relative to doing nothing. Only the POLICY change
+  (``all`` to ``failed``) removes files, and only files INSIDE a run
+  directory, never the directories themselves.
+
+THE EFFECT, measured before it was believed, and the only measurement this
+docstring still relies on. The same two modules, the same 88 tests, run twice
+into isolated base directories with no machine sweep in scope:
 
 - ``tmp_path_retention_policy=all`` (the stock default): 589 files, 401 dirs.
 - ``tmp_path_retention_policy=failed``: 175 files, 236 dirs.
@@ -51,6 +74,7 @@ default.** ``--strict-config`` is already on, so a value here cannot be a typo
 that silently does nothing. Pinning it means a future pytest changing its own
 default cannot quietly change what this repository leaves on the operator's
 disk - which is the class of silent behaviour change this file exists to stop.
+It is not, and was never, evidence for the run-directory count falling.
 """
 
 from __future__ import annotations

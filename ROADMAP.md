@@ -1438,7 +1438,7 @@ environment again, because doing so is itself a leak vector.
 `tests/test_secret_scan_outside.py` asserts the module reads no environment
 values.
 
-## OPS-105. Correct our own tmp-retention record - OPEN
+## OPS-105. Correct our own tmp-retention record - CLOSED 2026-09-20, `LL-0301`
 
 Out of the 2026-09-21 channel batch (our `0935 WITHDRAWAL` note). The docstring
 of `tests/test_tmp_retention.py` and the record under `LL-0295` still carry
@@ -1452,7 +1452,7 @@ Acceptance: the docstring cites only the controlled 589 to 175 measurement as
 evidence; a NEW ledger entry (never an edit to `LL-0295`) records the correction;
 the ASCII and doc guards stay green.
 
-## OPS-106. One-off full-history scan for operator identifiers and non-ASCII - OPEN
+## OPS-106. One-off full-history scan for operator identifiers and non-ASCII - CLOSED 2026-09-20, `LL-0302`, rewrite DECLINED
 
 Every hygiene guard here scans the TREE. A value committed and later removed is
 still in every clone. Acceptance: a script under `scripts/` walks every blob
@@ -1463,17 +1463,47 @@ with a planted synthetic identifier in a deleted file. If it finds anything, the
 remediation decision (history rewrite or not) is recorded as a question in the
 ledger, because rewriting a PUBLIC history is not a session decision.
 
-## OPS-107. Stop our own scratch output landing in the Git install root - OPEN
+## OPS-107. Stop our own scratch output landing in the Git install root - CLOSED 2026-09-20, `LL-0303`
 
 Root cause of the gap `OPS-103` criterion 3 controls but does not fix: under Git
 Bash `$TMPDIR` is unset, so `"$TMPDIR/name"` becomes `/name`, which resolves to
-the Git install root, and a bare `/tmp` does the same. 17 of our files landed
+the Git install root. (CORRECTED at closure: a bare `/tmp/...` does NOT - Git
+Bash mounts the user Temp folder on `/tmp`, measured with `mount` and
+`cygpath -w`. The real look-alike hazard is `/tmp_x`, `/tmp-x`, `/tmpfile`,
+which DO resolve to the Git install root, plus PowerShell `$env:TMPDIR`, which
+is unset and collapses to the drive root.) 17 of our files landed
 there, written by subagents. Acceptance: `python -m ops.preflight` (or the lane
 contract text it checks) refuses a command or script in the tree that builds a
 scratch path from an unset variable or bare `/tmp`, proved by a test that plants
 one; and every lane contract names the session scratchpad as the only scratch
 destination. Disposal of the 17 existing files stays the operator's call - they
 are redacted and recorded, not deleted.
+
+### Closure of OPS-105, OPS-106 and OPS-107, 2026-09-20
+
+- `OPS-105`: `tests/test_tmp_retention.py` docstring cites only the controlled
+  589 to 175 measurement; the withdrawn figures are marked CONFOUNDED; no
+  assertion changed. `LL-0295` is untouched (append-only) and `LL-0301` records
+  the correction.
+- `OPS-106`: `scripts/history_scan.py` + `tests/test_history_scan.py` (14
+  tests). An adversarial mutation harness first found 5 of 9 mutants SURVIVING
+  the original 9 tests - including `--all` narrowed to `HEAD` - and all 9 are
+  killed now. Over 1771 blobs from 4 refs: two history-only rows. The split git
+  identity in `tests/test_source_register.py` (8442072 to 1978cfc) is a TRUE
+  positive, but that identity is already public in the author metadata of every
+  commit (`OPS-52`), so a rewrite would remove nothing a reader cannot already
+  see - DECLINED, a session decision because declining needs no ruling. The
+  PERSONA row in `lanes/safety.STATE.json` is a FALSE positive (English prose in
+  an `open_items` text field). Not covered, and written in the docstring:
+  older stash entries, dangling objects, staged blobs, commit messages and
+  author fields.
+- `OPS-107`: `ops/scratch_path_guard.py` + `tests/test_scratch_path_guard.py`
+  (77 tests), run by `ops.preflight`; zero findings over the tracked tree with
+  NO exemptions; all eight lane contracts name the session scratchpad as the
+  only scratch destination. The adversarial pass REFUTED the first version
+  (`/tmp_x` and `$env:TMPDIR` passed) and corrected the item's own premise.
+  Known gap, in the module docstring: prose and inline code in Markdown other
+  than `CLAUDE.md`, `docs/HEADLESS.md` and the lane contracts.
 
 ## OPS-100. A sibling's question found a relative-path defect in our own pre-commit hook - FIXED 2026-09-20
 

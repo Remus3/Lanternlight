@@ -113,6 +113,11 @@ WHY: dict[str, str] = {
         "class (b). A file under moon_sync_inbox/ becoming tracked is a "
         "licensing failure a push makes very hard to undo."
     ),
+    "tests/test_scratch_path_guard.py": (
+        "class (b). A tracked command building a scratch path from an unset "
+        "temp variable or a bare root temp directory, which under Git Bash "
+        "writes into the Git install root - OPS-107, seventeen files measured."
+    ),
     "tests/test_hook_file_mode.py": (
         "class (b). Hook registration and mode, which is plumbing whose "
         "absence no feature test can see."

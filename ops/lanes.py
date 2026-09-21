@@ -384,6 +384,11 @@ LANES: tuple[Lane, ...] = (
             # operator's, so both belong here.
             ".github/**",
             "scripts/install_hooks.py",
+            # OPS-106. The tree guards cannot see a value committed and later
+            # deleted; this is the same redaction and ASCII mandate applied to
+            # every blob reachable from every ref.
+            "scripts/history_scan.py",
+            "tests/test_history_scan.py",
             "lanes/safety.*",
         ),
         veto=True,
@@ -539,6 +544,10 @@ LANES: tuple[Lane, ...] = (
             "docs/refutation_census.tsv",
             "docs/REFUTATION_CENSUS.md",
             "tests/test_preflight.py",
+            # OPS-107, the scratch-path guard. ops/** already covers
+            # ops/scratch_path_guard.py; the test module matches no glob here.
+            # It runs in the pre-flight, beside the test above.
+            "tests/test_scratch_path_guard.py",
             # OPS-87 criterion 4, the live suite-run recorder. ops/** already
             # covers ops/suite_recorder.py; the test module matches no glob
             # here. It measures what this project's own cycles cost in
