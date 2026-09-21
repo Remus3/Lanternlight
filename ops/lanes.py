@@ -300,6 +300,14 @@ LANES: tuple[Lane, ...] = (
             # one site it found was in `tests/test_gitignore_shadowing.py`,
             # already owned above.
             "tests/test_no_environ_mapping_assertions.py",
+            # Disk hygiene, 2026-09-20. This suite must delete a PASSING test's
+            # tmp_path instead of leaving it on the operator's disk. It sits
+            # with this lane because it is a repository hygiene guard and
+            # because the reflex it guards against - quietly relaxing a setting
+            # to make something else easier - is the reflex this lane may not
+            # indulge. It pins two keys in `pytest.ini`, which is cross-cutting;
+            # the GUARD is this lane's, the file it reads is nobody's alone.
+            "tests/test_tmp_retention.py",
             # OPS-96. Empty untracked, unignored directories - the class the
             # 2026-09-19 machine sweep found, invisible to `git status` because
             # git does not report empty directories. It sits with this lane for

@@ -799,6 +799,7 @@ KNOWN_NON_HOSTS = frozenset(
         # `os.environ` and `os.environ.get`, not hosts.
         "os.environ",
         "os.environ.get",
+        "os.environ.keys",
         "trigger.json",
         "contract.write",
         "ops.outbox.SIBLING",

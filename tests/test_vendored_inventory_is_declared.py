@@ -26,6 +26,25 @@ it is a confident lie aimed at the one reader least able to check it.
 it does not store a list of names beyond what the document itself carries -
 ``tests/test_source_register.py`` gives the reason one level down: a committed
 list of filenames goes stale on the first rename.
+
+WHAT THIS GUARD IS BLIND TO, stated here in the artifact because a caveat that
+lives only in a chat message is a lie in the artifact. An adversarial pass on
+2026-09-20 found these and they are limits rather than defects:
+
+- **It cannot tell a DECLARATION from any other mention.** A sentence REFUSING
+  to vendor ``third_party/some_pkg/``, or that path inside a code fence, both
+  satisfy it. A prose guard over prose can check that a name is present and
+  cannot check what the sentence around it means. The failure it exists to
+  prevent is a vendored work the document never mentions AT ALL, and that one
+  it catches.
+- **It is a TOP-LEVEL inventory.** A vendoring nested at
+  ``third_party/outer/inner/`` is not a separate entry here, because this
+  repository's convention is one top-level directory per vendored work with
+  its NOTICE at that root. A nested one would be a convention violation for
+  ``tests/test_vendored_write_tracer.py`` and its channel sibling to speak to.
+- Two narrower blind spots were CLOSED rather than documented - dot-prefixed
+  names and loose files directly under ``third_party/`` are both in the
+  population now. See :func:`vendored_directories`.
 """
 
 from __future__ import annotations
@@ -39,14 +58,21 @@ THIRD_PARTY = REPO_ROOT / "third_party"
 
 
 def vendored_directories(root: Path = THIRD_PARTY) -> set[str]:
-    """Directory names directly under ``third_party/``.
+    """Every entry directly under ``third_party/``, files included.
 
-    One directory is one vendored work. ``CLAUDE.md`` requires a ``NOTICE``
-    per vendored work, so the directory is the unit the document names.
+    One entry is one vendored work. ``CLAUDE.md`` requires a ``NOTICE`` per
+    vendored work, so the top-level entry is the unit the document names.
+
+    **Two exclusions were removed after an adversarial pass, 2026-09-20.** The
+    first version skipped dot-prefixed names and non-directories, and both were
+    holes rather than tidiness: a vendored work at ``third_party/.hidden/`` or
+    a single vendored FILE dropped straight into ``third_party/`` would have
+    been invisible to a guard whose whole job is to notice a vendored work the
+    document does not name. Nothing is skipped now.
     """
     if not root.is_dir():
         return set()
-    return {p.name for p in root.iterdir() if p.is_dir() and not p.name.startswith(".")}
+    return {p.name for p in root.iterdir()}
 
 
 def declared_directories(text: str) -> set[str]:

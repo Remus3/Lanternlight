@@ -50,6 +50,7 @@ Touch these paths and nothing else. Every other path in the repository belongs t
 - `tests/test_source_register.py`
 - `tests/test_gitignore_shadowing.py`
 - `tests/test_no_environ_mapping_assertions.py`
+- `tests/test_tmp_retention.py`
 - `tests/test_no_empty_orphan_dirs.py`
 - `tests/test_repo_surfaces.py`
 - `tests/test_tracked_walker.py`
