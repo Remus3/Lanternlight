@@ -2,113 +2,144 @@ LANTERNLIGHT - NEXT SESSION PROMPT
 Written at the wrap of 2026-09-20. Assume you have zero context; everything you
 need is here or in the files this names.
 
-YOUR JOB THIS SESSION, by operator direction 2026-09-20: MONITOR AND WORK THE
-SYNC INBOX. The roadmap has no item you can work - that is OPS-102, and it is a
-STATE rather than a failure. Do not start a blocked item and do not lower an
-acceptance criterion to make one look startable.
+YOUR JOB THIS SESSION: work OPS-103, and keep the sync inbox answered.
+OPS-102 is still open and every MEASUREMENT item is still blocked on the
+operator playing - but read its amendment before you conclude there is nothing
+to do, because that is no longer what it says.
 
 READ FIRST, in this order:
   CLAUDE.md                - the rules. THE HARD BOUNDARY is not negotiable.
-  ROADMAP.md               - read OPS-102 FIRST; it says why nothing is eligible.
-  docs/LEDGER.md           - newest entry is LL-0290.
+  ROADMAP.md               - OPS-103 first, then OPS-102's amendment.
+  docs/LEDGER.md           - newest entry is LL-0295.
   docs/HEADLESS.md         - its STOP CONDITIONS, before starting any loop.
-  docs/REPLY_PATHS.md      - where a reply actually goes. SIX codes now.
+  docs/REPLY_PATHS.md      - where a reply actually goes. FIVE sibling codes.
 
 STATE AT THE WRAP
-  Branch main, clean, pushed. HEAD cd0b01a plus this wrap commit.
-  Full suite, observed this run: 3668 passed, 1 skipped in 416.76s.
-    Collected 3669. Do NOT carry either number forward - re-measure. `-q` is
-    already in pytest.ini addopts, so a second one prints NO summary line and
-    still exits 0. Run bare `python -m pytest` and read the last line; this
-    session hit exactly that trap once and re-ran to a file to get a number.
-  Ruff: All checks passed. `python -m ops.preflight`: PRE-FLIGHT PASS.
-  Loop state: cycle 95, item INBOX-MONITOR, 99 completed.
-  CAPTURE WATCHER: NO_RECORD, and this wrap DID NOT re-arm it. That is the
-    FIFTH wrap in a row to say so. The operator disarmed that lane on
-    2026-09-11 and never lifted it; docs/HEADLESS.md says the wrap does not
-    re-arm it, and the operator overrides the ritual. Nothing is archiving the
-    game log, the saves or the market cache. Accepted cost, not a fault.
-  Inbox: ~50 unread. Sent 14 notes on 2026-09-20 through ops.outbox.deliver,
-    all five recipients each, none failed.
+  Branch main, clean, pushed. HEAD e28b3d3.
+  Full suite, observed this run: 3697 passed, 1 skipped in 423.69s.
+    Collected 3698, measured separately with a BARE `--collect-only`. Do NOT
+    carry either forward - re-measure. `-q` is already in pytest.ini addopts,
+    so a second one prints NO summary line and still exits 0.
+  Ruff: All checks passed. `python -m ops.preflight`: PRE-FLIGHT PASS, 14 guards.
+  Loop state: cycle 96, item OPS-103, 100 completed.
+  CAPTURE WATCHER: NO_RECORD, and this wrap DID NOT re-arm it. SIXTH wrap in a
+    row to say so. The operator disarmed that lane on 2026-09-11 and never
+    lifted it; docs/HEADLESS.md says the wrap does not re-arm it, and the
+    operator overrides the ritual. Nothing is archiving the game log, the saves
+    or the market cache. Accepted cost, not a fault.
+  Inbox: acknowledged this session after all 68 unread were read IN FULL.
+    Two notes sent, both to all five siblings, neither failed.
 
-WHAT THIS SESSION CLOSED
-  OPS-36, OPS-91, OPS-95, OPS-96, OPS-97, OPS-98, OPS-99, OPS-100, OPS-101.
-  Six commits, cycles 89 to 94. Evidence in LL-0270 through LL-0290.
+WHAT THIS SESSION DID
+  Worked the channel, then fixed what working it exposed here.
+  Commits 0577d29 and e28b3d3. Evidence in LL-0291 through LL-0295.
 
-  The operator ruled VENDOR on Amberstone's docs/CHANNEL.md, then the channel
-  voted six-of-six for a CHANNEL_VERSION 2 re-pin and RC cut it the same night.
-  We hold it at third_party/rc_channel/docs/CHANNEL.md, 25425 bytes, sha256
-  fc22e86eebe93bb247a91f44835257a3fe717a287c4a3184a8e7a7b9a463fb9c. The licence
-  gate was RE-RUN at the new commit rather than inherited: a licence is a fact
-  about a COMMIT, not about a repository.
+THE ITEM YOU ARE PICKING UP - OPS-103
+  Two gaps, both measured, both admitted to five trees before being filed:
+  this repository has NO provider-credential detection anywhere in its tracked
+  tree, and NO control whose population includes a file outside the repository
+  root. Six acceptance criteria are written out in ROADMAP.md.
 
-THE FOUR FINDINGS WORTH CARRYING, all measured here
-  1. A STATIC CHECK IS A CLAIM ABOUT SOURCE TEXT AND LOSES TO A NAME BUILT AT
-     RUN TIME. Three guards asserting the responder could not send were defeated
-     at once by importlib.import_module("ops." + "out" + "box") plus getattr of
-     an assembled attribute, while the suite stayed GREEN at 50 of 50. The
-     replacement is not a better static check - it is a subprocess under
-     sys.addaudithook. A census then found FOUR guards over THE HARD BOUNDARY
-     with no runtime arm at all, and one module, overlay/window.py, that no
-     severity-1 guard had ever examined because the scope was a DENYLIST.
-  2. MEASURE THE AUDIT EVENT BEFORE BUILDING ON IT. importlib.import_module does
-     NOT raise the `import` event. shutil.which raises NOTHING. subprocess.Popen
-     carries a STRING, not an argument vector - a guard indexing it reads one
-     character. ctypes.dlsym DOES carry the real symbol name after assembly, and
-     that one measurement is what makes the native arm possible.
-  3. A HEREDOC EATS A DOUBLED BACKSLASH, TWICE IN TWO DAYS. A regex character
-     class meant as backslash-or-slash became slash-only, and the sweep returned
-     a clean, plausible, internally consistent answer with NO error message. It
-     was published to five trees and withdrawn. Write the script to a FILE with
-     a self-test that asserts the pattern matches before it walks anything.
-  4. A COUNT FROM THIS CHANNEL CARRIES THE TIMESTAMP OF THE READ. A vote tally
-     was published off a digest of 13 notes while the inbox already held 20, and
-     recorded CS as silent when CS had voted. Re-derive from the notes.
+  CRITERION 3 IS THE HARD HALF AND MUST NOT BE QUIETLY DROPPED. Criteria 1 and
+  2 are both repository-scoped and would leave the second gap exactly where it
+  is. A scan a session runs by hand is NOT a control - a control runs without
+  being remembered. If you refuse it, the item requires you to write down WHY
+  and what you did instead.
+
+  CRITERION 4 is unstarted: nine PII-class occurrences - five home-directory
+  paths, four Windows account names - sit in three of our eleven files in the
+  shared bucket at C:\Program Files\Git. Ours are ours. Deleting another tree's
+  file is not.
+
+THE FIVE FINDINGS WORTH CARRYING, all measured here
+  1. A SAFE LIST IS WHERE THE HOLES ARE. An adversarial pass defeated a guard
+     this session shipped, twice, and fixing the second exposed a third - all
+     three were entries on the guard's own SAFE list, admitted because the
+     reasoning sounded right. Every POSITIVE specimen had been measured and no
+     NEGATIVE one had. That asymmetry is where all three defects lived. If you
+     keep a denylist, an allowlist or a KNOWN_GOOD set - and this repo keeps
+     several - the question is not whether the entries are plausible, it is
+     which of them was ever measured.
+  2. `assert "NAME" not in os.environ` RENDERS THE WHOLE ENVIRONMENT into a
+     pytest failure diff. You do not have to write the mapping as an operand;
+     a membership test naming one variable is enough. `os.environ.keys()` is
+     WORSE - KeysView reprs as KeysView(environ({...})), keys and values both.
+     `os.environ.get(...)` renders only the retrieved value. The render COUNT
+     is environment-specific - this machine gave three, an independent pass in
+     a scrubbed environment gave two - so quote the mechanism, not the number.
+  3. A COUNT FROM A SHARED DIRECTORY CARRIES THE TIMESTAMP OF THE READ. A
+     relayed figure of 192,202 files measured 266,336 here hours later, with
+     two of this session's own suite runs inside the difference. Same lesson as
+     the vote tallies, in a different costume.
+  4. A DIRECTORY'S DATE IS NOT ITS CONTENTS' DATE. A temp base was reported as
+     "accumulating since 2026-04-22"; nothing in it was older than 29 hours.
+     That one correction moved the whole fix: it is churn, not accumulation, so
+     no cutoff expressed in DAYS can catch it and the producing suite is the
+     only place it is fixable. pytest.ini now pins retention and the shared base
+     fell from 266,336 files to 64,528.
+  5. A CONFIG ASSERTION THAT READS THE CONFIG FILE IS TESTING YOUR TEXT EDITOR.
+     An ini key the tool does not honour sits in the file looking correct while
+     changing nothing, and --strict-config only catches keys pytest knows to be
+     unknown. Ask the LIVE pytestconfig. See tests/test_tmp_retention.py.
 
 WHAT IS OWED ON THE CHANNEL
-  Nothing HALTS this tree. LW's HALT and the responder tasks RSC and RC disabled
-  are their own trees under their own operators. LW's ROUND B lands 2026-09-22
-  and we gave it a GO AHEAD: it is a VOTE and not a hash, because we carry
-  neither winmutex.py nor slots.py - re-measured, zero in git ls-files and zero
-  on a full tree walk. Do not let anyone count us in that round's N.
+  Nothing is outstanding as of this wrap - both notes went to all five and
+  neither failed. Expect replies to the FOLLOW-UP, because it told four trees
+  their reads of our pin test were stale and told one tree that three temp
+  directories are its own.
 
-  RE-PIN STATE: v2 at four carriers - LW, RC, RSC, LL. CS is the sole
-  outstanding carrier, still at v1. No mismatch reported anywhere. SS holds no
-  copy, is settled as a participant and NOT a pin-holder, and must not be asked
-  again.
+  RE-PIN STATE, re-derived from the notes rather than from any tally inside
+  one: v2 is carried by LL, CS, LW, RC and RSC - five of five. CS re-pinned at
+  commit c820cc6 and hashes equal. SS holds no copy, is settled as a
+  participant and NOT a pin-holder, and must not be asked again. The previous
+  hand-off said CS was the sole outstanding carrier at v1; that is SUPERSEDED.
 
-  ALWAYS DELIVER A REPLY - standing operator instruction, now in CLAUDE.md.
-  Every note gets an answer, including one saying we owe nothing. Charter v2
-  makes silence read as DISSENT, so a quiet tree with no stake is
-  indistinguishable from one objecting, one whose watcher never fired, and one
-  whose delivery failed.
+  LL IS A NON-CARRIER for slots.py and winmutex.py. Re-measured two ways, zero
+  both times. Do not let anyone count us in ROUND B's N.
 
-CORRECTIONS THIS SESSION MADE TO ITS OWN PUBLISHED WORK
-  Two figures were published to five trees and WITHDRAWN: "six harness project
-  directories" was five, and "seven git-root files" was eleven. LW's eleven and
-  ours were then compared member by member and byte for byte - they agree, so
-  the total was not a coincidence. LL-0290 corrects a third: three ledger
-  entries and two delivered notes carry the date 2026-09-21 and were written on
-  2026-09-20.
+  ALWAYS DELIVER A REPLY, and SEND THE FOLLOW-UP TOO. Both are standing
+  operator instructions and both are in CLAUDE.md. A number this project has
+  published and can no longer reproduce is withdrawn in a note, never quietly
+  corrected in our own documents.
 
-THE WRAP-TIME ADVERSARIAL PASS TRIED TO BREAK FIVE DONE-CLAIMS AND FAILED ON
-ALL FIVE. It re-ran every mutation itself rather than believing the reports,
-compared per-file collected counts against HEAD~6 in a detached worktree (3516
-across 73 files then, 3669 across 78 now, NO file fell), fired the pre-commit
-hook end to end with a banned glyph and a clean negative control, and confirmed
-the vendored digest against the GIT BLOB rather than the working file. Its only
-finding is the date error above. It could not verify the eleven-filename
-agreement with LW's own disk, nor RC's upstream provenance without network.
+  THE FILENAME CLOCKS ON THIS CHANNEL ARE NOT ON ONE AXIS. Measured: local read
+  2026-09-20 19:34 CDT while notes stamped 2026-09-21-0030, -0330 and -0600 were
+  already in the inbox. At least one tree stamps UTC and at least one stamps
+  local, on the same machine. A sort by filename is not a sort by time, and
+  "the newest note says X" is not a safe sentence here.
+
+CORRECTIONS THIS SESSION MADE TO ITS OWN WORK
+  CLAUDE.md claimed ONE vendored work while the tree held two. A cold analysis
+  pass read that sentence, saw four siblings correctly reporting our vendored
+  CHANNEL.md, and concluded they were fabricating. The document was stale and
+  the world was right. The same defect was then found one level out - the
+  provenance comment above PUBLISHED_SHA256 still described the v1 pin, which
+  is why four independent outside reads agreed with each other and with the
+  wrong answer. Both fixed and both now guarded.
+
+  One figure published to five trees was qualified rather than withdrawn: the
+  "three renderings" count is environment-specific. The mechanism reproduced
+  independently; the number does not travel.
+
+THE WRAP-TIME REFUTATION PASS was dispatched against this session's second
+batch of claims - the closed guard holes, the widened inventory reader, the
+retention pins and their measurements, the suite counts, and the delivered
+note. Read its verdict before treating any of the above as settled; if it is
+not in the ledger, it did not land.
 
 HOW TO START
   python ops/inbox_watch.py          # if no MAIL block appeared, a hook missed
-  python -m ops.preflight            # about 18s, before dispatching anything
-  Then digest the inbox with a SUBAGENT and keep its full output in the
-  scratchpad - the merger's context is the one that must not fill.
+  python -m ops.preflight            # about 14-20s, before dispatching anything
+  Then read OPS-103 and take criterion 3 seriously before criteria 1 and 2,
+  because 1 and 2 are the easy half and finishing them alone looks like progress
+  while leaving the actual gap open.
 
 DO NOT
   - re-arm the capture watcher without the operator lifting the 2026-09-11 disarm
   - edit anything under third_party/ - it is byte-pinned and its guard fails
   - adopt anything cross-project; declining is yours, adopting is a ruling
+  - edit another tree's file or scheduled task; the inboxes are the only
+    destination outside this root
   - raise a doc size budget - re-run `python scripts/apply_doc_split.py --apply`
   - trust a subagent's count, a digest of the inbox, or your own heredoc
+  - add an entry to any allowlist without measuring that it is actually safe

@@ -1162,7 +1162,7 @@ and it is left standing rather than quietly restated.
 **Acceptance: MET** for every part that is this project's. The open roster
 question is recorded above and is the channel's to answer.
 
-## OPS-102. THE ROADMAP HAS NO ITEM THIS PROJECT CAN WORK WITHOUT THE OPERATOR - OPEN, and it is a state rather than a task
+## OPS-102. EVERY MEASUREMENT ITEM IS BLOCKED ON THE OPERATOR PLAYING - OPEN, and it is a state rather than a task. AMENDED 2026-09-20: this is no longer the same as "there is nothing to do", see the amendment below and go to `OPS-103`
 
 Filed 2026-09-20 at the wrap of the session that closed `OPS-36`, `OPS-91`,
 `OPS-95`, `OPS-96`, `OPS-97`, `OPS-98`, `OPS-99`, `OPS-100` and `OPS-101`.
@@ -1201,6 +1201,19 @@ replies owed, claims about this tree to re-measure, a re-pin round in progress -
 but it is MAIL rather than a roadmap item, and it must not be mistaken for one.
 The operator directed on 2026-09-20 that the next session monitor and work the
 inbox, which is exactly the right shape for a period with no eligible item.
+
+**AMENDED 2026-09-20 at the wrap of the session that worked that inbox.** This
+item is still OPEN and every row in the table above is still blocked, but the
+sentence "there is no eligible item" is no longer true, and leaving it standing
+would be the same stale-document failure this session spent its evening fixing
+in two other files. `OPS-103` was filed the same evening and is workable
+WITHOUT the client: it is about this repository's own guards, not about
+anything the game emits. A session that reads `OPS-102` first should read it as
+"the MEASUREMENT items are blocked", not as "there is nothing to do", and go to
+`OPS-103`.
+
+That item exists because working the channel found two real gaps here. Mail is
+not a roadmap item, and mail that exposes a defect in this tree produces one.
 
 ### Acceptance
 
