@@ -11,9 +11,20 @@ work. It does not matter. Everything you need is in files.
 **Do not ask the operator anything.** They are playing Mistfall Hunter. A
 question is a failure of this command, not a use of it.
 
-## First, arm the session watcher
+## First, arm the session watcher - or be refused by the OPERATOR DISARM
 
-Before reading anything else, arm it. The game empties `MistfallHunter.log` on
+**The watcher is under an OPERATOR DISARM** (2026-09-11, `LL-0234`), and it is
+enforced in code: `OPERATOR_DISARM` in `lanternlight/armwatch.py`. While it stands,
+`ensure_armed` returns `armed=False` with a reason beginning `OPERATOR DISARM`,
+and spawns nothing and creates no directory. **That refusal is expected and
+correct - read it, print it, carry on. Never work around it:** no direct launch
+of `lanternlight.armwatch`, no restored record under `ops/runtime/`, no edit to
+the constant, no monkeypatch outside a test. Only the operator lifts it. On
+2026-09-20 a session that followed the old wording of this step armed a real
+watcher and recreated `C:/ll-captures`, a tree the operator had lost for good.
+
+Call it anyway, before reading anything else, so that the day the operator
+lifts the disarm the arming resumes without anyone rewriting this step. The game empties `MistfallHunter.log` on
 launch and the market cache empties itself unobserved, so a session that runs
 unwatched can lose a surface it will never get back - that is how the 6.1 MB
 log of 2026-08-09 went. Item `4d`.
@@ -26,8 +37,11 @@ armed = watch.ensure_armed("C:/ll-captures")
 print(armed)
 ```
 
-- `armed.armed` False means one was **already running**. That is a refusal, not
-  an error - carry on. **Never start a second** and **never stop the one you
+- `armed.armed` False with a reason starting `OPERATOR DISARM` means the
+  operator has disarmed the watcher. Nothing is running and nothing should be.
+  Expected; carry on; never work around it.
+- `armed.armed` False otherwise means one was **already running**. That is a
+  refusal, not an error - carry on. **Never start a second** and **never stop the one you
   find**; nothing in this project terminates a process it did not start.
 - The destination is derived per pass from the local date, so pass the BASE
   (`C:/ll-captures`) and never a dated path - a literal dated path is what made

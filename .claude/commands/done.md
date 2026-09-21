@@ -60,7 +60,12 @@ test rather than the code is not a green suite.
    next directive, so a cold session can pick up from disk alone.
 8. **Re-check the watcher.** Call `check_watcher()` from `ops/loop/watch.py`
    (or its `ensure_armed_at_wrap` wrapper) before the next-session prompt is
-   printed. Re-arm on `NO_RECORD`, `DEAD` or `IMPOSTOR`; a `STALE`,
+   printed. **While the OPERATOR DISARM stands** (2026-09-11, `LL-0234`,
+   enforced by `OPERATOR_DISARM` in `lanternlight/armwatch.py`), `NO_RECORD` is the
+   expected answer and `ensure_armed_at_wrap` refuses to re-arm with a reason
+   beginning `OPERATOR DISARM` - that refusal is correct, report it and never
+   work around it; only the operator lifts it. Otherwise re-arm on
+   `NO_RECORD`, `DEAD` or `IMPOSTOR`; a `STALE`,
    `SURFACE_STALE` or `NO_HEARTBEAT` result is reported, not re-armed, and
    nothing is ever killed - see `docs/HEADLESS.md` 4b. `SURFACE_STALE` names
    WHICH surface stopped, so quote the name rather than the state alone.

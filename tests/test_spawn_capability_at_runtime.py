@@ -317,6 +317,8 @@ SPAWN_RUNTIME_ENTRY_POINTS: dict[str, tuple[tuple[str, str], ...]] = {
     ),
     "ops/lanes.py": (("ops.lanes", "primary_checkout"),),
     "ops/store_drift.py": (("ops.store_drift", "snapshot"),),
+    # OPS-103. Lists this repository's staged set with one git call - a read.
+    "tools/secret_scan.py": (("tools.secret_scan", "staged_paths"),),
 }
 
 #: Modules that CAN reach a spawn and are deliberately not probed, each with
@@ -371,6 +373,16 @@ SPAWN_SCOPE_EXCLUSIONS: dict[str, tuple[str, tuple[str, ...]]] = {
         "this file the slowest module in the suite by an order of magnitude, "
         "and it would be running the suite from inside the suite.",
         ("import subprocess", "subprocess.run"),
+    ),
+    "ops/outside_scan.py": (
+        "OPS-103. Its spawns are git calls whose INPUT is the population outside "
+        "this repository - the Git for Windows install root and the system temp "
+        "directory - and its only spawning entry points take that population "
+        "rather than a repository root. A probe would hash every file in the "
+        "operator's temp directory from inside the suite, and a failure message "
+        "built from what it observed would print paths under the account's home "
+        "directory. Its own tests drive it against a planted tmp_path bucket.",
+        ("getattr", "import subprocess", "subprocess.SubprocessError", "subprocess.run"),
     ),
     "ops/preflight.py": (
         "Its spawning entry point is the pre-flight itself, measured at "

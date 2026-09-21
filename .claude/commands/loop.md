@@ -64,6 +64,13 @@ with (
   that writes only the lock line runs unwatched. Keep both. `armed.armed` is
   False when a watcher was already running - that is a refusal, not an error,
   and the cycle proceeds.
+- **OPERATOR DISARM.** The watcher is disarmed by the operator (2026-09-11,
+  `LL-0234`), enforced by `OPERATOR_DISARM` in `lanternlight/armwatch.py`. While it
+  stands, `session_armed` / `ensure_armed` yield `armed=False` with a reason
+  beginning `OPERATOR DISARM`, spawn nothing and create no directory. That is
+  expected and correct, the cycle proceeds, and **never work around it** - no
+  direct launch of the watcher, no restored record, no edit to the constant.
+  Only the operator lifts it.
 - **Never start a second watcher and never stop the one you find.**
   `ensure_armed` refuses on its own, and nothing in this project terminates a
   process it did not start.

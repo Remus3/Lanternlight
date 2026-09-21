@@ -69,6 +69,15 @@ REQUIRED_POLICY = "failed"
 #: pinned deliberately - see the module docstring.
 REQUIRED_COUNT = "3"
 
+#: An empty ``@pytest.mark.parametrize`` list used to SKIP the test silently.
+#: A skip is invisible in a green summary, so a data source that quietly went
+#: empty - a fixture returning ``[]``, a file that failed to load - reads as a
+#: pass rather than as the collection error it actually is. Setting this makes
+#: it a hard error at collect time instead. Guarded the same way as the
+#: retention settings above: a text check that the ini says the right thing,
+#: and a live ``pytestconfig`` check that pytest actually took it.
+REQUIRED_EMPTY_PARAMETER_SET_MARK = "fail_at_collect"
+
 
 def _config() -> configparser.ConfigParser:
     parser = configparser.ConfigParser()
@@ -136,3 +145,28 @@ def test_the_settings_are_live_and_not_merely_declared(pytestconfig):
     """
     assert pytestconfig.getini("tmp_path_retention_policy") == REQUIRED_POLICY
     assert str(pytestconfig.getini("tmp_path_retention_count")) == REQUIRED_COUNT
+
+
+def test_the_empty_parameter_set_mark_is_set_to_fail_at_collect():
+    parser = _config()
+    assert parser.has_option("pytest", "empty_parameter_set_mark"), (
+        "pytest.ini does not set empty_parameter_set_mark. Without it an "
+        "empty parametrize list SKIPS silently instead of failing collection, "
+        "which hides a broken data source behind a green summary."
+    )
+    assert (
+        parser.get("pytest", "empty_parameter_set_mark").strip()
+        == REQUIRED_EMPTY_PARAMETER_SET_MARK
+    )
+
+
+def test_the_empty_parameter_set_mark_is_live_and_not_merely_declared(pytestconfig):
+    """Same arm as ``test_the_settings_are_live_and_not_merely_declared``.
+
+    A key pytest does not recognise sits in the ini looking correct while
+    changing nothing. Asking the live config asks the tool, not the text.
+    """
+    assert (
+        pytestconfig.getini("empty_parameter_set_mark")
+        == REQUIRED_EMPTY_PARAMETER_SET_MARK
+    )

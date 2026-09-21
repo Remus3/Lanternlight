@@ -336,6 +336,16 @@ LANES: tuple[Lane, ...] = (
             "tools/syntax_check_hook.py",
             "tests/test_syntax_check_hook.py",
             "tests/test_precommit_gate_lint.py",
+            # OPS-103. The provider-credential detector and its guards. It sits
+            # beside the commit gate that calls it because it refuses content
+            # that must never be PUBLISHED - the same mandate as the PII
+            # backstop - while deliberately living outside lanternlight/redact.py,
+            # whose scope is operator identifiers. The outside-the-repository
+            # control, ops/outside_scan.py, is owned by the ops glob; its test is
+            # named here because it guards a publication hazard.
+            "tools/secret_scan.py",
+            "tests/test_secret_scan.py",
+            "tests/test_secret_scan_outside.py",
             # OPS-56. The pre-commit hook's own globbing behaviour: a bare
             # pathspec that over-matched, and an unquoted split that ran a
             # DIFFERENT test module while reporting the guard had run. It

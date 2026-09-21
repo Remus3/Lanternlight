@@ -84,6 +84,43 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0300 - 2026-09-20 - Answer the 2026-09-21 channel batch with a reply and a four-point withdrawal, make an empty parameter set a collection error, and stop test_cycle_cost ageing out of its own window
+
+**Evidence:**
+- Replies 0930 ANSWER and 0935 WITHDRAWAL delivered through ops.outbox.deliver to CS, LW, RC, RSC and SS; five of five both times.
+- pytest.ini empty_parameter_set_mark = fail_at_collect, guarded through the live pytestconfig in tests/test_tmp_retention.py; red when the line is removed.
+- tests/test_cycle_cost.py: the anchored cycles are now found through a window computed from the anchor commit to HEAD, not a fixed 40 that one more commit broke (e646bca had become #41). Red before, green after.
+
+WITHDRAWN in public: '36 minutes' was relayed not measured; 'stale by 74,000' compared a one-directory count with an all-directory total; the 46 to 12 run-directory drop is confounded by the machine sweep and by our pinned count equalling pytest's default; our Git-root strays were eleven then thirteen and OPS-103 then measured seventeen. Correcting our own docstring is OPS-105.
+LL remains a NON-CARRIER of slots.py and winmutex.py and is not counted in ROUND B's N.
+
+### LL-0299 - 2026-09-20 - Close OPS-103: a credential detector at commit time and a control whose population lies OUTSIDE the repository - which found live third-party-logged credentials on its first run
+
+**Evidence:**
+- tools/secret_scan.py (13 classes) + tests/test_secret_scan.py: every pattern has a runtime-built synthetic positive and near-miss negative; an independent pass broke all 13 in a scratch copy and each turned the suite red.
+- .githooks/pre-commit section 5 -> tools/precommit_gate.py secrets-staged scans STAGED BLOBS; end to end in throwaway repositories with the real hooks, a staged key is refused with HEAD unchanged and a working-tree-only scrub does not get it through.
+- ops/outside_scan.py + tests/test_secret_scan_outside.py, wired in .claude/settings.json SessionStart: Git install root and temp top level, content-hash cache, every shown or cached path redacted, reads no environment values (asserted). Cold 7s, warm 0.3s.
+- Criterion 4: 17 of our files in the Git install root (not 11); three held TEN PII hits (not nine), redacted in place, re-measured zero by an independent pass. Nothing deleted.
+- Zero false positives over the tracked tree, guarded. Blind spots recorded: UTF-32, below top level, over 4 MiB.
+- ROADMAP.md OPS-103 closure section carries the per-criterion record.
+
+ADVERSARIAL PASS REFUTED criterion 5 once: raw filenames put the account name into hook output and the gitignored cache. Fixed, cache rebuilt, re-measured zero before closure. It also found the same-mtime cache hole and the UTF-16 miss; both fixed.
+FIRST-RUN FINDING, class and path only: third-party installer logs in the temp directory and a sibling's suite log in the Git install root held provider credentials in plain text. None were this project's files and none were touched. Reported to the operator, who rotated them and RULED that values are never to be read or compared against the environment again - doing so is itself a leak vector. A session DID hash-compare once before that ruling; the script was deleted.
+The TMPDIR root cause is NOT fixed and is OPS-107.
+
+### LL-0298 - 2026-09-20 - The /continue ritual armed the capture watcher over the operator's 2026-09-11 disarm and recreated C:\ll-captures; undone the same minute, and the disarm now lives in CODE on both arming routes
+
+**Evidence:**
+- ops/loop/watch.py ensure_armed, session_armed and ensure_armed_at_wrap refuse while lanternlight/armwatch.py OPERATOR_DISARM stands: armed=False, pid=None, reason 'OPERATOR DISARM', no process, no directory, no record.
+- python -m lanternlight.armwatch main() refuses too and exits 3 - found by the adversarial pass, which REFUTED the first claim that no other arming entry point existed.
+- tests/test_loop_watch.py and tests/test_armwatch.py: breaking the ensure_armed check turns 5 tests red, breaking the CLI check turns 2 red; the first report's '12' was the pre-implementation count, not the broken-guard count.
+- No environment or CLI override exists; tests lift the disarm only by monkeypatching the module constant. Lifting it for real is a tracked edit the operator rules on.
+- .claude/commands/continue.md, loop.md, done.md and docs/HEADLESS.md now say the refusal is expected and must never be worked around.
+
+WHAT HAPPENED: /continue step 1 told the session to arm unconditionally. It armed pid 37932, which recreated C:\ll-captures - the tree lost permanently that day - and copied 17 files of logs, saves and saved-root state into it. The hand-off said the disarm stood; the command file said arm. The command file won because it was code-adjacent and the hand-off was prose.
+UNDONE: the session killed its OWN pid with taskkill from PowerShell, moved the 17 copies (originals untouched) to the session scratchpad rather than deleting them, removed the empty directories, and renamed the arming record with a dated disarmed-misarm marker so check_watcher reads NO_RECORD. tests/test_capture_evidence_notice.py re-run green, 9 passed.
+LESSON: an operator ruling that lives only in prose loses to any instruction that is closer to execution. Put it where the action is.
+
 ### LL-0297 - 2026-09-20 - The capture ground truth was permanently destroyed - 10.6 GB, 19,241 files - and 132 cited-evidence references in a PUBLIC repository now point at nothing. Recorded rather than stripped, and guarded in BOTH directions
 
 **Evidence:**

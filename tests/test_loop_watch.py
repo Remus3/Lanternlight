@@ -32,6 +32,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from lanternlight import armwatch as armwatch_mod  # noqa: E402
 from lanternlight.savewatch import SaveWatcher  # noqa: E402
 from ops.loop import guard as guard_mod, watch as watch_mod  # noqa: E402
 
@@ -48,6 +49,26 @@ if str(TESTS_DIR) not in sys.path:
     sys.path.insert(0, str(TESTS_DIR))
 
 from test_process_capability import SCOPE  # noqa: E402  (sits beside this file in tests/)
+
+
+@pytest.fixture(autouse=True)
+def _operator_disarm_lifted_for_arming_machinery_tests(monkeypatch) -> None:
+    """Lift ``OPERATOR_DISARM`` for THIS FILE ONLY, and only in-process.
+
+    The operator disarmed the capture watcher on 2026-09-11 (``LL-0234``) and
+    ``lanternlight.armwatch.OPERATOR_DISARM`` now enforces that in code - read
+    by ``ops.loop.watch`` and by the watcher's own CLI - so every
+    arming entry point refuses while it stands. The tests in this file exercise
+    the arming machinery BEHIND that refusal - spawn, record, re-arm, identity -
+    and every one of them injects a recording ``spawn_fn`` and a ``tmp_path``
+    record, so lifting the constant here starts no real process.
+
+    This is the sanctioned test-only override and nothing else is. The refusal
+    itself is pinned in the OPERATOR DISARM section at the end of this file,
+    whose ``operator_disarm_stands`` fixture puts the tracked value back. A
+    session must never use this path to arm a real watcher.
+    """
+    monkeypatch.setattr(armwatch_mod, "OPERATOR_DISARM", None, raising=False)
 
 
 @pytest.fixture
@@ -4355,3 +4376,281 @@ def test_the_access_denied_reason_labels_its_recorded_destination(
     assert status.identity == watch_mod.IDENTITY_REFUTED, status.reason
     assert record.dest_root in status.reason, status.reason
     assert watch_mod.DEST_ARMING_TIME_NOTE in status.reason, status.reason
+
+
+# ---------------------------------------------------------------------------
+# THE OPERATOR DISARM - enforced in code, not only in prose
+#
+# The operator disarmed the session watcher on 2026-09-11 (LL-0234). That
+# disarm lived in the ledger, in docs/HEADLESS.md and in renamed gitignored
+# files under ops/runtime/, none of which ensure_armed reads, while
+# .claude/commands/continue.md told every session to call it unconditionally.
+# On 2026-09-20 a /continue session did exactly that, armed a real watcher and
+# RECREATED C:/ll-captures - a tree the operator had lost permanently that same
+# day and that tests/test_capture_evidence_notice.py requires to stay absent.
+#
+# Every test in this section RE-IMPOSES the tracked constant over the file's
+# autouse lift (see _operator_disarm_lifted_for_arming_machinery_tests), so
+# these tests see exactly what a real session sees. No test here starts a real
+# process: every spawn is a recording spy, and the default-spawn test replaces
+# default_spawn on the module with a recording spy and records into tmp_path.
+# ---------------------------------------------------------------------------
+
+#: The tracked value, captured at IMPORT time - before any fixture has lifted
+#: it - so the section below can put it back.
+_TRACKED_OPERATOR_DISARM = getattr(armwatch_mod, "OPERATOR_DISARM", None)
+
+DISARM_NOW = datetime(2026, 9, 20, 18, 0, 0, tzinfo=UTC)
+
+
+@pytest.fixture
+def operator_disarm_stands(monkeypatch) -> None:
+    """Undo this file's autouse lift: the disarm stands, as it does for real."""
+    monkeypatch.setattr(
+        armwatch_mod, "OPERATOR_DISARM", _TRACKED_OPERATOR_DISARM, raising=False
+    )
+
+def _disarm_spy(calls: list):
+    """A RECORDING spy, never a raising one - see tests/test_loop_watch.py."""
+
+    def spawn_fn(base, root) -> int:
+        calls.append((Path(base), Path(root)))
+        return os.getpid()
+
+    return spawn_fn
+
+
+def _disarm_dated_spy(calls: list):
+    def dest_root_fn(base, when) -> Path:
+        calls.append(Path(base))
+        return Path(base) / when.strftime("%Y-%m-%d")
+
+    return dest_root_fn
+
+
+def _assert_operator_disarm_refusal(result) -> None:
+    assert result.armed is False
+    assert result.pid is None, "a disarm refusal must not name a pid as if one were running"
+    assert result.dest_root is None
+    assert "OPERATOR DISARM" in result.reason
+    assert "LL-0234" in result.reason
+    lowered = result.reason.lower()
+    assert "not a running watcher" in lowered, (
+        "the refusal must say it is NOT a running watcher, or a reader will "
+        "confuse it with the already-armed refusal"
+    )
+    assert "only the operator" in lowered
+
+
+# ---------------------------------------------------------------------------
+# the record itself
+# ---------------------------------------------------------------------------
+
+
+def test_the_operator_disarm_is_a_tracked_standing_record(operator_disarm_stands) -> None:
+    """The disarm of 2026-09-11 stands. Lifting it is an operator ruling.
+
+    If this test reds because ``OPERATOR_DISARM`` became ``None``, that is a
+    change the operator must have ruled on in chat - do not edit this test to
+    make it green on a session's own initiative.
+    """
+    disarm = armwatch_mod.OPERATOR_DISARM
+    assert disarm is not None, "the operator disarm of 2026-09-11 (LL-0234) was lifted"
+    assert disarm.ledger_id == "LL-0234"
+    assert disarm.date == "2026-09-11"
+    assert disarm.reason.strip(), "a disarm with no stated reason is not a record"
+    assert watch_mod.operator_disarm() is disarm, (
+        "ops.loop.watch must read the ONE tracked value in lanternlight.armwatch"
+    )
+    assert not hasattr(watch_mod, "OPERATOR_DISARM"), (
+        "ops.loop.watch keeps its own copy of the disarm - two copies drift, and "
+        "the watcher CLI only honours the one in lanternlight.armwatch"
+    )
+
+
+# ---------------------------------------------------------------------------
+# every arming entry point refuses while it stands
+# ---------------------------------------------------------------------------
+
+
+def test_ensure_armed_refuses_and_touches_nothing(operator_disarm_stands, tmp_path: Path) -> None:
+    spawns: list = []
+    resolves: list = []
+    record = tmp_path / "runtime" / "armwatch.json"
+    dest_base = tmp_path / "ll-captures"
+
+    result = watch_mod.ensure_armed(
+        dest_base,
+        spawn_fn=_disarm_spy(spawns),
+        dest_root_fn=_disarm_dated_spy(resolves),
+        now=DISARM_NOW,
+        path=record,
+    )
+
+    _assert_operator_disarm_refusal(result)
+    assert spawns == [], "a process was spawned through an operator disarm"
+    assert resolves == [], "a destination was resolved through an operator disarm"
+    assert not record.exists(), "an arming record was written through an operator disarm"
+    assert not record.parent.exists()
+    assert not dest_base.exists(), "the capture tree was created through an operator disarm"
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_ensure_armed_refuses_even_over_a_dead_record(
+    operator_disarm_stands, tmp_path: Path
+) -> None:
+    """A stale record is the case that re-arms today. The disarm must win."""
+    record = tmp_path / "armwatch.json"
+    watch_mod.write_record(
+        watch_mod.WatchRecord(
+            pid=999_999,
+            dest_base=str(tmp_path / "captures"),
+            dest_root=str(tmp_path / "captures" / "2026-09-01"),
+            started="2026-09-01T12:00:00+00:00",
+        ),
+        record,
+    )
+    before = record.read_bytes()
+    spawns: list = []
+
+    result = watch_mod.ensure_armed(
+        tmp_path / "captures", spawn_fn=_disarm_spy(spawns), now=DISARM_NOW, path=record
+    )
+
+    _assert_operator_disarm_refusal(result)
+    assert spawns == []
+    assert record.read_bytes() == before, "the record was rewritten through a disarm"
+    assert not (tmp_path / "captures").exists()
+
+
+def test_the_default_spawn_is_refused_too(
+    operator_disarm_stands, tmp_path: Path, monkeypatch
+) -> None:
+    """The path a real session takes: no ``spawn_fn`` injected at all.
+
+    ``default_spawn`` is replaced on the module with a RECORDING spy, so a
+    broken guard reds this test instead of starting a real poller.
+    """
+    spawns: list = []
+    monkeypatch.setattr(watch_mod, "default_spawn", _disarm_spy(spawns))
+    dest_base = tmp_path / "ll-captures"
+
+    result = watch_mod.ensure_armed(dest_base, now=DISARM_NOW, path=tmp_path / "armwatch.json")
+
+    _assert_operator_disarm_refusal(result)
+    assert spawns == []
+    assert not dest_base.exists()
+
+
+def test_session_armed_yields_the_refusal_and_the_body_still_runs(
+    operator_disarm_stands, tmp_path: Path
+) -> None:
+    spawns: list = []
+    ran: list = []
+    with watch_mod.session_armed(
+        tmp_path / "captures",
+        spawn_fn=_disarm_spy(spawns),
+        now=DISARM_NOW,
+        path=tmp_path / "a.json",
+    ) as armed:
+        ran.append(True)
+
+    _assert_operator_disarm_refusal(armed)
+    assert ran == [True]
+    assert spawns == []
+    assert not (tmp_path / "captures").exists()
+
+
+def test_the_wrap_does_not_rearm_through_the_disarm(operator_disarm_stands, tmp_path: Path) -> None:
+    spawns: list = []
+    result = watch_mod.ensure_armed_at_wrap(
+        tmp_path / "captures",
+        spawn_fn=_disarm_spy(spawns),
+        dest_root_fn=_disarm_dated_spy([]),
+        now=DISARM_NOW,
+        path=tmp_path / "armwatch.json",
+        heartbeat=tmp_path / "absent.json",
+    )
+
+    assert result.status.state == watch_mod.STATE_NO_RECORD
+    assert result.arm is not None
+    _assert_operator_disarm_refusal(result.arm)
+    assert result.rearmed is False
+    assert spawns == []
+    assert "OPERATOR DISARM" in result.reason
+    assert not (tmp_path / "captures").exists()
+
+
+def test_check_watcher_no_record_says_disarmed_by_operator(
+    operator_disarm_stands, tmp_path: Path
+) -> None:
+    status = watch_mod.check_watcher(
+        path=tmp_path / "armwatch.json", heartbeat=tmp_path / "absent.json", now=DISARM_NOW
+    )
+
+    assert status.state == watch_mod.STATE_NO_RECORD
+    assert "whole point" not in status.reason, (
+        "NO_RECORD still tells a session that arming is the whole point while "
+        "the operator has disarmed it"
+    )
+    assert "disarmed by operator" in status.reason.lower()
+    assert "LL-0234" in status.reason
+
+
+# ---------------------------------------------------------------------------
+# the override exists for tests, and proves the refusal is the constant's doing
+# ---------------------------------------------------------------------------
+
+
+def test_lifting_the_constant_restores_arming(
+    operator_disarm_stands, tmp_path: Path, monkeypatch
+) -> None:
+    """Non-vacuity: the same call arms once the constant is lifted.
+
+    Without this, every refusal above could be explained by some other defect
+    that stops arming altogether.
+    """
+    monkeypatch.setattr(armwatch_mod, "OPERATOR_DISARM", None, raising=False)
+    spawns: list = []
+
+    result = watch_mod.ensure_armed(
+        tmp_path / "captures",
+        spawn_fn=_disarm_spy(spawns),
+        dest_root_fn=_disarm_dated_spy([]),
+        now=DISARM_NOW,
+        path=tmp_path / "armwatch.json",
+    )
+
+    assert result.armed is True
+    assert len(spawns) == 1
+
+    status = watch_mod.check_watcher(
+        path=tmp_path / "other.json", heartbeat=tmp_path / "absent.json", now=DISARM_NOW
+    )
+    assert "disarmed by operator" not in status.reason.lower()
+
+
+# ---------------------------------------------------------------------------
+# the prose that told a session to arm now says what the refusal means
+# ---------------------------------------------------------------------------
+
+DISARM_DOCS = (
+    ".claude/commands/continue.md",
+    ".claude/commands/loop.md",
+    ".claude/commands/done.md",
+    "docs/HEADLESS.md",
+)
+
+
+@pytest.mark.parametrize("relpath", DISARM_DOCS)
+def test_every_arming_document_says_the_disarm_refusal_is_expected(
+    operator_disarm_stands, relpath: str
+) -> None:
+    text = " ".join((REPO_ROOT / relpath).read_text(encoding="utf-8").split())
+    assert "OPERATOR DISARM" in text, (
+        f"{relpath} tells a session to arm but never says an OPERATOR DISARM "
+        "refusal is the expected answer while it stands"
+    )
+    assert "never work around it" in text.lower(), (
+        f"{relpath} does not forbid working around the operator disarm"
+    )

@@ -1307,7 +1307,7 @@ is the failure this item exists to prevent.
 
 ---
 
-## OPS-103. This repository can detect an OPERATOR identifier and CANNOT detect a CREDENTIAL, and neither guard has a population that includes a file we never commit - OPEN
+## OPS-103. This repository can detect an OPERATOR identifier and CANNOT detect a CREDENTIAL, and neither guard has a population that includes a file we never commit - CLOSED 2026-09-20, criterion 3 met as a CONTROL with the TMPDIR root cause recorded as refused, see `LL-0299`
 
 Filed 2026-09-20, out of Clockspeed's 1820 ACTION note on the shared
 git-install-root bucket. Two gaps, both MEASURED here rather than suspected, and
@@ -1394,6 +1394,86 @@ shared. Clockspeed asked the question; the answer, the gap and the fix are ours.
 It is also not a licence to widen `lanternlight/redact.py`'s scope - a credential
 is a different class from an operator identifier and conflating them in one
 module would make both harder to reason about.
+
+### Closure, 2026-09-20 - `LL-0299`
+
+1. DONE. `tools/secret_scan.py`, 13 classes, each with a runtime-built
+   synthetic positive and near-miss negative in `tests/test_secret_scan.py`.
+   An independent pass broke each of the 13 patterns in a scratch copy and every
+   one turned the suite red. UTF-16 is scanned (NUL-stripped second pass);
+   UTF-32 is NOT, and the module docstring says so.
+2. DONE. `.githooks/pre-commit` section 5 runs `precommit_gate.py
+   secrets-staged` over the STAGED BLOBS, not the working copy. Proved end to end
+   in throwaway repositories with the real hooks: staged key refused and HEAD
+   unchanged; key scrubbed only from the working tree still refused; clean file
+   committed.
+3. DONE AS A CONTROL, ROOT CAUSE REFUSED. `ops/outside_scan.py` runs from the
+   SessionStart hook over the Git install root and the temp directory, top level
+   only, files up to 4 MiB, cache keyed on a CONTENT hash so a same-size
+   same-mtime rewrite is not hidden. Every displayed or cached path is
+   redacted. The TMPDIR root cause is NOT fixed: the only in-tree lever is an
+   `env` entry in `.claude/settings.json`, which would need an absolute temp path
+   carrying the account name in a tracked file. Stopping the litter at its
+   source is `OPS-107`.
+4. DONE, on a larger set than filed. 17 files are provably ours (13 by project
+   marker, 4 byte-identical to our own history), not 11. The three carrying PII
+   held TEN hits, not nine - one short-form account name was missed by the
+   original count. Redacted IN PLACE, nothing deleted, re-measured at zero by an
+   independent pass.
+5. DONE. Findings carry class, line and a redacted path only; tests assert no
+   fragment of any planted value appears. The adversarial pass REFUTED this once
+   - raw filenames carried the account name into hook output and into the
+   gitignored cache - and it was fixed and the live cache rebuilt and
+   re-measured at zero before closure.
+6. DONE. Zero false positives over the whole tracked tree, guarded by a test.
+   UTF-32 and files below the top level of the scanned roots are recorded
+   blind spots.
+
+THE CONTROL PAID FOR ITSELF ON ITS FIRST RUN. It found live provider
+credentials in plain text in files that are NOT this project's - third-party
+installer logs in the temp directory and a sibling's suite log in the Git
+install root. Reported to the operator by class and path only. The operator
+rotated them and ruled that values are never to be read or compared against the
+environment again, because doing so is itself a leak vector.
+`tests/test_secret_scan_outside.py` asserts the module reads no environment
+values.
+
+## OPS-105. Correct our own tmp-retention record - OPEN
+
+Out of the 2026-09-21 channel batch (our `0935 WITHDRAWAL` note). The docstring
+of `tests/test_tmp_retention.py` and the record under `LL-0295` still carry
+figures we have withdrawn in public: "stale by roughly 74,000" compared one
+directory's count with a total across all pytest directories, and the 46 to 12
+run-directory drop and the 266,336 to about 65,000 temp-base drop are
+CONFOUNDED - the machine-level sweep ran inside our before/after window, and the
+retention count we pinned is pytest's default anyway.
+
+Acceptance: the docstring cites only the controlled 589 to 175 measurement as
+evidence; a NEW ledger entry (never an edit to `LL-0295`) records the correction;
+the ASCII and doc guards stay green.
+
+## OPS-106. One-off full-history scan for operator identifiers and non-ASCII - OPEN
+
+Every hygiene guard here scans the TREE. A value committed and later removed is
+still in every clone. Acceptance: a script under `scripts/` walks every blob
+reachable from every ref, runs the ADR-004 identifier detection and the 7-bit
+ASCII check, and its result is ledgered as counts and commit-relative paths only,
+never a value. The script is proved non-vacuous against a throwaway repository
+with a planted synthetic identifier in a deleted file. If it finds anything, the
+remediation decision (history rewrite or not) is recorded as a question in the
+ledger, because rewriting a PUBLIC history is not a session decision.
+
+## OPS-107. Stop our own scratch output landing in the Git install root - OPEN
+
+Root cause of the gap `OPS-103` criterion 3 controls but does not fix: under Git
+Bash `$TMPDIR` is unset, so `"$TMPDIR/name"` becomes `/name`, which resolves to
+the Git install root, and a bare `/tmp` does the same. 17 of our files landed
+there, written by subagents. Acceptance: `python -m ops.preflight` (or the lane
+contract text it checks) refuses a command or script in the tree that builds a
+scratch path from an unset variable or bare `/tmp`, proved by a test that plants
+one; and every lane contract names the session scratchpad as the only scratch
+destination. Disposal of the 17 existing files stays the operator's call - they
+are redacted and recorded, not deleted.
 
 ## OPS-100. A sibling's question found a relative-path defect in our own pre-commit hook - FIXED 2026-09-20
 

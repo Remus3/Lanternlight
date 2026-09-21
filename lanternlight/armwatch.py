@@ -176,7 +176,10 @@ from lanternlight.savewatch import DestinationInsideRepoError, SaveWatcher
 __all__ = [
     "DEST_DATE_FORMAT",
     "HEARTBEAT_FLUSH_INTERVAL_S",
+    "OPERATOR_DISARM",
+    "OPERATOR_DISARM_EXIT",
     "Heartbeat",
+    "OperatorDisarm",
     "WatchPlan",
     "arm",
     "dated_dest_root",
@@ -204,6 +207,62 @@ LOG_POLL_S = 300.0
 #: directory listing is already in session order, and it is what the capture
 #: tree on this machine is named in.
 DEST_DATE_FORMAT = "%Y-%m-%d"
+
+
+@dataclass(frozen=True)
+class OperatorDisarm:
+    """A standing OPERATOR instruction that no capture watcher may run.
+
+    Attributes:
+        date: The day the operator gave the instruction, ISO ``YYYY-MM-DD``.
+        ledger_id: The ledger entry that records it.
+        reason: Why, in words, for whoever reads the refusal.
+    """
+
+    date: str
+    ledger_id: str
+    reason: str
+
+
+#: THE OPERATOR DISARM - TRACKED, and the ONE copy of it in this repository.
+#:
+#: While this is not ``None``, :func:`main` refuses before running a single
+#: pass: it creates no destination, writes no heartbeat and exits
+#: :data:`OPERATOR_DISARM_EXIT`. ``ops.loop.watch.ensure_armed`` - and through
+#: it ``session_armed`` and ``ensure_armed_at_wrap`` - reads THIS value too and
+#: refuses before spawning anything. It lives here, in the lowest layer, so the
+#: process that would actually copy files is itself the one that refuses, and
+#: so the dependency runs ops -> lanternlight and never the other way.
+#:
+#: Why it is code and not prose: the disarm of 2026-09-11 lived in the ledger,
+#: in ``docs/HEADLESS.md`` and in renamed gitignored files under
+#: ``ops/runtime/``, none of which any arming path reads. On 2026-09-20 a
+#: ``/continue`` session followed its start-up step, armed a real watcher and
+#: RECREATED ``C:/ll-captures``, a capture tree the operator had lost
+#: permanently that same day. An adversarial pass the same day then showed that
+#: enforcing it in ``ops.loop.watch`` alone left this CLI running.
+#:
+#: ONLY THE OPERATOR LIFTS IT. Lifting is an edit to this constant, a tracked
+#: change the operator rules on in chat - never a session's own decision. There
+#: is deliberately NO command-line flag and NO environment variable that
+#: overrides it: an override a session can type is a workaround a session will
+#: type. The only sanctioned override is ``monkeypatch`` inside a test, which
+#: is how ``tests/test_armwatch.py`` and ``tests/test_loop_watch.py`` keep
+#: exercising the machinery behind the refusal against ``tmp_path`` trees.
+OPERATOR_DISARM: OperatorDisarm | None = OperatorDisarm(
+    date="2026-09-11",
+    ledger_id="LL-0234",
+    reason=(
+        "the operator instructed in chat that any headless capture lane for this "
+        "project be disarmed; the watcher was terminated at that wrap and must not "
+        "be re-armed by a session"
+    ),
+)
+
+#: Exit status of :func:`main` when it refuses on :data:`OPERATOR_DISARM`.
+#: Distinct from ``2``, the usage and destination refusals, so a caller reading
+#: only the status can still tell "the operator said no" from "you asked wrong".
+OPERATOR_DISARM_EXIT = 3
 
 #: How often the heartbeat file is rewritten, seconds. ARGUED, like every
 #: other number in this module.
@@ -1091,6 +1150,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     """Entry point. Returns 0 on a clean run, non-zero on a refused destination.
 
+    FIRST: while :data:`OPERATOR_DISARM` stands, refuse with
+    :data:`OPERATOR_DISARM_EXIT` before running any pass or touching any path.
+
     ``--dest-base`` routes through :func:`run_rolling`, which re-derives the
     dated root as the day changes. ``--dest-root`` keeps its original literal
     meaning exactly: the directory named is the directory written to.
@@ -1102,6 +1164,20 @@ def main(argv: list[str] | None = None) -> int:
     signal ROADMAP 4e exists to remove, arriving from the opposite direction.
     """
     args = parse_args(argv)
+    disarm = OPERATOR_DISARM
+    if disarm is not None:
+        # Before ANY filesystem work - parse_args touches nothing, and nothing
+        # below this line may run while the operator disarm stands.
+        print(
+            f"refusing to arm: OPERATOR DISARM. The operator disarmed the capture "
+            f"watcher on {disarm.date} ({disarm.ledger_id}) - {disarm.reason}. No pass "
+            "was run, no destination was created and no heartbeat was written. Only "
+            "the operator lifts it, by a tracked edit to OPERATOR_DISARM in "
+            "lanternlight/armwatch.py. Never work around it.",
+            file=sys.stderr,
+            flush=True,
+        )
+        return OPERATOR_DISARM_EXIT
     if args.heartbeat is not None and args.dest_root is not None:
         # Exit 2, matching both argparse's usage-error code and the refusal
         # below, because this IS a usage error.

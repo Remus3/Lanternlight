@@ -25,6 +25,12 @@ line THIS COMMIT ADDS. ``.githooks/pre-commit`` calls it that way. See
 load-bearing, and :class:`StagedEntry` for the decision this makes about every
 git status letter - a renamed file used to be excluded from that listing
 outright, which permitted every line such a commit added.
+
+THIRD ENTRY POINT, ROADMAP ``OPS-103``. Run with the single argument
+``secrets-staged`` it scans the STAGED BLOB of every staged path, of any file
+type, with ``tools/secret_scan.py`` and exits 1 on any provider-credential
+shape. See :func:`secrets_staged_main`. Its report is class, count and path
+only - never the value.
 """
 
 from __future__ import annotations
@@ -735,6 +741,57 @@ def lint_staged_main(repo: Path) -> int:
     return 1
 
 
+def _secret_scan_module():
+    """Import ``tools/secret_scan.py`` under either way this file is loaded.
+
+    Imported as ``tools.precommit_gate`` by the suite and ``ops.preflight``,
+    and run as a SCRIPT by ``.githooks/pre-commit``, where ``sys.path[0]`` is
+    this file's own directory and ``tools`` is not importable. Lazy, so the
+    PreToolUse path never pays for it.
+    """
+    try:
+        from tools import secret_scan
+    except ImportError:
+        import secret_scan
+    return secret_scan
+
+
+def secrets_staged_main(repo: Path) -> int:
+    """CLI entry for ``secrets-staged``. 0 permits, 1 refuses. ``OPS-103``.
+
+    Scans the STAGED BLOB of every staged path for a provider credential and
+    refuses the commit on any finding. The report is class, count and path
+    ONLY - never the value, not even a fragment of it, because this hook's
+    output lands in terminals, CI logs and session transcripts.
+
+    Refuses, rather than permits, when the detector's own self-test fails or
+    git cannot list or read the staged set: a gate that did not run has not
+    passed. There is no ruff-style stand-down here, because the detector is
+    part of this repository and not an optional tool.
+    """
+    scanner = _secret_scan_module()
+    failures = scanner.self_test()
+    if failures:
+        _say("precommit_gate secrets-staged: detector SELF-TEST FAILED, refusing:\n")
+        for failure in failures:
+            _say(f"  {failure}\n")
+        return 1
+    try:
+        hits = scanner.scan_staged(repo)
+    except scanner.StagedScanFailed as exc:
+        _say(f"precommit_gate secrets-staged: {exc}, refusing\n")
+        return 1
+    if not hits:
+        return 0
+    _say(
+        "credential-shaped content in the STAGED set (class count path - the "
+        "value is never printed):\n"
+    )
+    for line in scanner.format_report(hits).splitlines():
+        _say(f"  {line}\n")
+    return 1
+
+
 def _say(message: str) -> None:
     """Report ``message`` on stderr, best-effort, without risking the exit code.
 
@@ -851,6 +908,10 @@ def main() -> int:
 #: are the obvious thing to type.
 _LINT_ARGV = {"lint-staged", "--lint-staged"}
 
+#: The credential entry point, ``OPS-103`` criterion 2. Same contract as the
+#: lint one: a git hook helper that reads no stdin and refuses on non-zero.
+_SECRETS_ARGV = {"secrets-staged", "--secrets-staged"}
+
 #: Exit code for an argument this module does not understand. 2 is chosen
 #: because it refuses on BOTH of this file's contracts at once: a PreToolUse
 #: hook blocks on exactly 2, and git reads any non-zero exit from a hook helper
@@ -919,10 +980,24 @@ def dispatch(argv: list[str]) -> int:
             _say(f"precommit_gate lint-staged crashed, REFUSING: {exc}\n")
             return 1
 
+    if argv[0] in _SECRETS_ARGV:
+        if len(argv) > 1:
+            _say(
+                "precommit_gate: the secrets entry point takes no further "
+                f"arguments, REFUSING: {argv[1:]!r}\n"
+            )
+            return USAGE_EXIT_CODE
+        # Fail CLOSED on a crash, for the reason the lint branch gives.
+        try:
+            return secrets_staged_main(REPO)
+        except Exception as exc:
+            _say(f"precommit_gate secrets-staged crashed, REFUSING: {exc}\n")
+            return 1
+
     _say(
         "precommit_gate: unrecognised argument, REFUSING rather than reporting "
         f"a pass it did not measure: {argv[0]!r}. Known: no arguments at all "
-        f"for the PreToolUse hook, or one of {sorted(_LINT_ARGV)}.\n"
+        f"for the PreToolUse hook, or one of {sorted(_LINT_ARGV | _SECRETS_ARGV)}.\n"
     )
     return USAGE_EXIT_CODE
 

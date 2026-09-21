@@ -228,7 +228,9 @@ record.
   the session.
 - The **session watcher** is a separate process, so it is the one governor that
   does survive a command exiting. It is deliberately DISARMED by operator
-  instruction of 2026-09-11 and this document does not re-arm it.
+  instruction of 2026-09-11 and this document does not re-arm it. Since
+  2026-09-20 that is enforced in code, not only here: see the OPERATOR DISARM
+  paragraph under 4a.
 
 ### 4a. Arming the session watcher - `ops/loop/watch.py`
 
@@ -243,6 +245,24 @@ the guard does NOT arm. Taking the lock and arming are two calls, and a cycle
 that writes only the first still runs unwatched. What is enforced is that every
 document telling a session how to start says to arm, pinned by
 `test_every_session_entry_document_still_wires_the_arming`.
+
+**OPERATOR DISARM - read this before the rest of 4a.** The operator disarmed
+the watcher on 2026-09-11 (`LL-0234`). The disarm lived only in prose and in
+renamed gitignored files, so on 2026-09-20 a `/continue` session followed its
+start-up step, armed a real watcher and recreated `C:/ll-captures`, a tree the
+operator had lost for good that day. It is now a TRACKED constant,
+`OPERATOR_DISARM` in `lanternlight/armwatch.py`, checked FIRST by `ensure_armed` and
+therefore by `session_armed` and `ensure_armed_at_wrap` - and by the
+watcher's own command line, which exits 3 before running a pass. While it stands every
+call returns `armed=False`, `pid=None` and a reason beginning
+`OPERATOR DISARM`, and spawns nothing, resolves no destination, writes no
+record and creates no directory; `check_watcher()` answers `NO_RECORD` and
+says disarmed by operator. Keep calling `ensure_armed` - the refusal is the
+expected and correct answer. **Never work around it**: no direct launch of the
+watcher module, no restored record under `ops/runtime/`, no edit to the
+constant, no monkeypatch outside a test. Only the operator lifts it, by a
+tracked edit to that constant. Everything below describes the machinery for
+the day it is lifted.
 
 `ensure_armed(dest_base)` starts a DETACHED watcher, so it outlives the
 cycle that armed it, and records its pid and dated destination in

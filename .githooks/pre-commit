@@ -396,6 +396,44 @@ if [ "$fail" -eq 0 ] && [ -n "$staged_py" ] && [ -f "$repo_top/tools/precommit_g
     fi
 fi
 
+# ---------------------------------------------------------------
+# 5. CREDENTIALS in the staged set. ROADMAP OPS-103
+# ---------------------------------------------------------------
+#
+# Sections 1 and 2 guard OPERATOR IDENTIFIERS and glyphs; nothing here looked
+# for a PROVIDER CREDENTIAL until OPS-103 measured that nothing did. This asks
+# tools/precommit_gate.py secrets-staged, which reads the STAGED BLOB of every
+# staged path - any file type, not only .py - and refuses on an Anthropic,
+# OpenAI, AWS, GitHub, Google or Slack key shape, a bearer token, a JWT, a
+# private-key header or an assigned secret literal. Its report is class, count
+# and path ONLY: the value never reaches this terminal, a CI log or a session
+# transcript, not even in part.
+#
+# It runs whatever sections 1-4 decided, so a refusal lists every reason at
+# once. The ambient git environment is KEPT, for the reason section 4 gives.
+#
+# A REPOSITORY THAT DOES NOT CARRY BOTH tools/precommit_gate.py AND
+# tools/secret_scan.py IS SKIPPED, exactly as sections 3 and 4 skip a
+# repository without their tooling: several tests commit into throwaway
+# repositories through this hook with only the gate copied in.
+# tests/test_secret_scan.py pins the refusal END TO END in one that carries
+# both.
+
+if [ -f "$repo_top/tools/precommit_gate.py" ] && [ -f "$repo_top/tools/secret_scan.py" ]; then
+    sec_py=$(find_python) || sec_py=
+    if [ -z "$sec_py" ]; then
+        report ".githooks/pre-commit" "no working python was found, so the staged set cannot be scanned for credentials - set LL_PYTHON"
+    else
+        sec_out=$("$sec_py" "$repo_top/tools/precommit_gate.py" secrets-staged 2>&1)
+        if [ $? -ne 0 ]; then
+            report ".githooks/pre-commit" "the staged set carries credential-shaped content, or the credential scan could not run"
+            printf '%s\n' "$sec_out" | tr -d '\r' | while IFS= read -r line; do
+                printf '        %s\n' "$line" >&2
+            done
+        fi
+    fi
+fi
+
 if [ "$fail" -ne 0 ]; then
     printf '\n%s%spre-commit REFUSED the commit.%s\n' "$BOLD" "$RED" "$RESET" >&2
     printf 'Unstage the offending paths (git restore --staged <path>) and fix them.\n' >&2

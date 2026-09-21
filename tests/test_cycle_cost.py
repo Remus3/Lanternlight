@@ -456,12 +456,46 @@ class TestReportIsDerived:
         assert "no cycle" in report.lower()
 
 
+#: The oldest of the two ledger-anchored commits this class pins against.
+#: Anchoring the WINDOW on this sha (see ``_window_covering`` below) rather
+#: than on a fixed ``-n`` count is the whole fix: a fixed count recedes into
+#: history by one every time this repository gains a commit, and it already
+#: aged out once - ``e646bca`` was commit 41 the day this was written, past a
+#: window of 40. The sha itself never moves, so resolving the window from it
+#: cannot age out the same way.
+_OLDEST_ANCHOR_SHA = "c6b854d"
+
+
+def _window_covering(sha: str, git: str, margin: int = 5) -> int:
+    """The ``-n`` count that reaches ``sha`` from ``HEAD``, plus a margin.
+
+    Resolved fresh, from git, every time this runs - never a number typed into
+    the test. ``git rev-list --count`` gives the exact distance from ``HEAD``
+    down to (but not including) ``sha``; adding one includes ``sha`` itself,
+    and the margin leaves room for the commit on the other side of each pair
+    plus the grouped commits ``build_cycles`` needs to see around it. Because
+    the distance is measured rather than guessed, this keeps working no matter
+    how many commits land after the anchor - the thing a fixed window cannot
+    do.
+    """
+    completed = subprocess.run(
+        [git, "rev-list", "--count", f"{sha}..HEAD"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    distance = int(completed.stdout.strip())
+    return distance + 1 + margin
+
+
 class TestAgainstThisRepository:
     """The integration arm. It must find the two verbatim-anchored cycles."""
 
     def test_both_ledger_anchored_cycles_are_found(self) -> None:
         git = _toolguard.require("git")
-        commits = cycle_cost.load_commits(REPO_ROOT, window=40, git_exe=git)
+        window = _window_covering(_OLDEST_ANCHOR_SHA, git)
+        commits = cycle_cost.load_commits(REPO_ROOT, window=window, git_exe=git)
         assert commits, "git log returned nothing for this repository"
 
         cycles = cycle_cost.build_cycles(commits)
@@ -472,7 +506,8 @@ class TestAgainstThisRepository:
 
     def test_the_anchored_cycles_carry_a_real_span_and_a_real_floor(self) -> None:
         git = _toolguard.require("git")
-        commits = cycle_cost.load_commits(REPO_ROOT, window=40, git_exe=git)
+        window = _window_covering(_OLDEST_ANCHOR_SHA, git)
+        commits = cycle_cost.load_commits(REPO_ROOT, window=window, git_exe=git)
 
         cycles = [c for c in cycle_cost.build_cycles(commits) if c.pairs]
         assert cycles, "no anchored cycle was built from this repository"

@@ -224,6 +224,7 @@ __all__ = [
     "ensure_armed_at_wrap",
     "heartbeat_path",
     "is_armed",
+    "operator_disarm",
     "process_creation_time",
     "read_heartbeat",
     "read_record",
@@ -236,6 +237,43 @@ __all__ = [
 
 #: Name of the arming record inside the runtime directory.
 WATCH_RECORD_FILENAME = "armwatch.json"
+
+
+def operator_disarm():
+    """The standing OPERATOR DISARM, or ``None`` when the operator has lifted it.
+
+    The value is ``lanternlight.armwatch.OPERATOR_DISARM`` - the ONE tracked
+    copy, which the watcher's own CLI also honours. This module deliberately
+    keeps no copy of its own: two copies drift, and a copy here would let an
+    edit to one leave the other arming. Imported inside the function body for
+    the same reason as :func:`_default_dest_root_fn` - this module takes no
+    module-scope dependency on the lanternlight package - and read at CALL
+    time, so a test's monkeypatch of the armwatch module is seen here.
+
+    While it is not ``None``, :func:`ensure_armed` (and therefore
+    :func:`session_armed` and :func:`ensure_armed_at_wrap`) refuses before
+    spawning, resolving, reading or writing anything, and :func:`check_watcher`
+    reports ``NO_RECORD`` as the expected, operator-disarmed answer. Only the
+    operator lifts it, by a tracked edit to that constant.
+    """
+    # A from-import of the NAME, executed on every call, so it reads the
+    # module attribute as it is NOW - a test's monkeypatch included.
+    from lanternlight.armwatch import OPERATOR_DISARM
+
+    return OPERATOR_DISARM
+
+
+def _operator_disarm_refusal(disarm) -> str:
+    """The words an arming entry point returns while the disarm stands."""
+    return (
+        f"OPERATOR DISARM: no watcher was started. The operator disarmed the capture "
+        f"watcher on {disarm.date} ({disarm.ledger_id}) - {disarm.reason}. This is NOT "
+        "a running watcher and not the already-armed refusal: nothing is archiving the "
+        "log, the saves or the market cache, on purpose. Nothing was spawned, no "
+        "destination was resolved, no record was written and no directory was "
+        "created. Only the operator lifts it, by a tracked edit to OPERATOR_DISARM in "
+        "lanternlight/armwatch.py. Never work around it."
+    )
 
 #: Name of the watcher's heartbeat file, beside the arming record. This layer
 #: owns the path and hands it down to the child as ``--heartbeat``; the
@@ -829,7 +867,13 @@ def ensure_armed(
 ) -> ArmResult:
     """Make sure a watcher is running, without starting a second one.
 
-    Three outcomes, in the order they are decided:
+    FIRST, BEFORE ANYTHING ELSE: while :func:`operator_disarm` stands, refuse.
+    ``armed`` is False, ``pid`` and ``dest_root`` are None, and ``reason``
+    begins ``OPERATOR DISARM``. No process is spawned, no destination is
+    resolved, no record is read or written and no directory is created. That
+    refusal is expected and correct; only the operator lifts it.
+
+    Otherwise, three outcomes, in the order they are decided:
 
     1. A record exists and its pid is ALIVE. Nothing is spawned, nothing is
        stopped, and ``armed`` is False. Two pollers on the same four sources
@@ -874,6 +918,15 @@ def ensure_armed(
         An :class:`ArmResult` whose ``armed`` is True only if THIS call started
         a watcher.
     """
+    disarm = operator_disarm()
+    if disarm is not None:
+        return ArmResult(
+            armed=False,
+            pid=None,
+            dest_root=None,
+            reason=_operator_disarm_refusal(disarm),
+        )
+
     target = Path(path) if path is not None else record_path()
     base = Path(dest_base)
     when = _now() if now is None else now
@@ -2311,6 +2364,21 @@ def check_watcher(
 
     record = read_record(target)
     if record is None:
+        disarm = operator_disarm()
+        if disarm is not None:
+            no_record_reason = (
+                f"no usable watcher record at {target}, so nothing is archiving the log, "
+                f"the saves or the market cache - and that is CORRECT: disarmed by "
+                f"operator on {disarm.date} ({disarm.ledger_id}). NO_RECORD is the "
+                "expected answer while the OPERATOR DISARM stands. Do not arm one; only "
+                "the operator lifts it."
+            )
+        else:
+            no_record_reason = (
+                f"no usable watcher record at {target}, so nothing is archiving the log, "
+                "the saves or the market cache. Arming one is the whole point of handing "
+                "the machine back in a known state."
+            )
         return WatcherStatus(
             state=STATE_NO_RECORD,
             pid=None,
@@ -2318,11 +2386,7 @@ def check_watcher(
             evidence=tuple(evidence),
             heartbeat_age_s=None,
             identity=IDENTITY_NOT_REACHED,
-            reason=(
-                f"no usable watcher record at {target}, so nothing is archiving the log, "
-                "the saves or the market cache. Arming one is the whole point of handing "
-                "the machine back in a known state."
-            ),
+            reason=no_record_reason,
         )
 
     evidence.append(

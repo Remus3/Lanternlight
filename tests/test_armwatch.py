@@ -63,6 +63,27 @@ if str(REPO_ROOT) not in sys.path:
 
 from lanternlight import armwatch, savewatch  # noqa: E402  (path bootstrap first)
 
+#: The tracked OPERATOR DISARM, captured at IMPORT time - before any fixture has
+#: lifted it - so the disarm section at the end of this file can put it back.
+#: ``getattr`` rather than an attribute access so a missing constant reds the
+#: tests that pin it instead of erroring the whole module at collection.
+_TRACKED_OPERATOR_DISARM = getattr(armwatch, "OPERATOR_DISARM", None)
+
+
+@pytest.fixture(autouse=True)
+def _operator_disarm_lifted_for_watcher_machinery_tests(monkeypatch) -> None:
+    """Lift ``armwatch.OPERATOR_DISARM`` for THIS FILE ONLY, in-process.
+
+    The operator disarmed the capture watcher on 2026-09-11 (``LL-0234``) and
+    ``main()`` now refuses while that stands. The tests in this file exercise
+    the watcher BEHIND the refusal against ``tmp_path`` trees, so lifting the
+    constant here starts nothing against the operator's real directories. The
+    refusal itself is pinned at the end of this file, whose
+    ``operator_disarm_stands`` fixture puts the tracked value back. A session
+    must never use this path to run a real watcher.
+    """
+    monkeypatch.setattr(armwatch, "OPERATOR_DISARM", None, raising=False)
+
 
 def _saved_tree(root: Path) -> Path:
     """Build the shape of the game's ``Saved/`` directory under ``root``."""
@@ -2433,3 +2454,85 @@ class TestBOTHCallSitesReportWhatTheyActuallyCopied:
                 f"bound from poll_once>). Names bound from poll_once here: "
                 f"{sorted(from_poll)}"
             )
+
+
+# ---------------------------------------------------------------------------
+# THE OPERATOR DISARM - the CLI refuses too, not only ops.loop.watch
+#
+# An adversarial pass on 2026-09-20 showed that with the disarm enforced only
+# in ops.loop.watch.ensure_armed, ``python -m lanternlight.armwatch --dest-base
+# X`` still ran a pass and created X: a second entry point. The constant lives
+# HERE, in the lowest layer, so the process that would actually copy files is
+# the one that refuses, and ops.loop.watch reads this same value rather than
+# keeping a copy of its own.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def operator_disarm_stands(monkeypatch) -> None:
+    """Undo this file's autouse lift: the disarm stands, as it does for real."""
+    monkeypatch.setattr(armwatch, "OPERATOR_DISARM", _TRACKED_OPERATOR_DISARM, raising=False)
+
+
+def _assert_cli_refused(rc: int, err: str) -> None:
+    assert rc != 0, "the CLI ran through an OPERATOR DISARM"
+    assert rc == armwatch.OPERATOR_DISARM_EXIT
+    assert "OPERATOR DISARM" in err
+    assert "LL-0234" in err
+    assert "only the operator" in err.lower()
+
+
+class TestOperatorDisarmRefusesTheCli:
+    def test_the_disarm_lives_in_the_lowest_layer(self, operator_disarm_stands) -> None:
+        disarm = armwatch.OPERATOR_DISARM
+        assert disarm is not None, "the operator disarm of 2026-09-11 (LL-0234) was lifted"
+        assert disarm.ledger_id == "LL-0234"
+        assert disarm.date == "2026-09-11"
+        assert disarm.reason.strip()
+
+    def test_dest_base_is_refused_and_nothing_is_created(
+        self, operator_disarm_stands, tmp_path: Path, capsys
+    ) -> None:
+        saved = _saved_tree(tmp_path)
+        base = tmp_path / "ll-captures"
+        beat = tmp_path / "runtime" / "armwatch_heartbeat.json"
+        rc = armwatch.main(
+            [
+                "--saved-dir",
+                str(saved),
+                "--dest-base",
+                str(base),
+                "--heartbeat",
+                str(beat),
+                "--max-passes",
+                "1",
+            ]
+        )
+        _assert_cli_refused(rc, capsys.readouterr().err)
+        assert not base.exists(), "the capture tree was created through an OPERATOR DISARM"
+        assert not beat.exists()
+        assert not beat.parent.exists()
+
+    def test_dest_root_is_refused_and_nothing_is_created(
+        self, operator_disarm_stands, tmp_path: Path, capsys
+    ) -> None:
+        saved = _saved_tree(tmp_path)
+        dest = tmp_path / "dest"
+        rc = armwatch.main(
+            ["--saved-dir", str(saved), "--dest-root", str(dest), "--max-passes", "1"]
+        )
+        _assert_cli_refused(rc, capsys.readouterr().err)
+        assert not dest.exists()
+
+    def test_lifting_the_constant_lets_the_same_call_run(
+        self, operator_disarm_stands, tmp_path: Path, monkeypatch
+    ) -> None:
+        """Non-vacuity: the refusal above is the constant's doing."""
+        monkeypatch.setattr(armwatch, "OPERATOR_DISARM", None)
+        saved = _saved_tree(tmp_path)
+        base = tmp_path / "captures"
+        rc = armwatch.main(
+            ["--saved-dir", str(saved), "--dest-base", str(base), "--max-passes", "1"]
+        )
+        assert rc == 0
+        assert base.exists()

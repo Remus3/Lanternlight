@@ -61,6 +61,9 @@ Touch these paths and nothing else. Every other path in the repository belongs t
 - `tools/syntax_check_hook.py`
 - `tests/test_syntax_check_hook.py`
 - `tests/test_precommit_gate_lint.py`
+- `tools/secret_scan.py`
+- `tests/test_secret_scan.py`
+- `tests/test_secret_scan_outside.py`
 - `tests/test_precommit_hook_globbing.py`
 - `tests/test_no_hardcoded_home_path.py`
 - `tests/test_no_inbox_in_git.py`
