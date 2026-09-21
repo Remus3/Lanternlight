@@ -568,7 +568,8 @@ class TestLiveWiring:
     def test_this_very_session_is_marked_in_the_environment(self):
         import os
 
-        assert os.environ.get(suite_recorder.NEST_ENV) == "1", (
+        marked = os.environ.get(suite_recorder.NEST_ENV)
+        assert marked == "1", (
             "the live session did not mark the environment, so a pytest "
             "spawned by a test would record itself as a top-level run"
         )

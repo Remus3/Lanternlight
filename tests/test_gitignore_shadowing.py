@@ -823,13 +823,16 @@ class TestTheCeilingReallyStopsTheUpwardWalk:
         outer = _throwaway_repo(tmp_path / "ceiling_control", "*.log\n")
         probe = outer / "mid" / "probe"
         probe.mkdir(parents=True, exist_ok=True)
-        # NOT ``"GIT_CEILING_DIRECTORIES" not in os.environ``. That form puts
-        # the whole mapping in an operand position, and pytest's rewriting
-        # renders every variable and every value into the failure diff - which
-        # is how a provider API key reached a world-readable scratch file on
-        # this machine. ``tests/test_no_environ_mapping_assertions.py`` refuses
-        # it tree-wide and carries the measurement.
-        assert os.environ.get("GIT_CEILING_DIRECTORIES") is None
+        # The mapping is BOUND OUT before the assert rather than reached
+        # inside it. Measured: `assert os.environ.get(NAME) is None` renders
+        # the whole environment through pytest's `+ where` chain, which is how
+        # a provider API key reached a world-readable scratch file on this
+        # machine. Binding first leaves the assert holding a local name and
+        # nothing for that chain to walk back into.
+        # `tests/test_no_environ_mapping_assertions.py` refuses the other
+        # shapes tree-wide and carries the measurement.
+        ceiling = os.environ.get("GIT_CEILING_DIRECTORIES")
+        assert ceiling is None
         inside = _git(probe, "rev-parse", "--is-inside-work-tree")
         assert inside.returncode == 0
         assert inside.stdout.decode("ascii", "replace").strip() == "true"
@@ -863,7 +866,8 @@ def _leak_the_hook_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GIT_INDEX_FILE", str(REPO_ROOT / ".git" / "index"))
     for name in GIT_HOOK_ENV_REDIRECTORS:
         assert name in GIT_HOOK_ENV, f"{name} is leaked here but not scrubbed by _clean_env"
-        assert os.environ.get(name), f"{name} did not actually reach the environment"
+        reached = os.environ.get(name)
+        assert reached, f"{name} did not actually reach the environment"
 
 
 class TestTheHookEnvironmentCannotLeakIn:

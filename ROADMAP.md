@@ -1215,6 +1215,85 @@ anything the game emits. A session that reads `OPS-102` first should read it as
 That item exists because working the channel found two real gaps here. Mail is
 not a roadmap item, and mail that exposes a defect in this tree produces one.
 
+---
+
+## OPS-104. THE CAPTURE GROUND TRUTH WAS DESTROYED AND MUST BE RETAKEN - OPEN, and it blocks on the operator playing
+
+Filed 2026-09-20. `C:\ll-captures` was permanently deleted - 10.6 GB in 19,241
+files. Not to the Recycle Bin, no volume shadow copy existed, and the operator
+confirmed there is no backup and the loss is unrecoverable. This project did not
+delete it: there is no `rmtree` anywhere near a capture or destination path in
+this tree, and the capture watcher had been disarmed since 2026-09-11. The
+operator's ruling was that the captures needed retaking anyway.
+
+### What went with it, enumerated rather than estimated
+
+A search over both separator spellings and a whitespace-collapsed copy of every
+file - because prose here wraps near 80 columns and a path routinely spans two
+lines - found **267 references in 32 files**: 132 CITED EVIDENCE, 6
+CONFIGURATION, 109 NARRATIVE and 20 other. The archives hold 86 of the 267, so a
+search of the live halves alone would have been confidently wrong by a third.
+
+Three things are worse than the documents:
+
+- **`tests/test_vision_meter.py` went from 62 passing to 41 passing and 21
+  skipped, and the suite still exits 0.** A skipped test is still a COLLECTED
+  test, so `ops/merge_gate.py`'s floor never moves and nothing reports it. The
+  reader's only ground truth is disabled and the exit code says everything is
+  fine. Made loud rather than left quiet - see the acceptance below.
+- **Two constants in SHIPPED code were derived from those frames and can no
+  longer be audited**: `VALUE_WINDOW = (48, 92)` and the glyph templates in
+  `lanternlight/vision_meter_templates.py`. They still WORK; what is gone is the
+  ability to check how they were arrived at.
+- **A note this project sent on 2026-09-19 told LW, CS and RSC that the tree was
+  KEEP rather than PRUNE, with exact byte counts, because it was referenced.**
+  That statement is now false about the world. `LL-0244` requires a withdrawal
+  rather than a quiet correction in our own documents.
+
+### What SURVIVES, recorded so nobody annotates it as lost
+
+The 2026-08-09 set of 218 PNGs cited at `docs/OBSERVED_IDS.md` lines 662-686 is
+**outside** that tree and is intact. A blanket "all capture evidence is gone"
+would be wrong, and wrongly retracting a good measurement is as bad as keeping
+a bad one.
+
+### Acceptance
+
+1. **Fresh captures exist** covering what the disabled tests need: the panel set
+   behind `PANEL`, the 1.0.15 full-scene set behind `FULLSCREEN`, and a human
+   transcription equivalent to `meter_transcription_cycle34.csv`. This needs the
+   operator to PLAY; no session time substitutes.
+2. **The 21 skipped tests in `tests/test_vision_meter.py` pass again**, and the
+   count is observed rather than assumed - the module reported 41 passed and 21
+   skipped at the moment of filing.
+3. **Every re-derived constant is compared against the shipped one.**
+   `VALUE_WINDOW` and the glyph templates are re-derived from the NEW captures
+   and the result stated either way. If a re-derivation disagrees with the
+   shipped value, that is a finding and is recorded, not reconciled quietly.
+4. **The `CAPTURE-EVIDENCE-DESTROYED-2026-09-20` notices come out of
+   `docs/AFFIXES.md`, `docs/FINDINGS.md` and `docs/OBSERVED_IDS.md`** only after
+   the citations they cover have been re-verified against the new captures.
+   `tests/test_capture_evidence_notice.py` fails in BOTH directions, so the
+   notice cannot be removed early and cannot be left behind late.
+5. **Counts derived from the old tree are re-measured or left withdrawn**, never
+   carried forward. The unverifiable ones include 2172 frames, 18,898
+   timestamped, 6439, 263 GVAS generations, 353, 431, 19,162, and the
+   19,241-file / 10,678,327,730-byte figure for the tree itself.
+6. **The withdrawal note goes to the channel**, saying plainly that a figure and
+   a recommendation this project published about that tree no longer describe
+   the world.
+
+### What was done at filing time, so it is not redone
+
+- The three evidence documents carry a notice at the top, guarded in both
+  directions by `tests/test_capture_evidence_notice.py`.
+- `tests/test_vision_meter.py`'s skip messages now distinguish DESTROYED from
+  merely absent, and it carries an always-running arm that prints the loss and
+  fails if the notice and the disk ever disagree.
+- The citations were deliberately NOT stripped out. Deleting them would destroy
+  the record of how the readings were taken, which is the one thing still
+  recoverable.
+
 ### Acceptance
 
 This item CLOSES the moment any of the above unblocks - which happens when the

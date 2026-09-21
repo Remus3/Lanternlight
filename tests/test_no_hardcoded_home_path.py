@@ -814,7 +814,8 @@ class TestTheParameterisedFormsActuallyWork:
         """``done.md`` tells the operator to expand ``$env:USERPROFILE``."""
         if os.name != "nt":
             return
-        assert os.environ.get("USERPROFILE"), (
+        userprofile = os.environ.get("USERPROFILE")
+        assert userprofile, (
             "USERPROFILE is unset, so the wrap ritual's shortcut path would "
             "expand to nothing and the Desktop shortcut would be created at a "
             "bare relative path"

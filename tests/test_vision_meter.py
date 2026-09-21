@@ -51,9 +51,44 @@ GROUND_TRUTH_RUN = (
 )
 
 
+#: Marker that says the loss was a DESTRUCTION rather than a fresh clone that
+#: never had captures. A skip cannot tell those apart, and on 2026-09-20 they
+#: stopped being the same thing here: C:/ll-captures was permanently deleted,
+#: 10.6 GB in 19,241 files, unrecoverable. See
+#: tests/test_capture_evidence_notice.py, which carries the whole account.
+_DESTROYED_NOTE = (
+    "This is NOT a fresh clone that never had captures. C:/ll-captures was "
+    "PERMANENTLY DELETED on 2026-09-20 - 10.6 GB, 19,241 files, no backup, "
+    "unrecoverable. These tests are the reader's only ground truth and they "
+    "are disabled until the captures are RETAKEN. See ROADMAP OPS-104."
+)
+
+
+def _capture_root_was_destroyed() -> bool:
+    """True when this tree records the loss, rather than merely lacking data.
+
+    Asked of the repository's own document rather than of a constant, so the
+    answer stops being true the moment the notice is removed - which is what
+    happens when the captures come back.
+    """
+    notice = REPO_ROOT / "docs" / "FINDINGS.md"
+    try:
+        head = notice.read_text(encoding="utf-8")[:4000]
+    except OSError:
+        return False
+    return "CAPTURE-EVIDENCE-DESTROYED-2026-09-20" in head
+
+
+def _skip_reason(what: str, where) -> str:
+    base = f"{what} not on this machine: {where}"
+    if _capture_root_was_destroyed():
+        return base + " - " + _DESTROYED_NOTE
+    return base
+
+
 def _require_capture():
     if not PANEL.is_dir():
-        pytest.skip(f"reference capture not on this machine: {PANEL}")
+        pytest.skip(_skip_reason("reference capture", PANEL))
 
 
 def _pillow():
@@ -708,9 +743,9 @@ FULLSCREEN_CROP_ORIGIN = (2058, 390)
 
 def _require_fullscreen():
     if not FULLSCREEN.is_dir():
-        pytest.skip(f"1.0.15 capture not on this machine: {FULLSCREEN}")
+        pytest.skip(_skip_reason("1.0.15 capture", FULLSCREEN))
     if not TRANSCRIPTION.is_file():
-        pytest.skip(f"human transcription not on this machine: {TRANSCRIPTION}")
+        pytest.skip(_skip_reason("human transcription", TRANSCRIPTION))
 
 
 def _panel_up_rows():
@@ -1548,3 +1583,39 @@ def _tries(frame):
         return vision_meter.read_frame(frame)
     except Unreadable:
         return None
+
+
+def test_the_disabled_ground_truth_is_reported_rather_than_merely_skipped():
+    """ALWAYS RUNS. A skip is quiet; this is the thing that is not.
+
+    This repository's doctrine is that a check gets NOISIER when its input is
+    missing, never quieter. The vision tests skip when the captures are absent,
+    which is right for a fresh clone - and on 2026-09-20 it stopped being the
+    whole story here, because the captures were destroyed rather than never
+    present. Twenty-one tests went from passing to skipping and the suite still
+    exited 0, because a skipped test is still a COLLECTED test and the merge
+    gate's floor never moved.
+
+    So this arm exists to make the loss visible in the one place a reader
+    always looks - the run itself. It fails only if the tree LIES: if the
+    documents say the captures were destroyed while the capture root is sitting
+    there on disk.
+    """
+    destroyed_note = _capture_root_was_destroyed()
+    root_present = PANEL.is_dir() or FULLSCREEN.is_dir()
+
+    assert not (destroyed_note and root_present), (
+        "docs/FINDINGS.md carries the CAPTURE-EVIDENCE-DESTROYED notice while "
+        f"the capture root is present ({PANEL} / {FULLSCREEN}). One of those "
+        "is wrong, and while they disagree a reader cannot tell whether the "
+        "ground truth is available. Re-verify, then remove the notice."
+    )
+
+    if destroyed_note:
+        print(
+            "\nVISION GROUND TRUTH UNAVAILABLE - the capture tree was DESTROYED "
+            "on 2026-09-20, not merely absent. Every vision test below that "
+            "reads a frame is SKIPPED, and a skipped test is still collected, "
+            "so no count and no exit code will tell you. Re-capture is "
+            "ROADMAP OPS-104."
+        )

@@ -800,6 +800,7 @@ KNOWN_NON_HOSTS = frozenset(
         "os.environ",
         "os.environ.get",
         "os.environ.keys",
+        "unittest.TestCase",
         "trigger.json",
         "contract.write",
         "ops.outbox.SIBLING",

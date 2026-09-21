@@ -1,46 +1,84 @@
-"""No assertion in this repository may take the environment MAPPING as an operand.
+"""The environment mapping may not appear inside an ``assert`` AT ALL.
 
-WHY THIS GUARD EXISTS, and it is a measurement rather than a worry.
+WHY THIS GUARD EXISTS, and every number below was measured on this machine.
 
 Clockspeed's 2026-09-20 1820 ACTION note reported a live-shaped provider API
 key sitting in a world-readable scratch file, and traced it to a ``pytest``
-assertion that rendered an environment mapping into a failure diff. Clockspeed
-described the hazard as "an assertion whose operand is an environment mapping",
-which reads like a warning about code that deliberately compares against
-``os.environ``.
+assertion that rendered an environment mapping into a failure diff.
 
-**Measured here 2026-09-20, and the real hazard is narrower and much easier to
-miss than that description suggests.** The dangerous form is the one that names
-a SINGLE variable and looks like the safest line in the file:
+THIS MODULE HAS NOW BEEN WRONG TWICE ABOUT WHY, and the second version was
+published to five sibling projects before it was measured properly. The history
+is kept here rather than tidied away, because the shape of the mistake is worth
+more than the rule it produced.
 
-    assert "SOME_NAME" not in os.environ
+**First answer, wrong:** "the dangerous form is ``assert "X" not in os.environ``
+and ``os.environ.get(...)`` is safe." Measured with a planted sentinel and the
+``.get`` form leaks too.
 
-A reader sees one environment variable named and concludes one environment
-variable can be printed. ``pytest``'s assertion rewriting prints the whole
-right-hand operand, so on failure that line renders EVERY variable and EVERY
-value the process holds. Probed with a planted sentinel and a planted
-admin-family key shape: the sentinel appeared three times in the failure
-output, and the planted key was visible in the ``+ where`` line. The author
-never wrote ``os.environ`` as a thing to be compared - they wrote a membership
-test - and that is precisely why the form survives review.
+**Second answer, also wrong:** "the axis is whether the MAPPING OBJECT reaches
+an operand position, so a subscript or a ``.get`` receiver is safe." That
+produced a SAFE LIST, and an adversarial pass then defeated the module three
+times through entries on it - ``.keys()``, an alias, and a bound name.
 
-The control probe in the same measurement:
+**The measured answer, and it is about the OPERATOR rather than the operand.**
+``pytest`` emits an ``E + where`` explanation chain for some comparisons and
+not others, and when it emits one it walks back through every sub-expression
+and reprs each, including the mapping - twice. Probed per form, each in its own
+pytest process, at this suite's real verbosity::
 
-    assert os.environ.get("SOME_NAME") == "expected"
+    assert "X" not in os.environ                  LEAKS
+    assert os.environ.get("ABSENT") == "x"        LEAKS
+    assert os.environ.get("PRESENT") is None      LEAKS
+    assert "X" not in os.environ.keys()           LEAKS  (worst, 4 renderings)
+    assert not os.environ                         LEAKS
+    assert cond, os.environ                       LEAKS  (the message half)
+    assert os.environ.get("PRESENT") == "x"       clean
+    assert os.environ["PRESENT"] == "x"           clean
 
-rendered ONLY the retrieved value. The distinction is not "does the author
-mention the environment", it is "does the MAPPING OBJECT reach an operand
-position". So that is what this guard checks.
+Look at the last three against the third. **The same expression is safe or
+unsafe depending on what is IN the environment at run time**: ``.get`` on a
+present key is clean, ``.get`` on an absent key leaks, because ``None`` sends
+``pytest`` down the ``+ where`` path and a string comparison does not. A rule
+that calls a line safe on Tuesday and unsafe on Wednesday is not a rule anyone
+can follow, and a guard encoding it would be a guard encoding a coincidence.
 
-**The rule.** Inside an ``assert``, ``os.environ`` (or a bare ``environ``
-imported from ``os``) may appear ONLY as the receiver of a ``.get(...)`` call
-or as a subscript target. Anywhere else - a membership test, an equality, a
-``len()``, a truthiness check - is refused, because every one of those puts the
-mapping itself where the rewriter will print it.
+**So there is NO SAFE LIST.** Inside an ``assert`` - the test half and the
+message half - the environment mapping may not be reached by any route. The
+only permitted shape binds first::
+
+    value = os.environ.get("NAME")
+    assert value == "expected"
+
+Measured clean, and clean STRUCTURALLY rather than by luck: the assert
+expression holds a local name and nothing else, so there is no sub-expression
+for the explanation chain to walk back into. ``value = os.environ["NAME"]``
+then asserting on ``value`` is equally clean.
+
+**THE LESSON IS THE SAFE LIST ITSELF.** Three defects, three safe-list entries,
+every one admitted because the reasoning sounded right and none of them
+measured. Every POSITIVE specimen in the first version had been measured; not
+one NEGATIVE specimen had. That asymmetry is where all three lived. A guard
+with no exemptions cannot be defeated through its exemptions.
 
 **This guard is deliberately not a regex.** A line-oriented pattern is a claim
-about line breaks, and this repository has already published a wrong answer
-from one. The check parses the file and asks the tree.
+about line breaks, and this repository has published a wrong answer from one.
+The check parses the file and asks the tree.
+
+WHAT THIS GUARD IS BLIND TO, stated in the artifact because a caveat that lives
+only in a chat message is a lie in the artifact:
+
+- **It walks ``assert`` STATEMENTS only.** A ``unittest`` style
+  ``self.assertIn("X", os.environ)`` is a CALL, is not walked, and was measured
+  to leak worse than a bare assert because ``unittest`` does not use
+  ``saferepr`` and renders the mapping whole. This tree contains no
+  ``unittest.TestCase`` at all, measured, so the hole is currently unreachable
+  here - but it is a hole, and a sibling reading this module should know.
+- **Alias tracking follows a DIRECT binding only**, including a chain of them.
+  An alias reached through a container, a function parameter or a return value
+  is not tracked, and no AST pass can do that soundly without type inference.
+- It reasons about ``os.environ``. Any other object whose repr carries secrets -
+  a parsed ``.env``, a config mapping, a credential dict - has exactly the same
+  hazard and this guard says nothing about it.
 """
 
 from __future__ import annotations
@@ -55,6 +93,12 @@ from tests._tracked import REPO_ROOT, iter_scannable_files
 #: Source files this guard reads. Python only - the hazard is an assertion
 #: statement, which no other language in this tree has.
 _SUFFIX = ".py"
+
+_ADVICE = (
+    "the environment mapping is reachable inside an assert; pytest's "
+    "'+ where' chain reprs every sub-expression, mapping included. Bind it "
+    "first - value = os.environ.get(NAME) - and assert on the local."
+)
 
 
 def _python_sources(root: Path = REPO_ROOT):
@@ -72,122 +116,104 @@ def _python_sources(root: Path = REPO_ROOT):
         yield path
 
 
+def _binds_environ(value: ast.AST, aliases: set[str]) -> bool:
+    """Does this expression evaluate TO the mapping itself?
+
+    Covers the four routes measured to reach it: the attribute ``os.environ``,
+    a bare ``environ`` from ``from os import environ``, an existing alias
+    (so a chain ``a = os.environ; b = a`` is followed), and the two dynamic
+    lookups ``getattr(os, "environ")`` and ``os.__dict__["environ"]``.
+    """
+    if isinstance(value, ast.Attribute) and value.attr == "environ":
+        return isinstance(value.value, ast.Name) and value.value.id == "os"
+    if isinstance(value, ast.Name):
+        return value.id == "environ" or value.id in aliases
+    if isinstance(value, ast.Call):
+        func = value.func
+        if (
+            isinstance(func, ast.Name)
+            and func.id == "getattr"
+            and len(value.args) >= 2
+            and isinstance(value.args[1], ast.Constant)
+            and value.args[1].value == "environ"
+        ):
+            return True
+    if isinstance(value, ast.Subscript):
+        target = value.value
+        if (
+            isinstance(target, ast.Attribute)
+            and target.attr == "__dict__"
+            and isinstance(value.slice, ast.Constant)
+            and value.slice.value == "environ"
+        ):
+            return True
+    return False
+
+
 def _aliases(tree: ast.AST) -> set[str]:
-    """Names bound directly to the mapping, e.g. ``env = os.environ``.
+    """Names bound to the mapping, following chains to a fixed point.
 
-    **An adversarial pass defeated this guard with two of these.** A check that
-    knows only the spellings ``os.environ`` and ``environ`` is a check about
-    SPELLING, and the rewriter does not care what the object is called - it is
-    the same object and it renders identically. Collected per module rather
-    than per function on purpose: an alias bound at module scope and used
-    inside a test is the shape that would otherwise slip through.
+    Per module rather than per function: an alias bound at module scope and
+    used inside a test is the shape that would otherwise slip through. The
+    fixed-point loop is what an adversarial pass required - one pass catches
+    ``a = os.environ`` and misses ``b = a``.
 
-    The honest limit, stated rather than discovered: this follows a direct
-    binding only. An alias reached through a container, a function parameter,
-    or a return value is not tracked, and no AST pass can do that soundly
-    without type inference.
+    ``from os import environ as e`` is picked up here too, since that is also
+    a binding of the name ``e`` to the mapping.
     """
     found: set[str] = set()
-    for node in ast.walk(tree):
-        targets: list[ast.expr] = []
-        if isinstance(node, ast.Assign):
-            targets = list(node.targets)
-        elif (
-            isinstance(node, ast.AnnAssign) and node.value is not None
-        ) or isinstance(node, ast.NamedExpr):
-            targets = [node.target]
-        else:
-            continue
-        value = node.value
-        if value is None or not _is_environ(value, frozenset()):
-            continue
-        for target in targets:
-            if isinstance(target, ast.Name):
-                found.add(target.id)
+    for _ in range(8):  # a chain deeper than this is not real code
+        before = len(found)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module == "os":
+                for alias in node.names:
+                    if alias.name == "environ":
+                        found.add(alias.asname or alias.name)
+                continue
+            targets: list[ast.expr] = []
+            if isinstance(node, ast.Assign):
+                targets = list(node.targets)
+            elif (
+                isinstance(node, ast.AnnAssign) and node.value is not None
+            ) or isinstance(node, ast.NamedExpr):
+                targets = [node.target]
+            else:
+                continue
+            if node.value is None or not _binds_environ(node.value, found):
+                continue
+            for target in targets:
+                if isinstance(target, ast.Name):
+                    found.add(target.id)
+        if len(found) == before:
+            break
     return found
-
-
-def _is_environ(node: ast.AST, aliases: frozenset[str] | set[str]) -> bool:
-    """True for ``os.environ``, a bare ``environ``, or a known alias of either.
-
-    All three reach the rewriter identically. ``from os import environ`` is not
-    used in this tree today, and a guard that only knows the spelling currently
-    in use is a guard that misses the first file written the other way.
-    """
-    if isinstance(node, ast.Attribute) and node.attr == "environ":
-        return isinstance(node.value, ast.Name) and node.value.id == "os"
-    if isinstance(node, ast.Name):
-        return node.id == "environ" or node.id in aliases
-    return False
-
-
-def _safe_parent(parent: ast.AST | None, child: ast.AST) -> bool:
-    """True when this occurrence of the mapping cannot reach an operand.
-
-    The two permitted shapes, and nothing else:
-
-    - ``os.environ["NAME"]`` - a subscript, which yields one value.
-    - ``os.environ.get(...)`` - an attribute access that is immediately called,
-      which also yields one value.
-
-    An attribute access that is NOT called - ``os.environ.copy`` passed as a
-    callable, say - is refused, because the object still travels.
-
-    **``.keys()`` WAS on this list for one commit and an adversarial pass took
-    it off.** The reasoning that put it here was that a keys view yields no
-    values. That reasoning was never measured, and it is wrong:
-    ``os.environ.keys()`` reprs as ``KeysView(environ({...}))``, which carries
-    every key AND every value. A planted key shape rendered four times through
-    it - more than through the membership form this whole module exists to
-    catch. The lesson is the repository's own: a safe-list entry admitted on
-    reasoning rather than on a measurement is a hole with a comment over it.
-    """
-    if isinstance(parent, ast.Subscript) and parent.value is child:
-        return True
-    if isinstance(parent, ast.Attribute) and parent.value is child:
-        return parent.attr == "get"
-    return False
 
 
 def find_violations(source: str, label: str = "<source>") -> list[str]:
     """Return one message per refused occurrence. Empty means clean.
 
-    Exposed rather than inlined so the vacuity arms below can drive the real
-    detector over synthetic sources instead of over a mock of it.
+    Exposed rather than inlined so the specimen arms below drive the REAL
+    detector rather than a mock of it.
     """
     tree = ast.parse(source, filename=label)
     aliases = _aliases(tree)
-
-    parents: dict[int, ast.AST] = {}
-    for node in ast.walk(tree):
-        for child in ast.iter_child_nodes(node):
-            parents[id(child)] = node
 
     found: list[str] = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.Assert):
             continue
-        for sub in ast.walk(node):
-            if not _is_environ(sub, aliases):
+        # Both halves. The message half was measured to leak too, and it is
+        # the half an author writes while trying to be helpful.
+        for half in (node.test, node.msg):
+            if half is None:
                 continue
-            parent = parents.get(id(sub))
-            # An attribute access that is called is safe only when the CALL is
-            # what the assertion consumes; ``.get`` bare would still travel.
-            if isinstance(parent, ast.Attribute) and _safe_parent(parent, sub):
-                grandparent = parents.get(id(parent))
-                if isinstance(grandparent, ast.Call) and grandparent.func is parent:
-                    continue
-            elif _safe_parent(parent, sub):
-                continue
-            found.append(
-                f"{label}:{sub.lineno}: the environment MAPPING reaches an "
-                "assert operand; pytest will render every variable and every "
-                "value on failure. Use os.environ.get(NAME) instead."
-            )
+            for sub in ast.walk(half):
+                if _binds_environ(sub, aliases):
+                    found.append(f"{label}:{sub.lineno}: {_ADVICE}")
     return found
 
 
-def test_no_published_python_file_asserts_on_the_environment_mapping():
+def test_no_published_python_file_reaches_the_environment_inside_an_assert():
     """The guard itself, over the real tree."""
     violations: list[str] = []
     scanned = 0
@@ -210,68 +236,90 @@ def test_no_published_python_file_asserts_on_the_environment_mapping():
     assert not violations, "\n".join(violations)
 
 
-def test_the_detector_flags_the_membership_form():
-    """Vacuity arm: the exact form that was measured to leak.
+#: Every form MEASURED to render environment values into a pytest failure, plus
+#: the evasions an adversarial pass found. Each was probed in its own pytest
+#: process with two sentinels placed at the tail of the insertion-ordered
+#: environment, because ``saferepr`` elides the middle and a badly placed
+#: sentinel reports a real leak as clean.
+_LEAKING = [
+    'import os\n\n\ndef t():\n    assert "NAME" not in os.environ\n',
+    'import os\n\n\ndef t():\n    assert "NAME" in os.environ\n',
+    "import os\n\n\ndef t():\n    assert os.environ == {}\n",
+    "import os\n\n\ndef t():\n    assert not os.environ\n",
+    "import os\n\n\ndef t():\n    assert len(os.environ) > 0\n",
+    "from os import environ\n\n\ndef t():\n    assert environ\n",
+    "import os\n\n\ndef t():\n    assert os.environ.copy\n",
+    'import os\n\n\ndef t():\n    assert "NAME" in os.environ.keys()\n',
+    "import os\n\n\ndef t():\n    assert not os.environ.keys()\n",
+    # Formerly on this module's own SAFE list. Both measured to leak.
+    'import os\n\n\ndef t():\n    assert os.environ.get("NAME") == "x"\n',
+    'import os\n\n\ndef t():\n    assert os.environ.get("NAME") is None\n',
+    'import os\n\n\ndef t():\n    assert os.environ["NAME"] == "x"\n',
+    # Aliases, including a CHAIN of them.
+    'import os\n\n\ndef t():\n    env = os.environ\n    assert "N" in env\n',
+    "import os\n\n\ndef t():\n    env = os.environ\n    assert not env\n",
+    'import os\n\n\ndef t():\n    a = os.environ\n    b = a\n    assert "N" in b\n',
+    'from os import environ as e\n\n\ndef t():\n    assert "N" in e\n',
+    # Dynamic lookups.
+    'import os\n\n\ndef t():\n    env = getattr(os, "environ")\n    assert not env\n',
+    'import os\n\n\ndef t():\n    assert not getattr(os, "environ")\n',
+    'import os\n\n\ndef t():\n    e = os.__dict__["environ"]\n    assert not e\n',
+    # The MESSAGE half, measured to leak and easy to miss.
+    "import os\n\n\ndef t():\n    assert False, os.environ\n",
+    'import os\n\n\ndef t():\n    env = os.environ\n    assert False, f"{env}"\n',
+]
 
-    Without this, a detector that silently matched nothing would look identical
-    to a clean tree.
-    """
+#: The only shape this guard permits, and it is permitted STRUCTURALLY: the
+#: assert expression holds a local name, so there is no sub-expression for
+#: pytest's explanation chain to walk back into. Both were measured clean.
+_SAFE = [
+    'import os\n\n\ndef t():\n    value = os.environ.get("N")\n    assert value == "x"\n',
+    'import os\n\n\ndef t():\n    value = os.environ["N"]\n    assert value == "x"\n',
+    # Binding alone is not an assertion and is not this guard's business.
+    "import os\n\n\ndef t():\n    env = os.environ\n    del env\n",
+    # An unrelated assert in a module that happens to import os.
+    'import os\n\n\ndef t():\n    assert os.sep == "/"\n',
+]
+
+
+@pytest.mark.parametrize("source", _LEAKING)
+def test_every_leaking_form_is_flagged(source):
+    assert find_violations(source, "probe.py"), source
+
+
+@pytest.mark.parametrize("source", _SAFE)
+def test_the_permitted_shapes_are_accepted(source):
+    assert find_violations(source, "probe.py") == [], source
+
+
+def test_the_detector_reports_the_line_and_the_fix():
+    """A finding has to say where it is and what to do about it."""
     bad = 'import os\n\n\ndef t():\n    assert "NAME" not in os.environ\n'
     found = find_violations(bad, "probe.py")
     assert len(found) == 1, found
     assert "probe.py:5" in found[0], found
+    assert "os.environ.get(NAME)" in found[0], found
 
 
-@pytest.mark.parametrize(
-    "source",
-    [
-        'import os\n\n\ndef t():\n    assert "NAME" in os.environ\n',
-        "import os\n\n\ndef t():\n    assert os.environ == {}\n",
-        "import os\n\n\ndef t():\n    assert not os.environ\n",
-        "import os\n\n\ndef t():\n    assert len(os.environ) > 0\n",
-        "from os import environ\n\n\ndef t():\n    assert environ\n",
-        "import os\n\n\ndef t():\n    assert os.environ.copy\n",
-        # ADVERSARIAL, 2026-09-20. ``.keys()`` was on this guard's OWN safe
-        # list for one commit, on the reasoning that a keys view yields no
-        # values. MEASURED and wrong: ``KeysView`` reprs as
-        # ``KeysView(environ({...}))``, which carries keys AND values, and a
-        # planted key shape rendered four times. That is WORSE than the form
-        # this guard was built to catch, and the guard was permitting it.
-        'import os\n\n\ndef t():\n    assert "NAME" in os.environ.keys()\n',
-        "import os\n\n\ndef t():\n    assert not os.environ.keys()\n",
-        # An ALIAS defeats any check that only knows two spellings. It is the
-        # same object and the rewriter renders it identically.
-        'import os\n\n\ndef t():\n    env = os.environ\n    assert "N" in env\n',
-        "import os\n\n\ndef t():\n    env = os.environ\n    assert not env\n",
-        'import os\n\n\ndef t():\n    e = os.environ\n    assert "N" in e.keys()\n',
-        # This one was in the SAFE list until the alias arm above was added,
-        # on the reasoning that binding the mapping outside an assert does not
-        # render it. Half right: the BINDING does not, and the assertion does.
-        # Measured - `seen = os.environ` then `assert seen is None` rendered a
-        # planted sentinel twice. A second safe-list entry admitted on
-        # reasoning rather than on a measurement, found the same day as the
-        # first.
-        "import os\n\n\ndef t():\n    seen = os.environ\n    assert seen is not None\n",
-    ],
-)
-def test_the_detector_flags_every_operand_shape(source):
-    assert find_violations(source, "probe.py"), source
+def test_there_is_no_safe_list_to_attack():
+    """The design claim, asserted so it cannot be softened back in.
 
-
-@pytest.mark.parametrize(
-    "source",
-    [
-        'import os\n\n\ndef t():\n    assert os.environ.get("NAME") == "x"\n',
-        'import os\n\n\ndef t():\n    assert os.environ.get("NAME") is None\n',
-        'import os\n\n\ndef t():\n    assert os.environ["NAME"] == "x"\n',
-        # Binding the mapping is fine; it is reaching an assert OPERAND that is
-        # not. Here the alias is subscripted, so one value is rendered.
-        'import os\n\n\ndef t():\n    env = os.environ\n    assert env["N"] == "x"\n',
-        'import os\n\n\ndef t():\n    env = os.environ\n    assert env.get("N") is None\n',
-    ],
-)
-def test_the_detector_accepts_the_safe_shapes(source):
-    assert find_violations(source, "probe.py") == [], source
+    Three defects in this module came from safe-list entries. If a future
+    change reintroduces one, this arm is the thing that should have to be
+    deleted deliberately rather than eroded quietly.
+    """
+    source = Path(__file__).read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    names = {
+        node.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef)
+    }
+    assert "_safe_parent" not in names, (
+        "a per-occurrence exemption helper is back. Three separate defects in "
+        "this module were entries on its safe list; the guard has none now, "
+        "and reintroducing one needs a measurement, not a rationale."
+    )
 
 
 def test_the_detector_reaches_its_own_file():

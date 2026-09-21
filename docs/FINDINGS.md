@@ -1,5 +1,34 @@
 # Lanternlight - Feasibility Findings
 
+> **CAPTURE-EVIDENCE-DESTROYED-2026-09-20 - read this before citing anything
+> below.** Many readings in this document name an individual frame or save file
+> under `C:\ll-captures` as the evidence they rest on. **That tree was
+> permanently deleted on 2026-09-20** - 10.6 GB in 19,241 files. It was not
+> sent to the Recycle Bin, no volume shadow copy existed, and the operator has
+> confirmed there is no backup and the loss is **unrecoverable**. Lanternlight
+> did not delete it and no code in this tree could have; the capture watcher
+> had been disarmed since 2026-09-11.
+>
+> **What that does and does not change.** It does NOT retract a single reading.
+> Each was read off the operator's own screen at the time and the method is
+> recorded beside it, which is worth more than a reading with no provenance at
+> all. What it changes is that the readings can no longer be INDEPENDENTLY
+> RE-VERIFIED from this machine: a citation below names a frame that no longer
+> exists. Treat every frame-level citation as a record of how a value was
+> obtained, not as a pointer you can follow.
+>
+> **Counts derived from that tree are now unverifiable too** - the frame
+> totals, the capture-set tallies and anything quoting a number of files under
+> it. They are left in place as the honest record of what was measured, and
+> nobody should re-derive them.
+>
+> The citations are deliberately NOT stripped out. Deleting them would destroy
+> the record of how these readings were taken, which is the one thing still
+> recoverable. `tests/test_capture_evidence_notice.py` keeps this notice honest
+> and **fails in both directions** - it also fails if the tree ever returns and
+> this paragraph is still here claiming otherwise.
+
+
 Measured 2026-08-09 on Legion. Every line below is a probe result, not an
 inference. Where something was not measured, it says so.
 
