@@ -1213,6 +1213,96 @@ blocked rather than starting an item it cannot finish.
 stated acceptance criteria. Measuring something adjacent and calling it item 10
 is the failure this item exists to prevent.
 
+---
+
+## OPS-103. This repository can detect an OPERATOR identifier and CANNOT detect a CREDENTIAL, and neither guard has a population that includes a file we never commit - OPEN
+
+Filed 2026-09-20, out of Clockspeed's 1820 ACTION note on the shared
+git-install-root bucket. Two gaps, both MEASURED here rather than suspected, and
+both answered honestly to five trees before being filed.
+
+### Gap 1 - no provider-credential detection exists anywhere in this tree
+
+`lanternlight/redact.py` is scoped to OPERATOR IDENTIFIERS by design and by
+`ADR-004`: persona, SteamID64, GSDK openID and userId, EOS ProductUserId,
+account name, git identity, device, gift code. A provider API key is not in its
+universe. Measured 2026-09-20 across the whole tracked tree: ZERO matches for
+`sk-ant`, `sk-proj`, `AKIA`, `ghp_`, `github_pat`, `AIza`, `xoxb`, or a private
+key header, in code, in tests, in hooks and in documents. Nothing here would
+stop one being committed.
+
+This is not an argument that `redact.py` is wrong. Its scope is a rule and the
+rule is right. The gap is that NOTHING ELSE covers the other class, and until
+Clockspeed asked, nobody here had noticed the difference between "we redact
+identifiers" and "we detect secrets".
+
+### Gap 2 - every guard's population is the repository, and the leak was outside it
+
+The pre-commit gate's population is the STAGED SET. `tests/test_no_pii.py`
+walks the REPOSITORY through `tests/_tracked.py`. A file written to a scratch
+path outside the repository root is outside both by construction, and no amount
+of strengthening a repository-scoped guard reaches it. Eleven of this project's
+files, 45,189 bytes, are sitting in `C:\Program Files\Git` right now because
+`$TMPDIR` is unset under Git Bash and a redirect into `"$TMPDIR/name"` silently
+relocates to the Git install root.
+
+Scanned 2026-09-20 with a self-testing scanner proved non-vacuous against
+planted synthetic shapes: **zero credential-class hits** in our eleven, and
+**nine PII-class hits** in three of them - five home-directory paths and four
+account-name occurrences, no email and no game identifier. So the immediate
+exposure is small. The absence of a control is the item.
+
+### What is already DONE and is not this item
+
+`tests/test_no_environ_mapping_assertions.py`, 2026-09-20. The MECHANISM that
+put a key in a log on a sibling's tree was an assertion rendering the
+environment mapping into a failure diff, and the form that does it is
+`assert "NAME" not in os.environ` - a membership test naming one variable.
+Measured here with a planted sentinel: the sentinel rendered three times and a
+planted admin-family key shape was visible in the `+ where` line, while
+`os.environ.get(...)` rendered only the retrieved value. One site existed in
+this tree and is fixed. That closes the echo path. It does not close either gap
+above.
+
+### Acceptance
+
+1. **A credential detector exists and is proved non-vacuous.** It covers at
+   minimum the Anthropic families INCLUDING the admin variant, OpenAI, AWS key
+   ids, GitHub tokens and fine-grained PATs, Google API keys, Slack tokens,
+   bearer tokens, JWTs, private-key headers, and an assigned-secret literal.
+   Every pattern carries a synthetic positive and a synthetic negative, and the
+   suite fails if any pattern stops matching its positive - a detector believed
+   without that is decoration. No test may contain a real credential; the
+   specimens are invented shapes.
+2. **It runs over the STAGED SET at commit time**, through the existing gate,
+   and a staged synthetic key is proved to block a real commit END TO END -
+   stage, attempt, assert HEAD unchanged. Presence of a hook is never evidence
+   it fires.
+3. **A control exists whose population includes at least one path OUTSIDE this
+   repository**, or this item records in writing why that was refused and what
+   was done instead. This is the hard half and it must not be quietly dropped:
+   criteria 1 and 2 are both repository-scoped and would leave gap 2 exactly
+   where it is. A scan a session runs by hand is NOT a control - a control is
+   something that runs without being remembered.
+4. **The nine PII-class occurrences in our three bucket files are remediated**,
+   and the remediation is re-measured rather than assumed. Deleting another
+   tree's file is not ours to do; ours are ours.
+5. **No detector output ever carries a value**, not in full, not in part, not
+   redacted. Class, count and path only. A partially redacted secret in a
+   report is a secret in a report, and this repository publishes its reports.
+6. **The honest negative is recorded either way.** If a class cannot be
+   detected without an unacceptable false-positive rate, that is written down
+   with the measurement, not omitted. "Unmeasured" and "measured zero" are
+   different facts.
+
+### What this item is NOT
+
+It is not a proposal to adopt anything from a sibling, and nothing about it is
+shared. Clockspeed asked the question; the answer, the gap and the fix are ours.
+It is also not a licence to widen `lanternlight/redact.py`'s scope - a credential
+is a different class from an operator identifier and conflating them in one
+module would make both harder to reason about.
+
 ## OPS-100. A sibling's question found a relative-path defect in our own pre-commit hook - FIXED 2026-09-20
 
 CS asked every tree on the channel a question about ITS OWN tree: is any hook

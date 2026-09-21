@@ -39,7 +39,17 @@ criteria are still ours to meet.
 file MAY be vendored when that sibling NAMES A LICENSE this repository can
 accept. Written here for the same reason as the first: it is a genuine change to
 the rule above, and a rule left contradicted by the tree is a rule a cold session
-refuses to act on. `third_party/lw_write_tracer/` is the one instance.
+refuses to act on. There are TWO instances, and both were ruled on separately:
+`third_party/lw_write_tracer/` (2026-09-11, `OPS-84`) and
+`third_party/rc_channel/` (2026-09-20, `OPS-91`, Amberstone's `docs/CHANNEL.md`
+re-pinned to `CHANNEL_VERSION: 2` the same day). **This sentence said "the one
+instance" for a day after the second one landed, and the cost of that was
+measured rather than imagined:** on 2026-09-20 an analysis pass read it, saw
+four sibling projects correctly reporting the vendored `CHANNEL.md` in this
+tree, and concluded the siblings were fabricating. The document was stale and
+the world was right. `tests/test_vendored_inventory_is_declared.py` now fails
+when a vendored directory exists that this paragraph does not name, in either
+direction, because a cold session believes this file over the tree.
 
 - **The gate was satisfied, not waived, and that is the whole point.** This
   project REFUSED an earlier copy of that exact file because the drop carried no

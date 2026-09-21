@@ -791,6 +791,14 @@ KNOWN_NON_HOSTS = frozenset(
         # `git ls-files` matches zero paths for it by design. Both looked at
         # before adding, per the regenerating note above.
         "json.loads",
+        # Python standard-library attribute paths quoted by
+        # `docs/INVENTORY.md` when it describes
+        # `tests/test_no_environ_mapping_assertions.py`. `environ` and
+        # `get` parse as host-shaped tails after a dot. Both looked at
+        # before adding, per the regenerating note above: they are
+        # `os.environ` and `os.environ.get`, not hosts.
+        "os.environ",
+        "os.environ.get",
         "trigger.json",
         "contract.write",
         "ops.outbox.SIBLING",

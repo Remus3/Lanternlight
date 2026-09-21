@@ -290,6 +290,16 @@ LANES: tuple[Lane, ...] = (
             "tests/test_sibling_inbox_choke_point.py",
             "tests/test_source_register.py",
             "tests/test_gitignore_shadowing.py",
+            # The environment-mapping echo path, 2026-09-20, answering
+            # Clockspeed's ACTION note about a provider key found in a
+            # world-readable scratch file. `assert "NAME" not in os.environ`
+            # renders EVERY variable and EVERY value into a pytest failure
+            # diff - measured here with a planted sentinel. It is this lane's
+            # because the class of data is a secret leaving the process, which
+            # is the lane that may not weaken a hygiene guard, and because the
+            # one site it found was in `tests/test_gitignore_shadowing.py`,
+            # already owned above.
+            "tests/test_no_environ_mapping_assertions.py",
             # OPS-96. Empty untracked, unignored directories - the class the
             # 2026-09-19 machine sweep found, invisible to `git status` because
             # git does not report empty directories. It sits with this lane for
@@ -474,6 +484,14 @@ LANES: tuple[Lane, ...] = (
             # the note channel is continuity machinery, not feature work - and
             # the vendored document must not be edited by ANY lane.
             "tests/test_vendored_channel_md.py",
+            # The INVENTORY of vendored works, 2026-09-20. `CLAUDE.md` names
+            # the instances its second vendoring exception covers, and that
+            # sentence went stale for a day after `third_party/rc_channel/`
+            # landed. A cold analysis pass then read it and called four
+            # siblings' correct reports a fabrication. This lane owns the
+            # durable record a cold session resumes from, so it owns the guard
+            # that keeps that record honest about its own tree.
+            "tests/test_vendored_inventory_is_declared.py",
             # OPS-91 criterion 4, the channel's portable assertions written as
             # OUR OWN test module rather than vendored - RC's gate module is
             # not vendored under any answer, because it hard-imports RC-only

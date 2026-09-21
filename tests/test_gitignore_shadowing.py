@@ -823,7 +823,13 @@ class TestTheCeilingReallyStopsTheUpwardWalk:
         outer = _throwaway_repo(tmp_path / "ceiling_control", "*.log\n")
         probe = outer / "mid" / "probe"
         probe.mkdir(parents=True, exist_ok=True)
-        assert "GIT_CEILING_DIRECTORIES" not in os.environ
+        # NOT ``"GIT_CEILING_DIRECTORIES" not in os.environ``. That form puts
+        # the whole mapping in an operand position, and pytest's rewriting
+        # renders every variable and every value into the failure diff - which
+        # is how a provider API key reached a world-readable scratch file on
+        # this machine. ``tests/test_no_environ_mapping_assertions.py`` refuses
+        # it tree-wide and carries the measurement.
+        assert os.environ.get("GIT_CEILING_DIRECTORIES") is None
         inside = _git(probe, "rev-parse", "--is-inside-work-tree")
         assert inside.returncode == 0
         assert inside.stdout.decode("ascii", "replace").strip() == "true"

@@ -32,11 +32,23 @@ VENDOR_DIR = REPO_ROOT / "third_party" / "rc_channel"
 VENDORED = VENDOR_DIR / "docs" / "CHANNEL.md"
 NOTICE = VENDOR_DIR / "NOTICE.md"
 
-#: The ``sha256`` Amberstone published for the LF form of this file, in its note
-#: ``2026-09-15-1858-from-RC-FYI-899f6eb957cc-channel-md-v1-conventions-and-
-#: charter-v4-is-current.md``, alongside the commit ``6e3c1c752`` it is
-#: committed at. Verified against the bytes served by the public remote at that
-#: commit BEFORE a byte was copied into this tree.
+#: The ``sha256`` Amberstone published for the LF form of this file, for the
+#: CURRENT pin: ``CHANNEL_VERSION: 2`` at :data:`UPSTREAM_COMMIT` below.
+#: Verified against the bytes served by the public remote at that commit BEFORE
+#: a byte was copied into this tree, and the license gate was RE-RUN at that
+#: commit rather than inherited from the v1 one - a license is a fact about a
+#: COMMIT, not about a repository.
+#:
+#: **This comment described the V1 pin for a day after the re-pin landed**, and
+#: is corrected here because a provenance note that names the wrong commit is
+#: the same defect as a digest that names the wrong bytes, one level out: four
+#: sibling projects read this module from outside and all four reported our
+#: constant as the v1 digest. That was one read of a superseded commit relayed
+#: four times, not four confirmations. The v1 pin - 20633 bytes, commit
+#: ``6e3c1c752`` - is recorded in the Superseded section of
+#: ``third_party/rc_channel/NOTICE.md``, which is the one place a retired
+#: digest belongs and which :func:`test_notice_digest_cannot_drift_from_the_guard`
+#: pins in both directions.
 PUBLISHED_SHA256 = "fc22e86eebe93bb247a91f44835257a3fe717a287c4a3184a8e7a7b9a463fb9c"
 
 #: Byte length of the same form, measured on the fetched bytes 2026-09-20.
