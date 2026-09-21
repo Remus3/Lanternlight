@@ -1,188 +1,114 @@
 LANTERNLIGHT - NEXT SESSION PROMPT
-Written at the wrap of 2026-09-19. Assume you have zero context; everything you
+Written at the wrap of 2026-09-20. Assume you have zero context; everything you
 need is here or in the files this names.
+
+YOUR JOB THIS SESSION, by operator direction 2026-09-20: MONITOR AND WORK THE
+SYNC INBOX. The roadmap has no item you can work - that is OPS-102, and it is a
+STATE rather than a failure. Do not start a blocked item and do not lower an
+acceptance criterion to make one look startable.
 
 READ FIRST, in this order:
   CLAUDE.md                - the rules. THE HARD BOUNDARY is not negotiable.
-  ROADMAP.md               - OPS-91 is next; OPS-96 closed this session.
-  docs/LEDGER.md           - newest entry is LL-0269, this session.
-  docs/HEADLESS.md         - read its STOP CONDITIONS before starting a loop.
+  ROADMAP.md               - read OPS-102 FIRST; it says why nothing is eligible.
+  docs/LEDGER.md           - newest entry is LL-0290.
+  docs/HEADLESS.md         - its STOP CONDITIONS, before starting any loop.
+  docs/REPLY_PATHS.md      - where a reply actually goes. SIX codes now.
 
 STATE AT THE WRAP
-  Branch main, clean, pushed. HEAD is 29b10c7 plus the wrap commit.
-  Full suite: 3483 passed, 1 skipped in 328.26s - observed on the last run of
-    the session. Collected total re-derived by summing per-file counts: 3484.
-    Do NOT carry either number forward. Re-measure with
-    `python -m pytest --collect-only -q` and read the last line of a bare
-    `python -m pytest`; note that `-q` is already in pytest.ini addopts, so a
-    second one prints no summary line at all and still exits 0.
+  Branch main, clean, pushed. HEAD cd0b01a plus this wrap commit.
+  Full suite, observed this run: 3668 passed, 1 skipped in 416.76s.
+    Collected 3669. Do NOT carry either number forward - re-measure. `-q` is
+    already in pytest.ini addopts, so a second one prints NO summary line and
+    still exits 0. Run bare `python -m pytest` and read the last line; this
+    session hit exactly that trap once and re-ran to a file to get a number.
   Ruff: All checks passed. `python -m ops.preflight`: PRE-FLIGHT PASS.
-  Loop state: cycle 88, item OPS-91, 90 completed.
-  CAPTURE WATCHER: NO_RECORD, and this wrap DID NOT re-arm it. That is
-    deliberate and it is the fourth wrap in a row to say so. The operator
-    disarmed that lane on 2026-09-11 and never lifted it, docs/HEADLESS.md says
-    in terms that it does not re-arm it, and the operator overrides the wrap
-    ritual. Nothing is archiving the game log, the saves or the market cache.
-    That is the accepted cost, not a fault to fix. Do not re-arm it without the
-    operator lifting the disarm.
-  Inbox: 24 unread of 205 files at session start, NOT acknowledged and NOT
-    reviewed this session - see STILL OPEN below.
+  Loop state: cycle 95, item INBOX-MONITOR, 99 completed.
+  CAPTURE WATCHER: NO_RECORD, and this wrap DID NOT re-arm it. That is the
+    FIFTH wrap in a row to say so. The operator disarmed that lane on
+    2026-09-11 and never lifted it; docs/HEADLESS.md says the wrap does not
+    re-arm it, and the operator overrides the ritual. Nothing is archiving the
+    game log, the saves or the market cache. Accepted cost, not a fault.
+  Inbox: ~50 unread. Sent 14 notes on 2026-09-20 through ops.outbox.deliver,
+    all five recipients each, none failed.
 
-WHAT THIS SESSION DID
-  The operator asked all five projects sharing this machine to run a READ-ONLY
-  inventory of stray work, classified PRUNE / MOVE / KEEP / UNKNOWN, and to
-  report it on the moon_sync channel. That pass deleted, moved and renamed
-  nothing. OPS-96 then fixed the four findings that were ours.
+WHAT THIS SESSION CLOSED
+  OPS-36, OPS-91, OPS-95, OPS-96, OPS-97, OPS-98, OPS-99, OPS-100, OPS-101.
+  Six commits, cycles 89 to 94. Evidence in LL-0270 through LL-0290.
 
-  The four repo-side fixes:
-   1. .backtest/ removed - an EMPTY untracked, unignored orphan at the repo
-      root, left by this project's own back-test of a git hook against the
-      in-session pre-flight (docs/CYCLE_COST.md).
-   2. .claude/worktrees/ ignored by name at .gitignore:185 rather than deleted,
-      because the harness recreates it. .claude/ is DELIBERATELY TRACKED here,
-      so that directory was untracked and unignored: the first file a session
-      wrote into it would have been an untracked orphan with no owning lane -
-      what tests/test_lanes.py fails on - and a whole worktree one `git add -A`
-      from publication in a PUBLIC repo.
-   3. ops/inbox_watch.py: the per-drop content key no longer walks with
-      `root.rglob("*")`. New `_files_under` uses os.walk with an in-place
-      `dirnames[:]` prune, so bytecode written beside a drop's own sources
-      cannot change the drop's identity and re-surface an already-read note as
-      UNREAD in every reader on the channel. RC reported this class.
-   4. docs/OPERATIONS.md: a new section saying a probe of a fresh clone or
-      worktree runs FROM the repo root and never chdirs into the probe. The
-      harness mints a project identity per working directory, so six project
-      directories named after our own scratchpad paths now exist under
-      ~/.claude/projects/ and outlive the probes that made them.
+  The operator ruled VENDOR on Amberstone's docs/CHANNEL.md, then the channel
+  voted six-of-six for a CHANNEL_VERSION 2 re-pin and RC cut it the same night.
+  We hold it at third_party/rc_channel/docs/CHANNEL.md, 25425 bytes, sha256
+  fc22e86eebe93bb247a91f44835257a3fe717a287c4a3184a8e7a7b9a463fb9c. The licence
+  gate was RE-RUN at the new commit rather than inherited: a licence is a fact
+  about a COMMIT, not about a repository.
 
-  New guard: tests/test_no_empty_orphan_dirs.py.
+THE FOUR FINDINGS WORTH CARRYING, all measured here
+  1. A STATIC CHECK IS A CLAIM ABOUT SOURCE TEXT AND LOSES TO A NAME BUILT AT
+     RUN TIME. Three guards asserting the responder could not send were defeated
+     at once by importlib.import_module("ops." + "out" + "box") plus getattr of
+     an assembled attribute, while the suite stayed GREEN at 50 of 50. The
+     replacement is not a better static check - it is a subprocess under
+     sys.addaudithook. A census then found FOUR guards over THE HARD BOUNDARY
+     with no runtime arm at all, and one module, overlay/window.py, that no
+     severity-1 guard had ever examined because the scope was a DENYLIST.
+  2. MEASURE THE AUDIT EVENT BEFORE BUILDING ON IT. importlib.import_module does
+     NOT raise the `import` event. shutil.which raises NOTHING. subprocess.Popen
+     carries a STRING, not an argument vector - a guard indexing it reads one
+     character. ctypes.dlsym DOES carry the real symbol name after assembly, and
+     that one measurement is what makes the native arm possible.
+  3. A HEREDOC EATS A DOUBLED BACKSLASH, TWICE IN TWO DAYS. A regex character
+     class meant as backslash-or-slash became slash-only, and the sweep returned
+     a clean, plausible, internally consistent answer with NO error message. It
+     was published to five trees and withdrawn. Write the script to a FILE with
+     a self-test that asserts the pattern matches before it walks anything.
+  4. A COUNT FROM THIS CHANNEL CARRIES THE TIMESTAMP OF THE READ. A vote tally
+     was published off a digest of 13 notes while the inbox already held 20, and
+     recorded CS as silent when CS had voted. Re-derive from the notes.
 
-THE HEADER FINDING, worth carrying into any future sweep
-  An orphaned EMPTY directory is reported by exactly ONE of the enumeration
-  commands in common use, because git does not report empty directories.
-  `git status --ignored --porcelain` does not list it. `git status --porcelain
-  --untracked-files=all <path>` returns nothing. `git check-ignore -v <path>`
-  exits 1 saying only that no rule matches, which is an answer about
-  .gitignore. Only `git ls-files --others --directory` sees it.
-  AND THE COMMAND USUALLY RECOMMENDED MISSES ONE. Measured with both orphans
-  present: `--others --exclude-standard --directory` reported .backtest/ and
-  NOT .claude/worktrees/; without --exclude-standard it reported both; scoped
-  with `-- .claude` it reported nothing while pathlib confirmed the directory
-  existed. So the guard enumerates with `--others --directory` and applies
-  .gitignore per path afterwards.
+WHAT IS OWED ON THE CHANNEL
+  Nothing HALTS this tree. LW's HALT and the responder tasks RSC and RC disabled
+  are their own trees under their own operators. LW's ROUND B lands 2026-09-22
+  and we gave it a GO AHEAD: it is a VOTE and not a hash, because we carry
+  neither winmutex.py nor slots.py - re-measured, zero in git ls-files and zero
+  on a full tree walk. Do not let anyone count us in that round's N.
 
-THE REFUTATION PASS OVERTURNED THREE OF THE FIXES. Read this part.
-  An independent adversarial agent was handed the done-claim and found three
-  real defects. None was a false alarm. All three are fixed and all three are
-  in ROADMAP.md OPS-96 and LL-0269.
-   1. The orphan guard was VACUOUS. Its three helpers hardcoded cwd=REPO_ROOT,
-      so the non-vacuity test could not call them and re-implemented the
-      enumeration inline - proving only that git behaves as documented.
-      Measured: `_is_empty` returning False left the file at 7 passed, and the
-      enumeration returning [] also left it at 7 passed. The detection could
-      have been deleted outright behind a docstring asserting the opposite.
-   2. `_child_counts`' skip filter was UNTESTED while OPS-96 asserted it as
-      part of the fix. Removing it left the whole suite green.
-   3. Reusing `_SKIP_DIRS` for a drop was WRONG, not merely untested. It is
-      tuned for walking THIS repository, so it also skips captures, frames,
-      screenshots, runtime, venv, node_modules and the inbox - meaning a
-      sibling's AUTHORED files under any of those names were excluded from the
-      drop's digest, so an edit inside them could never re-surface the note.
-      In a project whose subject is screen capture, captures/ is not a
-      hypothetical directory name. Replaced by `_DROP_RESIDUE_DIRS`, scoped by
-      CAUSE to what a reader generates by importing or linting a drop.
-  Every fix was then proved RED before being trusted, anchor asserted matched
-  before each mutation and source digest compared after each restore, with
-  __pycache__ deleted between runs because a timestamp-based .pyc is validated
-  on (mtime, size) alone.
-  THE PATTERN: two of the three were guards that were GREEN and proved nothing,
-  and the third was a design decision defended in prose with a reason that
-  sounded like care - one shared constant cannot drift - while doing damage the
-  prose never considered.
+  RE-PIN STATE: v2 at four carriers - LW, RC, RSC, LL. CS is the sole
+  outstanding carrier, still at v1. No mismatch reported anywhere. SS holds no
+  copy, is settled as a participant and NOT a pin-holder, and must not be asked
+  again.
 
-TWO CORRECTIONS THIS SESSION MADE AGAINST ITSELF
-  1. A note delivered to all four siblings claimed the CHANNEL.md "ask has not
-     changed" and re-asked RC to name a license. RC NAMED IT ON 2026-09-16 -
-     Remus3/Amberstone, PUBLIC, Apache-2.0, sole holder, documentation inside
-     the grant - and OPS-91 criteria 1 and 2 have been MET for three days.
-     WITHDRAWN in a correction note to all four the same hour. This is
-     CLAUDE.md's own rule executing against us: A DECLINE REASON GOES STALE
-     FASTER THAN A COUNT DOES. Every count in the sweep was re-measured and
-     was right; the one wrong thing was a REASON carried forward four days.
-  2. A count this session "corrected" was correct before the correction. The
-     roadmap's `.gitignore:185` was changed to 186 on a refuting agent's line
-     numbers, and `git check-ignore -v .claude/worktrees` then reported 185.
-     Changed back and verified against the command. A filed count is a
-     hypothesis, including one inside a correction.
+  ALWAYS DELIVER A REPLY - standing operator instruction, now in CLAUDE.md.
+  Every note gets an answer, including one saying we owe nothing. Charter v2
+  makes silence read as DISSENT, so a quiet tree with no stake is
+  indistinguishable from one objecting, one whose watcher never fired, and one
+  whose delivery failed.
 
-WHAT WAS DECLINED, with the measurement, so nobody re-opens it on recollection
-  RC asked all five projects to set `tmp_path_retention_policy = failed` in
-  pytest.ini, citing 68,630 temp files across about nine pytest runs. Measured
-  here: %TEMP% holds 76,518 files and 3,263,424,324 bytes, but
-  pytest-of-<account> is only 1,327 files and 932,552 bytes across three
-  numbered directories - 0.03 per cent. The tree is dominated by HARNESS
-  scratchpads under %TEMP%\claude: CS 2.32 GB, ours 419.8 MB, RSC 109.1 MB. The
-  setting would be a real change with a nearly worthless effect here.
+CORRECTIONS THIS SESSION MADE TO ITS OWN PUBLISHED WORK
+  Two figures were published to five trees and WITHDRAWN: "six harness project
+  directories" was five, and "seven git-root files" was eleven. LW's eleven and
+  ours were then compared member by member and byte for byte - they agree, so
+  the total was not a coincidence. LL-0290 corrects a third: three ledger
+  entries and two delivered notes carry the date 2026-09-21 and were written on
+  2026-09-20.
 
-WHAT IS KEEP, and do not let a later cleanup pass touch it
-  C:\ll-captures is 10.7 GB in 19,241 files and is the single largest stray
-  tree on this machine - and it is KEEP. It is the --dest-base of the capture
-  watcher at .claude/commands/continue.md:25, .claude/commands/loop.md:48 and
-  docs/HEADLESS.md:136, and individual frames in it are the CITED EVIDENCE for
-  measured findings in docs/AFFIXES.md and docs/FINDINGS.md. Deleting any of it
-  silently unfoots published measurements in a PUBLIC repository. Whether a
-  subset is prunable needs a per-frame reference audit nobody has run.
+THE WRAP-TIME ADVERSARIAL PASS TRIED TO BREAK FIVE DONE-CLAIMS AND FAILED ON
+ALL FIVE. It re-ran every mutation itself rather than believing the reports,
+compared per-file collected counts against HEAD~6 in a detached worktree (3516
+across 73 files then, 3669 across 78 now, NO file fell), fired the pre-commit
+hook end to end with a banned glyph and a clean negative control, and confirmed
+the vendored digest against the GIT BLOB rather than the working file. Its only
+finding is the date error above. It could not verify the eleven-filename
+agreement with LW's own disk, nor RC's upstream provenance without network.
 
-NEXT ITEM: OPS-91 - vendoring RC's docs/CHANNEL.md
-  It is BLOCKED ON AN OPERATOR RULING and NOT on RC. Criteria 1 and 2 are met.
-  Do not re-ask RC; that is the mistake this session already made and withdrew.
-  Acceptance: the operator rules VENDOR or REFUSE. On VENDOR, the file goes
-  under third_party/<name>/ with a NOTICE naming upstream, license, holder, the
-  digest of what was licensed and every change made, hashed against what RC
-  published before a byte is copied; ruff.toml already excludes third_party/.
-  On REFUSE, record it and close the item.
-  IF THE OPERATOR HAS NOT RULED, do not block. Take the next READY item:
-  OPS-95 has four, three of them commitments already made in writing to
-  sibling inboxes.
+HOW TO START
+  python ops/inbox_watch.py          # if no MAIL block appeared, a hook missed
+  python -m ops.preflight            # about 18s, before dispatching anything
+  Then digest the inbox with a SUBAGENT and keep its full output in the
+  scratchpad - the merger's context is the one that must not fill.
 
-STILL OPEN
-  - OPS-91, blocked on an operator ruling (above).
-  - OPS-95, four items READY, three are existing commitments to siblings.
-  - THE INBOX WAS NOT REVIEWED THIS SESSION. 24 unread of 205 files at session
-    start, not acknowledged. The standing operator instruction of 2026-09-06 is
-    to review the inbox AND ITS SUBDIRECTORIES every session - ingest, review,
-    implement, respond - and a top-level pass is not a review. Run
-    `python ops/inbox_watch.py` if no MAIL RECEIVED block appears, because a
-    hook that did not fire is indistinguishable from an empty inbox.
-  - TWO OPS-96 ROWS ARE OUTSIDE THE REPO ROOT and were deliberately left:
-    C:\ll-worktrees (empty since 2026-09-06) and six harness project
-    directories under ~/.claude/projects/ named after our own scratchpad paths,
-    about 420 KB. The sweep was read-only by instruction and RC is assembling
-    all five projects' reports into one machine-wide reconciliation for the
-    operator to adjudicate before any gated deletion pass. Deleting our rows
-    early removes evidence from a reconciliation that has not happened.
-  - THREE DRIVE-ROOT ARTIFACTS OF ONE BUG were reported to the channel: a path
-    written without its drive colon resolves relative to C:\. Two are CS's
-    (C:\tmp, C:\scratchpad - the latter holds 787 lines of UNCOMMITTED CS work
-    dated 2026-09-10), one branch of C:\c is ours. Worth grepping this tree for
-    a path built without a leading slash or a drive colon.
-
-TWO NOTES WENT OUT THIS SESSION, both recorded in moon_sync_inbox/_outbox/
-  The REVIEW note carrying the full inventory: 26,257 bytes, sha256
-  d618d01f3db46b0d92469353833c046e0c9e117e14309e70aca261999e6adcb7, delivered
-  to CS, LW, RC and RSC with failed ().
-  The CORRECTION note withdrawing the CHANNEL.md claim: 3,657 bytes, sha256
-  d8918959964b7865a4df1169039f7440d5e828f8f660bb67863104364918fe18, delivered
-  to all four with failed ().
-  Both filenames are listed in full in ROADMAP.md OPS-96. They are NOT repeated
-  here, and that is not tidiness: a truncated note filename ending `.md` is
-  read as an unregistered HOST by tests/test_source_register.py, which fired on
-  this very file during this wrap. Which also corrects the /done ritual text -
-  it says that guard's reach is docs/ and nothing else, and it reached a
-  tracked file at the repository root.
-  Ask `ops.outbox.replies_to("RC")` rather than listing a sibling's inbox.
-
-START HERE
-  python ops/inbox_watch.py
-  python -m pytest --collect-only -q
-  then read ROADMAP.md OPS-91 and OPS-95 and pick up.
+DO NOT
+  - re-arm the capture watcher without the operator lifting the 2026-09-11 disarm
+  - edit anything under third_party/ - it is byte-pinned and its guard fails
+  - adopt anything cross-project; declining is yours, adopting is a ruling
+  - raise a doc size budget - re-run `python scripts/apply_doc_split.py --apply`
+  - trust a subagent's count, a digest of the inbox, or your own heredoc

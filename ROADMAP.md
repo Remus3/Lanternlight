@@ -1162,6 +1162,57 @@ and it is left standing rather than quietly restated.
 **Acceptance: MET** for every part that is this project's. The open roster
 question is recorded above and is the channel's to answer.
 
+## OPS-102. THE ROADMAP HAS NO ITEM THIS PROJECT CAN WORK WITHOUT THE OPERATOR - OPEN, and it is a state rather than a task
+
+Filed 2026-09-20 at the wrap of the session that closed `OPS-36`, `OPS-91`,
+`OPS-95`, `OPS-96`, `OPS-97`, `OPS-98`, `OPS-99`, `OPS-100` and `OPS-101`.
+
+**This is recorded as an ITEM so that a cold session does not invent work.**
+`docs/HEADLESS.md` names "the roadmap has no eligible item left" as a STOP
+CONDITION and says to say so plainly and exit rather than staying busy. A
+session that reads a roadmap full of open-looking items and starts one anyway
+has not read them.
+
+### What is left, and why each one is blocked
+
+Every remaining item needs the OPERATOR to play Mistfall Hunter, and no amount
+of session time substitutes:
+
+| Item | Needs |
+|---|---|
+| 1, remainder | a run with a NON-ZERO `matchId` - a real matchmade raid rather than a solo explore |
+| 4b | the client open, for ammo-family and talent measurement |
+| 5 | the client open, for the Sorcerer single-weapon question |
+| 6 | a weapon-stance toggle the operator performs |
+| 7 | fresh gameplay on both routes |
+| 10 | the stack buff measured AT THE CEILING, which needs the buff at the ceiling |
+| 11 | affix ids 101 and 214, which need the client |
+| 12 | a forward baseline after the patch, which needs play |
+
+`OPS-71` is open and is NOT eligible either: the measurement that would settle
+it cannot be taken in bypass permissions mode, and `CLAUDE.md` records that the
+full-authority directive does NOT move it. Authority does not manufacture a
+fact.
+
+### What IS eligible, and it is not roadmap work
+
+The moon_sync channel is live and answering within the hour. That is real work -
+replies owed, claims about this tree to re-measure, a re-pin round in progress -
+but it is MAIL rather than a roadmap item, and it must not be mistaken for one.
+The operator directed on 2026-09-20 that the next session monitor and work the
+inbox, which is exactly the right shape for a period with no eligible item.
+
+### Acceptance
+
+This item CLOSES the moment any of the above unblocks - which happens when the
+operator plays, not when a session tries harder. A session that finds it open
+should work the inbox, answer what is owed, and say plainly that the roadmap is
+blocked rather than starting an item it cannot finish.
+
+**It is NOT a licence to lower a bar.** The blocked items stay blocked at their
+stated acceptance criteria. Measuring something adjacent and calling it item 10
+is the failure this item exists to prevent.
+
 ## OPS-100. A sibling's question found a relative-path defect in our own pre-commit hook - FIXED 2026-09-20
 
 CS asked every tree on the channel a question about ITS OWN tree: is any hook

@@ -84,6 +84,18 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0290 - 2026-09-20 - CORRECTION - three ledger entries and two delivered notes carry the date 2026-09-21 and were written on 2026-09-20
+
+**Evidence:**
+- LL-0287, LL-0288 and LL-0289 are dated 2026-09-21. The session that wrote them ran on 2026-09-20 and this entry is dated correctly.
+- Two notes delivered to the channel carry 2026-09-21 in their filenames: the 0230 member-by-member git-root confirmation and the 0330 ROUND B go-ahead. A filename is the wire format on that channel and at least one responder parses it, so the date in it is not cosmetic.
+- Found by the wrap-time adversarial pass, which was trying to break five done-claims, failed on all five, and reported this instead. It is the only defect that pass found.
+
+The ledger is APPEND-ONLY, so the three entries are not edited. This is the correction, and a reader meeting a 2026-09-21 date on those three should read it as 2026-09-20.
+The mechanism is worth naming because it will recur: a long session crossing local midnight, or a session reasoning about a UTC timestamp while the environment date is local. Neither is exotic here - the game log timestamps in UTC and capture filenames are local, and this project already has a documented join that depends on knowing which is which.
+THE CHEAP FIX FOR NEXT TIME: read the date from the environment rather than carrying it forward from the last entry written. Every one of the three wrong dates was inherited from the entry before it rather than measured.
+The two delivered notes are NOT withdrawn. The date in a filename is wrong by one day and nothing in either note rests on it; a withdrawal note would cost five trees a read for no gain. If a sibling sorts by filename date and it matters, this entry is the record.
+
 ### LL-0289 - 2026-09-21 - OPS-36 CLOSED - the charter's caveman-wiring clause is DECLINED on three rules this repository already holds, and the decline is guarded rather than left in prose
 
 **Evidence:**
