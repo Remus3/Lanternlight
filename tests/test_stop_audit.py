@@ -617,3 +617,46 @@ def test_the_module_exposes_the_two_entry_points_it_documents(mode):
 
 def _option_strings(parser):
     return {string for action in parser._actions for string in action.option_strings}
+
+
+class TestAnAmbientPytestAddoptsCannotNarrowTheCollectCount:
+    """``collect_count`` spawned pytest with the parent environment.
+
+    The same class as the ``ops/merge_gate.py`` defect, and it lands on the one
+    number this auditor uses to refute a claim about test counts. An inherited
+    ``--ignore`` drops a whole file, pytest exits 0, and the auditor compares an
+    agent's claim against a count that describes a selection rather than the
+    tree - so a claim of "3 tests" is refuted against a true answer of 1, or an
+    overstated claim is confirmed because the selection happened to match.
+    """
+
+    @staticmethod
+    def _two_files(root):
+        (root / "tests").mkdir(parents=True, exist_ok=True)
+        (root / "pytest.ini").write_text(
+            "[pytest]\ntestpaths = tests\npython_files = test_*.py\n",
+            encoding="utf-8",
+        )
+        (root / "tests" / "test_a.py").write_text(
+            "def test_a_0():\n    assert True\n", encoding="utf-8"
+        )
+        (root / "tests" / "test_b.py").write_text(
+            "def test_b_0():\n    assert True\n\n\ndef test_b_1():\n    assert True\n",
+            encoding="utf-8",
+        )
+
+    def test_the_count_describes_the_tree_not_an_inherited_selection(
+        self, tmp_path, monkeypatch
+    ):
+        self._two_files(tmp_path)
+        monkeypatch.setenv("PYTEST_ADDOPTS", "--ignore=tests/test_b.py")
+        assert stop_audit.collect_count(root=tmp_path) == 3
+
+    def test_the_count_is_the_same_number_with_no_variable_set(
+        self, tmp_path, monkeypatch
+    ):
+        # The control. Without it the assertion above could be satisfied by a
+        # function that had stopped looking at the tree at all.
+        self._two_files(tmp_path)
+        monkeypatch.delenv("PYTEST_ADDOPTS", raising=False)
+        assert stop_audit.collect_count(root=tmp_path) == 3

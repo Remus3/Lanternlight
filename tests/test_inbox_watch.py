@@ -2216,3 +2216,239 @@ class TestTheReportNAMESTheDrafts:
         text = inbox_watch.render(self._scan(tmp_path, drafts=0))
 
         assert "UNSENT DRAFT" not in text
+
+
+# ---------------------------------------------------------------------------
+# THE ``to:`` HEADER IS THE CHANNEL'S ACTUAL ADDRESSING GRAMMAR - ``OPS-108``
+# ---------------------------------------------------------------------------
+#
+# ``classify`` recognised an addressing statement only when it was written as
+# prose - "sent to", "copied to", "addressed to". It never parsed the header
+# field this channel actually uses, which is a ``to:`` line. Measured against
+# the 372 real entries in ``moon_sync_inbox/`` on 2026-10-02: 53 notes whose
+# ``to:`` field names this project reached only POSSIBLY OURS, and one note
+# carrying ``to: all carriers`` was filed under NOT OURS outright, because with
+# no addressing evidence the absent-path rule took over.
+#
+# That is not a cosmetic bucket error. This repository carries a standing
+# operator rule that EVERY note addressed to it is answered, because on this
+# channel SILENCE READS AS DISSENT - so a classifier that files a note addressed
+# to us as not-ours manufactures exactly the silence the rule exists to prevent,
+# and it does it invisibly, since the session-start report looks complete either
+# way. It is the ``OPS-34`` failure one level down: there the watcher listed only
+# top-level ``*.md`` and a 49-file drop was invisible while the report said
+# nothing was new.
+#
+# THE GRAMMAR BELOW IS EVIDENCE, NOT A GUESS. Every form asserted here was read
+# off the real channel first. The notes are SYNTHETIC - assembled here from
+# project codes only - because a real note is another tree's correspondence and
+# nothing from the channel belongs in a tracked file.
+#
+# THE TESTS RUN IN BOTH DIRECTIONS ON PURPOSE. Over-claiming a note as ours is
+# also a defect: it puts another tree's correspondence into our reply queue. So
+# the four outcomes are asserted to stay DISTINGUISHABLE - addressed to us,
+# addressed to a group that includes us, no addressing evidence either way, and
+# addressed to someone else - rather than collapsed into "probably relevant".
+
+
+def _classify(text: str, tmp_path: Path) -> tuple[str, str]:
+    """Classify ``text`` against an EMPTY tree, so no path rule can fire.
+
+    The path rule reaches NOT OURS on its own evidence, and a header test that
+    ran against the real repository root would be measuring which files happen
+    to exist here rather than which header was parsed.
+    """
+    return inbox_watch.classify(text, root=tmp_path, index=(set(), set()))
+
+
+class TestTheToHeaderNamingUsIsAddressingUs:
+    """A ``to:`` field that names this project is the strongest evidence there is.
+
+    Each form below is one of the shapes the real channel writes. They differ in
+    ways a matcher can trip over - bare codes, Markdown bold around the field
+    name, spelled-out project names, upper case - and every one of them has to
+    land in OURS rather than in the hedge bucket.
+    """
+
+    def test_a_bare_code_list_per_the_roster_rule(self, tmp_path: Path) -> None:
+        note = "# From RC - a finding\n\nTo: LL, LW, RC, RSC per the roster rule\n"
+
+        verdict, reason = _classify(note, tmp_path)
+
+        assert verdict == inbox_watch.OURS, reason
+
+    def test_the_field_name_wrapped_in_markdown_bold(self, tmp_path: Path) -> None:
+        """``**To:**`` is how several senders write it, and the stars survive the collapse."""
+        note = (
+            "# From LW - a position\n\n"
+            "**To:** RC, RSC, CS, LL - all four siblings, named explicitly\n"
+        )
+
+        verdict, reason = _classify(note, tmp_path)
+
+        assert verdict == inbox_watch.OURS, reason
+
+    def test_spelled_out_project_names_in_upper_case(self, tmp_path: Path) -> None:
+        note = (
+            "# From SS - five classes\n\n"
+            "TO:   Clockspeed, Lanternlight, Legion Wallpaper, Main, Resin Compute\n"
+            "DATE: 2026-09-21 1600\n"
+        )
+
+        verdict, reason = _classify(note, tmp_path)
+
+        assert verdict == inbox_watch.OURS, reason
+
+    def test_a_six_way_list_that_includes_us(self, tmp_path: Path) -> None:
+        note = (
+            "# From RC - FYI\n\n"
+            "To: CS, LL, LW, RC, RSC, SS - all six named explicitly, because an\n"
+            "address-list omission is invisible to the tree that was left out\n"
+        )
+
+        verdict, reason = _classify(note, tmp_path)
+
+        assert verdict == inbox_watch.OURS, reason
+
+    def test_the_verdict_survives_the_eighty_column_wrap(self, tmp_path: Path) -> None:
+        """The field is hard-wrapped on this channel, so our code can land on line two.
+
+        A line-oriented matcher is a claim about the file's line breaks, and this
+        repository has already had two false clean bills from exactly that.
+        """
+        note = (
+            "# From CS - a correction\n\n"
+            "TO:   Clockspeed, Legion Wallpaper, Resin Compute, Riot Commander,\n"
+            "Lanternlight\n"
+        )
+
+        verdict, reason = _classify(note, tmp_path)
+
+        assert verdict == inbox_watch.OURS, reason
+
+
+class TestAGroupBroadcastIncludesUs:
+    """``to: all carriers`` addresses this project without ever naming it.
+
+    These are the forms that carry NO project code at all, so nothing else in
+    the classifier can rescue them: without the collective noun the note has no
+    addressing evidence, and a note with no addressing evidence and a couple of
+    paths this tree does not have is filed NOT OURS. That is the measured
+    instance - RC's note of 2026-10-01-2230, which carried ``to: all carriers``
+    and was listed under NOT ADDRESSED TO US.
+    """
+
+    def test_all_carriers(self, tmp_path: Path) -> None:
+        note = "# From RC - information\n\nto: all carriers\nclass: INFORMATION\n"
+
+        verdict, reason = _classify(note, tmp_path)
+
+        assert verdict == inbox_watch.OURS, reason
+
+    def test_all_participants(self, tmp_path: Path) -> None:
+        note = "# From SS - information\n\nTO:   all participants\nKIND: INFORMATION\n"
+
+        verdict, reason = _classify(note, tmp_path)
+
+        assert verdict == inbox_watch.OURS, reason
+
+    def test_every_carrier_on_this_channel(self, tmp_path: Path) -> None:
+        note = (
+            "# From SS - three findings\n\n"
+            "To:   every carrier on this channel\n"
+            "Type: INFORMATION - nothing is asked of any carrier\n"
+        )
+
+        verdict, reason = _classify(note, tmp_path)
+
+        assert verdict == inbox_watch.OURS, reason
+
+    def test_a_group_broadcast_carrying_absent_paths_is_still_ours(
+        self, tmp_path: Path
+    ) -> None:
+        """The measured instance, reduced to its mechanism.
+
+        The note never writes this project's name, and it names repository paths
+        that do not exist here. Without the header the absent-path rule decides
+        and the answer is NOT OURS - a note addressed to us, filed as somebody
+        else's.
+        """
+        note = (
+            "# From RC - information\n\n"
+            "to: all carriers\n"
+            "class: INFORMATION\n\n"
+            "## What we measured\n\n"
+            "The guard lives in `tools/rc_only_guard.py` and its test is\n"
+            "`tests/test_rc_only_guard.py`, neither of which you have.\n"
+        )
+
+        verdict, reason = inbox_watch.classify(note, root=tmp_path)
+
+        assert verdict == inbox_watch.OURS, reason
+
+
+class TestTheFourOutcomesStayDISTINGUISHABLE:
+    """Widening the matcher must not collapse the buckets into "probably ours".
+
+    Over-claiming is a real cost, not a safe default: a note that is another
+    tree's correspondence, filed as ours, lands in this project's reply queue and
+    is answered. So the two negative outcomes are asserted here beside the two
+    positive ones, in one class, against one matcher.
+    """
+
+    def test_a_to_header_naming_only_other_projects_is_not_ours(
+        self, tmp_path: Path
+    ) -> None:
+        note = (
+            "# From RC - FYI\n\n"
+            "To: CS, LW and RSC per the roster rule\n\n"
+            "## Why\n\nA slot leak on the three of you.\n"
+        )
+
+        verdict, reason = _classify(note, tmp_path)
+
+        assert verdict == inbox_watch.NOT_OURS, reason
+
+    def test_no_addressing_field_at_all_stays_the_hedge(self, tmp_path: Path) -> None:
+        note = "# From RC - a thought\n\nNo addressing field anywhere in this one.\n"
+
+        verdict, reason = _classify(note, tmp_path)
+
+        assert verdict == inbox_watch.UNSURE, reason
+        assert "no addressing evidence" in reason
+
+    def test_the_four_reasons_are_pairwise_distinct(self, tmp_path: Path) -> None:
+        """A bucket you cannot tell apart from its neighbour is one bucket."""
+        named = _classify("# N\n\nTo: LL, CS per the roster rule\n", tmp_path)
+        group = _classify("# N\n\nto: all carriers\n", tmp_path)
+        hedge = _classify("# N\n\nnothing addressed here at all\n", tmp_path)
+        other = _classify("# N\n\nTo: CS, LW and RSC\n", tmp_path)
+
+        assert named[0] == group[0] == inbox_watch.OURS
+        assert hedge[0] == inbox_watch.UNSURE
+        assert other[0] == inbox_watch.NOT_OURS
+        reasons = [named[1], group[1], hedge[1], other[1]]
+        assert len(set(reasons)) == 4, (
+            "two outcomes share a reason string, so the report cannot say which "
+            "evidence placed the note: " + repr(reasons)
+        )
+        assert "Lanternlight" in named[1]
+
+    def test_a_to_colon_in_the_BODY_addresses_nothing(self, tmp_path: Path) -> None:
+        """Addressing is a HEADER field, and the body is somebody else's prose.
+
+        Without this the widening hands every sentence containing "to:" the
+        authority of an addressing line, which is how a note about a third
+        party's correspondence becomes ours.
+        """
+        note = (
+            "# From RC - FYI\n\n"
+            "No addressing field.\n\n"
+            "## What RSC told us\n\n"
+            "RSC wrote to: LL, CS and LW about the slot leak last night.\n"
+        )
+
+        verdict, reason = _classify(note, tmp_path)
+
+        assert verdict == inbox_watch.UNSURE, reason
+        assert verdict != inbox_watch.OURS

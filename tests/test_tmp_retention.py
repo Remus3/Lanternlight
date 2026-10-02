@@ -80,6 +80,8 @@ It is not, and was never, evidence for the run-directory count falling.
 from __future__ import annotations
 
 import configparser
+import subprocess
+import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -194,3 +196,117 @@ def test_the_empty_parameter_set_mark_is_live_and_not_merely_declared(pytestconf
         pytestconfig.getini("empty_parameter_set_mark")
         == REQUIRED_EMPTY_PARAMETER_SET_MARK
     )
+
+
+#: A generated test module whose only test is parametrized over an EMPTY list.
+_EMPTY_PARAMETRIZE_MODULE = """\
+import pytest
+
+
+@pytest.mark.parametrize("value", [])
+def test_never_runs(value):
+    pass
+"""
+
+
+def _run_pytest_over_empty_parametrize(tmp_path, ini, extra_args=()):
+    """Run a real pytest over a generated empty-parametrize module.
+
+    EVERYTHING lives under ``tmp_path``: the module, the rootdir, the base temp
+    directory and the cache. ``-p no:cacheprovider`` and ``--basetemp`` stop the
+    child writing a look-alike temp tree anywhere else. ``-c`` pins which ini
+    the child reads and ``--rootdir`` pins the rootdir, so the child is not
+    influenced by whichever directory the parent was launched from.
+    """
+    module = tmp_path / "test_generated_empty.py"
+    module.write_text(_EMPTY_PARAMETRIZE_MODULE, encoding="utf-8")
+    command = [
+        sys.executable,
+        "-m",
+        "pytest",
+        "-c",
+        str(ini),
+        "--rootdir",
+        str(tmp_path),
+        "--basetemp",
+        str(tmp_path / "child_basetemp"),
+        "-p",
+        "no:cacheprovider",
+        *extra_args,
+        str(module),
+    ]
+    return subprocess.run(
+        command,
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+
+
+def _output(result) -> str:
+    return result.stdout + result.stderr
+
+
+def test_an_empty_parametrize_list_is_a_collection_error_in_practice(tmp_path):
+    """OBSERVE the behaviour. The tests above only read a value back.
+
+    A read-back passes if someone edits ``pytest.ini`` and the constant in this
+    file together, and cannot say that an empty parameter set actually becomes
+    an error. This runs pytest itself, with this repository's real ini, over a
+    module whose parametrize list is empty.
+    """
+    result = _run_pytest_over_empty_parametrize(tmp_path, PYTEST_INI)
+    out = _output(result)
+    assert result.returncode == 2, (
+        "an empty parametrize list did not stop collection (exit "
+        f"{result.returncode}, 2 is a collection error). Output:\n{out}"
+    )
+    assert "Empty parameter set" in out, (
+        "pytest exited 2 but not because of the empty parameter set - some "
+        f"other error is being read as the one under test. Output:\n{out}"
+    )
+    assert "skipped" not in out
+
+
+def test_the_control_arm_skips_when_the_setting_is_overridden(tmp_path):
+    """CONTROL ARM: same module, same ini, one option changed, opposite outcome.
+
+    Without this, the error above could come from anything in the child's
+    environment and would say nothing about the setting. ``skip`` is pytest's
+    own historical behaviour, so if this does not skip, the assertion in the
+    arm above is not sensitive to ``empty_parameter_set_mark`` at all.
+    """
+    result = _run_pytest_over_empty_parametrize(
+        tmp_path, PYTEST_INI, extra_args=("-o", "empty_parameter_set_mark=skip")
+    )
+    out = _output(result)
+    assert result.returncode == 0, (
+        f"override to skip did not yield a clean run (exit {result.returncode}). "
+        f"Output:\n{out}"
+    )
+    assert "1 skipped" in out, f"expected the empty parameter set to SKIP:\n{out}"
+    assert "Empty parameter set" not in out
+
+
+def test_removing_the_line_from_the_ini_makes_the_error_disappear(tmp_path):
+    """The ini itself is what the behaviour follows, not a hardcoded option.
+
+    Copies the real ini minus the ``empty_parameter_set_mark`` line and shows
+    the child then SKIPS. That is the edit this guard exists to catch, observed
+    as behaviour rather than inferred from a text search.
+    """
+    lines = PYTEST_INI.read_text(encoding="utf-8").splitlines()
+    kept = [ln for ln in lines if not ln.startswith("empty_parameter_set_mark")]
+    assert len(kept) == len(lines) - 1, (
+        "expected to remove exactly one empty_parameter_set_mark line from the "
+        "ini copy - the anchor did not match, so this arm proves nothing"
+    )
+    stripped = tmp_path / "stripped_pytest.ini"
+    stripped.write_text("\n".join(kept) + "\n", encoding="utf-8")
+    result = _run_pytest_over_empty_parametrize(tmp_path, stripped)
+    out = _output(result)
+    assert result.returncode == 0, f"exit {result.returncode}. Output:\n{out}"
+    assert "1 skipped" in out, out
+

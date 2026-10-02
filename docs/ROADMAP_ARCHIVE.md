@@ -9,7 +9,7 @@ the original text, verbatim, in its original order, and the live roadmap
 carries a one-line stub linking to each one. If an item here turns out to
 matter again, move the section back rather than rewriting it.
 
-Sections in this archive: 99.
+Sections in this archive: 103.
 
 ---
 
@@ -12661,4 +12661,202 @@ a process, no severity-1 guard would fire.
 5. Nothing written for this touches the game process, in any tier, at any point.
    If a check cannot be written without doing so, it is not written - the
    feature is rejected, not the rule.
+
+## OPS-103. This repository can detect an OPERATOR identifier and CANNOT detect a CREDENTIAL, and neither guard has a population that includes a file we never commit - CLOSED 2026-09-20, criterion 3 met as a CONTROL with the TMPDIR root cause recorded as refused, see `LL-0299`
+
+Filed 2026-09-20, out of Clockspeed's 1820 ACTION note on the shared
+git-install-root bucket. Two gaps, both MEASURED here rather than suspected, and
+both answered honestly to five trees before being filed.
+
+### Gap 1 - no provider-credential detection exists anywhere in this tree
+
+`lanternlight/redact.py` is scoped to OPERATOR IDENTIFIERS by design and by
+`ADR-004`: persona, SteamID64, GSDK openID and userId, EOS ProductUserId,
+account name, git identity, device, gift code. A provider API key is not in its
+universe. Measured 2026-09-20 across the whole tracked tree: ZERO matches for
+`sk-ant`, `sk-proj`, `AKIA`, `ghp_`, `github_pat`, `AIza`, `xoxb`, or a private
+key header, in code, in tests, in hooks and in documents. Nothing here would
+stop one being committed.
+
+This is not an argument that `redact.py` is wrong. Its scope is a rule and the
+rule is right. The gap is that NOTHING ELSE covers the other class, and until
+Clockspeed asked, nobody here had noticed the difference between "we redact
+identifiers" and "we detect secrets".
+
+### Gap 2 - every guard's population is the repository, and the leak was outside it
+
+The pre-commit gate's population is the STAGED SET. `tests/test_no_pii.py`
+walks the REPOSITORY through `tests/_tracked.py`. A file written to a scratch
+path outside the repository root is outside both by construction, and no amount
+of strengthening a repository-scoped guard reaches it. Eleven of this project's
+files, 45,189 bytes, are sitting in `C:\Program Files\Git` right now because
+`$TMPDIR` is unset under Git Bash and a redirect into `"$TMPDIR/name"` silently
+relocates to the Git install root.
+
+Scanned 2026-09-20 with a self-testing scanner proved non-vacuous against
+planted synthetic shapes: **zero credential-class hits** in our eleven, and
+**nine PII-class hits** in three of them - five home-directory paths and four
+account-name occurrences, no email and no game identifier. So the immediate
+exposure is small. The absence of a control is the item.
+
+### What is already DONE and is not this item
+
+`tests/test_no_environ_mapping_assertions.py`, 2026-09-20. The MECHANISM that
+put a key in a log on a sibling's tree was an assertion rendering the
+environment mapping into a failure diff, and the form that does it is
+`assert "NAME" not in os.environ` - a membership test naming one variable.
+Measured here with a planted sentinel: the sentinel rendered three times and a
+planted admin-family key shape was visible in the `+ where` line, while
+`os.environ.get(...)` rendered only the retrieved value. One site existed in
+this tree and is fixed. That closes the echo path. It does not close either gap
+above.
+
+### Acceptance
+
+1. **A credential detector exists and is proved non-vacuous.** It covers at
+   minimum the Anthropic families INCLUDING the admin variant, OpenAI, AWS key
+   ids, GitHub tokens and fine-grained PATs, Google API keys, Slack tokens,
+   bearer tokens, JWTs, private-key headers, and an assigned-secret literal.
+   Every pattern carries a synthetic positive and a synthetic negative, and the
+   suite fails if any pattern stops matching its positive - a detector believed
+   without that is decoration. No test may contain a real credential; the
+   specimens are invented shapes.
+2. **It runs over the STAGED SET at commit time**, through the existing gate,
+   and a staged synthetic key is proved to block a real commit END TO END -
+   stage, attempt, assert HEAD unchanged. Presence of a hook is never evidence
+   it fires.
+3. **A control exists whose population includes at least one path OUTSIDE this
+   repository**, or this item records in writing why that was refused and what
+   was done instead. This is the hard half and it must not be quietly dropped:
+   criteria 1 and 2 are both repository-scoped and would leave gap 2 exactly
+   where it is. A scan a session runs by hand is NOT a control - a control is
+   something that runs without being remembered.
+4. **The nine PII-class occurrences in our three bucket files are remediated**,
+   and the remediation is re-measured rather than assumed. Deleting another
+   tree's file is not ours to do; ours are ours.
+5. **No detector output ever carries a value**, not in full, not in part, not
+   redacted. Class, count and path only. A partially redacted secret in a
+   report is a secret in a report, and this repository publishes its reports.
+6. **The honest negative is recorded either way.** If a class cannot be
+   detected without an unacceptable false-positive rate, that is written down
+   with the measurement, not omitted. "Unmeasured" and "measured zero" are
+   different facts.
+
+### What this item is NOT
+
+It is not a proposal to adopt anything from a sibling, and nothing about it is
+shared. Clockspeed asked the question; the answer, the gap and the fix are ours.
+It is also not a licence to widen `lanternlight/redact.py`'s scope - a credential
+is a different class from an operator identifier and conflating them in one
+module would make both harder to reason about.
+
+### Closure, 2026-09-20 - `LL-0299`
+
+1. DONE. `tools/secret_scan.py`, 13 classes, each with a runtime-built
+   synthetic positive and near-miss negative in `tests/test_secret_scan.py`.
+   An independent pass broke each of the 13 patterns in a scratch copy and every
+   one turned the suite red. UTF-16 is scanned (NUL-stripped second pass);
+   UTF-32 is NOT, and the module docstring says so.
+2. DONE. `.githooks/pre-commit` section 5 runs `precommit_gate.py
+   secrets-staged` over the STAGED BLOBS, not the working copy. Proved end to end
+   in throwaway repositories with the real hooks: staged key refused and HEAD
+   unchanged; key scrubbed only from the working tree still refused; clean file
+   committed.
+3. DONE AS A CONTROL, ROOT CAUSE REFUSED. `ops/outside_scan.py` runs from the
+   SessionStart hook over the Git install root and the temp directory, top level
+   only, files up to 4 MiB, cache keyed on a CONTENT hash so a same-size
+   same-mtime rewrite is not hidden. Every displayed or cached path is
+   redacted. The TMPDIR root cause is NOT fixed: the only in-tree lever is an
+   `env` entry in `.claude/settings.json`, which would need an absolute temp path
+   carrying the account name in a tracked file. Stopping the litter at its
+   source is `OPS-107`.
+4. DONE, on a larger set than filed. 17 files are provably ours (13 by project
+   marker, 4 byte-identical to our own history), not 11. The three carrying PII
+   held TEN hits, not nine - one short-form account name was missed by the
+   original count. Redacted IN PLACE, nothing deleted, re-measured at zero by an
+   independent pass.
+5. DONE. Findings carry class, line and a redacted path only; tests assert no
+   fragment of any planted value appears. The adversarial pass REFUTED this once
+   - raw filenames carried the account name into hook output and into the
+   gitignored cache - and it was fixed and the live cache rebuilt and
+   re-measured at zero before closure.
+6. DONE. Zero false positives over the whole tracked tree, guarded by a test.
+   UTF-32 and files below the top level of the scanned roots are recorded
+   blind spots.
+
+THE CONTROL PAID FOR ITSELF ON ITS FIRST RUN. It found live provider
+credentials in plain text in files that are NOT this project's - third-party
+installer logs in the temp directory and a sibling's suite log in the Git
+install root. Reported to the operator by class and path only. The operator
+rotated them and ruled that values are never to be read or compared against the
+environment again, because doing so is itself a leak vector.
+`tests/test_secret_scan_outside.py` asserts the module reads no environment
+values.
+
+## OPS-105. Correct our own tmp-retention record - CLOSED 2026-09-20, `LL-0301`
+
+Out of the 2026-09-21 channel batch (our `0935 WITHDRAWAL` note). The docstring
+of `tests/test_tmp_retention.py` and the record under `LL-0295` still carry
+figures we have withdrawn in public: "stale by roughly 74,000" compared one
+directory's count with a total across all pytest directories, and the 46 to 12
+run-directory drop and the 266,336 to about 65,000 temp-base drop are
+CONFOUNDED - the machine-level sweep ran inside our before/after window, and the
+retention count we pinned is pytest's default anyway.
+
+Acceptance: the docstring cites only the controlled 589 to 175 measurement as
+evidence; a NEW ledger entry (never an edit to `LL-0295`) records the correction;
+the ASCII and doc guards stay green.
+
+## OPS-106. One-off full-history scan for operator identifiers and non-ASCII - CLOSED 2026-09-20, `LL-0302`, rewrite DECLINED
+
+Every hygiene guard here scans the TREE. A value committed and later removed is
+still in every clone. Acceptance: a script under `scripts/` walks every blob
+reachable from every ref, runs the ADR-004 identifier detection and the 7-bit
+ASCII check, and its result is ledgered as counts and commit-relative paths only,
+never a value. The script is proved non-vacuous against a throwaway repository
+with a planted synthetic identifier in a deleted file. If it finds anything, the
+remediation decision (history rewrite or not) is recorded as a question in the
+ledger, because rewriting a PUBLIC history is not a session decision.
+
+## OPS-107. Stop our own scratch output landing in the Git install root - CLOSED 2026-09-20, `LL-0303`
+
+Root cause of the gap `OPS-103` criterion 3 controls but does not fix: under Git
+Bash `$TMPDIR` is unset, so `"$TMPDIR/name"` becomes `/name`, which resolves to
+the Git install root. (CORRECTED at closure: a bare `/tmp/...` does NOT - Git
+Bash mounts the user Temp folder on `/tmp`, measured with `mount` and
+`cygpath -w`. The real look-alike hazard is `/tmp_x`, `/tmp-x`, `/tmpfile`,
+which DO resolve to the Git install root, plus PowerShell `$env:TMPDIR`, which
+is unset and collapses to the drive root.) 17 of our files landed
+there, written by subagents. Acceptance: `python -m ops.preflight` (or the lane
+contract text it checks) refuses a command or script in the tree that builds a
+scratch path from an unset variable or bare `/tmp`, proved by a test that plants
+one; and every lane contract names the session scratchpad as the only scratch
+destination. Disposal of the 17 existing files stays the operator's call - they
+are redacted and recorded, not deleted.
+
+### Closure of OPS-105, OPS-106 and OPS-107, 2026-09-20
+
+- `OPS-105`: `tests/test_tmp_retention.py` docstring cites only the controlled
+  589 to 175 measurement; the withdrawn figures are marked CONFOUNDED; no
+  assertion changed. `LL-0295` is untouched (append-only) and `LL-0301` records
+  the correction.
+- `OPS-106`: `scripts/history_scan.py` + `tests/test_history_scan.py` (14
+  tests). An adversarial mutation harness first found 5 of 9 mutants SURVIVING
+  the original 9 tests - including `--all` narrowed to `HEAD` - and all 9 are
+  killed now. Over 1771 blobs from 4 refs: two history-only rows. The split git
+  identity in `tests/test_source_register.py` (8442072 to 1978cfc) is a TRUE
+  positive, but that identity is already public in the author metadata of every
+  commit (`OPS-52`), so a rewrite would remove nothing a reader cannot already
+  see - DECLINED, a session decision because declining needs no ruling. The
+  PERSONA row in `lanes/safety.STATE.json` is a FALSE positive (English prose in
+  an `open_items` text field). Not covered, and written in the docstring:
+  older stash entries, dangling objects, staged blobs, commit messages and
+  author fields.
+- `OPS-107`: `ops/scratch_path_guard.py` + `tests/test_scratch_path_guard.py`
+  (77 tests), run by `ops.preflight`; zero findings over the tracked tree with
+  NO exemptions; all eight lane contracts name the session scratchpad as the
+  only scratch destination. The adversarial pass REFUTED the first version
+  (`/tmp_x` and `$env:TMPDIR` passed) and corrected the item's own premise.
+  Known gap, in the module docstring: prose and inline code in Markdown other
+  than `CLAUDE.md`, `docs/HEADLESS.md` and the lane contracts.
 

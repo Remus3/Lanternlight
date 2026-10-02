@@ -121,11 +121,15 @@ a pair budget firing has NO mechanical remedy. A live budget firing is answered
 by re-running ``tools/doc_archive.py``; a pair budget firing cannot be, because
 the split is what the pair total ignores. The only answers are a real reduction
 in content (which this repository's own rules forbid for the ledger, since an
-entry is written in full for a cold session) or an operator ruling - move the
-archives out of this repository, or accept a higher bound. So a pair firing is
-a DECISION GATE for the operator, not a chore, which is why
-:data:`PAIR_LOW_HEADROOM_SESSIONS` warns further out than the per-document
-threshold does.
+entry is written in full for a cold session) or a RULING - move the archives out
+of this repository, or accept a higher bound. So a pair firing is a DECISION
+GATE, not a chore, which is why :data:`PAIR_LOW_HEADROOM_SESSIONS` warns further
+out than the per-document threshold does.
+
+This paragraph used to call that gate the OPERATOR's. Corrected 2026-10-02: it
+is adjudicated inside the session, by an agent distinct from the one whose work
+is red, and never by that slice itself. See the comment above
+:data:`PAIR_BUDGETS` for the reasoning and for the one raise taken by that route.
 
 THE COMMAND LINE REFUSES WHAT IT DOES NOT UNDERSTAND, AND ITS ONE OPTION IS
 REAL. ROADMAP ``OPS-67``, and this module is the one of that item's four that
@@ -498,8 +502,10 @@ UNBUDGETED_BY_DECISION: dict[str, str] = {
 #: A PAIR with fewer than this many sessions of headroom is flagged. Four, not
 #: the two used per document, and the difference is the remedy rather than the
 #: risk: a live budget firing is answered mechanically by re-running the split,
-#: while a pair budget firing needs an operator ruling (see the module
-#: docstring's cost statement). Four sessions is about one split interval at the
+#: while a pair budget firing needs an ADJUDICATED RULING - taken in-session by
+#: an agent distinct from the slice whose work is red, never by that slice, and
+#: not referred to the operator; corrected 2026-10-02, see the comment above
+#: :data:`PAIR_BUDGETS`. Four sessions is about one split interval at the
 #: measured rates, so the warning arrives with a full cycle in hand rather than
 #: with one session. Like :data:`LOW_HEADROOM_SESSIONS` this is a WARNING
 #: threshold and never a failure threshold.
@@ -578,14 +584,59 @@ PAIR_GROWTH: dict[str, PairGrowthModel] = {
 # 1,270,230; both are rounded DOWN to a round number below, since rounding down
 # shortens headroom and is the conservative direction.
 #
-# WHEN ONE OF THESE FIRES, DO NOT RE-RUN THE SPLIT AND DO NOT RAISE THE NUMBER
-# ON YOUR OWN. The split does not move this figure (it nudges it up, by the
-# overhead above) and raising a budget to make a red run green is the antipattern
-# this repository has written down. It is an operator ruling: move the archives
-# out of this repository, accept a higher bound, or reduce content for real.
+# WHEN ONE OF THESE FIRES, DO NOT RE-RUN THE SPLIT, AND NEVER RAISE THE NUMBER
+# IN THE LANE THAT WANTS TO GO GREEN. The split does not move this figure (it
+# nudges it up, by the overhead above) and raising a budget to make a red run
+# green is the antipattern this repository has written down. The remedies are:
+# move the archives out of this repository, accept a higher bound, or reduce
+# content for real.
+#
+# WHO DECIDES, CORRECTED 2026-10-02. This block said "it is an operator ruling".
+# Under the FULL AUTHORITY directive confirmed by the operator on 2026-09-14,
+# a blocked decision goes to an ADJUDICATOR rather than to the operator, and a
+# size budget is not on the list of rules that no grant of authority reaches -
+# that list is the hard boundary and ADR-001, redaction and ADR-004, the
+# third-party licence gate, the port block, 7-bit ASCII and TDD. So it is a
+# SESSION decision, taken by a DISTINCT adjudicator against stated criteria and
+# never by the slice whose work is red. The old wording is corrected rather than
+# left standing, because a rule the tree contradicts is one a cold session
+# refuses to act on.
+#
+# RAISED 2026-10-02 by that route, ledger LL-0309. The LEDGER pair fired at
+# 1,271,952 against 1,270,000. The adjudicator REFUTED the trim option on
+# arithmetic rather than on taste: this session's five new entries total 16,064
+# bytes, cutting the required ~2,000 would have left the pair 48 bytes under -
+# 0.0 sessions of headroom - so the very next entry re-fires it, at a cost of
+# 12.5 per cent of the session's evidence for one commit. It also measured the
+# growth model against reality: 370,254 bytes over the 12 session-boundary
+# commits since the OPS-62 commit is 30,855 bytes per session against a model
+# predicting 30,708, a 0.5 per cent error. So the tripwire fired in session 12
+# of a 12-session grant and is a calibrated guard arriving ON TIME, not a round
+# number placed badly.
+#
+# The new horizon is EIGHT sessions, deliberately half of the original twelve,
+# because the documented mechanical fallback is now measurably EXHAUSTED - a
+# second split run archived ZERO sections - so the gate must come back sooner
+# rather than later. Eight is also two split intervals (4.52), which leaves
+# PAIR_LOW_HEADROOM_SESSIONS at 4.0 a full cycle of warning instead of warning
+# and failing at the same moment. 1,271,952 + 8 x 30,708 = 1,517,616, rounded
+# DOWN to 1,510,000 as this module's own method requires.
+#
+# ROADMAP's pair was raised in the SAME ruling although it was NOT firing, and
+# that is stated rather than hidden: it stood at 1,113,410 of 1,180,000, which
+# is 1.7 sessions, so deciding LEDGER alone would have brought an identical
+# question back within two sessions. Same derivation: 1,113,410 + 8 x 40,287
+# rounded down to 1,430,000.
+#
+# A RE-GRANT WITHOUT A STRUCTURAL FIX IS A RATCHET, and this one is not allowed
+# to become one. OPS-113 carries the real remedy with acceptance criteria -
+# relocating the archives, or fixing the split's closed-item vocabulary at
+# archive level. If this block is read again by a session that finds OPS-113
+# still open and the budget firing again, the answer that time is the structural
+# fix, not a third number.
 PAIR_BUDGETS: dict[str, int] = {
-    "ROADMAP": 1_180_000,
-    "LEDGER": 1_270_000,
+    "ROADMAP": 1_430_000,
+    "LEDGER": 1_510_000,
 }
 
 

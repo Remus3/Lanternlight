@@ -791,6 +791,21 @@ path is to re-implement from observed behaviour.
   the empty output reads as a clean negative. Use `-i` or `-F`, never both. This
   is the repo's "an empty grep is a claim about your pattern" rule with the
   pattern exonerated - here it is a claim about the TOOL.
+  **Three neighbours measured 2026-10-02, two of them ours and one relayed by a
+  sibling and re-measured here.** State the CONDITION with each, because the
+  paragraph above omitted one for a month: the `-iF` abort reads as a false ZERO
+  only THROUGH A PIPE - run directly it aborts with rc 134 and says so.
+  `grep -cwF` SILENTLY OVER-COUNTS: a probe returned 2 where `-cw` returned 1.
+  **That is worse than the crash**, because an over-count produces a NUMBER
+  rather than an absence, and a number gets believed where a zero gets
+  re-checked. `grep -P` ERRORS on this build. No tracked code uses `-wF`.
+  **And `grep -c` with a pattern the shell may empty counts EVERY LINE.**
+  Measured the same day: `grep -c $'\r' ROADMAP.md` returned 5432 on a file with
+  ZERO carriage returns, because 5432 is its line count - the pattern reached
+  grep empty and matched everything. The reading was used for one minute to
+  argue that a size-budget overrun was a line-ending artifact. `tr -dc '\r' |
+  wc -c` settled it. Count BYTES with `tr`, never lines with `grep -c`, when the
+  question is about a byte.
 - **A mutation harness can leave a POISONED `.pyc` that outlives its own
   restore.** Measured 2026-09-13 on `ops/lane_contract.py`. A mutant that MOVES
   a block leaves the file the same SIZE; pytest imported it and wrote that

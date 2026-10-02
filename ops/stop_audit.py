@@ -99,6 +99,7 @@ from lanternlight.redact import (  # noqa: E402  (path bootstrap must run first)
     assert_no_operator_identifier,
     redact,
 )
+from ops import merge_gate  # noqa: E402  (path bootstrap must run first)
 
 SCHEMA = 1
 
@@ -475,6 +476,15 @@ def collect_count(root: Path | str | None = None, timeout: float = 120.0) -> int
     Measured 2026-09-08 on this tree: under one second. That is the whole reason
     the numeric check is affordable inside a hook, where a full run at over
     three minutes would not be.
+
+    **The child's environment is sanitised** -
+    :func:`ops.merge_gate.child_env`. This number is the one the auditor uses to
+    refute an agent's claim about test counts, and it used to be taken from a
+    child that inherited the shell: an ambient ``PYTEST_ADDOPTS="--ignore=..."``
+    drops a whole file, pytest exits 0, and the auditor then compares a claim
+    against a count that describes a SELECTION rather than the tree. Measured in
+    a two-file throwaway project: 3 tests clean, 1 under that variable. Both
+    verdicts are then wrong in whichever direction the selection happens to fall.
     """
     root = Path(root) if root is not None else REPO_ROOT
     try:
@@ -486,6 +496,7 @@ def collect_count(root: Path | str | None = None, timeout: float = 120.0) -> int
             timeout=timeout,
             check=False,
             creationflags=_NO_WINDOW,
+            env=merge_gate.child_env()[0],
         )
     except (OSError, subprocess.SubprocessError):
         return None

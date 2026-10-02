@@ -32,6 +32,7 @@ module touches this repository's own index.
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -458,3 +459,195 @@ def test_a_narrow_key_in_a_file_that_also_has_nuls_is_counted_once():
     data = b"\x00\x01binary\x00\n" + f"id {positive}\n".encode("ascii") + b"\x00\x00"
     found = secret_scan.scan_bytes(data)
     assert [f.cls for f in found] == ["AWS_ACCESS_KEY_ID"], found
+
+
+# ---------------------------------------------------------------------------
+# The BOUNDARY before a prefixed pattern. Every prefixed pattern carries a
+# negative look-behind whose stated purpose is to stop a match starting in the
+# MIDDLE of a longer token. Measured 2026-10-02: that look-behind also rejects
+# a key whose preceding byte is a SEPARATOR THAT HAS BEEN ENCODED - a literal
+# backslash-n as JSON and JSONL store a newline, or a percent-escape as a URL
+# query string stores one - because the last character of the encoding is
+# itself a token character. Those two are defects and are fixed. A key glued
+# straight onto a letter, a digit or an underscore stays missed BY DESIGN, and
+# the specimens below hold that line so a later session cannot quietly widen
+# it: those really are the mid-token false positive the look-behind buys.
+# ---------------------------------------------------------------------------
+
+#: PRIVATE_KEY_HEADER is excluded on purpose: it has no look-behind and cannot
+#: have one, because its match begins with ``-----`` and a hyphen is not a token
+#: character, so there is no boundary question to ask about it.
+BOUNDARY_CLASSES: tuple[str, ...] = tuple(
+    c for c in secret_scan.CLASSES if c != "PRIVATE_KEY_HEADER"
+)
+
+#: class -> a positive whose FIRST character is the first character of the
+#: match, so that prefixing the string exercises the look-behind rather than
+#: some later part of the pattern. Only BEARER_TOKEN needs an override: its
+#: SPECIMENS positive opens with an ``Authorization: `` header, and that space
+#: would satisfy the boundary no matter what was glued on in front.
+BOUNDARY_SPECIMENS: dict[str, str] = {
+    **{cls: SPECIMENS[cls][0] for cls in BOUNDARY_CLASSES},
+    "BEARER_TOKEN": _j("Bea", "rer ", "tok", _BODY),
+}
+
+
+def _detects(cls: str, text: str) -> bool:
+    return cls in {f.cls for f in secret_scan.scan_text(text)}
+
+
+def test_the_boundary_specimen_of_every_class_starts_at_the_match():
+    """A specimen whose match starts later would make the boundary tests vacuous."""
+    for cls in BOUNDARY_CLASSES:
+        specimen = BOUNDARY_SPECIMENS[cls]
+        match = secret_scan.PATTERNS[cls].search(specimen)
+        assert match is not None, f"{cls} boundary specimen does not match at all"
+        assert match.start() == 0, (
+            f"{cls} boundary specimen matches at {match.start()}, not 0 - "
+            "prefixing it would not exercise the look-behind"
+        )
+
+
+@pytest.mark.parametrize("escape", ["n", "r", "t"], ids=["bslash-n", "bslash-r", "bslash-t"])
+@pytest.mark.parametrize("cls", sorted(BOUNDARY_CLASSES))
+def test_a_literal_escape_sequence_does_not_hide_a_key(cls, escape):
+    """A credential in a JSONL transcript sits after a LITERAL backslash-n.
+
+    The two characters are a backslash and the letter ``n``, so the preceding
+    byte is a letter and the look-behind rejected the whole match. That is a
+    real shape: this repository's outside scan reads third-party logs, and a
+    JSON or JSONL transcript stores every newline exactly this way.
+    """
+    prefix = "line1" + chr(92) + escape
+    assert _detects(cls, prefix + BOUNDARY_SPECIMENS[cls]), (
+        f"{cls} missed after a literal backslash-{escape} escape"
+    )
+
+
+@pytest.mark.parametrize("encoded", ["%3D", "%20"], ids=["pct-eq", "pct-space"])
+@pytest.mark.parametrize("cls", sorted(BOUNDARY_CLASSES))
+def test_a_url_encoded_separator_does_not_hide_a_key(cls, encoded):
+    """A credential in a URL query string sits after a percent-escape.
+
+    ``%3D`` ends in ``D`` and ``%20`` ends in ``0``, both token characters, so
+    the look-behind rejected the match. A key in a logged request URL is the
+    single most common way a credential reaches a log file at all.
+    """
+    assert _detects(cls, "key" + encoded + BOUNDARY_SPECIMENS[cls]), (
+        f"{cls} missed after the URL-encoded separator {encoded}"
+    )
+
+
+#: THE RULING on a key glued straight onto a token character, stated HERE as a
+#: concrete expectation and deliberately NOT derived from
+#: ``secret_scan.CONTINUATION_CLASS``. A first version of this test did derive
+#: it, and widening ``_CONT_TOK`` in the module made the test agree with the
+#: widening and stay green - a guard that reads its expectation out of the code
+#: it guards cannot fail. These sets name the classes that MUST still detect a
+#: key after the glue character because that character genuinely ends a token in
+#: their alphabet; every other class MUST miss it.
+#:
+#: An underscore is a token character for the ``sk-``, GitHub, Google and JWT
+#: families and is therefore rejected there on exactly the same reasoning as a
+#: letter. It is not one for Slack, bearer or the context words, and an AWS key
+#: id is upper-case alphanumerics only, so for those four it is a real boundary.
+DETECT_AFTER_LOWERCASE: frozenset[str] = frozenset({"AWS_ACCESS_KEY_ID"})
+DETECT_AFTER_DIGIT: frozenset[str] = frozenset()
+DETECT_AFTER_UNDERSCORE: frozenset[str] = frozenset(
+    {"AWS_ACCESS_KEY_ID", "SLACK_TOKEN", "BEARER_TOKEN", "ASSIGNED_SECRET"}
+)
+GLUE_RULING: dict[str, frozenset[str]] = {
+    "abc": DETECT_AFTER_LOWERCASE,
+    "123": DETECT_AFTER_DIGIT,
+    "tok_": DETECT_AFTER_UNDERSCORE,
+}
+
+
+@pytest.mark.parametrize("glue", sorted(GLUE_RULING), ids=["letters", "digits", "underscore"])
+@pytest.mark.parametrize("cls", sorted(BOUNDARY_CLASSES))
+def test_a_key_glued_onto_a_continuation_character_stays_missed_by_design(cls, glue):
+    """NOT a defect - this is what the look-behind is FOR, and where the
+    UNDERSCORE ruling is recorded.
+
+    A character the family's own alphabet says CONTINUES a token cannot be told
+    apart from the interior of one longer token, so a prefix shape sitting
+    directly after one must stay rejected. Widening that turns the detector into
+    something that reports a fragment of every long identifier in the tree.
+
+    A session that wants a rejected case here to fire must delete this test
+    first, and should not: the encoded-separator tests above are the sanctioned
+    way to reach a key that a REAL delimiter precedes.
+    """
+    detected = _detects(cls, glue + BOUNDARY_SPECIMENS[cls])
+    if cls in GLUE_RULING[glue]:
+        assert detected, (
+            f"{cls} stopped matching after {glue!r}, which its own alphabet does "
+            "not treat as a token continuation - coverage was lost"
+        )
+    else:
+        assert not detected, (
+            f"{cls} fired mid-token after {glue!r} - the look-behind was widened too far"
+        )
+
+
+def test_the_declared_continuation_classes_agree_with_the_ruling():
+    """``CONTINUATION_CLASS`` is used to BUILD the patterns, so a silent edit to
+    it is a silent change of behaviour. The ruling above is the independent copy;
+    this is the only place the two are compared, and it names the divergence.
+    """
+    for glue, detects in GLUE_RULING.items():
+        char = glue[-1]
+        for cls in BOUNDARY_CLASSES:
+            continues = secret_scan.CONTINUATION_CLASS[cls]
+            assert continues, f"{cls} declares no continuation class"
+            is_continuation = re.match(f"[{continues}]", char) is not None
+            assert is_continuation is (cls not in detects), (
+                f"CONTINUATION_CLASS[{cls}] and the ruling disagree about {char!r}"
+            )
+
+
+@pytest.mark.parametrize(
+    "sep",
+    [" ", "=", chr(10), '"'],
+    ids=["space", "equals", "real-newline", "quote"],
+)
+@pytest.mark.parametrize("cls", sorted(BOUNDARY_CLASSES))
+def test_the_plain_separators_remain_detected(cls, sep):
+    """The regression net: the cases that already worked must keep working."""
+    assert _detects(cls, "lead" + sep + BOUNDARY_SPECIMENS[cls]), (
+        f"{cls} stopped matching after a plain {sep!r}"
+    )
+
+
+def test_a_unicode_or_hex_escape_remains_missed_and_the_docstring_says_so():
+    """What is STILL missed after the fix, pinned so the limit cannot drift.
+
+    ``\u000a`` and ``\x0a`` both end in a letter or digit that the token
+    alphabet treats as a continuation, and neither is decoded. The STATED
+    LIMITS section is asserted to name this, because a limit that exists only
+    in a test is a limit the next reader does not know about.
+    """
+    key = BOUNDARY_SPECIMENS["ANTHROPIC_API_KEY"]
+    for escape in ("u000a", "x0a"):
+        assert not _detects("ANTHROPIC_API_KEY", chr(92) + escape + key), escape
+
+
+def test_the_stated_limits_name_the_boundary_limit():
+    """The limits list enumerates limits so nobody assumes more coverage.
+
+    Searched on a whitespace-collapsed copy: the prose here is hard-wrapped
+    near 80 columns, so a line-oriented search is a claim about line breaks
+    rather than about the text.
+    """
+    doc = " ".join((secret_scan.__doc__ or "").split())
+    assert "STATED LIMITS" in doc
+    limits = doc.split("STATED LIMITS", 1)[1]
+    for phrase in (
+        "CONTINUATION_CLASS",
+        "token continuation",
+        "underscore",
+        "NOT detected",
+        "backslash",
+        "percent-escape",
+    ):
+        assert phrase in limits, f"STATED LIMITS does not mention {phrase!r}"

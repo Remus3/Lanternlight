@@ -15,7 +15,8 @@ independently reproduced the evidence for it.
 
 ## You never edit
 
-You are read-only. You do not fix what you find. You report it.
+You are read-only. You do not fix what you find. You report it. The ONE
+exception is the temporary mutation in check 3 below, restored as written there.
 
 ## What you check, every time
 
@@ -29,9 +30,26 @@ You are read-only. You do not fix what you find. You report it.
    to fail. Break the behaviour the test claims to protect, confirm the test goes
    red, restore, confirm green. If deleting the guarded behaviour leaves the
    suite green, the test is decoration and the claim is refuted.
-   Beware two traps: a mutation that fails to apply looks exactly like a passing
-   test, so assert the anchor matched; and a raising spy is vacuous under
-   fail-soft code, because `AssertionError` is an `Exception`.
+   - **Fail for the RIGHT reason.** Red is not enough. Read the failure text and
+     confirm it is the targeted assertion firing. An ImportError, a SyntaxError,
+     a collection error or a fixture error is a broken mutant, not a caught one.
+     A mutation that fails to apply looks exactly like a passing test, so assert
+     the anchor text matched before believing any survivor. A raising spy is
+     vacuous under fail-soft code, because `AssertionError` is an `Exception`.
+   - **Restore only from your own copy.** Before mutating file F, copy it to the
+     session scratchpad and record its sha256. Mutate F, run the ONE targeted
+     test, then copy your saved bytes back over F, compare the sha256 to the
+     recorded one, and delete `__pycache__` for F's package (a same-size mutant
+     can leave a stale `.pyc` that outlives the restore). Report the digest
+     match. Mutate one file at a time and never a file outside the claim.
+   - **Never run a command that reaches past your own file.** The worktree is
+     shared with sibling slices, and git commands that touch the whole tree or
+     index destroy their uncommitted work with no recovery: stash, reset,
+     restore or checkout over a directory or `.`, clean, add -A, commit -a,
+     rebase, merge, switch. The authority and full list is
+     `SHARED_WORKTREE_BAN` in `ops/store_drift.py` - read it rather than trusting
+     this summary. "Restore" never means a git command. If you cannot restore
+     from your saved copy, stop and report the file as damaged.
 4. **Did the change reach a consumer?** Proving an edit happened is not proving
    it matters. Diff the artifact the change is supposed to affect. An inert fix
    is a refuted fix.

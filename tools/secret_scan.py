@@ -61,6 +61,18 @@ STATED LIMITS, so nobody assumes more coverage than exists:
   ``redact.py``'s encoded pass.
 * ``BEARER_TOKEN`` requires a digit AND a letter in a 20-plus character token,
   so a bearer token of letters only is not caught.
+* A prefixed pattern will not START after a character its own family's alphabet
+  treats as a token continuation - see ``CONTINUATION_CLASS``. That is
+  deliberate and is what stops a match in the middle of one longer identifier,
+  so a key written with no separator at all in front of it, glued straight onto
+  a letter, a digit or (for the ``sk-``, GitHub, Google and JWT families) an
+  underscore, is NOT detected. What IS understood is a separator that has been
+  ENCODED: a literal backslash followed by ``n``, ``r`` or ``t``, as JSON and
+  JSONL store a newline, and a percent-escape such as ``%3D`` or ``%20``, as a
+  URL query string stores one. Every other encoding of a delimiter remains a
+  blind spot, including a ``\u000a`` or ``\x0a`` escape, an HTML numeric
+  entity, and any delimiter inside base64 - the last of those for the same
+  reason as the encoded-content limit above, which this module does not decode.
 """
 
 from __future__ import annotations
@@ -81,36 +93,100 @@ _NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 #: prefixed pattern stops a match starting in the MIDDLE of a longer token.
 _TOK = r"[A-Za-z0-9_-]"
 
+#: The character classes that CONTINUE a token, per family. A prefixed pattern
+#: refuses to start when the preceding character is one of these, because then
+#: the prefix shape is indistinguishable from the interior of one longer token.
+#: They differ per family on purpose and MUST NOT be harmonised: an AWS access
+#: key id is upper-case alphanumerics only, so a lower-case letter in front of
+#: ``AKIA`` genuinely ends a token for THAT alphabet, and widening the class to
+#: match the Anthropic one would delete real detections rather than add any.
+_CONT_TOK = "A-Za-z0-9_-"
+_CONT_WORD = "A-Za-z0-9_"
+_CONT_ALNUM = "A-Za-z0-9"
+_CONT_UPPER = "A-Z0-9"
+
+#: Separators that have been ENCODED, and so END in a token character.
+#:
+#: Measured 2026-10-02: a bare negative look-behind rejects a real key whose
+#: preceding BYTE is a token character even when the bytes before THAT say it is
+#: the tail of an escaped delimiter. Two shapes, both of them how a credential
+#: actually reaches a log file:
+#:
+#: * A literal backslash followed by ``n``, ``r`` or ``t`` - how JSON and JSONL
+#:   store a newline, a carriage return and a tab. The preceding byte is the
+#:   LETTER ``n``, so every prefixed pattern missed a key on the next "line" of
+#:   a transcript.
+#: * A percent-escape - how a URL query string stores a delimiter. ``%3D`` ends
+#:   in ``D`` and ``%20`` ends in ``0``, so a key in a logged request URL was
+#:   missed. This repository's outside scan reads third-party logs, where a
+#:   request URL is the commonest way a key is written down at all.
+#:
+#: Each alternative is its own fixed-width look-behind, which is what Python's
+#: engine requires; the widths differ BETWEEN alternatives and that is legal.
+#: Only these two shapes are understood. See STATED LIMITS for what is not, and
+#: for why a bare letter, digit or underscore STAYS rejected.
+_ENCODED_SEPARATOR = r"(?<=\\[nrt])|(?<=%[0-9A-Fa-f]{2})"
+
+
+def _boundary(continues: str) -> str:
+    """The start-of-token guard: no continuation character, or an encoded one."""
+    return r"(?:(?<![" + continues + r"])|" + _ENCODED_SEPARATOR + r")"
+
+
+#: class name -> the continuation class its boundary rejects. Empty means the
+#: pattern asks no boundary question: ``PRIVATE_KEY_HEADER`` opens on ``-----``
+#: and a hyphen cannot be mid-identifier in any of these alphabets. Declared as
+#: data so a test can derive the expected boundary behaviour from it instead of
+#: carrying a second hand-maintained copy that goes stale.
+CONTINUATION_CLASS: dict[str, str] = {
+    "ANTHROPIC_ADMIN_KEY": _CONT_TOK,
+    "ANTHROPIC_API_KEY": _CONT_TOK,
+    "OPENAI_PROJECT_KEY": _CONT_TOK,
+    "OPENAI_KEY": _CONT_TOK,
+    "AWS_ACCESS_KEY_ID": _CONT_UPPER,
+    "GITHUB_TOKEN": _CONT_WORD,
+    "GITHUB_FINE_GRAINED_PAT": _CONT_WORD,
+    "GOOGLE_API_KEY": _CONT_TOK,
+    "SLACK_TOKEN": _CONT_ALNUM,
+    "BEARER_TOKEN": _CONT_ALNUM,
+    "JWT": _CONT_TOK,
+    "PRIVATE_KEY_HEADER": "",
+    "ASSIGNED_SECRET": _CONT_ALNUM,
+}
+
 #: class name -> compiled pattern. ORDER is report order.
 PATTERNS: dict[str, re.Pattern[str]] = {
-    "ANTHROPIC_ADMIN_KEY": re.compile(r"(?<![A-Za-z0-9_-])sk-ant-admin\d{2}-" + _TOK + r"{20,}"),
-    "ANTHROPIC_API_KEY": re.compile(r"(?<![A-Za-z0-9_-])sk-ant-api\d{2}-" + _TOK + r"{20,}"),
-    "OPENAI_PROJECT_KEY": re.compile(r"(?<![A-Za-z0-9_-])sk-proj-" + _TOK + r"{20,}"),
+    "ANTHROPIC_ADMIN_KEY": re.compile(
+        _boundary(_CONT_TOK) + r"sk-ant-admin\d{2}-" + _TOK + r"{20,}"
+    ),
+    "ANTHROPIC_API_KEY": re.compile(_boundary(_CONT_TOK) + r"sk-ant-api\d{2}-" + _TOK + r"{20,}"),
+    "OPENAI_PROJECT_KEY": re.compile(_boundary(_CONT_TOK) + r"sk-proj-" + _TOK + r"{20,}"),
     # The legacy and service-account shapes. The look-ahead hands every
     # Anthropic and project key to its own class, so one secret is one count.
     "OPENAI_KEY": re.compile(
-        r"(?<![A-Za-z0-9_-])sk-(?!ant-|proj-)(?:[a-z]+-)?(?=[A-Za-z0-9]*\d)[A-Za-z0-9]{32,}"
+        _boundary(_CONT_TOK) + r"sk-(?!ant-|proj-)(?:[a-z]+-)?(?=[A-Za-z0-9]*\d)[A-Za-z0-9]{32,}"
     ),
-    "AWS_ACCESS_KEY_ID": re.compile(r"(?<![A-Z0-9])(?:AKIA|ASIA)[A-Z0-9]{16}(?![A-Z0-9])"),
-    "GITHUB_TOKEN": re.compile(r"(?<![A-Za-z0-9_])gh[pousr]_[A-Za-z0-9]{36,}"),
+    "AWS_ACCESS_KEY_ID": re.compile(
+        _boundary(_CONT_UPPER) + r"(?:AKIA|ASIA)[A-Z0-9]{16}(?![A-Z0-9])"
+    ),
+    "GITHUB_TOKEN": re.compile(_boundary(_CONT_WORD) + r"gh[pousr]_[A-Za-z0-9]{36,}"),
     "GITHUB_FINE_GRAINED_PAT": re.compile(
-        r"(?<![A-Za-z0-9_])github_pat_[A-Za-z0-9]{20,}_[A-Za-z0-9]{40,}"
+        _boundary(_CONT_WORD) + r"github_pat_[A-Za-z0-9]{20,}_[A-Za-z0-9]{40,}"
     ),
-    "GOOGLE_API_KEY": re.compile(r"(?<![A-Za-z0-9_-])AIza[0-9A-Za-z_-]{35}"),
-    "SLACK_TOKEN": re.compile(r"(?<![A-Za-z0-9])xox[abpr]-[0-9]{6,}-[A-Za-z0-9-]{8,}"),
+    "GOOGLE_API_KEY": re.compile(_boundary(_CONT_TOK) + r"AIza[0-9A-Za-z_-]{35}"),
+    "SLACK_TOKEN": re.compile(_boundary(_CONT_ALNUM) + r"xox[abpr]-[0-9]{6,}-[A-Za-z0-9-]{8,}"),
     "BEARER_TOKEN": re.compile(
-        r"(?<![A-Za-z0-9])[Bb]earer[ \t]+"
+        _boundary(_CONT_ALNUM) + r"[Bb]earer[ \t]+"
         r"(?=[A-Za-z0-9._~+/-]*[0-9])(?=[A-Za-z0-9._~+/-]*[A-Za-z])"
         r"[A-Za-z0-9._~+/-]{20,}=*"
     ),
     "JWT": re.compile(
-        r"(?<![A-Za-z0-9_-])eyJ" + _TOK + r"{10,}\.eyJ" + _TOK + r"{10,}\." + _TOK + r"{10,}"
+        _boundary(_CONT_TOK) + r"eyJ" + _TOK + r"{10,}\.eyJ" + _TOK + r"{10,}\." + _TOK + r"{10,}"
     ),
     "PRIVATE_KEY_HEADER": re.compile(r"-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY(?: BLOCK)?-----"),
     "ASSIGNED_SECRET": re.compile(
-        r"(?i)(?<![A-Za-z0-9])"
-        r"(?:api[_-]?key|secret[_-]?key|client[_-]?secret|access[_-]?token|auth[_-]?token"
-        r"|private[_-]?key|password|passwd|secret)"
+        r"(?i)" + _boundary(_CONT_ALNUM) + r"(?:api[_-]?key|secret[_-]?key|client[_-]?secret"
+        r"|access[_-]?token|auth[_-]?token|private[_-]?key|password|passwd|secret)"
         r"[\"']?[ \t]*(?::=|=|:)[ \t]*"
         r"(?P<q>[\"'])(?![<$%{*])(?=[^\"'\s]*[0-9])(?=[^\"'\s]*[A-Za-z])[^\"'\s]{12,}(?P=q)"
     ),

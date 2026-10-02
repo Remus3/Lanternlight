@@ -763,7 +763,19 @@ class TestVerifyDefaultsAreNotSilent:
         it did not run. Asserting an EMPTY notes tuple would now be asserting
         that a second unchecked probe stays silent, which is the opposite of
         what this class exists to defend. The assertion is therefore made
-        exact rather than loosened: one note, and it is the drift one.
+        exact rather than loosened: one note per probe that did not run, each
+        named.
+
+        WIDENED AGAIN when the skip-regression check landed, and the fact that
+        this test had to change is itself the point rather than an
+        inconvenience. ``len(report.notes) == 1`` is a FILED COUNT, and
+        ``CLAUDE.md`` records that every count re-derived from the artifact has
+        been wrong at least once - this one went wrong the moment a third
+        unrun-probe note existed. What the class defends is that a probe which
+        did not run SAYS SO, so the assertion now names every note it expects
+        and still refuses a per-file one. Loosening it to "at least one note"
+        would have made it pass for a report that had stopped mentioning the
+        per-file probe entirely.
         """
         _write_two_file_project(tmp_path, a_count=1, b_count=2)
         report = merge_gate.verify(
@@ -772,9 +784,11 @@ class TestVerifyDefaultsAreNotSilent:
             per_file_baseline={"tests/test_a.py": 1, "tests/test_b.py": 2},
             root=tmp_path,
         )
-        assert len(report.notes) == 1, report.format()
-        assert "per-file" not in report.notes[0], report.notes[0]
-        assert "store-drift" in report.notes[0], report.notes[0]
+        assert len(report.notes) == 2, report.format()
+        joined = " ".join(report.notes)
+        assert "per-file" not in joined, report.format()
+        assert "store-drift" in joined, report.format()
+        assert "skip-regression" in joined, report.format()
 
     def test_the_docstring_keeps_the_weakness_the_code_cannot_fix(self):
         """``baseline`` is supplied by the very caller whose work is under test.
@@ -1349,3 +1363,239 @@ class TestABaselineTakenAtHEADIsBelowTheWorkingTreeFloor:
         doc = merge_gate.verify.__doc__ or ""
         assert "PRIMARY WORKING TREE" in doc
         assert "never at HEAD" in doc
+
+
+# ---------------------------------------------------------------------------
+# The gate's own measurement can be narrowed by the environment
+# ---------------------------------------------------------------------------
+
+
+def _write_skipping_project(root, skips=1, passes=2):
+    """A real runnable project where ``skips`` tests collect and then SKIP.
+
+    The population the gate COLLECTS and the population the suite RUNS are
+    different numbers here, which is the whole point. Everything collects, so no
+    count guard can see the gap; the only witness is the summary line.
+    """
+    (root / "tests").mkdir(parents=True, exist_ok=True)
+    (root / "pytest.ini").write_text(
+        "[pytest]\ntestpaths = tests\npython_files = test_*.py\naddopts = -q\n",
+        encoding="utf-8",
+    )
+    body = ["import pytest", ""]
+    for i in range(passes):
+        body.append(f"def test_pass_{i}():\n    assert True\n")
+    for i in range(skips):
+        body.append(
+            f'@pytest.mark.skipif(True, reason="deliberate")\n'
+            f"def test_skip_{i}():\n    assert True\n"
+        )
+    (root / "tests" / "test_s.py").write_text("\n".join(body) + "\n", encoding="utf-8")
+
+
+class TestAnAmbientPytestAddoptsCannotNarrowTheGate:
+    """The gate spawned pytest with the parent environment, so an ambient
+    ``PYTEST_ADDOPTS`` narrowed BOTH the baseline and the re-run equally, the
+    count comparison was satisfied, and the gate signed off over a suite that
+    never ran.
+
+    Measured in the primary tree: 86 files and 4065 tests with no variable set,
+    1 file and 5 tests under ``PYTEST_ADDOPTS="-k test_ascii_hygiene"``, and
+    ``verify`` answering OK against the baseline of 5 that the same
+    contamination had produced. The same class as the ``-q``-in-addopts trap
+    ``CLAUDE.md`` records, on a different axis: an environment variable instead
+    of an ini file.
+    """
+
+    def test_child_env_strips_the_named_variables_and_keeps_everything_else(self):
+        base = {
+            "PATH": "/keep/me",
+            "PYTEST_ADDOPTS": "-k nope",
+            "PYTEST_PLUGINS": "evil",
+            "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+        }
+        env, stripped = merge_gate.child_env(base)
+        assert env["PATH"] == "/keep/me", "sanitising must not empty the environment"
+        assert "PYTEST_ADDOPTS" not in env
+        assert "PYTEST_PLUGINS" not in env
+        assert "PYTEST_DISABLE_PLUGIN_AUTOLOAD" not in env
+        assert "PYTEST_ADDOPTS" in stripped
+
+    def test_a_clean_environment_strips_nothing(self):
+        # The companion that stops the test above from passing for the wrong
+        # reason. A function that returned every name unconditionally would
+        # satisfy that assertion and be useless.
+        env, stripped = merge_gate.child_env({"PATH": "/keep/me"})
+        assert stripped == ()
+        assert env == {"PATH": "/keep/me"}
+
+    def test_collect_output_collects_the_whole_tree_despite_an_ambient_minus_k(
+        self, tmp_path, monkeypatch
+    ):
+        _write_two_file_project(tmp_path, a_count=1, b_count=2)
+        monkeypatch.setenv("PYTEST_ADDOPTS", "-k test_a_0")
+        counts = merge_gate.parse_collect_counts(merge_gate.collect_output(root=tmp_path))
+        assert sum(counts.values()) == 3, (
+            f"the environment narrowed the gate's own collect pass: {counts}"
+        )
+        assert len(counts) == 2
+
+    def test_take_per_file_baseline_is_the_floor_for_the_whole_tree(
+        self, tmp_path, monkeypatch
+    ):
+        # Worse here than anywhere else: this function exists precisely to
+        # produce a trustworthy floor, and a narrowed floor has no ROW for the
+        # files it dropped - check_per_file_counts treats an unknown file as NEW
+        # and therefore clean, so the whole file is unprotected rather than part
+        # of it.
+        _write_two_file_project(tmp_path, a_count=1, b_count=2)
+        monkeypatch.setenv("PYTEST_ADDOPTS", "-k test_a_0")
+        floor = merge_gate.take_per_file_baseline(root=tmp_path)
+        assert sorted(floor) == ["tests/test_a.py", "tests/test_b.py"], floor
+        assert sum(floor.values()) == 3
+
+    def test_verify_counts_the_whole_tree_despite_an_ambient_minus_k(
+        self, tmp_path, monkeypatch
+    ):
+        _write_two_file_project(tmp_path, a_count=1, b_count=2)
+        monkeypatch.setenv("PYTEST_ADDOPTS", "-k test_a_0")
+        report = merge_gate.verify(claimed_paths=["pytest.ini"], baseline=3, root=tmp_path)
+        assert report.collected == 3, (
+            f"verify signed off on a narrowed selection: {report.format()}"
+        )
+
+    def test_the_report_records_what_it_stripped_so_a_reader_can_tell_4065_from_5(
+        self, tmp_path, monkeypatch
+    ):
+        _write_two_file_project(tmp_path, a_count=1, b_count=2)
+        monkeypatch.setenv("PYTEST_ADDOPTS", "-k test_a_0")
+        report = merge_gate.verify(claimed_paths=["pytest.ini"], baseline=3, root=tmp_path)
+        rendered = report.format()
+        assert "PYTEST_ADDOPTS" in rendered, (
+            "a silently sanitised environment is still an unrecorded measurement "
+            f"condition: {rendered}"
+        )
+        assert "-k" in rendered, f"the dangerous flag is not named: {rendered}"
+
+    def test_a_clean_environment_produces_no_sanitisation_line(
+        self, tmp_path, monkeypatch
+    ):
+        # Negative control for the test above. If the report always printed the
+        # variable name, that assertion would be decoration.
+        _write_two_file_project(tmp_path, a_count=1, b_count=2)
+        monkeypatch.delenv("PYTEST_ADDOPTS", raising=False)
+        report = merge_gate.verify(claimed_paths=["pytest.ini"], baseline=3, root=tmp_path)
+        assert "PYTEST_ADDOPTS" not in report.format()
+
+    def test_the_report_states_the_provenance_of_the_count_it_compared(
+        self, tmp_path, monkeypatch
+    ):
+        _write_two_file_project(tmp_path, a_count=1, b_count=2)
+        monkeypatch.delenv("PYTEST_ADDOPTS", raising=False)
+        report = merge_gate.verify(
+            claimed_paths=["pytest.ini"],
+            baseline=3,
+            per_file_baseline={"tests/test_a.py": 1, "tests/test_b.py": 2},
+            root=tmp_path,
+        )
+        rendered = report.format()
+        assert "3 test(s) in 2 file(s)" in rendered, (
+            f"the count carries no provenance: {rendered}"
+        )
+        assert "baseline covered 2 file(s)" in rendered, rendered
+
+    def test_selection_flags_are_named_without_echoing_the_whole_value(self):
+        # The value can carry an absolute path, which on this machine carries
+        # the account name - ADR-004. Report the flag, never its argument. The
+        # sample argument below is deliberately NOT home-shaped: a literal
+        # `/home/<name>/` in a tracked file is itself what
+        # tests/test_no_hardcoded_home_path.py refuses, and this test drew that
+        # red on its first run.
+        flags = merge_gate.selection_flags_in("-k secret --ignore=an-account-name")
+        assert "-k" in flags
+        assert "--ignore" in flags
+        assert all("secret" not in flag for flag in flags)
+        assert all("account" not in flag for flag in flags)
+
+
+class TestASuiteThatSKIPSIsNotASuiteThatRan:
+    """The same class one axis over: the population shrinks AFTER collection.
+
+    ``check_test_count`` floors on the COLLECTED count, which a skip does not
+    change, so a lane can mark tests skipped - a conditional import, an ambient
+    variable, a missing binary - and the gate stays green. Not hypothetical
+    here: the same tree gives 3896 passed / 22 skipped under Git Bash and 3833
+    passed / 85 skipped under PowerShell, because PowerShell's PATH lacks Git's
+    ``usr/bin``.
+    """
+
+    def test_parse_summary_carries_the_skipped_count(self):
+        result = merge_gate.parse_summary("12 passed, 30 skipped in 1.00s\r")
+        assert result.skipped == 30
+
+    def test_parse_summary_carries_the_deselected_count(self):
+        result = merge_gate.parse_summary("1 passed, 2 deselected in 0.01s\r")
+        assert result.deselected == 2
+
+    def test_a_summary_that_was_never_printed_has_no_skip_count_either(self):
+        # Keeps "no summary" distinguishable from "measured zero skips", which
+        # is the rule the other three counts already obey.
+        result = merge_gate.parse_summary("nothing summary shaped here")
+        assert result.skipped is None
+
+    def test_a_skip_rise_above_the_baseline_is_a_finding(self):
+        findings = merge_gate.check_skip_count(30, 22)
+        assert [f.kind for f in findings] == ["skip-regression"]
+        assert "30" in findings[0].detail
+        assert "22" in findings[0].detail
+
+    def test_skips_at_or_below_the_baseline_are_clean(self):
+        assert merge_gate.check_skip_count(22, 22) == []
+        assert merge_gate.check_skip_count(0, 22) == []
+
+    def test_an_absent_skip_baseline_draws_no_finding(self):
+        assert merge_gate.check_skip_count(30, None) == []
+
+    def test_deselected_tests_are_a_finding_because_they_never_ran_at_all(self):
+        run = merge_gate.RunResult(
+            text="1 passed, 2 deselected in 0.01s\r", returncode=0
+        )
+        kinds = [f.kind for f in merge_gate.check_run_completed(run)]
+        assert "deselected" in kinds, (
+            "a run that deselected tests under a sanitised environment and no -k "
+            "argument ran a different population than the one it collected"
+        )
+
+    def test_a_run_with_no_deselection_draws_no_deselected_finding(self):
+        run = merge_gate.RunResult(text="3 passed in 0.01s\r", returncode=0)
+        assert merge_gate.check_run_completed(run) == []
+
+    def test_the_skipped_count_reaches_the_rendered_report(self, tmp_path):
+        _write_skipping_project(tmp_path, skips=1, passes=2)
+        report = merge_gate.verify(claimed_paths=["pytest.ini"], baseline=3, root=tmp_path)
+        rendered = report.format()
+        assert "1 skipped" in rendered, (
+            f"a skip was invisible in the composed report: {rendered}"
+        )
+
+    def test_verify_refuses_a_skip_rise_against_a_supplied_baseline(self, tmp_path):
+        _write_skipping_project(tmp_path, skips=1, passes=2)
+        report = merge_gate.verify(
+            claimed_paths=["pytest.ini"],
+            baseline=3,
+            skip_baseline=0,
+            root=tmp_path,
+        )
+        assert not report.ok, f"a skip rise was signed off: {report.format()}"
+        assert any(f.kind == "skip-regression" for f in report.findings)
+
+    def test_verify_without_a_skip_baseline_says_the_check_did_not_run(self, tmp_path):
+        _write_skipping_project(tmp_path, skips=1, passes=2)
+        report = merge_gate.verify(claimed_paths=["pytest.ini"], baseline=3, root=tmp_path)
+        assert report.ok, report.format()
+        # The phrase is pinned rather than the word "skip": the store-drift note
+        # already carries "skips the dispatch ritual", so a loose substring test
+        # passed before this check existed at all.
+        assert any("no skip_baseline" in note for note in report.notes), (
+            f"an unrun skip check left no trace: {report.format()}"
+        )

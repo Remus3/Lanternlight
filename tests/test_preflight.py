@@ -36,6 +36,7 @@ import _toolguard
 import pytest
 
 from ops import preflight
+from tools import precommit_gate
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -313,3 +314,95 @@ class TestTheLintStepIsInTheSet:
         assert outcome.ran is True
         assert outcome.returncode != 0, outcome.summary
         assert outcome.summary.startswith("Found "), outcome.summary
+
+
+class TestAnAmbientPytestAddoptsCannotNarrowThePreFlight:
+    """The pre-flight spawns pytest and inherited the parent environment.
+
+    Same class as the defect in ``ops/merge_gate.py`` and the reason the fix had
+    to be made to the CLASS rather than to one call site. ``PYTEST_ADDOPTS="-k
+    something"`` deselects most of the named guard modules, pytest still exits 0
+    because the tests it did select passed, and ``format_report`` prints
+    PRE-FLIGHT PASS over guards that never ran. ``check_modules_present`` cannot
+    see it: every module is on disk, it is the SELECTION inside them that shrank.
+    """
+
+    @staticmethod
+    def _tiny(root):
+        (root / "tests").mkdir(parents=True, exist_ok=True)
+        (root / "pytest.ini").write_text(
+            "[pytest]\ntestpaths = tests\npython_files = test_*.py\naddopts = -q\n",
+            encoding="utf-8",
+        )
+        (root / "tests" / "test_x.py").write_text(
+            "def test_keep():\n    assert True\n\n\ndef test_drop():\n    assert True\n",
+            encoding="utf-8",
+        )
+        return ("tests/test_x.py",)
+
+    def test_the_named_guards_all_run_despite_an_ambient_minus_k(
+        self, tmp_path, monkeypatch
+    ):
+        modules = self._tiny(tmp_path)
+        monkeypatch.setenv("PYTEST_ADDOPTS", "-k test_keep")
+        result = preflight.run(root=tmp_path, modules=modules)
+        assert result.returncode == 0, result.summary
+        assert "2 passed" in result.summary, (
+            f"the environment deselected a guard and the run still passed: {result.summary}"
+        )
+        assert "deselected" not in result.summary, result.summary
+
+    def test_the_run_reports_which_variables_it_stripped(self, tmp_path, monkeypatch):
+        modules = self._tiny(tmp_path)
+        monkeypatch.setenv("PYTEST_ADDOPTS", "-k test_keep")
+        result = preflight.run(root=tmp_path, modules=modules)
+        assert "PYTEST_ADDOPTS" in result.stripped_env
+        rendered = preflight.format_report(result, ())
+        assert "PYTEST_ADDOPTS" in rendered, (
+            f"a sanitised environment left no trace in the report: {rendered}"
+        )
+
+    def test_a_clean_environment_adds_no_such_line(self, tmp_path, monkeypatch):
+        # Negative control. Without this the assertion above would pass against a
+        # report that printed the warning unconditionally.
+        modules = self._tiny(tmp_path)
+        monkeypatch.delenv("PYTEST_ADDOPTS", raising=False)
+        result = preflight.run(root=tmp_path, modules=modules)
+        assert result.stripped_env == ()
+        assert "PYTEST_ADDOPTS" not in preflight.format_report(result, ())
+
+    def test_the_linter_is_run_with_a_sanitised_environment_too(self, monkeypatch):
+        # RUFF_OUTPUT_FORMAT replaces ruff's summary wholesale, so an inherited
+        # one makes _lint_summary report something that is not a verdict. The
+        # check is on the CALL rather than on ruff's behaviour, because ruff is
+        # not a declared dependency and a fresh clone may not have it at all.
+        #
+        # Every call is recorded rather than only the last. ``preflight.subprocess``
+        # is the same module object ``tools.precommit_gate`` holds, so patching it
+        # intercepts that module's own probe for ruff as well - the first version
+        # of this test read THAT call's keyword arguments and reported check_lint
+        # as unsanitised when the measurement was simply of the wrong process.
+        #
+        # ``ruff_command()`` is resolved BEFORE the fake is installed, because it
+        # probes for ruff with a subprocess of its own and caches the answer in a
+        # module global. Without this line the fake intercepts the PROBE, raises
+        # there, and ``check_lint`` never reaches the invocation under test - so
+        # the test passed only when an earlier test in the file had happened to
+        # warm that cache, and failed in isolation. Measured both ways.
+        if precommit_gate.ruff_command() is None:
+            pytest.skip("ruff is not installed, so there is no lint child to check")
+        calls = []
+
+        def fake_run(args, **kwargs):
+            calls.append((list(args), kwargs))
+            raise RuntimeError("stop here")
+
+        monkeypatch.setenv("RUFF_OUTPUT_FORMAT", "json")
+        monkeypatch.setattr(preflight.subprocess, "run", fake_run)
+        with pytest.raises(RuntimeError):
+            preflight.check_lint()
+        lint_calls = [kwargs for args, kwargs in calls if "check" in args]
+        assert lint_calls, f"no ruff invocation was made at all: {calls}"
+        for kwargs in lint_calls:
+            assert "env" in kwargs, "check_lint inherited the parent environment"
+            assert "RUFF_OUTPUT_FORMAT" not in kwargs["env"]

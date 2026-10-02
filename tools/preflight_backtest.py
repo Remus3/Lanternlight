@@ -41,6 +41,11 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from ops import merge_gate  # noqa: E402  (path bootstrap must run first)
+
 NEWLINE = chr(10)
 
 VERDICTS = ("CAUGHT", "MISSED", "NO-GUARD", "UNBUILDABLE")
@@ -99,6 +104,7 @@ def entry_commit(entry_id: str, root: Path = REPO_ROOT) -> str | None:
             capture_output=True,
             text=True,
             timeout=120,
+            env=merge_gate.child_env()[0],
         )
         shas = [ln.strip() for ln in completed.stdout.splitlines() if ln.strip()]
         if shas:
@@ -119,8 +125,22 @@ def _work_root() -> Path:
 
 
 def _run(args: list[str], cwd: Path, timeout: int = 900) -> subprocess.CompletedProcess:
+    """Run one command in a historical tree, with a SANITISED environment.
+
+    :func:`ops.merge_gate.child_env` explains the set. It is worse here than in
+    most of the call sites it was fixed in: this harness decides whether a guard
+    WOULD HAVE CAUGHT a past defect, so an inherited selection flag that
+    deselects the guard turns a CAUGHT into a MISSED and the conclusion written
+    down is the opposite of the truth. Measured in a two-file throwaway project:
+    both files collected clean, one under ``PYTEST_ADDOPTS="-k test_a_0"``.
+    """
     return subprocess.run(
-        args, cwd=cwd, capture_output=True, text=True, timeout=timeout
+        args,
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        env=merge_gate.child_env()[0],
     )
 
 

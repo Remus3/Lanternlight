@@ -21,9 +21,11 @@ earn, so the pure parts of :mod:`tools.preflight_backtest` are pinned here:
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import _toolguard
+import pytest
 
 from tools import preflight_backtest as bt
 
@@ -191,3 +193,53 @@ class TestReconstruction:
         # the false negative this mode exists to remove.
         assert bt.registration_files() == ("docs/INVENTORY.md", "ops/lanes.py")
 
+
+class TestAnAmbientPytestAddoptsCannotNarrowTheBackTest:
+    """``_run`` is how every historical tree in the back-test is exercised.
+
+    Same class as the ``ops/merge_gate.py`` defect. It is worse here in one
+    specific way: this harness decides whether a guard WOULD HAVE CAUGHT a past
+    defect, so an inherited selection flag that deselects the guard turns a CAUGHT
+    into a MISSED and the conclusion written down is the opposite of the truth.
+    """
+
+    @staticmethod
+    def _two_files(root):
+        (root / "tests").mkdir(parents=True, exist_ok=True)
+        (root / "pytest.ini").write_text(
+            "[pytest]\ntestpaths = tests\npython_files = test_*.py\naddopts = -q\n",
+            encoding="utf-8",
+        )
+        (root / "tests" / "test_a.py").write_text(
+            "def test_a_0():\n    assert True\n", encoding="utf-8"
+        )
+        (root / "tests" / "test_b.py").write_text(
+            "def test_b_0():\n    assert True\n\n\ndef test_b_1():\n    assert True\n",
+            encoding="utf-8",
+        )
+
+    def test_the_child_runs_the_whole_tree_despite_an_ambient_minus_k(
+        self, tmp_path, monkeypatch
+    ):
+        self._two_files(tmp_path)
+        monkeypatch.setenv("PYTEST_ADDOPTS", "-k test_a_0")
+        completed = bt._run(
+            [sys.executable, "-m", "pytest", "--collect-only", "-q"], cwd=tmp_path
+        )
+        assert "tests/test_b.py: 2" in completed.stdout.replace(chr(92), "/"), (
+            f"the environment narrowed the back-test's own run: {completed.stdout!r}"
+        )
+
+    def test_git_is_queried_with_a_sanitised_environment_too(self, monkeypatch):
+        seen = {}
+
+        def fake_run(args, **kwargs):
+            seen.update(kwargs)
+            raise RuntimeError("stop here")
+
+        monkeypatch.setenv("PYTEST_ADDOPTS", "-k nope")
+        monkeypatch.setattr(bt.subprocess, "run", fake_run)
+        with pytest.raises(RuntimeError):
+            bt.entry_commit("LL-0001")
+        assert "env" in seen, "entry_commit inherited the parent environment"
+        assert "PYTEST_ADDOPTS" not in seen["env"]

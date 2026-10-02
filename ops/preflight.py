@@ -44,7 +44,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from ops import refutation_census
+from ops import merge_gate, refutation_census
 from tools import precommit_gate
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -129,12 +129,23 @@ MODULES: tuple[str, ...] = tuple(WHY)
 
 @dataclass(frozen=True)
 class Result:
-    """One pre-flight run. ``seconds`` is measured, never declared."""
+    """One pre-flight run. ``seconds`` is measured, never declared.
+
+    ``stripped_env`` names the environment variables that were REMOVED from the
+    child before it ran. An inherited ``PYTEST_ADDOPTS`` deselects most of the
+    named guard modules, pytest still exits 0 because the tests it did select
+    passed, and this report said PRE-FLIGHT PASS over guards that never ran -
+    ``check_modules_present`` cannot see it, because every module is on disk and
+    it is the SELECTION inside them that shrank. The set and the reasoning are in
+    :func:`ops.merge_gate.child_env`; what is carried here is the fact that it
+    fired, because a sanitisation nobody can see is a condition nobody recorded.
+    """
 
     returncode: int
     summary: str
     seconds: float
     modules: int
+    stripped_env: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -191,6 +202,11 @@ def check_lint(root: Path = REPO_ROOT) -> LintResult:
             seconds=0.0,
             ran=False,
         )
+    # Sanitised for the same reason the pytest child is, with one extra bite
+    # that is specific to lint: ``RUFF_OUTPUT_FORMAT`` and ``FORCE_COLOR`` change
+    # what ruff PRINTS, and every verdict here is parsed out of that text, so an
+    # inherited one makes ``_lint_summary`` report something that is not a
+    # verdict at all.
     start = time.monotonic()
     completed = subprocess.run(
         [*command, "check", "."],
@@ -198,6 +214,7 @@ def check_lint(root: Path = REPO_ROOT) -> LintResult:
         capture_output=True,
         text=True,
         timeout=300,
+        env=merge_gate.child_env()[0],
     )
     seconds = time.monotonic() - start
     return LintResult(
@@ -242,6 +259,7 @@ def untracked_new_files(root: Path = REPO_ROOT) -> tuple[str, ...]:
             capture_output=True,
             text=True,
             timeout=60,
+            env=merge_gate.child_env()[0],
         )
     except (OSError, subprocess.SubprocessError):
         return ()
@@ -269,6 +287,7 @@ def run(root: Path = REPO_ROOT, modules: tuple[str, ...] = MODULES) -> Result:
             seconds=0.0,
             modules=len(modules),
         )
+    env, stripped = merge_gate.child_env()
     start = time.monotonic()
     completed = subprocess.run(
         [sys.executable, "-m", "pytest", *modules],
@@ -276,6 +295,7 @@ def run(root: Path = REPO_ROOT, modules: tuple[str, ...] = MODULES) -> Result:
         capture_output=True,
         text=True,
         timeout=900,
+        env=env,
     )
     seconds = time.monotonic() - start
     return Result(
@@ -283,6 +303,7 @@ def run(root: Path = REPO_ROOT, modules: tuple[str, ...] = MODULES) -> Result:
         summary=_summary_line(completed.stdout),
         seconds=seconds,
         modules=len(modules),
+        stripped_env=stripped,
     )
 
 
@@ -343,6 +364,22 @@ def format_report(
     ]
     if lint is not None:
         lines.append(f"  lint:   {lint.summary} ({lint.seconds:.2f}s)")
+    if result.stripped_env:
+        # Loud, and above the untracked warning, because it changes what the
+        # summary line one line up MEANS. The same set is stripped from the lint
+        # child, so one block covers both.
+        lines.append("")
+        lines.append(
+            "  NOTE - these variables were set and were REMOVED before the"
+        )
+        lines.append(
+            "  children ran. An inherited one narrows what pytest collects or"
+        )
+        lines.append(
+            "  changes what a child prints, silently and with exit code 0:"
+        )
+        for line in merge_gate.describe_env_sanitisation(result.stripped_env):
+            lines.append(f"    {line}")
     if untracked:
         lines.append("")
         lines.append(

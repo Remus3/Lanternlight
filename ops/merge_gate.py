@@ -138,6 +138,7 @@ over text, so they are testable without running a suite inside a suite.
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import sys
@@ -146,6 +147,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 __all__ = [
+    "COLLECTION_ENV_VARS",
     "Finding",
     "GateReport",
     "MEASUREMENT_HEADER",
@@ -153,16 +155,20 @@ __all__ = [
     "SummaryResult",
     "check_baseline_floor",
     "check_claimed_paths",
+    "check_skip_count",
     "describe_store_drift",
     "read_store_drift",
     "check_per_file_counts",
     "check_run_completed",
     "check_test_count",
+    "child_env",
     "collect_output",
     "collect_result",
+    "describe_env_sanitisation",
     "find_summary_line",
     "parse_collect_counts",
     "parse_summary",
+    "selection_flags_in",
     "suite_output",
     "suite_result",
     "take_per_file_baseline",
@@ -180,6 +186,8 @@ _COLLECT_RE = re.compile(r"^(?P<path>\S.*?):[ \t]*(?P<count>\d+)[ \t]*$")
 _PASSED_RE = re.compile(r"(?<!\w)(\d+) passed(?!\w)")
 _FAILED_RE = re.compile(r"(?<!\w)(\d+) failed(?!\w)")
 _ERROR_RE = re.compile(r"(?<!\w)(\d+) errors?(?!\w)")
+_SKIPPED_RE = re.compile(r"(?<!\w)(\d+) skipped(?!\w)")
+_DESELECTED_RE = re.compile(r"(?<!\w)(\d+) deselected(?!\w)")
 
 # pytest's final stats line, and nothing that merely resembles one. Measured
 # shapes this must accept, all on this machine:
@@ -217,6 +225,149 @@ _EXIT_MEANING = {
 }
 
 
+#: Environment variables that change WHAT pytest collects or runs, stripped from
+#: every child this module spawns.
+#:
+#: THE DEFECT THIS CLOSES, measured in the primary working tree. ``_run`` used to
+#: inherit the parent environment wholesale, so an ambient ``PYTEST_ADDOPTS``
+#: narrowed the gate's own measurement with exit code 0 and no warning at all:
+#: 86 files and 4065 tests with nothing set, 1 file and 5 tests under
+#: ``PYTEST_ADDOPTS="-k test_ascii_hygiene"``. The count comparison is then
+#: satisfied over a suite that never ran, because the baseline and the re-run are
+#: narrowed EQUALLY and the per-file floor self-adjusts to the narrowed
+#: selection. ``CLAUDE.md``'s whole description of this gate is that it "fails if
+#: the collected test count dropped below the baseline" - there the baseline
+#: itself was being set by the environment.
+#:
+#: It is the same class as the ``-q``-in-``addopts`` trap ``CLAUDE.md`` already
+#: records, on a different axis: an environment variable instead of an ini file.
+#: A sibling project reported the same class and theirs went RED; this one went
+#: silently GREEN, which is strictly worse.
+#:
+#: ``-k``, ``-m``, ``-p``, ``-x``, ``--deselect`` and ``--ignore`` all arrive
+#: through ``PYTEST_ADDOPTS``, so removing the variable removes every one of them
+#: and there is no flag denylist to keep in step with pytest.
+PYTEST_ENV_VARS: frozenset[str] = frozenset(
+    {
+        "PYTEST_ADDOPTS",
+        "PYTEST_PLUGINS",
+        "PYTEST_DISABLE_PLUGIN_AUTOLOAD",
+        "PYTEST_DEBUG",
+    }
+)
+
+#: Variables that change what a child PRINTS rather than what it runs, which
+#: matters here because every verdict in this module is parsed out of text.
+#: ``FORCE_COLOR`` wraps a summary line in ANSI escapes and
+#: ``RUFF_OUTPUT_FORMAT`` replaces the lint summary wholesale, and a parser that
+#: finds neither reports "no summary line" - a finding about the environment
+#: wearing the costume of a finding about the work.
+OUTPUT_ENV_VARS: frozenset[str] = frozenset(
+    {"FORCE_COLOR", "CLICOLOR_FORCE", "RUFF_OUTPUT_FORMAT"}
+)
+
+#: The whole stripped set. One definition, consulted by ``ops/preflight.py``,
+#: ``ops/stop_audit.py`` and ``tools/preflight_backtest.py`` as well, because a
+#: fix closed in one call site is not closed - all four spawn a child and all
+#: four inherited the environment.
+COLLECTION_ENV_VARS: frozenset[str] = PYTEST_ENV_VARS | OUTPUT_ENV_VARS
+
+#: Flags that narrow a run, named so a report can say HOW an inherited value was
+#: dangerous. Only the flag is ever echoed and never its argument: a value can
+#: carry an absolute path, which on this machine carries the account name, and
+#: ``ADR-004`` scopes redaction to a CLASS OF DATA and a DIRECTION rather than to
+#: the game log.
+SELECTION_FLAGS: tuple[str, ...] = (
+    "--deselect",
+    "--ignore",
+    "--last-failed",
+    "--lf",
+    "-k",
+    "-m",
+    "-p",
+    "-x",
+)
+
+
+def selection_flags_in(value: str) -> tuple[str, ...]:
+    """Selection-narrowing flags present in an addopts-shaped string.
+
+    Used for the WORDING of the report, never for the decision - the decision is
+    to remove the variable whatever it holds, so a flag this list has never heard
+    of cannot slip through. Returns flag names only; the argument beside a flag is
+    never echoed anywhere.
+    """
+    found = [
+        flag
+        for flag in SELECTION_FLAGS
+        if re.search(rf"(?:^|\s){re.escape(flag)}(?:[=\s]|$)", value or "")
+    ]
+    return tuple(found)
+
+
+def child_env(
+    base: Mapping[str, str] | None = None,
+) -> tuple[dict[str, str], tuple[str, ...]]:
+    """A copy of ``base`` with :data:`COLLECTION_ENV_VARS` removed.
+
+    Returns ``(environment, stripped names)``. The second half is the whole
+    reason this is not a one-line ``dict`` comprehension at each call site: a
+    sanitisation nobody can see is a measurement condition nobody recorded, and
+    this repository's rule is that a caveat dropped from the artifact is a lie in
+    the artifact.
+
+    **SANITISE AND REPORT, rather than refuse.** Both were available and the
+    choice is argued from this repository's own rules. Refusing to run would make
+    the gate unavailable at exactly the moment it is needed - the same reasoning
+    that makes :func:`read_store_drift` never raise, because a merger who cannot
+    run the gate stops running it and then the claim goes unchecked too - and an
+    ambient ``PYTEST_ADDOPTS`` is a legitimate thing for an operator's shell to
+    carry, so refusing on it is a guard that cries wolf and gets overridden.
+    Sanitising silently is the other failure: a guard that goes green while the
+    conditions changed under it is decoration. So the hazard is REMOVED and the
+    removal is STATED, in :attr:`GateReport.measurement`, where a reader can tell
+    a 4065 from a 5.
+
+    ``base`` defaults to the real environment. Tests pass an explicit mapping,
+    because a test that reads the ambient shell is measuring the shell.
+
+    The copy keeps everything else - ``PATH``, ``SYSTEMROOT``, ``TEMP``. Handing
+    a child an environment stripped to just the safe names breaks process
+    creation on Windows, which is a cure worse than the disease.
+    """
+    source = dict(os.environ if base is None else base)
+    stripped = tuple(sorted(name for name in COLLECTION_ENV_VARS if name in source))
+    for name in stripped:
+        del source[name]
+    return source, stripped
+
+
+#: One rendered line per stripped variable. The NAME is given, the VALUE never
+#: is - see :data:`SELECTION_FLAGS`.
+_ENV_STRIPPED_LINE = (
+    "environment: {name} was set and was REMOVED before the child ran{how} - "
+    "an inherited value here narrows the measurement silently, with exit code 0"
+)
+
+
+def describe_env_sanitisation(
+    stripped: Sequence[str], values: Mapping[str, str] | None = None
+) -> tuple[str, ...]:
+    """Measurement lines for what :func:`child_env` removed. Pure.
+
+    Empty when nothing was stripped, which keeps the measurement block from
+    becoming furniture a reader stops seeing - the same reason
+    :data:`MEASUREMENT_HEADER` is printed only when there is something under it.
+    """
+    source = dict(os.environ if values is None else values)
+    lines: list[str] = []
+    for name in stripped:
+        flags = selection_flags_in(source.get(name, ""))
+        how = f", and it carried {', '.join(flags)}" if flags else ""
+        lines.append(_ENV_STRIPPED_LINE.format(name=name, how=how))
+    return tuple(lines)
+
+
 @dataclass(frozen=True)
 class Finding:
     """One thing the gate refuses to sign off on.
@@ -233,16 +384,30 @@ class Finding:
 class SummaryResult:
     """What pytest's final summary line said, if it printed one at all.
 
-    ``found`` is the field that matters. When it is ``False`` the three counts
-    are ``None`` rather than ``0``, because "the suite printed no summary" and
-    "the suite ran and nothing passed" are different facts and only one of
-    them means the run happened.
+    ``found`` is the field that matters. When it is ``False`` every count is
+    ``None`` rather than ``0``, because "the suite printed no summary" and "the
+    suite ran and nothing passed" are different facts and only one of them means
+    the run happened.
+
+    ``skipped`` and ``deselected`` are the two ways the population that RAN is
+    smaller than the population that was COLLECTED, and the gate was blind to
+    both. ``check_test_count`` floors on the collected count, which neither of
+    them changes, so a lane could mark 30 tests skipped and the gate stayed
+    green. Measured here before the fix: ``check_run_completed`` on a summary
+    reading ``12 passed, 30 skipped in 1.00s`` with returncode 0 returned ``[]``.
+
+    Not hypothetical in this repository. The same tree gives 3896 passed and 22
+    skipped under Git Bash, and 3833 passed and 85 skipped under PowerShell,
+    because PowerShell's ``PATH`` lacks Git's ``usr/bin`` - 62 tests stop running
+    and the run still exits 0.
     """
 
     found: bool
     passed: int | None
     failed: int | None
     errors: int | None
+    skipped: int | None = None
+    deselected: int | None = None
 
 
 @dataclass(frozen=True)
@@ -256,6 +421,7 @@ class RunResult:
 
     text: str
     returncode: int
+    stripped_env: tuple[str, ...] = ()
 
 
 #: Printed above the measurement block, and only when there is one -
@@ -270,9 +436,10 @@ class RunResult:
 #: hashes to the object the first one already wrote. See ``OPS-60``.
 MEASUREMENT_HEADER = (
     "  --- measurement conditions - NOT a verdict on the claimed work ---",
-    "  a finding above says the work may be wrong; a line below says the "
-    "numbers above were taken on a moving tree, which changes what you check "
-    "next rather than whether you merge",
+    "  a finding above says the work may be wrong; a line below says HOW the "
+    "numbers above were taken - on a moving tree, from a sanitised environment, "
+    "over which population - which changes what you check next rather than "
+    "whether you merge",
 )
 
 
@@ -397,15 +564,26 @@ def parse_summary(text: str) -> SummaryResult:
     """
     stats = find_summary_line(text)
     if stats is None:
-        return SummaryResult(found=False, passed=None, failed=None, errors=None)
+        return SummaryResult(
+            found=False,
+            passed=None,
+            failed=None,
+            errors=None,
+            skipped=None,
+            deselected=None,
+        )
     passed = _PASSED_RE.search(stats)
     failed = _FAILED_RE.search(stats)
     errors = _ERROR_RE.search(stats)
+    skipped = _SKIPPED_RE.search(stats)
+    deselected = _DESELECTED_RE.search(stats)
     return SummaryResult(
         found=True,
         passed=int(passed[1]) if passed else 0,
         failed=int(failed[1]) if failed else 0,
         errors=int(errors[1]) if errors else 0,
+        skipped=int(skipped[1]) if skipped else 0,
+        deselected=int(deselected[1]) if deselected else 0,
     )
 
 
@@ -481,6 +659,19 @@ def check_run_completed(
         findings.append(Finding(kind="failed", detail=f"{failed} test(s) failed"))
     if errors:
         findings.append(Finding(kind="errors", detail=f"{errors} test error(s)"))
+    if resolved.deselected:
+        findings.append(
+            Finding(
+                kind="deselected",
+                detail=(
+                    f"{resolved.deselected} test(s) were DESELECTED, so the run "
+                    "executed a smaller population than it collected - this module "
+                    "passes no -k or -m and strips the variables that can inject "
+                    "one, and pytest.ini carries neither, so nothing legitimate "
+                    "explains a deselection here"
+                ),
+            )
+        )
     return findings
 
 
@@ -510,6 +701,48 @@ def check_test_count(current: int, baseline: int | None) -> list[Finding]:
                     f"collected {current} tests, down from a baseline of "
                     f"{baseline} - {baseline - current} test(s) went missing; a "
                     "suite can go green by losing coverage"
+                ),
+            )
+        ]
+    return []
+
+
+def check_skip_count(current: int | None, baseline: int | None) -> list[Finding]:
+    """Fail when more tests SKIPPED than the baseline recorded.
+
+    THE DECISION, because both alternatives were defensible and the middle has to
+    be argued rather than assumed. A skip is not a defect: this repository skips
+    22 tests legitimately, by design, through ``tests/_toolguard.py``, so making
+    any skip a finding would turn every honest run red and a guard that always
+    says no is a guard nobody reads. Silence is the other end, and silence is
+    what was here: 62 tests stopped running under PowerShell and the gate
+    reported success.
+
+    So the skipped count is ALWAYS REPORTED - it reaches
+    :attr:`GateReport.measurement` on every run, including an OK one, which is
+    what makes it unable to hide again - and a RISE is a finding only against a
+    baseline the caller measured and supplied. That keeps the red tied to a
+    specific before-and-after a human chose to assert, rather than to an
+    environment difference the gate cannot interpret. With no baseline the check
+    did not run, which is recorded as a note: a check that did not run has not
+    passed, and the absence must not read as a measured zero.
+
+    ``current is None`` means the suite printed no summary at all. That is
+    :func:`check_run_completed`'s ``no-summary`` finding, not a skip story, so
+    nothing is added here - reporting it twice would make a crashed run and a
+    skipped test indistinguishable in one report.
+    """
+    if baseline is None or current is None:
+        return []
+    if current > baseline:
+        return [
+            Finding(
+                kind="skip-regression",
+                detail=(
+                    f"{current} test(s) skipped, up from a baseline of {baseline} - "
+                    f"{current - baseline} test(s) collected and then did not run; "
+                    "the collected count is unchanged by a skip, so no count guard "
+                    "can see this"
                 ),
             )
         ]
@@ -730,7 +963,14 @@ def _run(args: Sequence[str], root: Path, timeout: int) -> RunResult:
     The exit code is not incidental. A pytest run that aborts can still print
     a plausible stats line, so the code is the only part of the answer the
     text cannot contradict.
+
+    **The environment is SANITISED and never inherited whole.** See
+    :func:`child_env` for the measured defect and for why sanitising-and-
+    reporting beat refusing. What was removed travels back on the
+    :class:`RunResult`, so the report can say it rather than leave a reader to
+    guess whether a count of 5 was the suite or the selection.
     """
+    env, stripped = child_env()
     proc = subprocess.run(
         list(args),
         cwd=root,
@@ -738,10 +978,12 @@ def _run(args: Sequence[str], root: Path, timeout: int) -> RunResult:
         text=True,
         timeout=timeout,
         check=False,
+        env=env,
     )
     return RunResult(
         text=(proc.stdout or "") + (proc.stderr or ""),
         returncode=proc.returncode,
+        stripped_env=stripped,
     )
 
 
@@ -782,8 +1024,99 @@ def take_per_file_baseline(root: Path = REPO_ROOT, timeout: int = 300) -> dict[s
 
     The total is the sum of these counts, so one call still feeds both count
     checks and there is no second collect to disagree with.
+
+    **The hazard in :func:`child_env` is at its worst here**, which is why this
+    function says out loud when it fired. A narrowed collect does not merely
+    lower a floor, it leaves the dropped files with NO ROW at all, and
+    :func:`check_per_file_counts` treats a file it has no row for as NEW and
+    therefore clean - so the whole file is unprotected rather than part of it. A
+    one-file floor measured under ``PYTEST_ADDOPTS="-k ..."`` against an 86-file
+    tree protects nothing whatever while looking exactly like a floor.
+
+    The child's environment is sanitised, so the returned floor covers the whole
+    tree. The notice goes to stderr because this function's contract is a plain
+    ``dict`` and has nowhere to put a note - and because an operator whose
+    deliberate ``PYTEST_ADDOPTS`` was ignored should be told, not left to
+    discover it from a count. It is a notice rather than a refusal for the reason
+    argued in :func:`child_env`: the floor it returns is correct, so refusing
+    would be crying wolf over a hazard that has already been removed.
     """
-    return parse_collect_counts(collect_output(root=root, timeout=timeout))
+    run = collect_result(root=root, timeout=timeout)
+    if run.stripped_env:
+        for line in describe_env_sanitisation(run.stripped_env):
+            print(f"take_per_file_baseline: {line}", file=sys.stderr)
+    return parse_collect_counts(run.text)
+
+
+#: Said when no skip baseline was supplied. A NOTE and not a finding, for the
+#: same reason ``_NO_PER_FILE_BASELINE_NOTE`` is one: the invocation quoted in
+#: ``CLAUDE.md`` and in all eight generated lane contracts passes neither, so a
+#: finding would turn the documented call permanently red and a gate that always
+#: says no is a gate nobody reads. The skipped count itself is reported
+#: unconditionally in the measurement block, so the number is never silent even
+#: when this comparison cannot be made.
+_NO_SKIP_BASELINE_NOTE = (
+    "the skip-regression check did not run - no skip_baseline was supplied, so "
+    "whether MORE tests collected-and-then-skipped than before is UNKNOWN rather "
+    "than settled; measure it with parse_summary(suite_result().text).skipped "
+    "before dispatching work. The skipped count for THIS run is in the "
+    "measurement block below and a skip does not move the collected count, so no "
+    "count guard above can see one"
+)
+
+
+def _coverage_lines(
+    collected: int,
+    files: int,
+    summary: SummaryResult,
+    per_file_baseline: Mapping[str, int] | None,
+) -> tuple[str, ...]:
+    """The provenance of the numbers this report compared.
+
+    ``CLAUDE.md``: a filed count is a hypothesis and every count re-derived from
+    the artifact has been wrong at least once. A bare ``3918`` and a bare ``93``
+    render identically as "N tests collected", and that is exactly the pair of
+    numbers the ``PYTEST_ADDOPTS`` defect produced from the same tree. So the
+    report states the population it measured - how many tests in how many files -
+    how many files the floor it compared against covered, and how the suite
+    ACCOUNTED for that population once it ran.
+
+    The accounting line is where a skip stops being invisible. ``collected`` minus
+    passed minus failed is the number of collected tests that produced no result
+    at all, and it is printed whether or not anybody supplied a skip baseline.
+    """
+    lines = [
+        f"population: collect found {collected} test(s) in {files} file(s)",
+    ]
+    if per_file_baseline is None:
+        lines.append(
+            "floor: no per-file baseline was supplied, so nothing was compared "
+            "file by file"
+        )
+    else:
+        lines.append(
+            f"floor: the baseline covered {len(per_file_baseline)} file(s) "
+            f"totalling {sum(per_file_baseline.values())} test(s)"
+        )
+    if not summary.found:
+        lines.append(
+            "accounting: the suite printed no summary line, so what became of "
+            "those tests is unknown"
+        )
+        return tuple(lines)
+    passed = summary.passed or 0
+    failed = summary.failed or 0
+    skipped = summary.skipped or 0
+    deselected = summary.deselected or 0
+    unaccounted = collected - passed - failed
+    lines.append(
+        f"accounting: the suite reported {passed} passed, {failed} failed, "
+        f"{skipped} skipped, {deselected} deselected - "
+        f"{unaccounted} of the {collected} collected test(s) produced no pass or "
+        "fail, and a skip never moves the collected count the guards above "
+        "compare"
+    )
+    return tuple(lines)
 
 
 #: Said in the report when the caller supplied no per-file baseline. Named as
@@ -913,6 +1246,7 @@ def verify(
     root: Path = REPO_ROOT,
     per_file_baseline: Mapping[str, int] | None = None,
     snapshot_path: Path | None = None,
+    skip_baseline: int | None = None,
 ) -> GateReport:
     """Run every probe and compose the verdict.
 
@@ -970,6 +1304,24 @@ def verify(
         permanently red, and a gate that always says no is a gate nobody
         reads.
 
+    **The environment is sanitised before any child runs, and the sanitisation
+    is reported.** ``PYTEST_ADDOPTS`` and its relatives narrow collection with
+    exit code 0, and because they narrow the baseline measurement and the merge
+    re-run EQUALLY, every count comparison above is satisfied over a suite that
+    did not run. Measured in this tree: 86 files and 4065 tests clean, 1 file and
+    5 tests under ``-k test_ascii_hygiene``, and an OK verdict against the
+    baseline of 5 that the same contamination produced. See :func:`child_env`
+    for why the answer is sanitise-and-report rather than refuse.
+
+    **The population that RAN is reported too, which is the other half of the
+    same hole.** A test that collects and then SKIPS leaves the collected count
+    untouched, so ``check_test_count`` and ``check_per_file_counts`` are both
+    blind to it - and this is a measured local hazard rather than a theory: the
+    same tree gives 22 skips under Git Bash and 85 under PowerShell. The counts
+    now reach the measurement block on every run, and a RISE is a finding only
+    against ``skip_baseline``, which the caller measures and supplies. See
+    :func:`check_skip_count` for that argument.
+
     **Store drift is reported, never blocked on** - ``OPS-58``. The readings
     above are only worth what the tree they were taken on is worth, and a
     parallel slice running ``git stash`` moves that tree wholesale. The gap
@@ -1018,7 +1370,8 @@ def verify(
     # back as 0 and check_test_count reports the drop. That is why there is no
     # separate exit-code probe here: the count guard already refuses it, and
     # with no baseline the no-baseline finding refuses it instead.
-    per_file = parse_collect_counts(collect_output(root=root))
+    collect = collect_result(root=root)
+    per_file = parse_collect_counts(collect.text)
     collected = sum(per_file.values())
     findings.extend(check_test_count(collected, baseline))
 
@@ -1030,6 +1383,24 @@ def verify(
     run = suite_result(root=root)
     summary = parse_summary(run.text)
     findings.extend(check_run_completed(run, summary))
+
+    if skip_baseline is None:
+        notes.append(_NO_SKIP_BASELINE_NOTE)
+    else:
+        findings.extend(check_skip_count(summary.skipped, skip_baseline))
+
+    # Provenance FIRST in the measurement block, because it is what tells a
+    # reader whether the numbers in the verdict line describe the suite or a
+    # selection of it. Both children are sanitised, and both are reported: the
+    # collect pass and the suite run are separate processes and an environment
+    # can change between them.
+    conditions: list[str] = list(
+        _coverage_lines(collected, len(per_file), summary, per_file_baseline)
+    )
+    for stage, stripped in (("collect", collect.stripped_env), ("suite", run.stripped_env)):
+        conditions.extend(
+            f"{stage}: {line}" for line in describe_env_sanitisation(stripped)
+        )
 
     # LAST, deliberately. The second store reading is taken after the suite has
     # run, so the interval it covers is the whole measurement rather than the
@@ -1044,5 +1415,5 @@ def verify(
         collected=collected,
         summary=summary,
         notes=tuple(notes),
-        measurement=tuple(measurement),
+        measurement=tuple(conditions) + tuple(measurement),
     )

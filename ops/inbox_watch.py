@@ -138,7 +138,12 @@ So each note is placed in one of three buckets from its own text:
 
 ``OURS``
     An addressing statement in the note's header names Lanternlight, or names a
-    broadcast to all the projects.
+    broadcast to all the projects. An addressing statement is the channel's own
+    ``to:`` HEADER FIELD as well as the prose forms - "sent to", "copied to" -
+    and the field was missing until ``OPS-108``, which cost 53 of the 372 real
+    entries their OURS verdict and filed one note addressed ``to: all carriers``
+    as somebody else's. Under the standing rule that every note addressed to
+    this project is answered, that is a manufactured silence.
 ``NOT OURS``
     No mention of us anywhere, AND either the header addresses other projects
     by name, or the note names two or more repository-relative paths and NONE
@@ -513,8 +518,29 @@ _OTHERS = re.compile(
 #: An addressing statement, and the recipient list it introduces. The list is
 #: cut at the first full stop, which is what keeps it a recipient list rather
 #: than the rest of the note.
+#:
+#: ``\bto\s*:`` IS THE CHANNEL'S OWN HEADER FIELD and it was missing until
+#: ``OPS-108``. Every other alternative here is PROSE - "sent to", "copied to" -
+#: and the senders on this channel overwhelmingly write a header field instead.
+#: Measured over the 372 real entries on 2026-10-02: 53 notes whose ``to:``
+#: field names this project reached only POSSIBLY OURS, and RC's note of
+#: 2026-10-01-2230 carrying ``to: all carriers`` was filed NOT OURS outright,
+#: because with no addressing evidence at all the absent-path rule took over.
+#: Under a standing operator rule that every note addressed to us is answered -
+#: silence reads as dissent on this channel - a missed addressing field is a
+#: manufactured silence, and an invisible one, because the session-start report
+#: looks complete either way.
+#:
+#: The alternative is deliberately just the field name and its colon, with no
+#: anchor to a line start: prose here is hard-wrapped near 80 columns and
+#: everything in this module matches the whitespace-collapsed form, so there is
+#: no line to anchor to. The containment is :func:`_header_of` instead - a
+#: ``to:`` in the BODY is somebody else's prose about somebody else's
+#: correspondence and must not address anything, which
+#: ``tests/test_inbox_watch.py`` asserts directly.
 _ADDRESS = re.compile(
-    r"(?:sent to|broadcast to|copied to|addressed to|addendum for|forwarded to|to all)"
+    r"(?:sent to|broadcast to|copied to|addressed to|addendum for|forwarded to|to all"
+    r"|\bto\s*:)"
     r"([^.]{0,200})",
     re.IGNORECASE,
 )
@@ -522,7 +548,29 @@ _ADDRESS = re.compile(
 #: A broadcast, recognised ONLY inside a recipient list. Measured 2026-09-07:
 #: matching it anywhere in the header made "reported all four as UNREAD" - four
 #: NOTES, not four projects - read as a broadcast to all four projects.
-_BROADCAST = re.compile(r"\ball (?:five|four|of you|of us)\b|\beveryone\b", re.IGNORECASE)
+#:
+#: THE COLLECTIVE NOUNS ARE THE ONLY ADDRESSING SOME NOTES CARRY. ``OPS-108``:
+#: four observed forms - ``to: all carriers``, ``TO: all participants``,
+#: ``To: every carrier on this channel`` and ``To: all projects`` - name no
+#: project code whatsoever, so nothing else in :func:`classify` can place them.
+#:
+#: NO NUMERAL WAS ADDED, and that omission is the guard rather than an oversight.
+#: The real "all six named explicitly" and "all four siblings" forms ENUMERATE
+#: their recipients, so this project's own code is already in the span and the
+#: named-recipient rule above reaches them first. Matching a bare numeral would
+#: buy nothing there and would misread a list that EXCLUDES us - "CS, LW, RC,
+#: RSC, SS - all five others" - as a broadcast including us, which is the
+#: over-claim direction: another tree's correspondence in our reply queue.
+#: A collective noun cannot make that mistake, because a list that omits a
+#: carrier does not call itself all the carriers.
+_BROADCAST = re.compile(
+    r"\ball (?:five|four|of you|of us)\b|\beveryone\b"
+    r"|\ball (?:carriers|participants|projects|siblings|addressees|recipients"
+    r"|trees|repositories)\b"
+    r"|\bevery (?:carrier|participant|project|sibling|addressee|recipient"
+    r"|tree|repository)\b",
+    re.IGNORECASE,
+)
 
 #: A repository-relative path named in backticks, with an optional :line suffix.
 _PATH = re.compile(
