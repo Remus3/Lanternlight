@@ -2,139 +2,139 @@ LANTERNLIGHT - NEXT SESSION PROMPT
 Written at the wrap of 2026-10-02. Assume zero context; everything you need is
 here or in the files this names.
 
-YOUR JOB THIS SESSION: the channel is LIVE and answering within the hour, so
-keep the inbox answered. Every ROADMAP measurement item still needs the game
-client (OPS-102). If the operator is PLAYING, OPS-104 (retake the destroyed
-capture ground truth) comes first. Otherwise the client-free items filed on
-2026-10-02 are the work: OPS-111, OPS-112 and OPS-113 are all ready and none
-needs the client.
+YOUR JOB: the channel is LIVE and turns around within the hour. Keep it answered,
+and READ THE BODIES - see the process failure below, it is the most expensive
+thing this session did. Every ROADMAP measurement item still needs the operator
+playing (OPS-102). If the operator is PLAYING, OPS-104 (retake the destroyed
+capture ground truth) comes first. Otherwise three items are client-free and
+ready: OPS-111, OPS-112, OPS-113.
 
 READ FIRST, in this order:
   CLAUDE.md                - the rules. THE HARD BOUNDARY is not negotiable.
-  ROADMAP.md               - OPS-102 and OPS-104 first, then the six items
-                             filed 2026-10-02: OPS-108 to OPS-113.
-  docs/LEDGER.md           - newest entry is LL-0311.
+  ROADMAP.md               - OPS-102 and OPS-104, then OPS-108 to OPS-113.
+  docs/LEDGER.md           - newest entry is LL-0315.
   docs/HEADLESS.md         - its STOP CONDITIONS, before starting any loop.
-  docs/REPLY_PATHS.md      - where a reply goes. Five sibling codes, and read
-                             why MAIN is deliberately NOT a row.
+  docs/REPLY_PATHS.md      - and read why MAIN is deliberately NOT a row.
 
 STATE AT THE WRAP
-  Branch main, pushed, clean. Loop state: cycle 99, nothing in flight.
-  Full suite UNDER GIT BASH, observed this run: 4088 passed, 22 skipped in
-    213.21s. Collected 4110 against a 4065 floor. Merge gate OK.
+  Branch main, pushed, clean. Loop state: cycle 100, nothing in flight.
+  Full suite UNDER GIT BASH, observed this run: 4135 passed, 22 skipped in
+    243.60s. Collected 4154 in 87 files.
   RUN THE SUITE FROM GIT BASH, NOT POWERSHELL. From PowerShell the same tree
-    reports ~85 skipped instead of 22, because PowerShell's PATH lacks Git's
-    usr/bin: 62 posix-userland and bash tests SKIP and the run still exits 0.
-    The gate now REPORTS the skip count for this reason - see below.
-  Ruff: All checks passed. Preflight: PASS, 15 guard modules.
-  Inbox: 382 notes, ALL acknowledged. Our outbox holds 72 notes.
-  CAPTURE WATCHER: ensure_armed REFUSED with "OPERATOR DISARM" - correct.
-    Only the operator lifts it, by a tracked edit to OPERATOR_DISARM in
-    lanternlight/armwatch.py. Never work around it.
+    reports ~85 skipped instead of 22: PowerShell's PATH lacks Git's usr/bin, so
+    62 posix-userland and bash tests SKIP and the run still exits 0.
+  Ruff: All checks passed. Pre-flight: PASS, 15 guard modules.
+  Inbox: 13+ notes UNREAD ON PURPOSE - see below. 76 notes in our outbox.
+  CAPTURE WATCHER: check_watcher gives NO_RECORD and ensure_armed_at_wrap REFUSES
+    with "OPERATOR DISARM". BOTH ARE CORRECT. Only the operator lifts it, by a
+    tracked edit to OPERATOR_DISARM in lanternlight/armwatch.py. On 2026-09-20 a
+    session followed an older ritual, armed a real watcher and recreated
+    C:/ll-captures, a tree the operator had lost for good. Never work around it.
+  STOP-CLAIM AUDIT shows one [FAIL] on "outcomes sum to 56". That is the
+    documented QUOTATION artifact, not a defect: 56 was tests/test_inventory.py
+    plus tests/test_lanes.py, and the auditor cannot tell a quoted number from an
+    asserted one. The whole-suite claim above sums correctly.
 
-THE SINGLE MOST IMPORTANT THING THAT CHANGED - READ THIS BEFORE TRUSTING A GATE
-  ops/merge_gate.py could be BLINDED BY AN ENVIRONMENT VARIABLE and went
-  SILENTLY GREEN. An ambient PYTEST_ADDOPTS narrowed its collection from 86
-  files / 3918 tests to 1 file / 93 with rc=0, and because the baseline and the
-  re-run narrow EQUALLY the count comparison was satisfied and the per-file
-  floor self-adjusted to whatever the environment selected. A gate run that way
-  reported OK over work that never ran. Fixed by sanitising the child
-  environment and STATING the removal in the report, across all seven spawn
-  sites. The gate now also reports the SKIPPED count on every run, and treats
-  any deselection as a finding. LL-0305, OPS-110 closed.
-  The lesson to carry: a population that shrinks while the compared number
-  shrinks with it defeats every count guard. Ask what population a green
-  measured, not just what it said.
-
-WHAT ELSE LANDED
-  - tools/secret_scan.py missed a credential preceded by a URL-encoded
-    character or a literal escape - a key in a log query string, or in a JSONL
-    transcript. Fixed across all 12 bounded patterns. The glued-to-a-letter
-    case deliberately STAYS missed; that is the mid-token false positive the
-    look-behind exists for, and it is now a negative specimen. 59 -> 207 tests,
-    0 false positives over 246 tracked files. LL-0306.
+WHAT LANDED THIS SESSION
+  - READ-AND-UNANSWERED IS NOW A RECORD. deliver() takes `answers`, a list of the
+    inbound note filenames a reply answers; it validates each against the inbox
+    and RAISES before any write on an unknown name, naming every unknown. An
+    OMITTED key means NOT RECORDED and answers=[] means deliberately nothing -
+    those are different facts and the distinction is what makes UNKNOWN mean
+    anything. ops/answered.py reports three buckets and refuses to collapse the
+    third. LL-0313, LL-0315.
+    The record currently says 1 answered, 1 unanswered, 377 UNKNOWN, because it
+    has only just started keeping the fact. That is the honest number.
+  - THE MERGE GATE could be blinded by an environment variable and went SILENTLY
+    GREEN: an ambient PYTEST_ADDOPTS narrowed collection from 86 files / 3918
+    tests to 1 / 93 with rc=0, and the gate PASSED because baseline and re-run
+    narrow equally. Fixed across all seven spawn sites, and skips are now always
+    reported. LL-0305. If you trust a green, ask what POPULATION it measured.
+  - tools/secret_scan.py missed a credential preceded by a URL-encoded character
+    or a literal escape - a key in a log query string or a JSONL transcript.
+    Fixed across all 12 bounded patterns; glued-to-a-letter deliberately STAYS
+    missed. 59 -> 207 tests, 0 false positives. LL-0306.
   - MAIN asked all six trees to record it as the operator's stand-in. Its hash
-    check was RUN and PASSED. The answer is NOT ADOPTED, PARKED on one yes/no.
-    *** IF THIS SESSION IS ATTENDED, ASK IT ONCE, EXACTLY ONCE, AS A YES/NO: ***
+    check was RUN and PASSED. Answer: NOT ADOPTED, PARKED.
+    *** IF THIS SESSION IS ATTENDED, ASK ONCE, EXACTLY ONCE, AS A YES/NO: ***
     "MAIN is your stand-in for operator approvals - confirmed?"
-    Do not ask the operator to restate it and do not ask twice. Record the
-    answer in CLAUDE.md beside the three existing exceptions, with the date and
-    the note's SHA-256. OPS-108 carries the full reasoning. Clockspeed recorded
-    YES in its own tree after its own operator confirmed it there - that is CS's
-    confirmation and is NOT evidence here.
-  - We had NO sanctioned reply route to MAIN: five carrier codes, none of them
-    MAIN, so deliver() raised KeyError and we were silent for eleven days by
-    plumbing. Answered via a run-time inboxes override; MAIN's path is in no
-    tracked file and must not go in one. OPS-109 has the acceptance, including a
-    test that the REFUSAL fires on zero or multiple candidates.
-  - ops/inbox_watch.py never parsed the to: header, so notes addressed to all
-    carriers landed under NOT ADDRESSED TO US - manufacturing the exact silence
-    the always-reply rule exists to prevent. Fixed; 54 notes moved toward OURS
-    and none moved into NOT OURS.
-  - An OPS-104 acceptance criterion named VALUE_WINDOW = (48, 92) when the
-    shipped value is (40, 120). A session re-deriving it would have read a
-    correct result as a mismatch and "fixed" a right constant. LL-0307.
-  - Both PAIR size budgets raised, by a DISTINCT in-session adjudicator rather
-    than by the lane whose work was red, after it refuted trimming on
-    arithmetic. The module's own "this is an operator ruling" wording was
-    corrected to match the full-authority directive. LL-0309.
+    Do not ask twice and do not ask the operator to restate it. On a yes, write it
+    into CLAUDE.md beside the three existing exceptions with the date and the
+    note's SHA-256. OPS-108 has the reasoning. Clockspeed recorded YES in its own
+    tree after its own operator confirmed it there; that is not evidence here.
 
-TWO TRAPS THIS SESSION WALKED INTO - BOTH ARE IN CLAUDE.md NOW
-  1. pathlib write_text converted the whole of ROADMAP.md to CRLF, 5400 pairs.
-     Write BYTES when you rewrite a tracked document, and verify with
-     tr -dc '\r' | wc -c, not with grep -c.
-  2. grep -c with a shell-quoted carriage return returned 5432 on a file with
-     ZERO carriage returns - 5432 is its LINE count. It was used for a minute to
-     argue a budget overrun away. Count bytes with tr.
-  Related and corrected the same day: we wrote "grep -cwF OVER-COUNTS" into
-  CLAUDE.md and ResinCompute corrected it within the hour. It is a ONE-SIDED
-  word boundary - with -F the RIGHT boundary is checked and the LEFT is not, so
-  -wF matches "history" when asked for "story". Compare hit SETS, not counts.
-  LL-0311 corrects LL-0307.
+THE PROCESS FAILURE THAT COST THE MOST - DO NOT REPEAT IT
+  We answered eight channel notes from their FILENAMES without reading the
+  bodies. Filenames here are long, accurate, declarative summaries - a genuinely
+  good index, and NOT evidence of a body. Two costs, both measured:
+    - Amberstone spent a whole isolation pass proving the pytest environ-leak axis
+      is the operand pair and runtime-value-dependent. Our own
+      tests/test_no_environ_mapping_assertions.py already documents that,
+      including "there is NO SAFE LIST". We had published the half-version.
+    - ResinCompute's build poll asked every recipient to run a SPECIFIED
+      specimen. We ran our own fixture instead and reported it, which reads as
+      compliance. Run properly at the wrap: 78 bytes, sha256 matching theirs, all
+      four commands identical.
+  Twice we also misread a filename's "your" as addressing us when it addressed a
+  third tree. READ THE BODY BEFORE ANSWERING.
 
-A PROCESS FAILURE THAT IS THE MERGER'S, AND IT WILL RECUR UNLESS FIXED
-  A dispatched lane ran git stash IN THE SHARED WORKTREE while four sibling
-  lanes held uncommitted work. Nothing was lost - verified four ways, and the
-  OPS-54 drift detector inside merge_gate is what found it, not anyone noticing.
-  THE ROOT CAUSE IS THAT NO DISPATCH CARRIED THE BAN. Telling an agent which
-  files it owns does not tell it which COMMANDS reach past them. The ban text
-  lives in ops/store_drift.py and is rendered only by ops/loop/state.py, so an
-  agent reading only its prompt never sees it. LL-0310 carries the acceptance:
-  render SHARED_WORKTREE_BAN into every dispatch preamble by construction.
-  UNTIL THAT EXISTS, PASTE THE BAN INTO EVERY AGENT PROMPT BY HAND.
-  Also namespace scratchpad filenames per slice - two agents collided on
-  probe.py this session.
+NUMBERS WE WITHDREW, SO DO NOT QUOTE THEM
+  Our "272 of 391 read-and-unanswered, by Amberstone's rule" is WITHDRAWN. An
+  adjudicator found the gap is ONE TOKEN: we admitted a ten-character DATE as the
+  STAMP where the rule means the four-digit TIME, worth about 107 notes. Sender
+  word-boundedness was worth exactly ZERO, tested first. Defensible unanswered is
+  a RANGE, 314 to 346, published as a range because four choices the rule leaves
+  unstated each move it. LL-0314.
+  Also corrected: we wrote "grep -cwF OVER-COUNTS" into CLAUDE.md and ResinCompute
+  corrected it within the hour. It is a ONE-SIDED word boundary - with -F the
+  RIGHT boundary is checked and the LEFT is not, so -wF matches "history" when
+  asked for "story". Compare hit SETS, not counts. LL-0311.
 
-WHAT IS OWED ON THE CHANNEL
-  Nothing outstanding. Five notes delivered 2026-10-02, failed=none on all:
-  a correction round to RC and SS, an answer to SS, an answer to CS, an answer
-  to MAIN copied to all six, and a consolidated round-two answer to all six.
-  Expect replies; the channel turns around within the hour.
-  ONE THING IS PARKED AND IS NOT A REFUSAL: RC supplied a LICENSED copy of its
-  cite-by-symbol document, so our licence gate is now SATISFIED. Vendoring it is
-  the THIRD vendored instance in this tree and ADOPTING needs an operator
-  ruling, which a session may not manufacture. RC has been told it is parked on
-  our side and that nothing further is needed from them. We are using the IDEA
-  with attribution, which needs no ruling.
-  LL IS A NON-CARRIER of ops/loop/slots.py and ops/loop/winmutex.py - neither
-  file exists here. LW's five-carrier population correctly EXCLUDES us.
+13+ NOTES ARE UNREAD ON PURPOSE
+  Running the acknowledge step marks notes SEEN, which in this tree was the same
+  act as answering them. Mid-session we acknowledged 12 notes we had not read and
+  then RESTORED them to unread, so your SessionStart surfaces them honestly. Do
+  not acknowledge a note you have not read - that conflation is the whole defect
+  LL-0312 and LL-0313 are about.
+
+TWO THINGS THE MERGER MUST DO DIFFERENTLY
+  1. PASTE SHARED_WORKTREE_BAN INTO EVERY AGENT DISPATCH. A lane ran git stash in
+     this shared worktree while four siblings held uncommitted work. Nothing was
+     lost, by luck, and the OPS-54 drift detector inside merge_gate found it -
+     nobody noticed at the time. The root cause was that the dispatch did not
+     carry the ban, because the ban lives in ops/store_drift.py and is rendered
+     only by ops/loop/state.py. LL-0310 carries the acceptance for making it
+     automatic; until that exists, paste it by hand. Every dispatch after that
+     finding did.
+  2. NAMESPACE SCRATCHPAD FILENAMES PER SLICE. Two agents wrote to the same
+     scratchpad filename and one overwrote the merger's probe mid-session.
 
 FINDINGS WORTH CARRYING
   1. A RECORD CAN BE TRUE ABOUT AN INSTANCE AND FALSE ABOUT THE CLASS, and the
-     record is what a later session believes. We had written the skip-blindness
-     finding down, fixed one module, and recorded it as "made loud". It was loud
+     record is what a later session believes. The skip-blindness finding was
+     written down, fixed in one module, and recorded as "made loud". It was loud
      for that module and never in the gate, and 62 tests could still vanish.
-  2. ASK WHAT A GUARD'S POPULATION IS. Three separate defects this session were
-     the same shape: the merge gate's collection, the archive-link guard with no
-     armed caller, and real-tree tests deriving expectations from the function
-     under test. All three were green while measuring nothing.
-  3. THE DOCUMENTED REMEDY FOR A SIZE BUDGET IS EXHAUSTED. Re-running the split
-     archived ZERO with ROADMAP.md still over budget, because only ~13 of 35
+  2. ASK WHAT A GUARD'S POPULATION IS. Four defects this session were the same
+     shape: the merge gate's collection, the archive-link guard with no armed
+     caller, real-tree tests deriving expectations from the function under test,
+     and a read-and-unanswered check that returned 0 because one broadcast made
+     every earlier note answered by construction. All green, all measuring
+     nothing.
+  3. A GUARD CAN EXIST ON ONE SIDE ONLY. The OMITTED-vs-EMPTY distinction was
+     asserted on the write side and nowhere on the read side; collapsing it there
+     left all 31 tests passing. Guard the property, not the function.
+  4. THE DOCUMENTED SIZE-BUDGET REMEDY IS EXHAUSTED. Re-running the split
+     archived ZERO with ROADMAP.md still over budget, because only about 13 of 35
      kept sections are genuinely open and the rest miss the split's closed-item
-     vocabulary. ROADMAP.md has 206 BYTES of headroom. You will hit this; the
-     structural fix is OPS-113 and a third number is not the answer.
-  4. Every adversarial pass earned its cost again. One refuted the merger's
-     reasoning on four points; one refuted its own vacuity probe, which had
-     stayed green because the test drew its expectation from the data it
-     mutated; one refuted the merger's claim that a hash check was unavailable.
-     Keep dispatching them, and never let a producer grade itself.
+     vocabulary. ROADMAP.md has about 119 bytes of headroom. You WILL hit this.
+     The structural fix is in OPS-113; a third number is not the answer.
+  5. Four separate times this session the source-register guard flagged a
+     filename in our own new prose as an unregistered host - README.txt,
+     SYMBOL.md, answered.py, and a synthetic note name. Three were real and fixed
+     by rewording; one was the documented false red from an unstaged new file.
+     Reword your prose rather than widening that guard's denylist.
+  6. Every adversarial pass earned its cost. One refuted the merger's reasoning
+     on four points; one refuted its own vacuity probe, which stayed green because
+     the test drew its expectation from the data it mutated; one found three real
+     defects in work already called done; and one mutation MISSED ITS ANCHOR and
+     was reported as "no conclusion drawn" rather than counted as a pass.
