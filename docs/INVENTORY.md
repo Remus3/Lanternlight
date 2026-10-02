@@ -215,6 +215,7 @@ is about.
 
 | Module | What it covers |
 |---|---|
+| `tests/test_answered.py` | `ops/answered.py`, the reader that reports which inbound channel notes are read and NOT answered. Its load-bearing assertions are about the UNKNOWN bucket: a manifest row with no `answers` key means NOT RECORDED and must never be folded into answered or unanswered, and a period is covered only when EVERY later row carries the field rather than any one of them (`LL-0312` filed it, `LL-0313` built it, `LL-0315` repaired three defects an adversarial pass found in it). |
 | `tests/test_armwatch.py` | The one entry point that arms a session's save watcher, so arming stops being something a human has to remember. |
 | `tests/test_avgprice.py` | The market cache reader, against a byte-for-byte fixture of the file the game writes. |
 | `tests/test_damage.py` | The per-hit damage series reader and the clock trap sitting underneath it. |

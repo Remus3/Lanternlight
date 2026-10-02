@@ -838,3 +838,334 @@ class TestSubstrateIsOnTheReplyPathMap:
         """
         text = (REPO_ROOT / "docs" / "REPLY_PATHS.md").read_text(encoding="utf-8")
         assert "moon_sync_outbox" in text
+
+
+class TestTheManifestRecordsWhichNotesAReplyAnswers:
+    """A reply must say WHICH inbound notes it answers - the record, not an
+    inference over filenames.
+
+    WHAT WAS BROKEN. This project's standing rule is that every note addressed
+    to it gets an answer, because on this channel SILENCE READS AS DISSENT. The
+    manifest recorded WHO we sent to and WHEN; ``ops/runtime/inbox_seen.json``
+    recorded what was marked SEEN; nothing linked a reply to the note it
+    answered. Asked on 2026-10-02 which notes were read and unanswered, this
+    tree could not say.
+
+    THE FIRST ATTEMPT TO MEASURE IT COULD NOT FAIL. It used per-sender recency -
+    a note counts as answered if any delivery to that sender postdates it - and
+    returned ZERO unanswered for all six siblings. One broadcast addressed to
+    all six makes every earlier note from any of them answered BY CONSTRUCTION,
+    so the figure was an artefact of the method rather than a measurement. A
+    check that cannot fail is not a check.
+
+    WHAT THESE TESTS PIN.
+
+    1. An ``answers`` sequence of inbound note filenames is stored in the row.
+    2. Every cited name is VALIDATED against the inbox and the call RAISES
+       BEFORE ANY WRITE if one is not present, naming every unknown name rather
+       than the first. The manifest is the record, so a mistyped citation would
+       under-count the debt forever - the same class of defect as the vacuous
+       recency check above, one level down. A caller fixing a typo is cheap; a
+       corrupted record is not.
+    3. OMITTED and EMPTY stay distinguishable. ``answers=None`` - the default,
+       and every row written before this existed - means NOT RECORDED, so the
+       key is ABSENT from the row. ``answers=[]`` means DELIBERATELY NOTHING:
+       this note answers no inbound note. ``CLAUDE.md``'s measurement doctrine
+       is that a missing field is absent and not a measured zero, and conflating
+       the two is how the next reader gets a confident wrong number.
+    4. Both pre-existing row shapes - a normal delivery and a reconstructed row
+       with no send timestamp - still read without raising.
+    """
+
+    INBOUND = "2026-10-01-0900-from-RC-a-synthetic-inbound-note.md"
+    INBOUND_TWO = "2026-10-01-0905-from-CS-another-synthetic-inbound-note.md"
+
+    def _plant_inbound(self, root: Path, *names: str) -> None:
+        """Synthetic inbound notes. No real sibling note's text goes in here."""
+        for name in names:
+            (outbox.default_inbox(root) / name).write_text(
+                "# synthetic inbound\n\nAssembled for this test.\n", encoding="utf-8"
+            )
+
+    def test_a_populated_answers_list_is_stored_in_the_row(
+        self, tmp_path: Path
+    ) -> None:
+        root, inboxes = _tree(tmp_path)
+        self._plant_inbound(root, self.INBOUND, self.INBOUND_TWO)
+        record = outbox.deliver(
+            "2026-10-02-1200-from-LL-answering-two.md",
+            NOTE_TEXT,
+            ["RC"],
+            root=root,
+            inboxes=inboxes,
+            answers=[self.INBOUND, self.INBOUND_TWO],
+        )
+        assert record.answers == (self.INBOUND, self.INBOUND_TWO)
+        stored = outbox.load_manifest(root=root)
+        assert stored[0]["answers"] == [self.INBOUND, self.INBOUND_TWO]
+
+    def test_an_omitted_answers_leaves_the_key_absent_rather_than_empty(
+        self, tmp_path: Path
+    ) -> None:
+        """NOT RECORDED is a different fact from ANSWERS NOTHING."""
+        root, inboxes = _tree(tmp_path)
+        record = outbox.deliver(
+            "2026-10-02-1201-from-LL-unrecorded.md",
+            NOTE_TEXT,
+            ["RC"],
+            root=root,
+            inboxes=inboxes,
+        )
+        assert record.answers is None
+        stored = outbox.load_manifest(root=root)
+        assert "answers" not in stored[0]
+
+    def test_an_empty_answers_is_stored_as_a_deliberate_empty_list(
+        self, tmp_path: Path
+    ) -> None:
+        """Unsolicited information answers nothing, and says so on the record."""
+        root, inboxes = _tree(tmp_path)
+        record = outbox.deliver(
+            "2026-10-02-1202-from-LL-unsolicited.md",
+            NOTE_TEXT,
+            ["RC"],
+            root=root,
+            inboxes=inboxes,
+            answers=[],
+        )
+        assert record.answers == ()
+        stored = outbox.load_manifest(root=root)
+        assert stored[0]["answers"] == []
+
+    def test_the_two_cases_are_distinguishable_in_one_manifest(
+        self, tmp_path: Path
+    ) -> None:
+        """The whole point of decision 3, asserted as one comparison."""
+        root, inboxes = _tree(tmp_path)
+        outbox.deliver(
+            "2026-10-02-1203-from-LL-omitted.md",
+            NOTE_TEXT,
+            ["RC"],
+            root=root,
+            inboxes=inboxes,
+        )
+        outbox.deliver(
+            "2026-10-02-1204-from-LL-empty.md",
+            NOTE_TEXT,
+            ["RC"],
+            root=root,
+            inboxes=inboxes,
+            answers=(),
+        )
+        stored = outbox.load_manifest(root=root)
+        assert [("answers" in row) for row in stored] == [False, True]
+        assert stored[1]["answers"] == []
+
+    def test_a_cited_note_that_is_not_in_the_inbox_is_refused(
+        self, tmp_path: Path
+    ) -> None:
+        root, inboxes = _tree(tmp_path)
+        self._plant_inbound(root, self.INBOUND)
+        with pytest.raises(ValueError):
+            outbox.deliver(
+                "2026-10-02-1205-from-LL-typo.md",
+                NOTE_TEXT,
+                ["RC"],
+                root=root,
+                inboxes=inboxes,
+                answers=[self.INBOUND + "x"],
+            )
+
+    def test_the_refusal_names_every_unknown_name_and_not_just_the_first(
+        self, tmp_path: Path
+    ) -> None:
+        """One name at a time turns a corrected citation into a round trip per
+        typo, and a caller that gives up half way leaves the record wrong."""
+        root, inboxes = _tree(tmp_path)
+        self._plant_inbound(root, self.INBOUND)
+        with pytest.raises(ValueError) as excinfo:
+            outbox.deliver(
+                "2026-10-02-1206-from-LL-two-typos.md",
+                NOTE_TEXT,
+                ["RC"],
+                root=root,
+                inboxes=inboxes,
+                answers=["no-such-note-one.md", self.INBOUND, "no-such-note-two.md"],
+            )
+        message = str(excinfo.value)
+        assert "no-such-note-one.md" in message
+        assert "no-such-note-two.md" in message
+
+    def test_an_unknown_citation_is_refused_before_a_single_byte_is_written(
+        self, tmp_path: Path
+    ) -> None:
+        """Nothing local, nothing remote - the same standing the redaction gate
+        has, and for the same reason: the outbox copy is written FIRST."""
+        root, inboxes = _tree(tmp_path)
+        name = "2026-10-02-1207-from-LL-nothing-written.md"
+        with pytest.raises(ValueError):
+            outbox.deliver(
+                name,
+                NOTE_TEXT,
+                ["RC", "CS"],
+                root=root,
+                inboxes=inboxes,
+                answers=["no-such-note.md"],
+            )
+        assert not (outbox.default_outbox(root) / name).exists()
+        assert not outbox.default_manifest(root).exists()
+        assert outbox.load_manifest(root=root) == []
+        for code in ("RC", "CS"):
+            assert not (Path(inboxes[code]) / name).exists()
+
+    def test_a_note_inside_a_sibling_drop_subdirectory_counts_as_present(
+        self, tmp_path: Path
+    ) -> None:
+        """``OPS-34``: a drop is a whole DIRECTORY of files, and a note that
+        arrived inside one is still a note addressed to us. A validator that saw
+        only the top level would refuse a correct citation, and a gate that
+        refuses a correct call is a gate somebody routes around."""
+        root, inboxes = _tree(tmp_path)
+        drop = outbox.default_inbox(root) / "from-RC-verbatim-drop"
+        drop.mkdir()
+        (drop / "2026-10-01-0910-from-RC-inside-a-drop.md").write_text(
+            "# synthetic\n", encoding="utf-8"
+        )
+        record = outbox.deliver(
+            "2026-10-02-1208-from-LL-answering-a-drop.md",
+            NOTE_TEXT,
+            ["RC"],
+            root=root,
+            inboxes=inboxes,
+            answers=["2026-10-01-0910-from-RC-inside-a-drop.md"],
+        )
+        assert record.answers == ("2026-10-01-0910-from-RC-inside-a-drop.md",)
+
+    def test_one_of_our_own_sent_notes_is_not_an_inbound_note(
+        self, tmp_path: Path
+    ) -> None:
+        """The outbox lives INSIDE the watched channel, so a validator that
+        merely walked the inbox would accept our own reply as the thing it
+        answers - a self-citation that reads as a discharged debt."""
+        root, inboxes = _tree(tmp_path)
+        sent = outbox.deliver(
+            "2026-10-02-1209-from-LL-earlier.md",
+            NOTE_TEXT,
+            ["RC"],
+            root=root,
+            inboxes=inboxes,
+        )
+        assert (outbox.default_outbox(root) / sent.name).is_file()
+        with pytest.raises(ValueError):
+            outbox.deliver(
+                "2026-10-02-1210-from-LL-self-citation.md",
+                NOTE_TEXT,
+                ["RC"],
+                root=root,
+                inboxes=inboxes,
+                answers=[sent.name],
+            )
+
+    def test_the_outcome_rewrite_keeps_the_answers_field(
+        self, tmp_path: Path
+    ) -> None:
+        """``deliver`` rewrites its own row after the sibling writes. A field
+        set before that rewrite and absent after it would be lost on every real
+        send while every pre-rewrite assertion stayed green."""
+        root, inboxes = _tree(tmp_path)
+        self._plant_inbound(root, self.INBOUND)
+        broken = tmp_path / "siblings" / "flat-file"
+        broken.write_text("not a directory\n", encoding="utf-8")
+        inboxes["RC"] = str(broken)
+        record = outbox.deliver(
+            "2026-10-02-1211-from-LL-rewritten.md",
+            NOTE_TEXT,
+            ["RC"],
+            root=root,
+            inboxes=inboxes,
+            answers=[self.INBOUND],
+        )
+        assert record.delivered == ()
+        stored = outbox.load_manifest(root=root)
+        assert stored[0]["answers"] == [self.INBOUND]
+
+    def test_both_pre_existing_row_shapes_still_read_without_raising(
+        self, tmp_path: Path
+    ) -> None:
+        """Decision 4. The manifest already held two shapes - a normal row and a
+        reconstructed one with no send timestamp - and neither carries
+        ``answers``. Reading an old row must not raise, and must not acquire a
+        fabricated empty list on the way through."""
+        root, _inboxes = _tree(tmp_path)
+        outbox.default_outbox(root).mkdir(parents=True)
+        legacy = {
+            "what": "notes this project SENT, so a cold session can see them",
+            "item": "OPS-43",
+            "deliveries": [
+                {
+                    "name": "2026-09-07-1900-from-LL-legacy-normal.md",
+                    "digest": "0" * 64,
+                    "sent_utc": "2026-09-07T23:00:00Z",
+                    "sent_local": "2026-09-07T18:00:00",
+                    "recipients": ["RC"],
+                    "delivered": ["RC"],
+                    "failed": [],
+                    "byte_count": 12,
+                },
+                {
+                    "name": "2026-09-06-2307-from-LL-legacy-reconstructed.md",
+                    "digest": "1" * 64,
+                    "recipients": ["CS"],
+                    "delivered": ["CS"],
+                    "failed": [],
+                    "byte_count": 34,
+                    "reconstructed": True,
+                    "earliest_seen_local": "2026-09-06T23:07:00",
+                },
+            ],
+        }
+        outbox.default_manifest(root).write_text(
+            json.dumps(legacy, indent=2) + "\n", encoding="utf-8"
+        )
+        rows = outbox.load_manifest(root=root)
+        assert len(rows) == 2
+        assert all("answers" not in row for row in rows)
+        assert [row["name"] for row in outbox.replies_to("RC", root=root)] == [
+            "2026-09-07-1900-from-LL-legacy-normal.md"
+        ]
+
+    def test_a_reconstructed_row_records_no_answers_because_none_was_observed(
+        self, tmp_path: Path
+    ) -> None:
+        """``backfill`` never watched the send, so it cannot know what the note
+        answered. An empty list there would be a measured zero standing in for
+        an unmeasured field."""
+        root, inboxes = _tree(tmp_path)
+        (Path(inboxes["RC"]) / "2026-09-06-2307-from-LL-early.md").write_text(
+            NOTE_TEXT, encoding="utf-8"
+        )
+        rows = outbox.backfill(inboxes=inboxes, root=root)
+        assert len(rows) == 1
+        assert "answers" not in rows[0]
+
+    def test_a_citation_that_is_not_a_bare_filename_is_refused(
+        self, tmp_path: Path
+    ) -> None:
+        """A citation is a NAME. It never steers a read, and a path that climbs
+        out of the inbox must not validate just because the file exists."""
+        root, inboxes = _tree(tmp_path)
+        self._plant_inbound(root, self.INBOUND)
+        for bad in (
+            "../" + self.INBOUND,
+            "sub/" + self.INBOUND,
+            "sub\\" + self.INBOUND,
+        ):
+            with pytest.raises(ValueError):
+                outbox.deliver(
+                    "2026-10-02-1212-from-LL-bad-citation.md",
+                    NOTE_TEXT,
+                    ["RC"],
+                    root=root,
+                    inboxes=inboxes,
+                    answers=[bad],
+                )

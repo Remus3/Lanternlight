@@ -39,9 +39,30 @@ final line for a reader that arrives mid-write.
 WHAT IS RECORDED, AND WHAT IS NOT
 ---------------------------------
 Recorded: the note's filename, the SHA-256 of its bytes, the UTC and local
-timestamps, the recipients it was addressed to, which of those it reached, and
-the reason for each that it did not. The note's own text lives in the outbox
-copy beside the manifest and is never inlined into it.
+timestamps, the recipients it was addressed to, which of those it reached, the
+reason for each that it did not, and - when the sender said so - WHICH INBOUND
+NOTES THE REPLY ANSWERS. The note's own text lives in the outbox copy beside the
+manifest and is never inlined into it.
+
+THE ANSWERED-NOTE CITATION IS A RECORD, NOT AN INFERENCE
+--------------------------------------------------------
+The standing rule on this channel is that every note addressed to this project
+gets an answer, because SILENCE READS AS DISSENT. For a long time nothing here
+could say which notes were still owed one: the manifest knew WHO we wrote to and
+WHEN, ``ops/runtime/inbox_seen.json`` knew what had been marked SEEN, and no
+field linked a reply to the note it answered. The figure therefore had to be
+inferred from filenames, and the first inference used per-sender recency - a note
+counts as answered if any delivery to that sender postdates it. It returned ZERO
+unanswered for all six siblings, because one broadcast addressed to everyone
+makes every earlier note from any of them answered BY CONSTRUCTION. That is a
+check that cannot fail, which is the same defect as no check at all wearing a
+number.
+
+:func:`deliver` now takes ``answers``, validates every cited name against this
+project's own inbox before it writes a byte, and stores the list in the row. An
+OMITTED ``answers`` leaves the key out of the row, because "not recorded" and
+"answers nothing" are different facts and this repository's measurement doctrine
+keeps a missing field absent rather than turning it into a measured zero.
 
 Not recorded: anything about a sibling's tree. This module writes INTO a
 sibling inbox and reads nothing there. :func:`replies_to` answers "has this
@@ -217,10 +238,22 @@ class Delivery:
     delivered: tuple[str, ...] = ()
     failed: tuple[tuple[str, str], ...] = ()
     byte_count: int = 0
+    #: Which inbound notes this reply answers, or ``None`` for NOT RECORDED.
+    #: The two are different facts - see :func:`deliver` - and ``as_record``
+    #: keeps them apart by OMITTING the key rather than storing an empty list.
+    answers: tuple[str, ...] | None = None
 
     def as_record(self) -> dict:
-        """The manifest row for this delivery - JSON types only."""
-        return {
+        """The manifest row for this delivery - JSON types only.
+
+        ``answers`` is present only when it was RECORDED. A delivery that never
+        said what it answered leaves the key out, so an absent field keeps
+        meaning "unknown" exactly as it does in every row written before the
+        parameter existed. Writing ``[]`` there would turn every legacy row into
+        a note that answered nothing, which is a measured zero standing in for
+        an unmeasured field - the conflation ``CLAUDE.md`` forbids.
+        """
+        record = {
             "name": self.name,
             "digest": self.digest,
             "sent_utc": self.sent_utc,
@@ -230,6 +263,9 @@ class Delivery:
             "failed": [{"code": code, "reason": reason} for code, reason in self.failed],
             "byte_count": self.byte_count,
         }
+        if self.answers is not None:
+            record["answers"] = list(self.answers)
+        return record
 
 
 # ---------------------------------------------------------------------------
@@ -328,6 +364,89 @@ def _refuse_operator_identifier(name: str, text: str) -> None:
             ) from exc
 
 
+def _inbound_note_names(root: Path | str | None) -> set[str]:
+    """Every file name in our inbox that is a note somebody sent US.
+
+    The whole channel is walked, not only its top level: ``OPS-34`` recorded
+    that a sibling drop can be a whole DIRECTORY of files, and a note that
+    arrived inside one is still a note addressed to us. A validator that read
+    only the top level would refuse a correct citation, and a gate that refuses
+    a correct call is a gate somebody routes around.
+
+    OUR OWN OUTBOX IS EXCLUDED, and that is the one subtlety here. The outbox
+    lives INSIDE the watched channel by design, so a walk that did not exclude
+    it would accept one of this project's own replies as an inbound note - a
+    self-citation that reads, on the record, as a discharged debt.
+
+    Nothing outside this tree is opened. The inbox is ours.
+    """
+    inbox = default_inbox(root)
+    if not inbox.is_dir():
+        return set()
+    ours = default_outbox(root)
+    names: set[str] = set()
+    for path in inbox.rglob("*"):
+        try:
+            if not path.is_file():
+                continue
+        except OSError:  # pragma: no cover - a vanished entry mid-walk
+            continue
+        if path.parent == ours or ours in path.parents:
+            continue
+        names.add(path.name)
+    return names
+
+
+def _check_answers(
+    answers: list[str] | tuple[str, ...] | None, root: Path | str | None
+) -> tuple[str, ...] | None:
+    """Validate the citations, or return ``None`` for NOT RECORDED.
+
+    IT RAISES BEFORE ANYTHING IS WRITTEN, and the reason is the same one that
+    put this parameter here. The manifest IS the record of what this project has
+    answered, so a mistyped citation does not merely fail to count a note - it
+    silently under-counts the unanswered debt for every session that reads the
+    manifest afterwards, with nothing on disk to say a name was wrong. That is
+    the class of defect the first attempt at this figure already had: a
+    per-sender recency check that returned zero unanswered for all six siblings
+    because one broadcast makes every earlier note answered by construction. A
+    caller correcting a typo costs one call; a corrupted record costs the
+    measurement.
+
+    EVERY UNKNOWN NAME IS LISTED, not the first. One name per round trip turns a
+    correction into a loop, and a caller that abandons it half way leaves the
+    row wrong in exactly the way this guard exists to prevent.
+    """
+    if answers is None:
+        return None
+    cited = tuple(str(name) for name in answers)
+    misshapen = [
+        name
+        for name in cited
+        if not name or name != Path(name).name or name in (".", "..")
+    ]
+    if misshapen:
+        raise ValueError(
+            "an answers citation must be a bare inbound note filename as it "
+            "appears in the inbox; refused "
+            + ", ".join(repr(name) for name in misshapen)
+            + " and nothing was written"
+        )
+    known = _inbound_note_names(root)
+    unknown = [name for name in cited if name not in known]
+    if unknown:
+        raise ValueError(
+            f"answers cites {len(unknown)} name(s) not present in "
+            f"{default_inbox(root)}: "
+            + ", ".join(unknown)
+            + ". Nothing was written. Every unknown name is listed rather than "
+            "the first, because the manifest is the record and a mistyped "
+            "citation would under-count the unanswered debt forever. Our own "
+            "outbox copies are deliberately not inbound notes."
+        )
+    return cited
+
+
 def deliver(
     name: str,
     text: str,
@@ -335,6 +454,7 @@ def deliver(
     root: Path | str | None = None,
     inboxes: dict[str, str] | None = None,
     now: str | None = None,
+    answers: list[str] | tuple[str, ...] | None = None,
 ) -> Delivery:
     """Write one note to our outbox, then to each recipient's inbox.
 
@@ -349,13 +469,45 @@ def deliver(
         root: Repository root. Defaults to this one.
         inboxes: Code-to-directory map. Defaults to :data:`SIBLING_INBOXES`.
         now: Pin the timestamps, for a test.
+        answers: The INBOUND note filenames this reply answers, as they appear
+            in our own ``moon_sync_inbox/``. OPTIONAL, because a note can be
+            unsolicited information that answers nothing.
+
+            OMITTED AND EMPTY ARE DIFFERENT FACTS AND STAY DIFFERENT.
+            ``answers=None`` - the default, and every row written before this
+            parameter existed - means NOT RECORDED: we do not know what the note
+            answered, and the key is ABSENT from the manifest row. ``answers=[]``
+            means DELIBERATELY NOTHING: this note answers no inbound note, and
+            the row carries an empty list saying so. Collapsing the two is how
+            the next reader gets a confident wrong number out of a field nobody
+            measured.
+
+            WHY IT IS RECORDED AT ALL. The standing rule here is that every note
+            addressed to us gets an answer, because on this channel SILENCE READS
+            AS DISSENT. Until this existed the manifest said who we wrote to and
+            when, ``ops/runtime/inbox_seen.json`` said what had been marked seen,
+            and nothing linked a reply to the note it answered - so "which notes
+            are read and unanswered" had to be INFERRED over filenames and
+            timestamps. The first such inference used per-sender recency and
+            returned zero unanswered for all six siblings, because one broadcast
+            addressed to everyone makes every earlier note answered BY
+            CONSTRUCTION. A check that cannot fail is not a check, and the fix is
+            a record rather than a better inference.
 
     Returns:
         The :class:`Delivery`, whose ``failed`` names every recipient that did
         not get it and why.
 
     Raises:
-        ValueError: The name is not a bare filename, or the text is not ASCII.
+        ValueError: The name is not a bare filename, the text is not ASCII, or
+            ``answers`` cites a name that is not an inbound note in our inbox.
+            The citation check raises BEFORE any write, local or remote, and
+            names every unknown name rather than the first - see
+            :func:`_check_answers`. It is deliberately NOT an ``OSError``
+            subclass such as ``FileNotFoundError``, because ``OSError`` out of
+            this function already means "the local write failed" and a caller
+            that catches it must not start treating a bad citation as a disk
+            problem.
         RedactionError: The name or the text carries an operator identifier.
             A subclass of ``ValueError``. Raised BEFORE any write, local or
             remote, so a refused note leaves nothing behind anywhere - see
@@ -378,6 +530,10 @@ def deliver(
         raise KeyError(
             f"no inbox recorded for {', '.join(unknown)}; see docs/REPLY_PATHS.md"
         )
+    # Before the local copy as well, for the reason the redaction gate is: the
+    # outbox copy and its manifest row are written FIRST by design, so a check
+    # placed one line later would already have recorded a citation it refuses.
+    cited = _check_answers(answers, root)
 
     sent_utc, sent_local = _timestamps(now)
     copy = default_outbox(root) / name
@@ -389,6 +545,7 @@ def deliver(
         recipients=codes,
         outbox_path=str(copy),
         byte_count=len(data),
+        answers=cited,
     )
 
     # THE LOCAL RECORD FIRST. Both of these raise on failure: if we cannot

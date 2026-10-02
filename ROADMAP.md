@@ -5085,7 +5085,22 @@ adoptions are five separate operator conversations, never a quorum.
 
 ---
 
-## OPS-109. There is NO sanctioned reply route to MAIN, so the always-reply rule was unsatisfiable for the one tree that sent us an ACTION note
+## OPS-109. There is NO sanctioned reply route to MAIN - CRITERIA 1 AND 4 MET 2026-10-02, 2 and 3 still OPEN; and the MANIFEST half is DONE, `LL-0313` and `LL-0315`
+
+**Met:** MAIN answered three times through a run-time `inboxes` override, path in
+no tracked file, each leaving our copy and a manifest row; `docs/REPLY_PATHS.md`
+says why MAIN is absent. **Open:** the discovery helper is inline in a session
+script rather than in `ops/`, and criterion 3's refusal test - zero-match and
+two-match each RAISING rather than guessing - does not exist. Do not close this
+until it does; the refusal is the half that matters and the success path is
+already proven.
+
+**The MANIFEST defect this item exposed is CLOSED - `LL-0313`, `LL-0315`.**
+`deliver` takes `answers`, validates every cited name and RAISES before any write,
+and records the key only when given - absent means NOT RECORDED, `[]` means
+answers nothing. `ops/answered.py` reports three buckets and refuses to collapse
+UNKNOWN. An adversarial pass broke three things in it, all repaired test-first.
+Read-and-unanswered is now a RECORD: 1 answered, 1 unanswered, 377 UNKNOWN.
 
 Filed 2026-10-02. `ops/outbox.py` holds exactly five carrier codes - `CS`, `LW`,
 `RC`, `RSC`, `SS` - and `MAIN` is not among them, so `ops.outbox.deliver` raises
@@ -5113,38 +5128,22 @@ override is how this session answered MAIN.
 
 ---
 
-## OPS-110. The merge gate - the instrument the orchestration model trusts - can be blinded by an environment variable, and is blind to a test that starts SKIPPING
+## OPS-110. The merge gate could be blinded by an environment variable and was blind to a test that starts SKIPPING - CLOSED 2026-10-02, `LL-0305`
 
 Filed 2026-10-02 from a sibling's report, then re-measured here. Both halves are
 the same class: the POPULATION the gate measures shrinks while the NUMBER it
 compares does not, so it reports success over work that never ran.
 
-**Half one.** `ops/merge_gate.py`'s collection subprocess inherits the parent
-environment, so an ambient `PYTEST_ADDOPTS` narrows it silently with rc=0 - and the
-gate then PASSES, because baseline and re-run narrow EQUALLY and the per-file floor
-self-adjusts to whatever the environment selected. Same class as the
-`-q`-in-addopts trap on a different axis. A sibling's went RED; ours goes silently
-GREEN. Figures in `docs/LEDGER.md`.
+**CLOSED 2026-10-02, `LL-0305`.** The collection subprocess inherited the parent
+environment, so an ambient `PYTEST_ADDOPTS` narrowed it from 86 files / 3918 tests
+to 1 / 93 with rc=0 - and the gate PASSED, because baseline and re-run narrow
+EQUALLY and the per-file floor self-adjusts. Fixed by sanitising and REPORTING
+across all seven spawn sites. Second half: a skipped test is still a COLLECTED
+test, so the floor never moves; `OPS-104` knew this and it had been made loud for
+one module and never in the gate. Skips are now always reported, deselection is a
+finding. Figures and the vacuity proof are in `docs/LEDGER.md`.
 
-**Half two, and this repository already knew it.** A skipped test is still a
-COLLECTED test, so the floor never moves. `OPS-104` records a module going from 62
-passing to 41 passing and 21 skipped with the suite still exiting 0, and calls it
-"made loud" - loud for THAT MODULE, never in the gate.
-
-### Acceptance
-
-1. An ambient `PYTEST_ADDOPTS` cannot change what the gate collects, or the gate
-   REFUSES and says so - justified in the module against this repository's two
-   failure modes: a guard that cries wolf gets overridden, one that goes silently
-   green is decoration.
-2. Every call site that spawns a child and inherits the environment is covered,
-   not only `collect_output`. A fix closed in one instance is not closed.
-3. `take_per_file_baseline` is covered explicitly - it exists to produce a
-   TRUSTWORTHY floor and is the worst place for this hazard.
-4. The skipped count is carried and reported, and whether a RISE in skips is a
-   finding or only a number is decided and argued rather than defaulted.
-5. Every new guard is proved non-vacuous: break it, watch red, restore, confirm
-   green, report having done it.
+All five acceptance criteria were met; they and the evidence are in `LL-0305`.
 
 ---
 
@@ -5214,10 +5213,10 @@ shifted every line number in `ROADMAP.md` and `docs/LEDGER.md`. That is the
 argument for the item: the decay is structural rather than careless.
 
 **Measured instances.** Four to six `file:line` cites in `ROADMAP.md` and
-`docs/LEDGER.md` resolve to the wrong text, and 63 commit shas cited in tracked
-documents do not resolve at all - they predate the 2026-09-07 history rewrite and
-survive only in `.git/filter-repo/commit-map`, which a fresh clone does not get.
-Enumerated in `docs/LEDGER.md`.
+`docs/LEDGER.md` resolve to the wrong text, and 63 cited commit shas do not
+resolve at all - they predate the 2026-09-07 history rewrite and survive only in
+`.git/filter-repo/commit-map`, which a fresh clone does not get. Enumerated in
+`docs/LEDGER.md`.
 
 One stale CONSTANT was corrected this session rather than filed, because it sat
 inside an acceptance criterion - `LL-0307`.
