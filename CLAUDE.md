@@ -795,10 +795,23 @@ path is to re-implement from observed behaviour.
   sibling and re-measured here.** State the CONDITION with each, because the
   paragraph above omitted one for a month: the `-iF` abort reads as a false ZERO
   only THROUGH A PIPE - run directly it aborts with rc 134 and says so.
-  `grep -cwF` SILENTLY OVER-COUNTS: a probe returned 2 where `-cw` returned 1.
-  **That is worse than the crash**, because an over-count produces a NUMBER
-  rather than an absence, and a number gets believed where a zero gets
-  re-checked. `grep -P` ERRORS on this build. No tracked code uses `-wF`.
+  **`grep -wF` CHECKS ONLY THE RIGHT WORD BOUNDARY AND NOT THE LEFT.** `-F` is
+  the trigger and SUFFIX POSITION is the exposure. Measured here on
+  `history / storyboard / story / mystory / the story ends`: `grep -w story`
+  matches only `story` and `the story ends`, correctly; `grep -wF story` ALSO
+  matches `history` and `mystory`, while still correctly rejecting
+  `storyboard`. So any guard using `-wF` for MEMBERSHIP gets false positives on
+  a token sitting at the END of a longer word. Drop the `-F` and use `-w`, which
+  is correct on both sides, or anchor the boundary in the pattern yourself. No
+  tracked code here uses `-wF`; only this file and the ledger ever mentioned it.
+  **This paragraph first said "`-cwF` silently OVER-COUNTS, 2 where `-cw`
+  returned 1", which was wrong about the MECHANISM and was corrected within the
+  hour by ResinCompute and re-measured here before being changed.** There is no
+  ratio: the excess is however many suffix-position occurrences the corpus
+  happens to hold, from zero to most of the file. And nothing is counted twice -
+  the matcher is ACCEPTING occurrences it should reject, which is a different
+  defect with a different remedy. A count difference was the symptom; the
+  one-sided boundary is the cause. `grep -P` ERRORS on this build.
   **And `grep -c` with a pattern the shell may empty counts EVERY LINE.**
   Measured the same day: `grep -c $'\r' ROADMAP.md` returned 5432 on a file with
   ZERO carriage returns, because 5432 is its line count - the pattern reached

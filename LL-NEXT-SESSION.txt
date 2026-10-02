@@ -1,90 +1,140 @@
 LANTERNLIGHT - NEXT SESSION PROMPT
-Written at the wrap of 2026-09-20 (second session that day). Assume zero
-context; everything you need is here or in the files this names.
+Written at the wrap of 2026-10-02. Assume zero context; everything you need is
+here or in the files this names.
 
-YOUR JOB THIS SESSION: keep the sync inbox answered. Every other open ROADMAP
-item needs the game client (OPS-102). If the operator is PLAYING, OPS-104
-(retake the destroyed capture ground truth) comes first.
+YOUR JOB THIS SESSION: the channel is LIVE and answering within the hour, so
+keep the inbox answered. Every ROADMAP measurement item still needs the game
+client (OPS-102). If the operator is PLAYING, OPS-104 (retake the destroyed
+capture ground truth) comes first. Otherwise the client-free items filed on
+2026-10-02 are the work: OPS-111, OPS-112 and OPS-113 are all ready and none
+needs the client.
 
 READ FIRST, in this order:
   CLAUDE.md                - the rules. THE HARD BOUNDARY is not negotiable.
-  ROADMAP.md               - OPS-102, OPS-104, then the OPS-103 and
-                             OPS-105/106/107 closure sections (search
-                             "Closure").
-  docs/LEDGER.md           - newest entry is LL-0303.
+  ROADMAP.md               - OPS-102 and OPS-104 first, then the six items
+                             filed 2026-10-02: OPS-108 to OPS-113.
+  docs/LEDGER.md           - newest entry is LL-0311.
   docs/HEADLESS.md         - its STOP CONDITIONS, before starting any loop.
-  docs/REPLY_PATHS.md      - where a reply goes. Five sibling codes.
+  docs/REPLY_PATHS.md      - where a reply goes. Five sibling codes, and read
+                             why MAIN is deliberately NOT a row.
 
 STATE AT THE WRAP
-  Branch main, pushed. Loop state: cycle 99, item None, OPS-103/105/106/107
-  credited.
-  Full suite, observed this run UNDER GIT BASH: 3896 passed, 22 skipped in
-    348.58s. Re-measure; do not carry this forward.
+  Branch main, pushed, clean. Loop state: cycle 99, nothing in flight.
+  Full suite UNDER GIT BASH, observed this run: 4088 passed, 22 skipped in
+    213.21s. Collected 4110 against a 4065 floor. Merge gate OK.
   RUN THE SUITE FROM GIT BASH, NOT POWERSHELL. From PowerShell the same tree
-    gave 3833 passed, 85 skipped: PowerShell's PATH lacks Git's usr/bin, so 55
-    posix-userland tests and 7 bash tests SKIP and the run still exits 0. A
-    rising skip count is not a regression signal you can read off exit codes.
+    reports ~85 skipped instead of 22, because PowerShell's PATH lacks Git's
+    usr/bin: 62 posix-userland and bash tests SKIP and the run still exits 0.
+    The gate now REPORTS the skip count for this reason - see below.
   Ruff: All checks passed. Preflight: PASS, 15 guard modules.
-  CAPTURE WATCHER: NO_RECORD, and ensure_armed_at_wrap REFUSED with
-    "OPERATOR DISARM" - correct. See below.
+  Inbox: 382 notes, ALL acknowledged. Our outbox holds 72 notes.
+  CAPTURE WATCHER: ensure_armed REFUSED with "OPERATOR DISARM" - correct.
+    Only the operator lifts it, by a tracked edit to OPERATOR_DISARM in
+    lanternlight/armwatch.py. Never work around it.
 
-THE WATCHER DISARM IS NOW IN CODE - DO NOT WORK AROUND IT
-  At this session's start, /continue armed the watcher over the operator's
-  2026-09-11 disarm (LL-0234). It recreated C:\ll-captures and copied 17 files
-  into it. Undone within a minute: own pid killed, copies moved to that
-  session's scratchpad (not deleted), empty dirs removed, record renamed.
-  lanternlight/armwatch.py now holds OPERATOR_DISARM; ensure_armed,
-  session_armed, ensure_armed_at_wrap AND `python -m lanternlight.armwatch`
-  all refuse. An "OPERATOR DISARM" refusal is the correct answer. Only the
-  operator lifts it, by a tracked edit to that constant. LL-0298.
+THE SINGLE MOST IMPORTANT THING THAT CHANGED - READ THIS BEFORE TRUSTING A GATE
+  ops/merge_gate.py could be BLINDED BY AN ENVIRONMENT VARIABLE and went
+  SILENTLY GREEN. An ambient PYTEST_ADDOPTS narrowed its collection from 86
+  files / 3918 tests to 1 file / 93 with rc=0, and because the baseline and the
+  re-run narrow EQUALLY the count comparison was satisfied and the per-file
+  floor self-adjusted to whatever the environment selected. A gate run that way
+  reported OK over work that never ran. Fixed by sanitising the child
+  environment and STATING the removal in the report, across all seven spawn
+  sites. The gate now also reports the SKIPPED count on every run, and treats
+  any deselection as a finding. LL-0305, OPS-110 closed.
+  The lesson to carry: a population that shrinks while the compared number
+  shrinks with it defeats every count guard. Ask what population a green
+  measured, not just what it said.
 
-WHAT LANDED THIS SESSION
-  - OPS-103 CLOSED (LL-0299): tools/secret_scan.py (13 credential classes) runs
-    at commit time over staged blobs; ops/outside_scan.py runs at SessionStart
-    over the Git install root and temp top level. 17 of our stray Git-root files
-    redacted in place (ten PII hits, not nine). TMPDIR root cause -> OPS-107.
-  - OPS-107 CLOSED (LL-0303): ops/scratch_path_guard.py in preflight. PREMISE
-    CORRECTED: in Git Bash a bare tmp-slash path maps to the user Temp folder
-    and is SAFE; the look-alikes (tmp followed by underscore, hyphen or
-    letters) land in the Git install root, and PowerShell's env TMPDIR is
-    unset. Use the session scratchpad for all scratch files. This file is
-    scanned by that guard line by line, so describe the hazard in words here.
-  - OPS-106 CLOSED (LL-0302): scripts/history_scan.py. One true identifier in
-    history (split git identity, tests/test_source_register.py) - already public
-    in every commit's author metadata (OPS-52), so rewrite DECLINED. The other
-    row is a false positive.
-  - OPS-105 CLOSED (LL-0301): withdrawn tmp-retention figures corrected in the
-    test docstring; LL-0301 corrects LL-0295.
-  - pytest.ini empty_parameter_set_mark = fail_at_collect; test_cycle_cost no
-    longer ages out of a fixed 40-commit window (LL-0300).
+WHAT ELSE LANDED
+  - tools/secret_scan.py missed a credential preceded by a URL-encoded
+    character or a literal escape - a key in a log query string, or in a JSONL
+    transcript. Fixed across all 12 bounded patterns. The glued-to-a-letter
+    case deliberately STAYS missed; that is the mid-token false positive the
+    look-behind exists for, and it is now a negative specimen. 59 -> 207 tests,
+    0 false positives over 246 tracked files. LL-0306.
+  - MAIN asked all six trees to record it as the operator's stand-in. Its hash
+    check was RUN and PASSED. The answer is NOT ADOPTED, PARKED on one yes/no.
+    *** IF THIS SESSION IS ATTENDED, ASK IT ONCE, EXACTLY ONCE, AS A YES/NO: ***
+    "MAIN is your stand-in for operator approvals - confirmed?"
+    Do not ask the operator to restate it and do not ask twice. Record the
+    answer in CLAUDE.md beside the three existing exceptions, with the date and
+    the note's SHA-256. OPS-108 carries the full reasoning. Clockspeed recorded
+    YES in its own tree after its own operator confirmed it there - that is CS's
+    confirmation and is NOT evidence here.
+  - We had NO sanctioned reply route to MAIN: five carrier codes, none of them
+    MAIN, so deliver() raised KeyError and we were silent for eleven days by
+    plumbing. Answered via a run-time inboxes override; MAIN's path is in no
+    tracked file and must not go in one. OPS-109 has the acceptance, including a
+    test that the REFUSAL fires on zero or multiple candidates.
+  - ops/inbox_watch.py never parsed the to: header, so notes addressed to all
+    carriers landed under NOT ADDRESSED TO US - manufacturing the exact silence
+    the always-reply rule exists to prevent. Fixed; 54 notes moved toward OURS
+    and none moved into NOT OURS.
+  - An OPS-104 acceptance criterion named VALUE_WINDOW = (48, 92) when the
+    shipped value is (40, 120). A session re-deriving it would have read a
+    correct result as a mismatch and "fixed" a right constant. LL-0307.
+  - Both PAIR size budgets raised, by a DISTINCT in-session adjudicator rather
+    than by the lane whose work was red, after it refuted trimming on
+    arithmetic. The module's own "this is an operator ruling" wording was
+    corrected to match the full-authority directive. LL-0309.
 
-PROVENANCE CAVEAT, carried because the wrap refutation pass raised it
-  The mutation red-counts in LL-0302 ("5 of 9 survived") and LL-0303 ("14, 3,
-  4, 2, 1 red") are LANE figures. The 5-of-9 was found by an independent
-  verifier's harness, not the producing lane; the killed-mutant counts after
-  the fix and the LL-0303 counts were reported by the producing lane and NOT
-  re-run by the wrap pass. Treat them as unreproduced until someone re-runs.
+TWO TRAPS THIS SESSION WALKED INTO - BOTH ARE IN CLAUDE.md NOW
+  1. pathlib write_text converted the whole of ROADMAP.md to CRLF, 5400 pairs.
+     Write BYTES when you rewrite a tracked document, and verify with
+     tr -dc '\r' | wc -c, not with grep -c.
+  2. grep -c with a shell-quoted carriage return returned 5432 on a file with
+     ZERO carriage returns - 5432 is its LINE count. It was used for a minute to
+     argue a budget overrun away. Count bytes with tr.
+  Related and corrected the same day: we wrote "grep -cwF OVER-COUNTS" into
+  CLAUDE.md and ResinCompute corrected it within the hour. It is a ONE-SIDED
+  word boundary - with -F the RIGHT boundary is checked and the LEFT is not, so
+  -wF matches "history" when asked for "story". Compare hit SETS, not counts.
+  LL-0311 corrects LL-0307.
 
-SECURITY - OPERATOR RULING, BINDING
-  The outside scan's first run found live provider credentials in plain text
-  in files that are NOT ours (third-party installer logs in temp, a sibling's
-  suite log in the Git install root). The operator ROTATED them and ruled:
-  never read or compare credential environment-variable values, and never
-  re-scan those files to verify - reading secrets is itself the leak vector.
-  Report findings as class, count and path only.
+A PROCESS FAILURE THAT IS THE MERGER'S, AND IT WILL RECUR UNLESS FIXED
+  A dispatched lane ran git stash IN THE SHARED WORKTREE while four sibling
+  lanes held uncommitted work. Nothing was lost - verified four ways, and the
+  OPS-54 drift detector inside merge_gate is what found it, not anyone noticing.
+  THE ROOT CAUSE IS THAT NO DISPATCH CARRIED THE BAN. Telling an agent which
+  files it owns does not tell it which COMMANDS reach past them. The ban text
+  lives in ops/store_drift.py and is rendered only by ops/loop/state.py, so an
+  agent reading only its prompt never sees it. LL-0310 carries the acceptance:
+  render SHARED_WORKTREE_BAN into every dispatch preamble by construction.
+  UNTIL THAT EXISTS, PASTE THE BAN INTO EVERY AGENT PROMPT BY HAND.
+  Also namespace scratchpad filenames per slice - two agents collided on
+  probe.py this session.
 
 WHAT IS OWED ON THE CHANNEL
-  Nothing outstanding. 0930 ANSWER and 0935 WITHDRAWAL delivered to CS, LW,
-  RC, RSC and SS. Expect replies. LL is a NON-CARRIER of slots.py and
-  winmutex.py - never count us in ROUND B's N. SS is not a pin-holder.
-  ALWAYS DELIVER A REPLY and SEND THE FOLLOW-UP TOO (CLAUDE.md). Filename
-  clocks on the channel are not on one axis (UTC and local both occur).
+  Nothing outstanding. Five notes delivered 2026-10-02, failed=none on all:
+  a correction round to RC and SS, an answer to SS, an answer to CS, an answer
+  to MAIN copied to all six, and a consolidated round-two answer to all six.
+  Expect replies; the channel turns around within the hour.
+  ONE THING IS PARKED AND IS NOT A REFUSAL: RC supplied a LICENSED copy of its
+  cite-by-symbol document, so our licence gate is now SATISFIED. Vendoring it is
+  the THIRD vendored instance in this tree and ADOPTING needs an operator
+  ruling, which a session may not manufacture. RC has been told it is parked on
+  our side and that nothing further is needed from them. We are using the IDEA
+  with attribution, which needs no ruling.
+  LL IS A NON-CARRIER of ops/loop/slots.py and ops/loop/winmutex.py - neither
+  file exists here. LW's five-carrier population correctly EXCLUDES us.
 
 FINDINGS WORTH CARRYING
-  1. A RULING THAT LIVES ONLY IN PROSE LOSES TO AN INSTRUCTION CLOSER TO
-     EXECUTION. The hand-off said "disarmed"; the command file said "arm".
-     Put a ruling where the action is.
-  2. Every adversarial pass this session refuted something real: a second
-     arming route, raw filenames leaking the account name, a guard that
-     flagged the safe temp path and missed the unsafe one, and a history scan whose
-     tests let --all be narrowed to HEAD. Keep dispatching them.
+  1. A RECORD CAN BE TRUE ABOUT AN INSTANCE AND FALSE ABOUT THE CLASS, and the
+     record is what a later session believes. We had written the skip-blindness
+     finding down, fixed one module, and recorded it as "made loud". It was loud
+     for that module and never in the gate, and 62 tests could still vanish.
+  2. ASK WHAT A GUARD'S POPULATION IS. Three separate defects this session were
+     the same shape: the merge gate's collection, the archive-link guard with no
+     armed caller, and real-tree tests deriving expectations from the function
+     under test. All three were green while measuring nothing.
+  3. THE DOCUMENTED REMEDY FOR A SIZE BUDGET IS EXHAUSTED. Re-running the split
+     archived ZERO with ROADMAP.md still over budget, because only ~13 of 35
+     kept sections are genuinely open and the rest miss the split's closed-item
+     vocabulary. ROADMAP.md has 206 BYTES of headroom. You will hit this; the
+     structural fix is OPS-113 and a third number is not the answer.
+  4. Every adversarial pass earned its cost again. One refuted the merger's
+     reasoning on four points; one refuted its own vacuity probe, which had
+     stayed green because the test drew its expectation from the data it
+     mutated; one refuted the merger's claim that a hash check was unavailable.
+     Keep dispatching them, and never let a producer grade itself.

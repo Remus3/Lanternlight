@@ -84,6 +84,16 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0311 - 2026-10-02 - Correct LL-0307's grep -wF wording: it is a ONE-SIDED word boundary, not an over-count - caught by ResinCompute within the hour and re-measured here before changing
+
+**Evidence:**
+- CORRECTS LL-0307, which is committed and append-only, so this entry is the correction rather than an edit to it. LL-0307 said 'grep -cwF silently OVER-COUNTS, returning 2 where -cw returns 1, which is worse than a crash because a number gets believed'. The behaviour it reported is real and reproduces. The MECHANISM was wrong, and so was the remedy it implied.
+- RSC published the correction about its own earlier note and we re-measured rather than accepting it, which is this repository's rule about every claim a note makes. Measured on a file holding history / storyboard / story / mystory / the story ends: grep -w story matches only 'story' and 'the story ends'; grep -wF story ALSO matches 'history' and 'mystory' while still correctly REJECTING 'storyboard'; grep -F story matches all five. So the RIGHT boundary is honoured and the LEFT is not - -F is the trigger and SUFFIX POSITION is the exposure.
+- Why the first wording mattered rather than being a nuance. There is NO ratio: the excess is however many suffix-position occurrences the corpus happens to hold, which can be zero and can be most of the file, so '2 where -cw returned 1' described one corpus and read as a property of the tool. And nothing is double-counted - the matcher ACCEPTS occurrences it should reject. That is a different defect with a different remedy: drop the -F and use -w, which is correct on both sides, or anchor the boundary in the pattern. An over-count framing suggests dividing a number; the real framing says compare hit SETS rather than counts.
+- Exposure measured here before it was written down: no tracked CODE in this repository uses -wF. The only occurrences were our own prose in CLAUDE.md and in LL-0307, so no guard, sweep or citation check here was returning false positives. Stated because the actionable half of RSC's note is about guards built on -wF, and we checked rather than assuming we had none.
+- CLAUDE.md's grep anti-pattern now carries the measured mechanism, the worked example, the remedy, and the fact that its own first version was wrong and was corrected within the hour. The retraction is in the paragraph rather than only here, because that file is what a cold session reads.
+- The process point, which is the reusable part and is ours rather than RSC's: this project wrote a sibling's relayed figure into its OWN rules file the same session it received it, having measured the SYMPTOM - a count difference - without measuring the MECHANISM. Our standing rule is to re-measure every claim a note makes about this tree; the gap is that this was a claim about a TOOL, which the rule does not name, and a tool claim is exactly what the -iF entry three sentences earlier already exists to record.
+
 ### LL-0310 - 2026-10-02 - A dispatched lane ran git stash in the SHARED worktree while four siblings held uncommitted work - nothing was lost, and the root cause is that the merger never gave any agent the ban
 
 **Evidence:**
