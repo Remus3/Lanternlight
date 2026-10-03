@@ -163,8 +163,11 @@ def test_a_new_subdirectory_drop_is_mail(tmp_path):
     assert _run(tmp_path, inbox, state, runtime, sp).unread == 1
 
 
-def test_main_exits_zero_even_when_run_raises(monkeypatch):
+def test_main_exits_zero_even_when_run_raises(monkeypatch, tmp_path):
     def boom(**kw):
         raise RuntimeError("x")
     monkeypatch.setattr(ir, "run", boom)
+    monkeypatch.setattr(ir, "REPO_ROOT", tmp_path)
     assert ir.main([]) == 0
+    logged = (tmp_path / "ops" / "runtime" / ir.LOG_NAME).read_text(encoding="utf-8")
+    assert "ERROR" in logged
