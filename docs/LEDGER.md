@@ -84,6 +84,14 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0334 - 2026-10-03 - Wrap 2026-10-03 (second session): suite 4269 passed / 22 skipped, ruff clean, wrap refutation pass 5 of 6 confirmed; CORRECTION to LL-0333's cited test name; runner HALT lifted
+
+**Evidence:**
+- CORRECTION to LL-0333 (append-only, so corrected here rather than edited): it names test_parentheses_and_underscores_are_dropped, which the same commit e2ffe31 RENAMED to test_parentheses_are_dropped_and_underscores_kept in tests/test_archive_link_guard.py. Caught by the wrap refutation pass.
+- Wrap suite on HEAD e2ffe31, clean tree: python -m pytest -> 4269 passed, 22 skipped in 283.35s. python -m ruff check . -> All checks passed.
+- Wrap refutation pass (verifier): LL-0327..LL-0333 present and ASCII, 19 cited paths exist; every closed item has a stub and an archive heading, OPS-113 and OPS-118 open with acceptance text, archive link guard OK 122/122; no email, profile path, proxy port or identity in the added lines of 62f4e10..HEAD (one reserved-domain test fixture address); inbox runner PROMPT keeps all floors plus the 600000/HEAD steps and no bypass mode; targeted files 330 passed; the OPS-114 note is in the outbox and DELIVERIES.json records RC and LW delivered, digest and 1561 bytes matching. It ran no mutants because the suite was running in the same tree.
+- Capture watcher: check_watcher NO_RECORD and ensure_armed_at_wrap refused with OPERATOR DISARM (LL-0234) - correct, not worked around. Stop-claim audit: 0 refuted, 0 confirmed. ops/runtime/INBOX_RUNNER_HALT, created at session start so the armed runner could not commit concurrently, is deleted at this wrap; 8 notes that arrived meanwhile are left for the runner.
+
 ### LL-0333 - 2026-10-03 - OPS-117 CLOSED: damage.py keeps null and absent apart for nameId and Key; both archive slug functions now match GitHub's rendered anchors, and 14 stubs that were dead links on github.com were re-derived
 
 **Evidence:**
