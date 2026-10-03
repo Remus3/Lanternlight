@@ -47,6 +47,7 @@ Touch these paths and nothing else. Every other path in the repository belongs t
 - `tests/test_outbox.py`
 - `tests/test_answered.py`
 - `tests/test_responder.py`
+- `tests/test_channel_route.py`
 - `tests/test_headless_spawn.py`
 - `tests/test_arm_inbox_runner.py`
 - `scripts/arm_inbox_runner.py`
@@ -78,6 +79,9 @@ Touch these paths and nothing else. Every other path in the repository belongs t
 - `tests/test_doc_archive.py`
 - `tools/archive_link_guard.py`
 - `tests/test_archive_link_guard.py`
+- `tools/citation_check.py`
+- `tools/citation_allowlist.txt`
+- `tests/test_citation_check.py`
 - `scripts/apply_doc_split.py`
 - `tests/test_apply_doc_split.py`
 - `tools/false_red_probe.py`

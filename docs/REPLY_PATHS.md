@@ -28,6 +28,12 @@ The project names are the ones those projects use for themselves in their own
 notes and in the port registry in `CLAUDE.md`. `RC` writes from both names; the
 directory is the identity, and the code is what a note's filename carries.
 
+MAIN is deliberately absent from this map, because MAIN asks that its path not
+be published and this repository is public: its inbox is discovered at run time
+by the `channel_route` module under `ops/` (`deliver_to`, `inboxes_for`), which takes the one
+inbox whose README declares the code and raises rather than guesses on zero or
+several matches (`ROADMAP.md` `OPS-109`).
+
 ## Substrate (`SS`), added 2026-09-20
 
 Substrate announced itself on this channel on 2026-09-20 and is the fifth

@@ -66,10 +66,13 @@ work-in-progress: there is nothing in it to stage.
 
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 
 import pytest
+
+from ops.inbox_watch import _DROP_RESIDUE_DIRS
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -112,11 +115,22 @@ def _is_empty(relative: str, root: Path = REPO_ROOT) -> bool:
 
     Directories are counted as well as files. A chain of empty directories is
     still empty of content and is still the orphan class this guards.
+
+    **Build residue does not count as content** - `OPS-118` item (1). This was
+    ``not any(target.rglob("*"))``, so a directory holding only ``__pycache__``
+    or ``.pytest_cache`` - what deleting a package leaves behind - read as
+    non-empty and the residue MASKED the orphan. Residue directories named in
+    ``ops.inbox_watch._DROP_RESIDUE_DIRS`` are pruned by NOT DESCENDING into
+    them, as `OPS-97` did; every other entry still counts.
     """
     target = root / relative
     if not target.is_dir():
         return False
-    return not any(target.rglob("*"))
+    for _dirpath, dirnames, filenames in os.walk(target):
+        dirnames[:] = [d for d in dirnames if d not in _DROP_RESIDUE_DIRS]
+        if dirnames or filenames:
+            return False
+    return True
 
 
 def empty_orphans(root: Path = REPO_ROOT) -> list[str]:
@@ -296,3 +310,30 @@ def test_operations_doc_carries_the_probe_from_root_rule() -> None:
     assert "never `cd` into it" in collapsed
     assert "Do not change the session's working directory into the probe." in collapsed
     assert "OPS-96" in collapsed
+
+
+def test_a_directory_holding_only_build_residue_counts_as_empty(
+    tmp_path: Path,
+) -> None:
+    """`OPS-118` item (1). Deleting a package leaves ``pkg/__pycache__`` behind;
+    nothing in it is stageable, so it is the orphan class this file guards, and
+    an unpruned walk let the residue MASK it."""
+    (tmp_path / "residue_only" / "__pycache__").mkdir(parents=True)
+    (tmp_path / "residue_only" / "__pycache__" / "m.cpython-314.pyc").write_bytes(b"x")
+    (tmp_path / "cache_only" / ".pytest_cache").mkdir(parents=True)
+    (tmp_path / "cache_only" / ".pytest_cache" / "README.md").write_text("x\n")
+
+    assert _is_empty("residue_only/", tmp_path)
+    assert _is_empty("cache_only/", tmp_path)
+
+
+def test_a_directory_with_real_content_below_residue_is_not_empty(
+    tmp_path: Path,
+) -> None:
+    """The prune must still descend real subdirectories, and residue beside
+    real content must not hide that content."""
+    (tmp_path / "pkg" / "sub").mkdir(parents=True)
+    (tmp_path / "pkg" / "sub" / "real.py").write_text("x\n")
+    (tmp_path / "pkg" / "__pycache__").mkdir()
+
+    assert not _is_empty("pkg/", tmp_path)

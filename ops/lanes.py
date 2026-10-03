@@ -490,6 +490,11 @@ LANES: tuple[Lane, ...] = (
             # test_inbox_* glob nor test_outbox.py, so it arrived as an orphan
             # exactly as the four inbox modules did above.
             "tests/test_responder.py",
+            # OPS-109 criteria 2 and 3, the ROUTING half: run-time discovery of
+            # a carrier's inbox by its README's declared channel code, refusing
+            # on zero or several matches. ``ops/**`` covers the module; the
+            # test arrived as an orphan exactly as the ones above did.
+            "tests/test_channel_route.py",
             # LL-0317, the ARMED half of the same channel: the headless spawn
             # door, the scheduled-task definition and their tests. ``ops/**``
             # covers both ops modules and tests/test_inbox_* covers the
@@ -605,6 +610,12 @@ LANES: tuple[Lane, ...] = (
             "tests/test_doc_archive.py",
             "tools/archive_link_guard.py",
             "tests/test_archive_link_guard.py",
+            # OPS-113 citation half. Checks that sha and path:line cites in
+            # the same continuity documents still resolve; the shrink-only
+            # allowlist names the cites that predate the 2026-09-07 rewrite.
+            "tools/citation_check.py",
+            "tools/citation_allowlist.txt",
+            "tests/test_citation_check.py",
             # OPS-80. The splitter PLANS and writes nothing, which left the
             # documented remedy for a fired size budget unable to change a
             # file. This is the applying half, kept in a separate script so

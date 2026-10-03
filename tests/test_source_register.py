@@ -172,12 +172,15 @@ red run green - that is how a guard stops working.
 """
 
 import functools
+import os
 import re
 import subprocess
 from collections.abc import Iterable
 from pathlib import Path
 
 import _toolguard
+
+from ops.inbox_watch import _DROP_RESIDUE_DIRS
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DOCS = REPO_ROOT / "docs"
@@ -1725,9 +1728,29 @@ def scanned_documents() -> tuple[str, ...]:
     }
     docs_dir = REPO_ROOT / "docs"
     if docs_dir.is_dir():
-        for path in docs_dir.rglob("*.md"):
+        for path in markdown_under(docs_dir):
             listed.add(path.relative_to(REPO_ROOT).as_posix())
     return tuple(sorted(listed - UNSCANNED_DOCS))
+
+
+def markdown_under(root: Path) -> list[Path]:
+    """Every ``*.md`` file beneath ``root``, pruning build residue.
+
+    `OPS-118` item (1). This was ``root.rglob("*.md")``, which descends
+    ``.pytest_cache`` - and pytest writes a README.md into every cache it
+    creates, citing ``docs.pytest.org``. A cache under ``docs/`` therefore made
+    the register guard RED on residue nobody authored. Residue directories are
+    pruned by NOT DESCENDING into them, as `OPS-97` did, rather than by walking
+    them and filtering afterwards. The set is reused from
+    ``ops.inbox_watch._DROP_RESIDUE_DIRS`` because it is scoped by CAUSE - only
+    what importing or testing generates - so an authored directory with any
+    other name is still read.
+    """
+    found: list[Path] = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in _DROP_RESIDUE_DIRS]
+        found.extend(Path(dirpath) / name for name in filenames if name.endswith(".md"))
+    return sorted(found)
 
 
 def cited_hosts(root: Path | None = None) -> dict[str, set[str]]:
@@ -2200,3 +2223,30 @@ def test_the_extractor_truncates_at_underscores_deliberately():
     # denylist has to carry the truncation rather than the real identifier.
     assert "reported.json" in KNOWN_NON_HOSTS
     assert "inbox_reported.json" not in KNOWN_NON_HOSTS
+
+
+def test_markdown_under_skips_build_residue(tmp_path: Path):
+    """`OPS-118` item (1). A pytest cache under ``docs/`` ships a README.md that
+    cites ``docs.pytest.org``; read as a document it turns the register guard
+    RED on build residue nobody authored."""
+    (tmp_path / ".pytest_cache").mkdir()
+    (tmp_path / ".pytest_cache" / "README.md").write_text("x\n", encoding="utf-8")
+    (tmp_path / "__pycache__").mkdir()
+    (tmp_path / "__pycache__" / "stray.md").write_text("x\n", encoding="utf-8")
+    (tmp_path / "top.md").write_text("x\n", encoding="utf-8")
+
+    found = [p.relative_to(tmp_path).as_posix() for p in markdown_under(tmp_path)]
+
+    assert found == ["top.md"]
+
+
+def test_markdown_under_still_descends_real_subdirectories(tmp_path: Path):
+    """A prune that walks nothing would pass the residue test above."""
+    nested = tmp_path / "adr" / "deeper"
+    nested.mkdir(parents=True)
+    (nested / "ADR-999.md").write_text("x\n", encoding="utf-8")
+    (tmp_path / "adr" / "README.md").write_text("x\n", encoding="utf-8")
+
+    found = {p.relative_to(tmp_path).as_posix() for p in markdown_under(tmp_path)}
+
+    assert found == {"adr/README.md", "adr/deeper/ADR-999.md"}

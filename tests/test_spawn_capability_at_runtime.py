@@ -327,6 +327,9 @@ SPAWN_RUNTIME_ENTRY_POINTS: dict[str, tuple[tuple[str, str], ...]] = {
     # OPS-116. Measures whether a finished runner session left work
     # uncommitted or unpushed: git status and git rev-list - both reads.
     "ops/inbox_runner.py": (("ops.inbox_runner", "_tree_problem"),),
+    # OPS-113 citation half. Resolves every cited sha with one batched
+    # git cat-file --batch-check over this repository - a read.
+    "tools/citation_check.py": (("tools.citation_check", "check_repo"),),
 }
 
 #: Modules that CAN reach a spawn and are deliberately not probed, each with

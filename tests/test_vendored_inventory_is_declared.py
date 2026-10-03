@@ -52,6 +52,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from ops.inbox_watch import _DROP_RESIDUE_DIRS
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CLAUDE_MD = REPO_ROOT / "CLAUDE.md"
 THIRD_PARTY = REPO_ROOT / "third_party"
@@ -68,11 +70,21 @@ def vendored_directories(root: Path = THIRD_PARTY) -> set[str]:
     holes rather than tidiness: a vendored work at ``third_party/.hidden/`` or
     a single vendored FILE dropped straight into ``third_party/`` would have
     been invisible to a guard whose whole job is to notice a vendored work the
-    document does not name. Nothing is skipped now.
+    document does not name. Nothing AUTHORED is skipped now.
+
+    **Build residue is skipped, and only build residue** - `OPS-118` item (1).
+    Importing a vendored module writes ``third_party/__pycache__``, which would
+    otherwise read as an undeclared vendored work. The set is
+    ``ops.inbox_watch._DROP_RESIDUE_DIRS``, scoped by CAUSE, so a dot-prefixed
+    vendored work or a loose vendored file is still in the population.
     """
     if not root.is_dir():
         return set()
-    return {p.name for p in root.iterdir()}
+    return {
+        p.name
+        for p in root.iterdir()
+        if not (p.is_dir() and p.name in _DROP_RESIDUE_DIRS)
+    }
 
 
 def declared_directories(text: str) -> set[str]:
@@ -129,3 +141,23 @@ def test_the_declaration_reader_is_not_vacuous():
     assert declared_directories("we vendor nothing under third_party at all") == set()
     # Naming the parent without an instance must NOT read as a declaration.
     assert declared_directories("`ruff.toml` excludes `third_party/`") == set()
+
+
+def test_build_residue_under_third_party_is_not_a_vendored_work(tmp_path):
+    """`OPS-118` item (1). Importing a vendored module writes
+    ``third_party/__pycache__``; that is residue, not an undeclared vendoring."""
+    (tmp_path / "__pycache__").mkdir()
+    (tmp_path / "__pycache__" / "x.cpython-314.pyc").write_bytes(b"x")
+    (tmp_path / ".pytest_cache").mkdir()
+    (tmp_path / "real_work").mkdir()
+
+    assert vendored_directories(tmp_path) == {"real_work"}
+
+
+def test_dot_names_and_loose_files_are_still_inventoried(tmp_path):
+    """The residue skip must not reopen the 2026-09-20 holes: a dot-prefixed
+    vendored work and a loose vendored file both stay in the population."""
+    (tmp_path / ".hidden").mkdir()
+    (tmp_path / "loose.py").write_text("x\n")
+
+    assert vendored_directories(tmp_path) == {".hidden", "loose.py"}

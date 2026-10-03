@@ -93,6 +93,11 @@ WHY: dict[str, str] = {
         "class (c). A stub in a split continuity document that points at "
         "nothing is the archive half of the same staleness."
     ),
+    "tests/test_citation_check.py": (
+        "class (c). A sha cite that no longer resolves or a path:line cite "
+        "past end of file in the four continuity documents - OPS-113's "
+        "citation half, structural decay that every split re-creates."
+    ),
     "tests/test_ops_ids.py": (
         "class (b). Two lanes taking the same OPS- id merge cleanly with "
         "nothing complaining - the collision is only visible to this guard."

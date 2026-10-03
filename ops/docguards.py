@@ -116,6 +116,12 @@ DOC_READING_IDIOMS = (
     # is deliberate - the glob lives in a non-test module, and following it would
     # mean this selector resolving arbitrary call graphs.
     re.compile(r"\binstruction_sites\b"),
+    # `OPS-113`, 2026-10-03. The citation checker opens whatever document a
+    # `path:line` cite points at - README, HEADLESS, the slash commands - so a
+    # module using it reads Markdown it never names. The cross-check caught it
+    # on the first full run, the second time that has happened. Matched on the
+    # MODULE name for the reason given above for matching a call.
+    re.compile(r"\bcitation_check\b"),
 )
 
 _GIT_TIMEOUT = 60

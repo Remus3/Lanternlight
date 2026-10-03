@@ -1,0 +1,81 @@
+# OPS-113 citation allowlist - read tools/citation_check.py's docstring first.
+# <key> <reason> <why...>. SHRINK ONLY: never add a row to mute a new dead cite;
+# fix the extraction rule or the citing text instead. A row that resolves or
+# that nothing cites any more fails tests/test_citation_check.py.
+
+0996f1b6 not-a-commit Claude session id prefix in a trace row
+290cbf80 foreign-repo Legion Wallpaper carrier commit C4, cited from LW's own note
+434818c throwaway HEAD of a mutation-test scratch repository, moved to 4718293
+4718293 throwaway the scratch repository's HEAD after 434818c, cited as 434818c -> 4718293
+6ad1531e2 foreign-repo Remus3/Amberstone commit pinned for the vendored CHANNEL.md v2
+6e3c1c752 foreign-repo Remus3/Amberstone commit of the superseded CHANNEL.md v1 pin
+899f6eb9 not-a-commit sha256 prefix of the retired CHANNEL.md v1 bytes
+a9317e03733da7f54b5da0eaa8edcb2697495cf5 foreign-repo upstream commit an external review re-derived its counts at
+d35eac2 throwaway probe commit made local-only on main and reset away, never pushed
+d8220fe4a54dd208 not-a-commit sha256 prefix of an outbound note, written as digest opens
+da35f8b1 foreign-repo frozen lane-governor carrier candidate published by a sibling
+
+# pre-rewrite: each prefix-matches an old sha in .git/filter-repo/commit-map
+# pure-digit, seen since the 2026-10-03 commit-context rule:
+5899729 pre-rewrite pure-digit, in commit-map, cited as before commit 5899729
+6074631 pre-rewrite pure-digit, in commit-map, cited as commit 6074631
+7661391 pre-rewrite pure-digit, in commit-map, cited as worktree at 7661391^
+# letter-bearing:
+060d48d pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+0d919c0 pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+0f7bf67 pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+104c316 pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+21f1c94 pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+2c0b7a5 pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+2e56714 pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+308d69c pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+311cef8 pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+38fda61 pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+3b5c3fb pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+43693b3 pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+4ccff35 pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+52ac836 pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+548e5b6 pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+5725c03 pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+5bc3347 pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+5f545b7 pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+60cf878 pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+66bad3f pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+6de0420 pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+73423fa pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+7fcf640 pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+814b1ea pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+81d3237 pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+8bb1178 pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+8c5eaee pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+950915d pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+9879c60 pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+98d2cac pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+a3a8d9d pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+a51c608 pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+ac7fd5e pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+ad0aa0b pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+ad2209a pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+af70a73 pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+af7fc49 pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+b153d41 pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+b4d4888 pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+b98cf91 pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+bc2aad7 pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+bfda016 pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+c9a0f76 pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+cc47938 pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+ce5ccc7 pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+cf3327b pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+d029669 pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+d638be2 pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+d7b96ce pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+e23f9fd pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+e2fe3e2 pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+e806747 pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+ec3946d pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+edf5698 pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+f04d394 pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+f9bf1d9 pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+fe877d3 pre-rewrite in commit-map, gone after the 2026-09-07 rewrite
+ff0bee2 pre-rewrite in commit-map, gone after the 2026-09-07 rewrite

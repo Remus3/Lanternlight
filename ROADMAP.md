@@ -2933,7 +2933,19 @@ is why nothing is urgent about this item.
 4. A DECLINE remains acceptable if the observation says the current rules are
    correct, provided the decline carries the observation behind it.
 
-## OPS-109. There is NO sanctioned reply route to MAIN - CRITERIA 1 AND 4 MET 2026-10-02, 2 and 3 still OPEN; and the MANIFEST half is DONE, `LL-0313` and `LL-0315`
+## OPS-109. There is NO sanctioned reply route to MAIN - ALL FOUR CRITERIA MET 2026-10-03 - CLOSED; and the MANIFEST half is DONE, `LL-0313` and `LL-0315`
+
+**CLOSED 2026-10-03 (third session), `LL-0336`.** Criteria 2 and 3:
+`ops/channel_route.py` finds the one inbox one level under the drive root whose
+README declares the code, and RAISES on zero or several matches, naming a count
+and never a path, writing nothing - 18 tests, the two-match refusal seen red by
+mutating the rule to take the first match. **CORRECTION, found by the
+refutation pass:** the heading's earlier "criterion 4 MET 2026-10-02" was FALSE.
+`docs/REPLY_PATHS.md` at that HEAD never mentioned MAIN, and no commit in its
+history did. Criterion 4 is met by this session's sentence, not by the earlier
+one. Two residual gaps, recorded rather than fixed: a `moon_sync_inbox` junction
+elsewhere that points at OUR inbox is not excluded, and the inbox can change
+between the scan and the write.
 
 **Met:** MAIN answered three times through a run-time `inboxes` override, path in
 no tracked file, each leaving our copy and a manifest row; `docs/REPLY_PATHS.md`
@@ -2987,6 +2999,29 @@ MEASURED each archive open items (1, 7b, 7c, OPS-68, OPS-109). The rule going
 forward: a session closing an item writes CLOSED into its heading. The citation
 half below stays OPEN.
 
+**Citation-half ACCEPTANCE, written 2026-10-03 (third session) before any code,
+because the half had none.** Measured first: of the backticked hex tokens in
+`ROADMAP.md`, all 20 failed to resolve as commits, and all 20 are pure-digit
+game ids, buildids or byte strings rather than shas; the archives hold 29
+genuine pre-rewrite shas that resolve only through
+`.git/filter-repo/commit-map`. So a checker that treats any hex run as a sha is
+noise. (The 29 counts BACKTICKED tokens only; the checker, which also reads
+unbackticked cites, allowlists 58 pre-rewrite shas - the two figures measure
+different extraction rules and neither is the old "63".) Accept when, test-first with each test seen red:
+(1) a checker in `tools/` extracts SHA CITES - a 7-to-40 character hex token
+holding at least one letter `a-f` AND at least one digit - from `ROADMAP.md`,
+`docs/LEDGER.md` and both archives, and reports every one that does not resolve
+with `git cat-file -e <sha>^{commit}`;
+(2) unresolvable shas that predate the 2026-09-07 rewrite are listed in a
+TRACKED allowlist (a fresh clone has no commit-map), the allowlist may only
+SHRINK, and a guard test fails on any unresolvable sha not in it - a NEW dead
+cite is red, an old one is named rather than hidden;
+(3) `path:line` cites whose path exists in the tree are checked for range: a
+line past end of file is red. Whether an in-range line still says what the
+cite meant is not decidable by a program and is out of scope - stated here so
+a green run is not read as "every cite is correct";
+(4) the checker runs in the suite and in `python -m ops.preflight`.
+
 Filed 2026-10-02. Three slices found instances independently, and this session
 CREATED a fresh batch of the same class by re-running the `OPS-57` split, which
 shifted every line number in `ROADMAP.md` and `docs/LEDGER.md`. That is the
@@ -3028,7 +3063,23 @@ firing again takes the structural fix, not a third number. The PER-DOCUMENT
 ceiling here was NOT raised and has under 100 bytes of headroom, which is why
 this is a paragraph and not an item.
 
-## OPS-118. Three small leftovers from the 2026-10-03 closures
+## OPS-118. Three small leftovers from the 2026-10-03 closures - (1) and (3) DONE, (2) carried by OPS-102 - CLOSED 2026-10-03
+
+**CLOSED 2026-10-03 (third session), `LL-0336`.** (1) Swept: `tests/` held 2
+HOT and 1 NEAR-MISS, the other three trees none. HOT: the docs walk in
+`tests/test_source_register.py` (a planted `docs/.pytest_cache/README.md` made
+the register guard red on residue) and `_is_empty` in
+`tests/test_no_empty_orphan_dirs.py` (a directory holding only `__pycache__`
+read as non-empty - a false green); a latent third in
+`tests/test_vendored_inventory_is_declared.py`. All three now prune by not
+descending, reusing the inbox watcher's residue set, each fix seen red when
+reverted. NEAR-MISS `tests/test_doc_archive.py` left: both snapshots see the
+same residue. (3) The guard now numbers anchors as GitHub does across EVERY
+heading level; a `##` item whose slug an earlier `###` took is `shadowed`, a
+stub to `S-1` is `duplicate_suffix`, both seen red; real tree green. (2) needs
+the client and is carried by `OPS-102`. Two stale texts the sweep found are
+filed as `OPS-119`.
+
 
 `LL-0332`, `LL-0333`. (1) OPS-97's stray-walker sweep never covered `tests/`,
 `.claude/commands/`, `.claude/agents/` or `third_party/`; accept: swept, result
@@ -3036,6 +3087,22 @@ ledgered. (2) Item 8's Brandrgarde map counts need the client loading that map;
 accept: measured when the operator plays, else carried by `OPS-102`. (3) The
 anchor rule does not model GitHub's `-1` suffix for duplicate headings; no stub
 targets one today; accept: a duplicate-heading stub fails the guard, seen red.
+
+## OPS-119. Two decline reasons the 2026-10-03 sweep found stale
+
+Filed 2026-10-03 (third session) from the `OPS-118` sweep, `LL-0336`.
+(a) `.claude/commands/done.md` says the reach of `test_source_register.py` is
+`docs/` and nothing else, and `tests/test_loop_watch.py` PINS that wording
+(it asserts the window names `docs/`). Since `OPS-63` the default scope is
+`scanned_documents`, the tracked documents repo-wide, so the pinned text is
+false and the test keeps it false. Re-measure whether the hand-off's `.txt`
+extension reason changes with the wider scope before rewording. (b) The
+archived `OPS-97` text calls the `rglob` in `lanternlight/paths.py` unreachable;
+it is reachable through `tests/test_paths_avgprice.py`, which runs on every
+commit, and stays out of class only because residue cannot match its pattern.
+Accept: (a) done.md states the measured scope and the pinning test asserts the
+measured scope, seen red against the old wording; (b) a dated correction note
+under the archived `OPS-97` heading.
 
 ## Archive index
 

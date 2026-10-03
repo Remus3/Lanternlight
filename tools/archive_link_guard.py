@@ -39,6 +39,15 @@ the stubs were re-derived in the same commit, and
 ``tests/test_archive_link_guard.py`` pins both functions to anchors read off
 the rendered page.
 
+DUPLICATE SLUGS ARE MODELED THE WAY GITHUB NUMBERS THEM - ``OPS-118`` item 3.
+GitHub anchors EVERY heading level in document order and renders the second
+heading whose slug is ``S`` as ``S-1``. :func:`rendered_headings` reproduces
+that assignment, and the check judges stubs by where an anchor really lands:
+a ``## `` item whose slug the title or a ``### `` sub-part already took is
+``shadowed`` (a stub to the bare slug would land on the other heading while
+reading as fine), and a stub that relies on an ``S-1`` suffix is
+``duplicate_suffix``, because it reaches its item only by position.
+
 WHAT COUNTS AS A STUB. Only a Markdown link whose target is the archive path
 AND carries a ``#fragment`` is a stub. A fragment-less link to the archive as a
 whole is a pointer to the document, not an entry point to an item, and counting
@@ -91,6 +100,7 @@ __all__ = [
     "check_texts",
     "iter_headings",
     "main",
+    "rendered_headings",
     "stub_anchors",
 ]
 
@@ -116,6 +126,15 @@ _FENCE_RE = re.compile(r"^\s{0,3}(`{3,}|~{3,})")
 #: item, not items.
 _H2_RE = re.compile(r"^##\s+(\S.*?)\s*$")
 
+#: An ATX heading of ANY level, `#` to `######`. GitHub assigns an anchor to
+#: every one of them, which is what the duplicate-suffix model below needs.
+#: Same shape as :data:`_H2_RE` on purpose (no indent, no closing-`#` strip),
+#: so the level-2 subset of this scan is exactly :func:`iter_headings`.
+_ANY_HEADING_RE = re.compile(r"^(#{1,6})\s+(\S.*?)\s*$")
+
+#: A trailing GitHub duplicate-heading suffix: `-1`, `-2`, ...
+_SUFFIX_RE = re.compile(r"^(.+)-([1-9][0-9]*)$")
+
 #: An inline Markdown link target: the `(...)` half of `[text](target)`.
 _LINK_RE = re.compile(r"\]\(\s*([^()\s]+)\s*\)")
 
@@ -135,6 +154,14 @@ class Finding:
     ``"ambiguous"``
         Two or more archive headings that derive the SAME anchor. One stub
         appears to satisfy both, so reachability counts stop meaning anything.
+    ``"shadowed"``
+        An archive ``## `` heading whose slug an EARLIER heading of another
+        level (the ``# `` title, a ``### `` sub-part) already took, so GitHub
+        renders it with a ``-1`` style suffix and a stub to the bare slug lands
+        on the other heading. ``OPS-118`` item 3; the silent case.
+    ``"duplicate_suffix"``
+        A stub whose anchor is a GitHub duplicate-heading suffix (``S-1``). It
+        resolves today, but only by position among duplicates.
     ``"archive_missing"``
         The roadmap links into an archive file that is not on disk.
     ``"roadmap_missing"``
@@ -257,6 +284,41 @@ def iter_headings(text: str) -> list[str]:
     return headings
 
 
+def rendered_headings(text: str) -> list[tuple[int, str, str]]:
+    """Return ``(level, text, anchor)`` for every heading, as GitHub renders it.
+
+    ``OPS-118`` item 3. GitHub slugs EVERY heading level in document order and
+    de-duplicates the result the way github-slugger does: the first heading
+    whose slug is ``S`` gets ``S``, and each later one gets ``S-1``, ``S-2``
+    and so on, skipping any ``S-n`` an earlier heading already holds - a
+    heading literally named ``Foo-1`` takes that slot, and the next ``Foo``
+    becomes ``foo-2``. :func:`anchor_for` is the per-heading slug; this is the
+    per-DOCUMENT assignment, and only this one says where a link really lands.
+
+    Fenced code is skipped, as everywhere here. NOT modeled, each measured
+    absent from both real documents on 2026-10-03: setext headings (every
+    ``---`` line there follows a blank line, so it is a thematic break),
+    indented or blockquoted ATX headings, and closing ``#`` sequences. Any of
+    those appearing would shift the numbering and this function would not
+    know.
+    """
+    occurrences: dict[str, int] = {}
+    out: list[tuple[int, str, str]] = []
+    for line in _uncoded_lines(text):
+        match = _ANY_HEADING_RE.match(line)
+        if not match:
+            continue
+        heading = match.group(2)
+        base = anchor_for(heading)
+        result = base
+        while result in occurrences:
+            occurrences[base] += 1
+            result = f"{base}-{occurrences[base]}"
+        occurrences[result] = 0
+        out.append((len(match.group(1)), heading, result))
+    return out
+
+
 def stub_anchors(text: str, archive_rel_path: str = ARCHIVE_REL_PATH) -> list[str]:
     """Return the ``#fragment`` of every link in ``text`` into the archive.
 
@@ -339,13 +401,39 @@ def check_texts(
     headings = iter_headings(archive_text)
     findings: list[Finding] = []
 
+    # Where GitHub really puts each anchor, over EVERY heading level in
+    # document order - OPS-118 item 3. `by_anchor` maps a rendered anchor to
+    # the heading that holds it; `items` is the `## ` subset, in order, and is
+    # the same list as `headings` because both scans share one line shape.
+    rendered = rendered_headings(archive_text)
+    by_anchor = {anchor: (level, text) for level, text, anchor in rendered}
+    items = [(text, anchor) for level, text, anchor in rendered if level == 2]
+
     # Direction 1: every archived heading needs a stub that resolves to it.
     # Built as a list of (anchor, heading) pairs rather than a dict so a
     # duplicate anchor is visible instead of being silently overwritten.
     seen: dict[str, str] = {}
     anchor_set = set(anchors)
-    for heading in headings:
+    for heading, rendered_anchor in items:
         anchor = anchor_for(heading)
+        holder_level, holder_text = by_anchor.get(anchor, (2, heading))
+        if rendered_anchor != anchor and holder_level != 2:
+            # The silent case: a stub to #anchor resolves - to the WRONG
+            # heading - so neither direction below would object on its own.
+            findings.append(
+                Finding(
+                    kind="shadowed",
+                    detail=(
+                        f"archive heading '## {heading}' renders as "
+                        f"#{rendered_anchor} on GitHub, because the earlier "
+                        f"heading '{'#' * holder_level} {holder_text}' already "
+                        f"took #{anchor} - a stub to #{anchor} lands on that "
+                        "heading, not on this item"
+                    ),
+                    heading=heading,
+                    anchor=rendered_anchor,
+                )
+            )
         if anchor in seen:
             findings.append(
                 Finding(
@@ -361,34 +449,71 @@ def check_texts(
             )
         else:
             seen[anchor] = heading
-        if anchor not in anchor_set:
+        if rendered_anchor not in anchor_set:
             findings.append(
                 Finding(
                     kind="unreachable",
                     detail=(
                         f"archived item has no stub in {roadmap_rel_path}: "
                         f"{heading} (expected a link to "
-                        f"{archive_rel_path}#{anchor})"
+                        f"{archive_rel_path}#{rendered_anchor})"
+                    ),
+                    heading=heading,
+                    anchor=rendered_anchor,
+                )
+            )
+
+    # Direction 2: every stub must resolve to a `## ` heading that exists,
+    # judged by where GitHub RENDERS each anchor rather than by the slug alone.
+    item_by_anchor = {anchor: heading for heading, anchor in items}
+    reported: set[str] = set()
+    for anchor in anchors:
+        if anchor in reported:
+            continue
+        if anchor in item_by_anchor:
+            heading = item_by_anchor[anchor]
+            base = anchor_for(heading)
+            if anchor == base:
+                continue
+            reported.add(anchor)
+            findings.append(
+                Finding(
+                    kind="duplicate_suffix",
+                    detail=(
+                        f"stub in {roadmap_rel_path} links to "
+                        f"{archive_rel_path}#{anchor}, a GitHub duplicate-"
+                        f"heading suffix of #{base}: it reaches {heading!r} "
+                        "only by its POSITION among headings sharing that "
+                        "slug, so adding or removing an earlier duplicate "
+                        "silently moves it"
                     ),
                     heading=heading,
                     anchor=anchor,
                 )
             )
-
-    # Direction 2: every stub must resolve to a heading that exists.
-    heading_anchors = {anchor_for(h) for h in headings}
-    reported: set[str] = set()
-    for anchor in anchors:
-        if anchor in heading_anchors or anchor in reported:
             continue
         reported.add(anchor)
+        if anchor in by_anchor:
+            level, text = by_anchor[anchor]
+            why = (
+                f"which GitHub renders on the heading '{'#' * level} {text}' - "
+                "not an archived '## ' item"
+            )
+        else:
+            why = "which matches no '## ' heading in the archive"
+            suffix = _SUFFIX_RE.match(anchor)
+            if suffix and suffix.group(1) in by_anchor:
+                why += (
+                    f" - it ends in a GitHub duplicate-heading suffix of "
+                    f"#{suffix.group(1)}, but the archive renders no such "
+                    "duplicate"
+                )
         findings.append(
             Finding(
                 kind="dangling",
                 detail=(
                     f"stub in {roadmap_rel_path} links to "
-                    f"{archive_rel_path}#{anchor}, which matches no '## ' "
-                    "heading in the archive"
+                    f"{archive_rel_path}#{anchor}, {why}"
                 ),
                 anchor=anchor,
             )

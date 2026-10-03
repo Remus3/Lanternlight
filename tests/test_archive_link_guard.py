@@ -437,6 +437,138 @@ class TestDuplicateArchiveAnchorsAreAmbiguous:
         assert any(f.kind == "ambiguous" for f in report.findings)
 
 
+class TestGitHubDuplicateHeadingSuffixes:
+    """ROADMAP ``OPS-118`` item 3: GitHub's ``-1`` suffix for duplicate slugs.
+
+    GitHub assigns an anchor to EVERY heading level, in document order, and
+    the second heading whose slug is ``S`` renders as ``S-1``, the third as
+    ``S-2``. A rule that slugs ``## `` headings in isolation cannot see two
+    failures that follow from that:
+
+    (a) a stub to ``S-1`` reaches its heading only by POSITION - add or remove
+        an earlier duplicate and it silently moves - and the guard used to
+        call it a generic dangling link, naming no cause;
+    (b) a ``## `` heading whose slug an EARLIER heading of another level
+        already took renders as ``S-1``, so a stub to ``#S`` lands on that
+        other heading while the old guard said OK. That is the silent case.
+    """
+
+    def test_rendered_anchors_count_every_level_in_document_order(self) -> None:
+        text = "\n".join(
+            ["# Foo", "", "## Foo", "", "### Foo", "", "## Bar", "", "#### Foo"]
+        )
+        anchors = [a for _, _, a in archive_link_guard.rendered_headings(text)]
+        assert anchors == ["foo", "foo-1", "foo-2", "bar", "foo-3"]
+
+    def test_rendered_anchors_skip_a_literal_suffix_already_taken(self) -> None:
+        """github-slugger: a heading literally named ``foo-1`` holds that slot."""
+        text = "## Foo\n\n## Foo-1\n\n## Foo\n"
+        anchors = [a for _, _, a in archive_link_guard.rendered_headings(text)]
+        assert anchors == ["foo", "foo-1", "foo-2"]
+
+    def test_rendered_anchors_ignore_fenced_code(self) -> None:
+        text = "## Foo\n\n```sh\n# Foo\n```\n\n### Foo\n"
+        anchors = [a for _, _, a in archive_link_guard.rendered_headings(text)]
+        assert anchors == ["foo", "foo-1"]
+
+    def test_item_shadowed_by_an_earlier_subheading_is_red(self) -> None:
+        """Case (b): ``### Notes`` under one item, then ``## Notes`` as an item."""
+        archive = "\n".join(
+            [
+                "# Lanternlight roadmap archive",
+                "",
+                f"## {SECOND_HEADING}",
+                "",
+                "### Notes",
+                "",
+                "## Notes",
+                "",
+            ]
+        )
+        roadmap = _roadmap(_stub(SECOND_HEADING, SECOND_ANCHOR), _stub("Notes", "notes"))
+        report = archive_link_guard.check_texts(
+            roadmap_text=roadmap, archive_text=archive, archive_rel_path=ARCHIVE_REL
+        )
+        assert report.ok is False, report.format()
+        shadowed = [f for f in report.findings if f.kind == "shadowed"]
+        assert len(shadowed) == 1, report.format()
+        assert shadowed[0].heading == "Notes"
+        assert shadowed[0].anchor == "notes-1"
+        assert "### Notes" in shadowed[0].detail
+        # The stub to #notes lands on the subheading, not on the item.
+        dangling = [f for f in report.findings if f.kind == "dangling"]
+        assert [f.anchor for f in dangling] == ["notes"], report.format()
+        assert "### Notes" in dangling[0].detail
+
+    def test_item_shadowed_by_the_document_title_is_red(self) -> None:
+        title = "Lanternlight roadmap archive"
+        anchor = "lanternlight-roadmap-archive"
+        report = archive_link_guard.check_texts(
+            roadmap_text=_roadmap(_stub(title, anchor)),
+            archive_text=_archive(title),
+            archive_rel_path=ARCHIVE_REL,
+        )
+        assert report.ok is False, report.format()
+        assert [f.kind for f in report.findings if f.kind == "shadowed"] == ["shadowed"]
+
+    def test_stub_to_a_suffixed_anchor_is_red_and_names_the_duplicate(self) -> None:
+        """Case (a): the stub works on GitHub today, but only by position."""
+        a = "OPS-70. A thing, done - CLOSED 2026-09-08"
+        b = "OPS-70. A thing done - CLOSED 2026-09-08"
+        base = "ops-70-a-thing-done---closed-2026-09-08"
+        report = archive_link_guard.check_texts(
+            roadmap_text=_roadmap(_stub(a, base), _stub(b, base + "-1")),
+            archive_text=_archive(a, b),
+            archive_rel_path=ARCHIVE_REL,
+        )
+        assert report.ok is False, report.format()
+        suffix = [f for f in report.findings if f.kind == "duplicate_suffix"]
+        assert [f.anchor for f in suffix] == [base + "-1"], report.format()
+        assert "duplicate" in suffix[0].detail
+        assert b in suffix[0].detail
+        assert not [f for f in report.findings if f.kind == "dangling"], report.format()
+
+    def test_suffix_stub_with_no_duplicate_is_dangling_and_says_why(self) -> None:
+        report = archive_link_guard.check_texts(
+            roadmap_text=_roadmap(
+                _stub(SECOND_HEADING, SECOND_ANCHOR), _stub("x", SECOND_ANCHOR + "-1")
+            ),
+            archive_text=_archive(SECOND_HEADING),
+            archive_rel_path=ARCHIVE_REL,
+        )
+        assert report.ok is False
+        dangling = [f for f in report.findings if f.kind == "dangling"]
+        assert [f.anchor for f in dangling] == [SECOND_ANCHOR + "-1"]
+        assert "duplicate-heading suffix" in dangling[0].detail
+
+    def test_repeated_subheadings_that_collide_with_no_item_stay_green(self) -> None:
+        """Positive control: ``### Acceptance`` under every item is normal."""
+        other = "OPS-70. A thing done - CLOSED 2026-09-08"
+        other_anchor = "ops-70-a-thing-done---closed-2026-09-08"
+        archive = "\n".join(
+            [
+                "# Lanternlight roadmap archive",
+                "",
+                f"## {SECOND_HEADING}",
+                "",
+                "### Acceptance",
+                "",
+                f"## {other}",
+                "",
+                "### Acceptance",
+                "",
+            ]
+        )
+        report = archive_link_guard.check_texts(
+            roadmap_text=_roadmap(
+                _stub(SECOND_HEADING, SECOND_ANCHOR), _stub(other, other_anchor)
+            ),
+            archive_text=archive,
+            archive_rel_path=ARCHIVE_REL,
+        )
+        assert report.ok is True, report.format()
+
+
 class TestHeadingScanIgnoresFencedCode:
     """A ``## `` line inside a fence is a shell comment, not a heading.
 
