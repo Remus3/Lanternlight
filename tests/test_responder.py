@@ -1030,6 +1030,29 @@ class TestPendingReport:
         assert "DRAFTS PENDING" in report
 
 
+class TestAKitBundleDirectoryIsNotANote:
+    """MAIN 1029 s1: a ``...-from-MAIN-FLEET-KIT-vN/`` bundle is a DIRECTORY.
+
+    Hashing it as a unit fails (LW's responder logged a PermissionError on the
+    v2 bundle). This runner takes MAIN's "skip it as a bundle" option; the ORDER
+    note beside it carries the instruction, and each file inside is verified
+    by hand against MAIN's outbox at the same relative path.
+    """
+
+    def test_a_bundle_directory_is_neither_a_note_nor_unreadable(self, tmp_path):
+        inbox = tmp_path / "inbox"
+        inbox.mkdir()
+        for name in ("2026-10-03-1016-from-MAIN-FLEET-KIT-v3", "bundle-named-like.md"):
+            bundle = inbox / name
+            bundle.mkdir()
+            (bundle / "FLEET-COMMON.md").write_bytes(b"# kit\n")
+        (inbox / "2026-10-03-1016-from-MAIN-ORDER.md").write_bytes(b"# order\n")
+        notes, unreadable, error = responder._unread_notes(inbox, tmp_path / "seen.json")
+        assert error == ""
+        assert unreadable == []
+        assert [name for name, _text in notes] == ["2026-10-03-1016-from-MAIN-ORDER.md"]
+
+
 class TestAtomicWrites:
     def test_a_draft_is_written_through_a_temporary_then_replaced(self, channel, monkeypatch):
         channel.place("2026-09-19-2310-from-CS-REVIEW-cap.md", NOTE_FROM_CS)

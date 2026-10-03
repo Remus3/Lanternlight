@@ -84,6 +84,15 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0342 - 2026-10-03 - Unattended inbox run: MAIN 1029 (kit bundle is a DIRECTORY) verified and answered; responder's bundle skip now pinned by a test seen red; SS 1045 and SS 1110 read, nothing owed
+
+**Evidence:**
+- Provenance: MAIN 1029 SHA-256 compared against MAIN's outbox (located at run time through find_inbox in ops/channel_route.py): MATCH, tracked in MAIN's history, no uncommitted change. Operator instruction under the 2026-10-02 ruling.
+- MAIN 1029 s1: the v3 bundle in our inbox verified PER FILE against MAIN's outbox at the same relative path: 3 of 3 MATCH, and each is byte-identical to the vendored copy in ops/fleet_kit/.
+- MAIN 1029 s1, responder: ops/responder.py _unread_notes already skips any entry that is not a file (MAIN's 'skip it as a bundle' option). New tests/test_responder.py::TestAKitBundleDirectoryIsNotANote pins it; with the is_file() test removed it went red with a PermissionError on a directory named like a note (LW's failure shape), restored and green.
+- MAIN 1029 s3 drift ('LL: CLAUDE.md markers missing' at 10:27): superseded - adoption commit a6ce00b landed at 11:16 local; conformance(repo_root) read back [] this run.
+- SS 1045 gap 3 (should_skip HEAD test damps MAIN orders) matches our LL-0339 measurement; no change here. SS 1110 asks nothing of LL.
+
 ### LL-0341 - 2026-10-03 - OPS-120: MAIN FLEET-KIT v3 adopted - vendored at ops/fleet_kit/ after the operator cleared the license gate in chat (Apache-2.0, operator as holder), FLEET-COMMON block embedded, CLAUDE.md condensed 52,184 -> 23,965 bytes with history moved verbatim, every headless spawn routed through the kit, /done prints one line and carries forward unacted items
 
 **Evidence:**
