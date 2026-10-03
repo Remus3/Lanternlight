@@ -84,6 +84,19 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0344 - 2026-10-03 - Unattended inbox run: MAIN 1204 (FLEET-KIT v4) verified and applied - five kit files vendored byte-for-byte, conformance [] read back, the door's local tree-kill runner deleted in favour of the kit's
+
+**Evidence:**
+- Provenance: MAIN 1204 note plus each of the five bundle files (MANIFEST.json, FLEET-COMMON.md, fleet_headless.py, LICENSE, NOTICE) SHA-256 compared against MAIN's outbox copy at the same relative path (inbox found by find_inbox in ops/channel_route.py): 6 of 6 MATCH, and 6 of 6 equal MAIN's COMMITTED blob at HEAD. Digests equal the five the note lists. Operator instruction under the 2026-10-02 ruling.
+- License gate: kit LICENSE differs from this repository's LICENSE only in the appendix template line (verbatim upstream Apache-2.0); kit NOTICE names the operator as sole holder; fleet_headless.py carries SPDX Apache-2.0. All five files ASCII, LF. No ctypes, OpenProcess, ReadProcessMemory, SendInput or socket bind in the kit source.
+- Vendored: ops/fleet_kit/ now holds the five kit files plus our NOTICE.md (pins updated to the five v4 digests, kit's NOTICE allows a tree notice under another name). fleet_headless.conformance(repo_root) read back [] and KIT_VERSION 4. CLAUDE.md SECOND EXCEPTION names v4.
+- v4 behaviour changes went red first under v3-era tests: 6 failed (two timeout tests read 'RAN' because v4 catches the timeout inside spawn; three non-dict-stdout tests no longer raise; kit should_skip no longer damps an ORDER quoting the rule) plus 1 pinned capability surface. ops/headless_spawn.py now maps the kit's usage line error 'timeout' to TIMEOUT; tests updated to v4 behaviour.
+- MAIN 1204 s7 step 3: run_tree in ops/headless_spawn.py (local Popen + taskkill copy) deleted; _kit_run delegates to the kit's _run. New test_the_door_has_no_local_runner_copy; the real-child tree-kill timeout test now runs through the kit runner and passes. Capability exclusion surfaces re-pinned for both modules.
+- Not moved, with why: our HALT file, --bare/--auto-fallback refusal and usage-limit backoff stay in the door (kit v4 defers automatic backoff to v5; our HALT check logs its own refusal). Runner damping keeps its marker-line check.
+- Targeted tests: 255 passed (spawn, runner, capability, preflight files); ruff: All checks passed!
+- Full suite this run: 1 failed, 4456 passed, 22 skipped - the one failure was test_source_register reading a dotted module name in this entry as a host; reworded, that file 18 passed. A second run: 2 failed, 4455 passed, 22 skipped - the same register test on another dotted name (reworded) and test_tmp_retention's control-arm child failing collection on a sibling's temp directory that vanished mid-scan (FileNotFoundError, not ours; that file passed on rerun). Third run: 4457 passed, 22 skipped. The commit hook re-runs the full suite.
+- Reply to MAIN through deliver_to in ops/channel_route.py after this commit, naming it; read-back in the next commit.
+
 ### LL-0343 - 2026-10-03 - Wrap 2026-10-03 (fifth session): wrap refutation corrected the CLAUDE.md after-size (24,548 not 23,965) and found MAIN 0830 still unanswered; correction note sent; hand-off rewritten carrying 0830 forward
 
 **Evidence:**

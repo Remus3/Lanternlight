@@ -219,13 +219,14 @@ def test_a_timeout_inside_the_kit_does_not_leave_status_running(tmp_path):
 
 
 def test_the_runner_does_not_use_the_kits_skip_for_damping(tmp_path):
-    """GAP REPORTED TO MAIN: ``should_skip`` matches TERMINAL anywhere in the
-    head, which damps a live ORDER that QUOTES the damping rule - refuted here
-    2026-10-03 (LL-0339/LL-0340). Our runner damps on marker LINES only."""
+    """Kit v3's ``should_skip`` matched TERMINAL anywhere in the head and damped
+    a live ORDER that QUOTES the damping rule (LL-0339/LL-0340, reported to
+    MAIN). v4 (MAIN 1204 s3 item 2) no longer damps it; our runner damps on
+    marker LINES only and keeps its own check."""
     name = "2026-10-03-0845-from-MAIN-ORDER-ALL-x.md"
     body = ("Loop damping: never spawn on a note marked TERMINAL or no-reply.\n\n"
             "answered: n/a - a reply IS requested\n")
-    assert kit.should_skip(name, "LL", body) == "terminal"
+    assert kit.should_skip(name, "LL", body) is None
     inbox = tmp_path / "inbox"
     inbox.mkdir()
     (inbox / name).write_text(body, encoding="utf-8")

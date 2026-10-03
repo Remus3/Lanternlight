@@ -3,39 +3,46 @@
 This directory holds a work that Lanternlight did not write. It is vendored
 under Apache-2.0, the same license this repository carries, and this file is
 the attribution and the statement of changes that Apache-2.0 section 4(b)
-requires.
+requires. Since kit v4 the kit carries its own `LICENSE` (verbatim Apache-2.0)
+and `NOTICE`; the kit's NOTICE allows a tree's own notice under another name,
+and this file is that notice.
 
 ## Provenance - CURRENT PIN
 
 | Field | Value |
 |---|---|
-| Files | `FLEET-COMMON.md`, `fleet_headless.py`, `MANIFEST.json` |
+| Files | `FLEET-COMMON.md`, `fleet_headless.py`, `MANIFEST.json`, `LICENSE`, `NOTICE` |
 | Origin project | MAIN, the supervisor tree on this machine's note channel |
-| Published copy | MAIN's outbox, directory `2026-10-03-1016-from-MAIN-FLEET-KIT-v3/`, announced by MAIN note 1016 |
-| Kit version | `KIT_VERSION = 3` |
-| License | Apache-2.0 |
-| Copyright holder | this repository's own sole copyright holder, the operator - the same holder named in this repository's `LICENSE` and `NOTICE` |
-| Vendored | 2026-10-03, `OPS-120` |
+| Published copy | MAIN's outbox, directory `2026-10-03-1204-from-MAIN-FLEET-KIT-v4/`, announced by MAIN note 1204 |
+| Kit version | `KIT_VERSION = 4` |
+| License | Apache-2.0 (the kit's own `LICENSE`; `fleet_headless.py` carries `SPDX-License-Identifier: Apache-2.0`) |
+| Copyright holder | this repository's own sole copyright holder, the operator - the same holder named in this repository's `LICENSE` and `NOTICE`, and in the kit's own `NOTICE` |
+| Vendored | v3 2026-10-03 `OPS-120`; v4 2026-10-03 (MAIN 1204) |
 
 | File | SHA-256 of what was licensed |
 |---|---|
 | `FLEET-COMMON.md` | `5f3385eef377fa127a5d5e5741acd302bb5bf9fc13e92fdc610bf3f0630f0f54` |
-| `fleet_headless.py` | `c76c03c3ca830e157a78e00e0e97e25e8d1c88804b15d3aaa0580ce23851dbac` |
-| `MANIFEST.json` | `9e7a68333096b278d0b9d511e336f1df8bbd05d24d5565e657567b05b67fc255` |
+| `fleet_headless.py` | `2a538bdd2c43cd8721ba5052f7f4e0a82921853c405b114dd1845866b3d73c7f` |
+| `MANIFEST.json` | `18c085e1fde34ff6cca2fa889ce404d0d37daeff59e261f55651e6fc493d1b07` |
+| `LICENSE` | `c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4` |
+| `NOTICE` | `9642ee05a624c33334c76a2f62c30d5370143bd7cb51e81f72c67b6d90d7ac07` |
 
-All three were hashed against MAIN's outbox copy before a byte was copied: 3 of
-3 MATCH. The order notes (MAIN 0955, 1014, 1016) were also byte-identical to
-MAIN's outbox copies.
+All five were hashed against MAIN's outbox copy before a byte was copied: 5 of
+5 MATCH, and each also matched MAIN's COMMITTED blob at HEAD. The order note
+(MAIN 1204) was byte-identical to MAIN's outbox copy and committed there. The
+kit `LICENSE` differs from this repository's `LICENSE` only in the appendix
+template line (`[yyyy] [name of copyright owner]`, the verbatim upstream text).
 
 ## How the license gate was satisfied, not waived
 
-The kit arrived with no license statement and no copyright line, and the order
+v3 arrived with no license statement and no copyright line, and the order
 notes named none. `CLAUDE.md` lists the license gate as a floor that MAIN's
 authority cannot lift, so the vendoring was HELD by a distinct adjudicator on
 2026-10-03. The operator - the kit's owner and copyright holder - then ruled in
 this repository's own session chat the same day: the kit may be vendored into
 Lanternlight under Apache-2.0 with the operator as copyright holder, at
-`ops/fleet_kit/` rather than `third_party/fleet_kit/`.
+`ops/fleet_kit/` rather than `third_party/fleet_kit/`. v4 now states the same
+license and holder in its own `LICENSE` and `NOTICE`.
 
 ## Why this lives at `ops/fleet_kit/` and not `third_party/`
 
@@ -46,8 +53,8 @@ exception in its vendored inventory.
 
 ## Changes
 
-None. The three files are byte-identical to what was licensed, and
+None. The five kit files are byte-identical to what was licensed, and
 `tests/test_fleet_kit_conformance.py` fails if any of them changes. This
-NOTICE is the only file Lanternlight added to the directory. Do not edit a kit
-file: a defect is reported to MAIN, which ships a new kit version to every tree
-at once, and the new version replaces all three files in one commit.
+NOTICE.md is the only file Lanternlight added to the directory. Do not edit a
+kit file: a defect is reported to MAIN, which ships a new kit version to every
+tree at once, and the new version replaces all kit files in one commit.

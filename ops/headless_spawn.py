@@ -30,10 +30,10 @@ reported to MAIN, never a patch to the vendored copy):
   retry another way. An unreadable backoff file holds closed. The kit has none.
 * The per-tree HALT file ``ops/runtime/INBOX_RUNNER_HALT`` refuses every spawn
   through this door, the CLI included.
-* The child is run through :func:`run_tree` - stdin closed, output decoded as
-  UTF-8 with replacement, the WHOLE tree killed on timeout - because the kit's
-  default ``subprocess.run`` inherits stdin, decodes with the locale codec and
-  kills only the npm shim's cmd.exe.
+* The child is run through the kit's own v4 runner (MAIN 1204 s7 step 3: the
+  local ``run_tree`` copy was deleted) - stdin closed, output decoded as UTF-8
+  with replacement, the WHOLE tree killed on timeout. This door wraps it only
+  to keep the raw stdout and stderr for the usage-limit backoff.
 * A timeout, start failure or kit error escaping the kit is reported, not
   raised, and the status file the kit left at ``running`` is set back to
   ``idle``.
@@ -83,7 +83,6 @@ __all__ = [
     "NOTE_WORK",
     "SpawnResult",
     "main",
-    "run_tree",
     "spawn",
 ]
 
@@ -157,39 +156,11 @@ def _is_usage_limited(stdout: str, stderr: str) -> bool:
     return any(marker in text for marker in _USAGE_LIMIT_MARKERS)
 
 
-def run_tree(argv, *, timeout=None, **kwargs) -> subprocess.CompletedProcess:
-    """:func:`subprocess.run` that kills the WHOLE process tree on timeout.
-
-    ``claude`` on this machine is an npm ``.cmd`` shim, so the direct child is
-    cmd.exe and the CLI is its grandchild; ``subprocess.run`` kills only the
-    direct child and then waits on pipes the grandchild still holds - measured
-    by the refutation pass as a 1 s timeout returning after 10 s. ``taskkill /T``
-    takes the tree. It is called with an argument LIST, never through a shell,
-    so no MSYS path conversion can rewrite ``/F``.
-    """
-    if kwargs.pop("capture_output", False):
-        kwargs["stdout"] = kwargs["stderr"] = subprocess.PIPE
-    with subprocess.Popen(argv, **kwargs) as proc:
-        try:
-            out, err = proc.communicate(timeout=timeout)
-        except subprocess.TimeoutExpired:
-            if os.name == "nt":
-                subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)],
-                               capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
-            else:
-                proc.kill()
-            proc.communicate()
-            raise
-        return subprocess.CompletedProcess(argv, proc.returncode, out, err)
-
-
 def _kit_run(argv, **kwargs) -> subprocess.CompletedProcess:
-    """The ``run`` seam handed to the kit: :func:`run_tree`, stdin closed,
-    output decoded as UTF-8 with replacement rather than the locale codec."""
-    kwargs["stdin"] = subprocess.DEVNULL
-    kwargs["encoding"] = "utf-8"
-    kwargs["errors"] = "replace"
-    return run_tree(argv, **kwargs)
+    """The ``run`` seam handed to the kit: the kit's own v4 runner (stdin
+    DEVNULL by default, whole-tree kill on timeout); the kit itself passes
+    UTF-8 with replacement. Kept as a seam so the door can record the result."""
+    return kit._run(argv, **kwargs)
 
 
 def _default_exe() -> str:
@@ -267,7 +238,7 @@ def spawn(
         why = str(exc)
         prefix = "LIMIT: " if "budget" in why else "REFUSED: "
         return refuse(prefix + why)
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired:  # a kit_spawn seam that still raises
         _status_idle(root)
         _log(runtime, now, spawned=True, reason="TIMEOUT", returncode=None)
         return SpawnResult(True, "TIMEOUT: the child outlived its budget", None)
@@ -277,9 +248,9 @@ def spawn(
     except ValueError as exc:  # the kit's URL parse raises on a malformed port
         return refuse(f"REFUSED: the kit rejected the proxy URL ({type(exc).__name__})")
     except Exception as exc:
-        # The kit's usage_line calls .get on whatever stdout parsed to, so a
-        # JSON array or string stdout raises AFTER the child ran (a kit gap
-        # reported to MAIN). The run happened and is counted; say so.
+        # Since kit v4 a non-dict stdout yields null fields, but any other
+        # error after the child ran still re-raises; the run happened and is
+        # counted, so say so.
         _status_idle(root)
         done = captured.get("done")
         if done is None:
@@ -293,6 +264,10 @@ def spawn(
     stdout = (done.stdout or "") if done is not None else ""
     stderr = (done.stderr or "") if done is not None else ""
     rc = line.get("rc") if isinstance(line, dict) else None
+    if isinstance(line, dict) and line.get("error") == "timeout":
+        # Kit v4 catches the timeout, kills the tree and resets its status.
+        _log(runtime, now, spawned=True, reason="TIMEOUT", returncode=None)
+        return SpawnResult(True, "TIMEOUT: the child outlived its budget", None)
     limited = rc not in (0, None) and _is_usage_limited(stdout, stderr)
     if limited:
         streak = (state or {}).get("streak", 0) + 1

@@ -26,6 +26,7 @@ import json
 import os
 import subprocess
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 
@@ -357,17 +358,26 @@ def test_the_url_is_resolved_on_every_spawn(tmp_path):
     assert asked == [1, 1]
 
 
-def test_the_default_run_seam_closes_stdin_and_decodes_utf8(monkeypatch):
+def test_the_default_run_seam_closes_stdin_and_decodes_utf8(tmp_path, monkeypatch):
+    """Since kit v4 the door's seam is the kit's own runner; the kit passes
+    the UTF-8-with-replacement decode and its runner closes stdin."""
     seen = {}
 
-    def fake_tree(argv, **kw):
-        seen.update(kw)
-        return subprocess.CompletedProcess(argv, 0, "", "")
+    def fake_popen(argv, stdin=None, **kw):
+        seen.update(kw, stdin=stdin)
+        raise FileNotFoundError(argv[0])
 
-    monkeypatch.setattr(hs, "run_tree", fake_tree)
-    hs._kit_run(["x"], text=True, capture_output=True)
+    monkeypatch.setattr(kit.subprocess, "Popen", fake_popen)
+    hs.spawn("x", root=tmp_path, runtime=tmp_path / "rt", url_source=lambda: URL,
+             connect=_ok_connect, exe_source=lambda: "E")
     assert seen["stdin"] is subprocess.DEVNULL
     assert seen["encoding"] == "utf-8" and seen["errors"] == "replace"
+
+
+def test_the_door_has_no_local_runner_copy():
+    """MAIN 1204 s7 step 3: the local run_tree copy is deleted, not kept."""
+    assert not hasattr(hs, "run_tree")
+    assert "subprocess.Popen" not in Path(hs.__file__).read_text(encoding="utf-8")
 
 
 def test_the_default_run_seam_is_used_when_none_is_given(tmp_path, monkeypatch):
@@ -420,8 +430,7 @@ def test_the_default_runner_kills_the_whole_tree_on_timeout():
             "time.sleep(30)")
     t0 = time.monotonic()
     with pytest.raises(subprocess.TimeoutExpired):
-        hs.run_tree([sys.executable, "-c", code], timeout=2, capture_output=True, text=True,
-                    stdin=subprocess.DEVNULL)
+        hs._kit_run([sys.executable, "-c", code], timeout=2, capture_output=True, text=True)
     assert time.monotonic() - t0 < 15
 
 
@@ -543,11 +552,12 @@ def test_our_log_record_has_a_fixed_shape(tmp_path, out):
 
 
 @pytest.mark.parametrize("out", ["[1, 2]", '"text"', json.dumps({"usage": "nope"})])
-def test_a_kit_error_after_the_run_is_reported_not_raised(tmp_path, out):
-    """KIT GAP: usage_line calls .get on a non-object stdout and raises after
-    the child ran. The door reports it, and the status is not left running."""
+def test_a_non_object_stdout_is_a_plain_run_since_kit_v4(tmp_path, out):
+    """Kit v3 raised in usage_line on a non-object stdout after the child ran;
+    v4 (MAIN 1204 s3 item 6) yields null fields instead. The door reports a
+    plain run, and the status is not left running."""
     res = _spawn(tmp_path, runner=_Runner(stdout=out))
-    assert res.spawned and res.reason.startswith("KIT ERROR")
+    assert res.spawned and res.reason == "RAN"
     assert res.returncode == 0
     status = json.loads((tmp_path / kit.STATUS_REL).read_text(encoding="ascii"))
     assert status["state"] == "idle"

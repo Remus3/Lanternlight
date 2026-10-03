@@ -340,14 +340,13 @@ SPAWN_RUNTIME_ENTRY_POINTS: dict[str, tuple[tuple[str, str], ...]] = {
 SPAWN_SCOPE_EXCLUSIONS: dict[str, tuple[str, tuple[str, ...]]] = {
     "ops/headless_spawn.py": (
         "NOT PROBED ON PURPOSE. Its only spawn is the claude CLI, which bills a "
-        "real subscription through the operator's proxy (LL-0317), plus a "
-        "taskkill /T of that same child on timeout. A runtime probe would have "
+        "real subscription through the operator's proxy (LL-0317), run by the "
+        "fleet kit's own runner since v4 (MAIN 1204). A runtime probe would have "
         "to start a real billed session to observe anything. Every spawn is "
         "covered instead by tests/test_headless_spawn.py through an injected "
-        "runner, and run_tree's tree kill by a real throwaway python child.",
-        ("import subprocess", "shutil.which", "subprocess.CREATE_NO_WINDOW",
-         "subprocess.CompletedProcess", "subprocess.DEVNULL", "subprocess.PIPE",
-         "subprocess.Popen", "subprocess.TimeoutExpired", "subprocess.run"),
+        "runner, and the kit runner's tree kill by a real throwaway python child.",
+        ("import subprocess", "shutil.which", "subprocess.CompletedProcess",
+         "subprocess.TimeoutExpired"),
     ),
     "ops/fleet_kit/fleet_headless.py": (
         "NOT PROBED ON PURPOSE. MAIN's fleet kit, vendored and digest-pinned "
@@ -355,8 +354,12 @@ SPAWN_SCOPE_EXCLUSIONS: dict[str, tuple[str, tuple[str, ...]]] = {
         "the claude CLI, which bills a real subscription through the "
         "operator's proxy, so a runtime probe would start a real billed "
         "session. Covered instead by tests/test_spawn_routes_through_fleet_kit.py "
-        "through the kit's own injected run seam.",
-        ("getattr", "import subprocess", "shutil.which", "subprocess.run"),
+        "through the kit's own injected run seam. v4 (MAIN 1204) adds a "
+        "Popen runner that kills the process tree with taskkill on timeout.",
+        ("getattr", "import subprocess", "subprocess.CompletedProcess",
+         "subprocess.DEVNULL", "subprocess.PIPE", "subprocess.Popen",
+         "subprocess.SubprocessError", "subprocess.TimeoutExpired",
+         "subprocess.run"),
     ),
     "scripts/arm_inbox_runner.py": (
         "NOT PROBED ON PURPOSE. Its only spawn is schtasks, and a probe that "

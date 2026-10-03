@@ -105,7 +105,8 @@ strings, payload shape). Nothing under `moon_sync_inbox/` is ever added to git.
 when that sibling NAMES A LICENSE we can accept. THREE instances:
 `third_party/lw_write_tracer/` (`OPS-84`), `third_party/rc_channel/`
 (2026-09-20, `OPS-91`, Amberstone `docs/CHANNEL.md`, `CHANNEL_VERSION: 2`), and
-`ops/fleet_kit/` (2026-10-03, `OPS-120`, MAIN's fleet kit v3: the operator, its
+`ops/fleet_kit/` (2026-10-03, `OPS-120`, MAIN's fleet kit v3, now v4 with its
+own Apache-2.0 LICENSE and NOTICE per MAIN 1204: the operator, its
 copyright holder, ruled Apache-2.0 in this repo's chat, and chose
 `ops/fleet_kit/` over `third_party/` because the kit's `conformance()` and
 MAIN's drift sweep require that path - the one exception to the location rule
