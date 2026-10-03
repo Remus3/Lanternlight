@@ -142,7 +142,7 @@ def _check_url(url: str) -> tuple[tuple[str, int] | None, str]:
     """Return ((probe_host, port), "") or (None, reason).
 
     STRICT ON PURPOSE. Python's parser and the CLI's parser disagree about
-    some URLs: ``http://evil.invalid\\@localhost:3456`` is host ``localhost``
+    some URLs: ``http://evil.invalid\\@localhost:18999`` is host ``localhost``
     to :func:`urllib.parse.urlsplit` and host ``evil.invalid`` to Node, so a
     check that trusts the parsed host would probe our proxy while the child
     talked elsewhere - measured by the 2026-10-02 refutation pass. So any

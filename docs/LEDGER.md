@@ -84,6 +84,17 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0324 - 2026-10-03 - Wrap of the 2026-10-02/03 session: armed runner verified firing on schedule, wrap refutation pass refuted the 'no machine value in tracked files' claim on the proxy port, fixtures moved to a neutral port
+
+**Evidence:**
+- Full suite under Git Bash at the wrap: first run 1 failed, 4206 passed, 22 skipped; re-run 4207 passed, 22 skipped. The single failure did not reproduce and the suite-run records do not name it - recorded as UNEXPLAINED, not as green.
+- Ruff: All checks passed.
+- The armed \Lanternlight\InboxRunner fired on schedule six times before the wrap (the inbox runner log under ops/runtime/, six RAN lines) and produced commits 9380317, f12a1b9, 7971473 and 06d113c with ledger entries LL-0318 to LL-0323, all spawned through the proxy gate (the spawn log beside it: every line rc 0, no URL, no port).
+- Wrap refutation pass: 6 of 7 claims CONFIRMED. REFUTED: the operator's proxy port appeared in tracked files - as test fixtures and one docstring example in ops/headless_spawn.py and tests/test_headless_spawn.py, and in LL-0317's text. Fixtures and docstring moved to a neutral port; tests/test_headless_spawn.py and tests/test_inbox_runner.py 65 passed after. LL-0317 is NOT edited, because ledger entries are append-only; this entry is the correction. Neither the URL path nor the account appears in any tracked file (git grep for the account-path segment and for the mail domain: zero).
+- Pass also noted, not yet acted on: runner commit f12a1b9 edited ops/inbox_runner.py itself (its OPS-115 fix makes the prompt hook refuse to acknowledge while the runner lock is held, so a live-but-hung runner would block acknowledgement; a dead owner's lock is reclaimed by ops/loop/guard.py); nearly every spawn logs stderr_chars 225, unexplained; the 05:11Z slot has no runner line.
+- INBOX_RUNNER_HALT was created for the duration of the wrap so two sessions would not commit at once, and removed at its end.
+- Capture watcher: check_watcher NO_RECORD, correct under the OPERATOR DISARM (LL-0234). Stop-claim audit: one [FAIL] summing several quoted suite counts - the known quotation artifact.
+
 ### LL-0323 - 2026-10-03 - Unattended inbox runner: SS 0000, RSC 0001, CS 0002, RC-RESPONDER 0002 and 0017 read in full and answered in one note; our age-first reap re-measured still open; RSC's OPS-116 guess (a brief with no commit step) ruled out for this runner
 
 **Evidence:**

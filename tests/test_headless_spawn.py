@@ -26,7 +26,7 @@ import pytest
 
 from ops import headless_spawn as hs
 
-URL = "http://localhost:3456/some-path"
+URL = "http://localhost:18999/some-path"
 
 
 def _ok_probe(host, port):
@@ -52,18 +52,18 @@ class _Runner:
 
 def test_user_store_wins_over_process_env():
     got = hs.resolve_base_url(
-        user_store=lambda name: "http://127.0.0.1:3456/a",
-        environ={hs.HEADLESS_VAR: "http://127.0.0.1:3456/b"},
+        user_store=lambda name: "http://127.0.0.1:18999/a",
+        environ={hs.HEADLESS_VAR: "http://127.0.0.1:18999/b"},
     )
-    assert got == "http://127.0.0.1:3456/a"
+    assert got == "http://127.0.0.1:18999/a"
 
 
 def test_process_env_is_the_fallback_when_user_store_is_unset():
     got = hs.resolve_base_url(
         user_store=lambda name: None,
-        environ={hs.HEADLESS_VAR: "http://127.0.0.1:3456/b"},
+        environ={hs.HEADLESS_VAR: "http://127.0.0.1:18999/b"},
     )
-    assert got == "http://127.0.0.1:3456/b"
+    assert got == "http://127.0.0.1:18999/b"
 
 
 def test_blank_values_count_as_unset():
@@ -97,8 +97,8 @@ def test_refused_proxy_refuses(tmp_path):
 
 
 @pytest.mark.parametrize("bad", [
-    "http://example.com:3456/x", "https://api.anthropic.com", "http://10.0.0.5:3456",
-    "not a url", "http://localhost/x", "ftp://127.0.0.1:3456",
+    "http://example.com:18999/x", "https://api.anthropic.com", "http://10.0.0.5:18999",
+    "not a url", "http://localhost/x", "ftp://127.0.0.1:18999",
 ])
 def test_non_loopback_or_malformed_url_refuses(tmp_path, bad):
     runner = _Runner()
@@ -109,10 +109,10 @@ def test_non_loopback_or_malformed_url_refuses(tmp_path, bad):
 
 def test_probe_is_aimed_at_loopback_on_the_urls_port(tmp_path):
     aimed = []
-    hs.spawn(["-p", "x"], base_url="http://localhost:3456/p",
+    hs.spawn(["-p", "x"], base_url="http://localhost:18999/p",
              probe=lambda h, p: aimed.append((h, p)) or True,
              runner=_Runner(), runtime=tmp_path)
-    assert aimed == [("127.0.0.1", 3456)]
+    assert aimed == [("127.0.0.1", 18999)]
 
 
 @pytest.mark.parametrize("argv", [
@@ -137,7 +137,7 @@ def test_the_log_never_carries_the_url(tmp_path):
     hs.spawn(["-p", "x"], base_url=URL, probe=_refused_probe, runner=_Runner(), runtime=tmp_path)
     hs.spawn(["-p", "x"], base_url=URL, probe=_ok_probe, runner=_Runner(), runtime=tmp_path)
     text = (tmp_path / hs.LOG_NAME).read_text(encoding="utf-8")
-    assert "some-path" not in text and "3456" not in text
+    assert "some-path" not in text and "18999" not in text
 
 
 # --- the child environment --------------------------------------------------
@@ -273,11 +273,11 @@ def test_real_probe_sees_a_listener_and_a_closed_port():
 
 
 @pytest.mark.parametrize("bad", [
-    "http://evil.invalid\\@localhost:3456/x",
-    "http://user@localhost:3456/x",
-    "http://evil.invalid@127.0.0.1:3456",
-    "http://localhost:3456\\@evil.invalid/x",
-    "http://LOCALHOST:3456 /x",
+    "http://evil.invalid\\@localhost:18999/x",
+    "http://user@localhost:18999/x",
+    "http://evil.invalid@127.0.0.1:18999",
+    "http://localhost:18999\\@evil.invalid/x",
+    "http://LOCALHOST:18999 /x",
 ])
 def test_userinfo_and_backslash_tricks_refuse(tmp_path, bad):
     runner = _Runner()
@@ -335,9 +335,9 @@ def test_a_malformed_streak_holds_closed(tmp_path):
 
 def test_ipv6_loopback_is_probed_on_ipv6(tmp_path):
     aimed = []
-    hs.spawn(["-p", "x"], base_url="http://[::1]:3456/p",
+    hs.spawn(["-p", "x"], base_url="http://[::1]:18999/p",
              probe=lambda h, p: aimed.append((h, p)) or True, runner=_Runner(), runtime=tmp_path)
-    assert aimed == [("::1", 3456)]
+    assert aimed == [("::1", 18999)]
 
 
 def test_the_default_runner_kills_the_whole_tree_on_timeout():

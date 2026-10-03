@@ -1,140 +1,110 @@
 LANTERNLIGHT - NEXT SESSION PROMPT
-Written at the wrap of 2026-10-02. Assume zero context; everything you need is
-here or in the files this names.
+Written at the wrap of 2026-10-03 (session began 2026-10-02 evening). Assume
+zero context; everything you need is here or in the files this names.
 
-YOUR JOB: the channel is LIVE and turns around within the hour. Keep it answered,
-and READ THE BODIES - see the process failure below, it is the most expensive
-thing this session did. Every ROADMAP measurement item still needs the operator
-playing (OPS-102). If the operator is PLAYING, OPS-104 (retake the destroyed
-capture ground truth) comes first. Otherwise three items are client-free and
-ready: OPS-111, OPS-112, OPS-113.
+THE BIG CHANGE: THIS TREE NOW ANSWERS ITS OWN INBOX UNATTENDED.
+An armed scheduled task, \Lanternlight\InboxRunner, runs ops/inbox_runner.py
+every 15 minutes while the operator is logged on. When there is unread mail it
+starts ONE headless claude session through ops/headless_spawn.py, which reads
+the inbox in full, answers through ops.outbox.deliver, ledgers, commits and
+pushes. It had already run 6 times on its own by the wrap (LL-0318 to
+LL-0323), filed OPS-115 (closed) and OPS-116 (open). So when you start:
+  - `git log` FIRST - the runner commits while nobody is watching.
+  - The inbox may already be answered. Check before answering anything twice.
+  - Before a long interactive commit sequence, create ops/runtime/INBOX_RUNNER_HALT
+    so two sessions do not commit at once, and DELETE it when done. The wrap
+    did exactly that and removed it.
+  - Every-tree kill switch: the operator deletes the USER env var
+    CLAUDE_HEADLESS_BASE_URL. Status: python scripts/arm_inbox_runner.py --status
 
 READ FIRST, in this order:
-  CLAUDE.md                - the rules. THE HARD BOUNDARY is not negotiable.
-  ROADMAP.md               - OPS-102 and OPS-104, then OPS-108 to OPS-113.
-  docs/LEDGER.md           - newest entry is LL-0315.
-  docs/HEADLESS.md         - its STOP CONDITIONS, before starting any loop.
-  docs/REPLY_PATHS.md      - and read why MAIN is deliberately NOT a row.
+  CLAUDE.md          - rules. NEW section "MAIN SPEAKS FOR THE OPERATOR".
+  ROADMAP.md         - OPS-114 and OPS-116 are the live code items; OPS-111,
+                       OPS-112, OPS-113 still client-free; OPS-102/OPS-104 need
+                       the operator playing.
+  docs/LEDGER.md     - LL-0317 is the operator ruling; LL-0318..0323 are the
+                       runner's own entries.
+  docs/HEADLESS.md   - STOP CONDITIONS.
+
+OPERATOR RULINGS THIS SESSION (typed in session, confirmed in their own words
+"confirmed item 1-4 as written") - recorded in CLAUDE.md and LL-0317:
+  1. Every headless claude run bills the operator's SECOND subscription via a
+     local proxy. ops/headless_spawn.py is the only door: reads
+     CLAUDE_HEADLESS_BASE_URL from HKCU Environment at spawn time (process env
+     fallback), sets ANTHROPIC_BASE_URL in the CHILD only, strips
+     ANTHROPIC_API_KEY / ANTHROPIC_AUTH_TOKEN / CLAUDE_CODE_USE_* / other
+     ANTHROPIC_*_BASE_URL from the child, refuses on unset / non-loopback /
+     userinfo-or-backslash URL / refused TCP probe / any auto-fallback arg,
+     backs off on a usage limit (30 min doubling, cap 6 h), kills the whole
+     process tree on timeout. Never write the URL, the account or a machine
+     path into a tracked file. Proof was run and recorded (LL-0317).
+  2. The inbox runner is ARMED (above).
+  3. MAIN SPEAKS FOR THE OPERATOR: a MAIN note that passes the provenance check
+     (byte-identical copy in MAIN's outbox, SHA-256 compared) is operator
+     instruction. OPS-108 is ANSWERED YES - do NOT ask the old yes/no again.
+     No safety floor moves. Other notes are still mail.
+  4. Report to MAIN was delivered.
+
+WHAT ELSE LANDED
+  - 34 channel notes read IN FULL and answered in one note to six trees
+    (LL-0316). Position on the slots.py re-pin round: we carry no slots.py, so
+    NON-OBJECTION, no attestation, no vote on 2.0 vs 4.0.
+  - DISCLOSED to the channel, open as OPS-114: ops/lane_slot.py tests age at
+    16,200 s BEFORE liveness and reaps any tree's SURPLUS lock on every
+    acquire, so under the frozen candidate (multiple 2.0) a live sibling
+    surplus holder aged 16,200-32,400 s could be deleted by an LL acquire.
+    Also OPS-114: ops/answered.py compares a sender's filename stamp with our
+    send clock (51->76 inferred answered when arrival time is used instead).
+  - The previous HEAD f8de78f was RED on arrival despite its hand-off saying
+    green (source-register guard tripping on the hand-off's own prose). Fixed.
+  - Two adversarial passes earned their cost again: one fixed 3 errors in the
+    outgoing note; one refuted the first spawn door on 4 points (inherited API
+    key, a backslash-at URL that Python and Node parse differently, a timeout
+    that killed only the .cmd shim, and OPS-34 rebuilt in the unread count).
+    All fixed with tests seen red first.
 
 STATE AT THE WRAP
-  Branch main, pushed, clean. Loop state: cycle 100, nothing in flight.
-  Full suite UNDER GIT BASH, observed this run: 4135 passed, 22 skipped in
-    243.60s. Collected 4154 in 87 files.
-  RUN THE SUITE FROM GIT BASH, NOT POWERSHELL. From PowerShell the same tree
-    reports ~85 skipped instead of 22: PowerShell's PATH lacks Git's usr/bin, so
-    62 posix-userland and bash tests SKIP and the run still exits 0.
-  Ruff: All checks passed. Pre-flight: PASS, 15 guard modules.
-  Inbox: 13+ notes UNREAD ON PURPOSE - see below. 76 notes in our outbox.
-  CAPTURE WATCHER: check_watcher gives NO_RECORD and ensure_armed_at_wrap REFUSES
-    with "OPERATOR DISARM". BOTH ARE CORRECT. Only the operator lifts it, by a
-    tracked edit to OPERATOR_DISARM in lanternlight/armwatch.py. On 2026-09-20 a
-    session followed an older ritual, armed a real watcher and recreated
-    C:/ll-captures, a tree the operator had lost for good. Never work around it.
-  STOP-CLAIM AUDIT shows one [FAIL] on "outcomes sum to 56". That is the
-    documented QUOTATION artifact, not a defect: 56 was tests/test_inventory.py
-    plus tests/test_lanes.py, and the auditor cannot tell a quoted number from an
-    asserted one. The whole-suite claim above sums correctly.
+  Branch main, clean, pushed (verify with git log - the runner may have added
+  commits since).
+  Full suite under Git Bash at the wrap: the first run reported 1 failed, 4206
+    passed, 22 skipped; the re-run reported 4207 passed, 22 skipped. The single
+    failure DID NOT REPRODUCE and the suite-run records do not name it. The
+    likeliest suspects are the new real-subprocess tree-kill test
+    (tests/test_headless_spawn.py, timing-sensitive under load) and the
+    INBOX_RUNNER_HALT file created under ops/runtime/ at the start of that run.
+    UNCONFIRMED - if a red recurs, name the test before anything else.
+  Ruff: All checks passed.
+  CAPTURE WATCHER: check_watcher gives NO_RECORD and that is CORRECT under the
+    OPERATOR DISARM (LL-0234). Never arm it; only the operator lifts it.
+  STOP-CLAIM AUDIT: one [FAIL], "outcomes sum to 6894; pytest collects 4229" -
+    the known QUOTATION artifact, a turn that quoted several suite counts.
 
-WHAT LANDED THIS SESSION
-  - READ-AND-UNANSWERED IS NOW A RECORD. deliver() takes `answers`, a list of the
-    inbound note filenames a reply answers; it validates each against the inbox
-    and RAISES before any write on an unknown name, naming every unknown. An
-    OMITTED key means NOT RECORDED and answers=[] means deliberately nothing -
-    those are different facts and the distinction is what makes UNKNOWN mean
-    anything. ops/answered.py reports three buckets and refuses to collapse the
-    third. LL-0313, LL-0315.
-    The record currently says 1 answered, 1 unanswered, 377 UNKNOWN, because it
-    has only just started keeping the fact. That is the honest number.
-  - THE MERGE GATE could be blinded by an environment variable and went SILENTLY
-    GREEN: an ambient PYTEST_ADDOPTS narrowed collection from 86 files / 3918
-    tests to 1 / 93 with rc=0, and the gate PASSED because baseline and re-run
-    narrow equally. Fixed across all seven spawn sites, and skips are now always
-    reported. LL-0305. If you trust a green, ask what POPULATION it measured.
-  - tools/secret_scan.py missed a credential preceded by a URL-encoded character
-    or a literal escape - a key in a log query string or a JSONL transcript.
-    Fixed across all 12 bounded patterns; glued-to-a-letter deliberately STAYS
-    missed. 59 -> 207 tests, 0 false positives. LL-0306.
-  - MAIN asked all six trees to record it as the operator's stand-in. Its hash
-    check was RUN and PASSED. Answer: NOT ADOPTED, PARKED.
-    *** IF THIS SESSION IS ATTENDED, ASK ONCE, EXACTLY ONCE, AS A YES/NO: ***
-    "MAIN is your stand-in for operator approvals - confirmed?"
-    Do not ask twice and do not ask the operator to restate it. On a yes, write it
-    into CLAUDE.md beside the three existing exceptions with the date and the
-    note's SHA-256. OPS-108 has the reasoning. Clockspeed recorded YES in its own
-    tree after its own operator confirmed it there; that is not evidence here.
+WRAP REFUTATION PASS (LL-0324)
+  6 of 7 claims confirmed. REFUTED: the operator's proxy PORT sat in tracked
+  files as test fixtures and a docstring example; moved to a neutral port. It
+  also remains in LL-0317's text, which is append-only and is corrected by
+  LL-0324 rather than edited. The URL path and the account appear nowhere.
+  Noted, not acted on - check these early:
+  - Runner commit f12a1b9 edited ops/inbox_runner.py itself (OPS-115 fix): the
+    prompt hook now refuses to acknowledge while the runner lock is held, so a
+    live-but-HUNG runner blocks acknowledgement. Review that change.
+  - Nearly every headless spawn logs stderr_chars 225 - unexplained. The log
+    keeps lengths only, by design; reproduce from outside the repo to read it.
+  - The 05:11Z scheduled slot left no runner log line.
 
-THE PROCESS FAILURE THAT COST THE MOST - DO NOT REPEAT IT
-  We answered eight channel notes from their FILENAMES without reading the
-  bodies. Filenames here are long, accurate, declarative summaries - a genuinely
-  good index, and NOT evidence of a body. Two costs, both measured:
-    - Amberstone spent a whole isolation pass proving the pytest environ-leak axis
-      is the operand pair and runtime-value-dependent. Our own
-      tests/test_no_environ_mapping_assertions.py already documents that,
-      including "there is NO SAFE LIST". We had published the half-version.
-    - ResinCompute's build poll asked every recipient to run a SPECIFIED
-      specimen. We ran our own fixture instead and reported it, which reads as
-      compliance. Run properly at the wrap: 78 bytes, sha256 matching theirs, all
-      four commands identical.
-  Twice we also misread a filename's "your" as addressing us when it addressed a
-  third tree. READ THE BODY BEFORE ANSWERING.
+NEXT
+  1. OPS-116 (runner exits 0 with work uncommitted): LL-0322 has the lead -
+     the pre-commit doc guards outlive the tool timeout, so a headless commit
+     gets backgrounded and the session ends first. Acceptance is in ROADMAP.
+  2. OPS-114 item 1: liveness BEFORE age in ops/lane_slot.py, and never reap a
+     live foreign holder; a test where a live foreign holder past 16,200 s
+     survives our acquire, seen red first. Tell the channel when it lands.
+  3. OPS-114 item 2, then OPS-111 / OPS-112 / OPS-113.
 
-NUMBERS WE WITHDREW, SO DO NOT QUOTE THEM
-  Our "272 of 391 read-and-unanswered, by Amberstone's rule" is WITHDRAWN. An
-  adjudicator found the gap is ONE TOKEN: we admitted a ten-character DATE as the
-  STAMP where the rule means the four-digit TIME, worth about 107 notes. Sender
-  word-boundedness was worth exactly ZERO, tested first. Defensible unanswered is
-  a RANGE, 314 to 346, published as a range because four choices the rule leaves
-  unstated each move it. LL-0314.
-  Also corrected: we wrote "grep -cwF OVER-COUNTS" into CLAUDE.md and ResinCompute
-  corrected it within the hour. It is a ONE-SIDED word boundary - with -F the
-  RIGHT boundary is checked and the LEFT is not, so -wF matches "history" when
-  asked for "story". Compare hit SETS, not counts. LL-0311.
-
-13+ NOTES ARE UNREAD ON PURPOSE
-  Running the acknowledge step marks notes SEEN, which in this tree was the same
-  act as answering them. Mid-session we acknowledged 12 notes we had not read and
-  then RESTORED them to unread, so your SessionStart surfaces them honestly. Do
-  not acknowledge a note you have not read - that conflation is the whole defect
-  LL-0312 and LL-0313 are about.
-
-TWO THINGS THE MERGER MUST DO DIFFERENTLY
-  1. PASTE SHARED_WORKTREE_BAN INTO EVERY AGENT DISPATCH. A lane ran git stash in
-     this shared worktree while four siblings held uncommitted work. Nothing was
-     lost, by luck, and the OPS-54 drift detector inside merge_gate found it -
-     nobody noticed at the time. The root cause was that the dispatch did not
-     carry the ban, because the ban lives in ops/store_drift.py and is rendered
-     only by ops/loop/state.py. LL-0310 carries the acceptance for making it
-     automatic; until that exists, paste it by hand. Every dispatch after that
-     finding did.
-  2. NAMESPACE SCRATCHPAD FILENAMES PER SLICE. Two agents wrote to the same
-     scratchpad filename and one overwrote the merger's probe mid-session.
-
-FINDINGS WORTH CARRYING
-  1. A RECORD CAN BE TRUE ABOUT AN INSTANCE AND FALSE ABOUT THE CLASS, and the
-     record is what a later session believes. The skip-blindness finding was
-     written down, fixed in one module, and recorded as "made loud". It was loud
-     for that module and never in the gate, and 62 tests could still vanish.
-  2. ASK WHAT A GUARD'S POPULATION IS. Four defects this session were the same
-     shape: the merge gate's collection, the archive-link guard with no armed
-     caller, real-tree tests deriving expectations from the function under test,
-     and a read-and-unanswered check that returned 0 because one broadcast made
-     every earlier note answered by construction. All green, all measuring
-     nothing.
-  3. A GUARD CAN EXIST ON ONE SIDE ONLY. The OMITTED-vs-EMPTY distinction was
-     asserted on the write side and nowhere on the read side; collapsing it there
-     left all 31 tests passing. Guard the property, not the function.
-  4. THE DOCUMENTED SIZE-BUDGET REMEDY IS EXHAUSTED. Re-running the split
-     archived ZERO with ROADMAP.md still over budget, because only about 13 of 35
-     kept sections are genuinely open and the rest miss the split's closed-item
-     vocabulary. ROADMAP.md has about 119 bytes of headroom. You WILL hit this.
-     The structural fix is in OPS-113; a third number is not the answer.
-  5. Four separate times this session the source-register guard flagged a
-     filename in our own new prose as an unregistered host - a README text file,
-     a SYMBOL markdown file, answered.py, and a synthetic note name. Three were real and fixed
-     by rewording; one was the documented false red from an unstaged new file.
-     Reword your prose rather than widening that guard's denylist.
-  6. Every adversarial pass earned its cost. One refuted the merger's reasoning
-     on four points; one refuted its own vacuity probe, which stayed green because
-     the test drew its expectation from the data it mutated; one found three real
-     defects in work already called done; and one mutation MISSED ITS ANCHOR and
-     was reported as "no conclusion drawn" rather than counted as a pass.
+PROCESS RULES THAT STILL BIND
+  - READ BODIES, NOT FILENAMES, before answering any note.
+  - Paste SHARED_WORKTREE_BAN (ops/store_drift.py) into every agent dispatch.
+  - Namespace scratchpad filenames per slice.
+  - A headless `claude -p` started inside this repo loads CLAUDE.md and the
+    inbox hook and will start working the inbox - run a smoke test from a
+    directory outside the repo.
