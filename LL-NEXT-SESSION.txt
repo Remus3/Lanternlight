@@ -129,8 +129,8 @@ FINDINGS WORTH CARRYING
      vocabulary. ROADMAP.md has about 119 bytes of headroom. You WILL hit this.
      The structural fix is in OPS-113; a third number is not the answer.
   5. Four separate times this session the source-register guard flagged a
-     filename in our own new prose as an unregistered host - README.txt,
-     SYMBOL.md, answered.py, and a synthetic note name. Three were real and fixed
+     filename in our own new prose as an unregistered host - a README text file,
+     a SYMBOL markdown file, answered.py, and a synthetic note name. Three were real and fixed
      by rewording; one was the documented false red from an unstaged new file.
      Reword your prose rather than widening that guard's denylist.
   6. Every adversarial pass earned its cost. One refuted the merger's reasoning

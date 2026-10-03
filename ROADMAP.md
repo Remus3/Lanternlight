@@ -5128,25 +5128,6 @@ override is how this session answered MAIN.
 
 ---
 
-## OPS-110. The merge gate could be blinded by an environment variable and was blind to a test that starts SKIPPING - CLOSED 2026-10-02, `LL-0305`
-
-Filed 2026-10-02 from a sibling's report, then re-measured here. Both halves are
-the same class: the POPULATION the gate measures shrinks while the NUMBER it
-compares does not, so it reports success over work that never ran.
-
-**CLOSED 2026-10-02, `LL-0305`.** The collection subprocess inherited the parent
-environment, so an ambient `PYTEST_ADDOPTS` narrowed it from 86 files / 3918 tests
-to 1 / 93 with rc=0 - and the gate PASSED, because baseline and re-run narrow
-EQUALLY and the per-file floor self-adjusts. Fixed by sanitising and REPORTING
-across all seven spawn sites. Second half: a skipped test is still a COLLECTED
-test, so the floor never moves; `OPS-104` knew this and it had been made loud for
-one module and never in the gate. Skips are now always reported, deselection is a
-finding. Figures and the vacuity proof are in `docs/LEDGER.md`.
-
-All five acceptance criteria were met; they and the evidence are in `LL-0305`.
-
----
-
 ## OPS-111. `tools/archive_link_guard.py` has no armed caller, and its real-tree tests cannot fail
 
 Filed 2026-10-02 from a sibling's analysis, with a demonstration this project can
@@ -5247,6 +5228,14 @@ so a split can reach what it keeps. A session finding this item open and a budge
 firing again takes the structural fix, not a third number. The PER-DOCUMENT
 ceiling here was NOT raised and has under 100 bytes of headroom, which is why
 this is a paragraph and not an item.
+
+## OPS-114. `ops/lane_slot.py` can reap a sibling's LIVE lock; `ops/answered.py` mixes two clocks
+
+Filed 2026-10-02 from the slots round, `LL-0316`. (1) `is_stale` returns stale on
+age at 16,200 s BEFORE liveness, acquire reaps any tree's SURPLUS lock, an
+unreadable payload is stale at once. Accept: a test where a live foreign holder
+past 16,200 s survives our acquire, seen red first. (2) "strictly later" compares
+a sender's filename stamp with our send clock; accept: inbound time is arrival.
 
 ## Archive index
 
@@ -5357,3 +5346,4 @@ links to that item's full original text.
 - **OPS-105** - Correct our own tmp-retention record - CLOSED 2026-09-20, `LL-0301` - [full text](docs/ROADMAP_ARCHIVE.md#ops-105-correct-our-own-tmp-retention-record---closed-2026-09-20-ll-0301)
 - **OPS-106** - One-off full-history scan for operator identifiers and non-ASCII - CLOSED 2026-09-20, `LL-0302`, rewrite DECLINED - [full text](docs/ROADMAP_ARCHIVE.md#ops-106-one-off-full-history-scan-for-operator-identifiers-and-non-ascii---closed-2026-09-20-ll-0302-rewrite-declined)
 - **OPS-107** - Stop our own scratch output landing in the Git install root - CLOSED 2026-09-20, `LL-0303` - [full text](docs/ROADMAP_ARCHIVE.md#ops-107-stop-our-own-scratch-output-landing-in-the-git-install-root---closed-2026-09-20-ll-0303)
+- **OPS-110** - The merge gate could be blinded by an environment variable and was blind to a test that starts SKIPPING - CLOSED 2026-10-02, `LL-0305` - [full text](docs/ROADMAP_ARCHIVE.md#ops-110-the-merge-gate-could-be-blinded-by-an-environment-variable-and-was-blind-to-a-test-that-starts-skipping---closed-2026-10-02-ll-0305)

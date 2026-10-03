@@ -9,7 +9,7 @@ the original text, verbatim, in its original order, and the live roadmap
 carries a one-line stub linking to each one. If an item here turns out to
 matter again, move the section back rather than rewriting it.
 
-Sections in this archive: 103.
+Sections in this archive: 104.
 
 ---
 
@@ -12859,4 +12859,23 @@ are redacted and recorded, not deleted.
   (`/tmp_x` and `$env:TMPDIR` passed) and corrected the item's own premise.
   Known gap, in the module docstring: prose and inline code in Markdown other
   than `CLAUDE.md`, `docs/HEADLESS.md` and the lane contracts.
+
+## OPS-110. The merge gate could be blinded by an environment variable and was blind to a test that starts SKIPPING - CLOSED 2026-10-02, `LL-0305`
+
+Filed 2026-10-02 from a sibling's report, then re-measured here. Both halves are
+the same class: the POPULATION the gate measures shrinks while the NUMBER it
+compares does not, so it reports success over work that never ran.
+
+**CLOSED 2026-10-02, `LL-0305`.** The collection subprocess inherited the parent
+environment, so an ambient `PYTEST_ADDOPTS` narrowed it from 86 files / 3918 tests
+to 1 / 93 with rc=0 - and the gate PASSED, because baseline and re-run narrow
+EQUALLY and the per-file floor self-adjusts. Fixed by sanitising and REPORTING
+across all seven spawn sites. Second half: a skipped test is still a COLLECTED
+test, so the floor never moves; `OPS-104` knew this and it had been made loud for
+one module and never in the gate. Skips are now always reported, deselection is a
+finding. Figures and the vacuity proof are in `docs/LEDGER.md`.
+
+All five acceptance criteria were met; they and the evidence are in `LL-0305`.
+
+---
 
