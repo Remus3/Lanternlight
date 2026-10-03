@@ -59,6 +59,30 @@ def test_unread_mail_spawns_exactly_one_session(tmp_path):
     assert kw["cwd"] == ir.REPO_ROOT
 
 
+def test_the_prompt_hook_refuses_while_the_spawned_session_runs(tmp_path):
+    """OPS-115: the child's own prompt hook must not ack the mail it was sent for.
+
+    End to end against the real hook function: inside the spawn, with the seen
+    set in the runner's runtime directory as it is in the real tree.
+    """
+    from ops import inbox_watch
+    inbox, _state, runtime = _setup(tmp_path, [("a.md", "x")])
+    state = runtime / "seen.json"
+    state.write_text(json.dumps({"schema": SCHEMA, "seen": []}), encoding="utf-8")
+    seen_inside = []
+
+    def spawn(args, **kw):
+        seen_inside.append(inbox_watch.on_prompt_submit(
+            json.dumps({"hook_event_name": "UserPromptSubmit", "session_id": "child"}),
+            inbox=inbox, state=state, reported=runtime / "rep.json",
+            trace=runtime / "trace.json",
+        ))
+        return hs.SpawnResult(True, "RAN", 0, "", "")
+
+    _run(tmp_path, inbox, state, runtime, spawn)
+    assert seen_inside == [inbox_watch.TRIGGER_RUNNER_SESSION]
+
+
 def test_an_edited_note_is_unread_again(tmp_path):
     inbox, state, runtime = _setup(tmp_path, [("a.md", "x")], seen=["a.md"])
     (inbox / "a.md").write_text("x, corrected", encoding="utf-8")

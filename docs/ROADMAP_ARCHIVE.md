@@ -9,7 +9,7 @@ the original text, verbatim, in its original order, and the live roadmap
 carries a one-line stub linking to each one. If an item here turns out to
 matter again, move the section back rather than rewriting it.
 
-Sections in this archive: 104.
+Sections in this archive: 105.
 
 ---
 
@@ -12878,4 +12878,13 @@ finding. Figures and the vacuity proof are in `docs/LEDGER.md`.
 All five acceptance criteria were met; they and the evidence are in `LL-0305`.
 
 ---
+
+## OPS-115. Prompt hook acks the inbox inside the headless runner - CLOSED 2026-10-02
+
+Detail in `LL-0319`. Accept: `on_prompt_submit` refuses in a runner-spawned
+session via a child-env marker, test seen red first. MET in `LL-0322` BY A
+DIFFERENT MECHANISM: an env marker breaks `tests/test_inbox_acknowledge.py`,
+which bans any environment read in `ops/inbox_watch.py`, so the hook instead
+refuses while the inbox runner's own lock, beside the seen set, is held. The
+runner holds it for the whole spawn. Mutant disabling the branch seen red.
 

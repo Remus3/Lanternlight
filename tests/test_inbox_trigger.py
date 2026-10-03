@@ -76,6 +76,49 @@ def _call(raw: str, tmp_path: Path, parts=None) -> tuple[str, tuple[Path, Path, 
     return decision, (inbox, state, reported, trace)
 
 
+class TestTheInboxRunnersOwnSessionNeverAcknowledges:
+    """OPS-115: the runner's headless child fires this hook on its one prompt.
+
+    Measured four runs in a row on 2026-10-02: the prompt hook marked the mail
+    read before the runner session ever listed it, so the runner's own step 6
+    could never decide anything. The runner holds its lock, beside the seen
+    set, for the whole session, and the hook refuses while it is held.
+    """
+
+    def test_a_held_runner_lock_refuses_and_touches_nothing(self, tmp_path: Path) -> None:
+        from ops.loop import guard
+
+        inbox, state, reported, trace = _tree(tmp_path)
+        state.parent.mkdir(parents=True)
+        lock = state.parent / inbox_watch.RUNNER_LOCK_NAME
+        guard.acquire(lock, label="test-runner")
+        try:
+            decision = inbox_watch.on_prompt_submit(
+                _payload(), inbox=inbox, state=state, reported=reported, trace=trace
+            )
+        finally:
+            guard.release(lock)
+        assert decision == inbox_watch.TRIGGER_RUNNER_SESSION
+        assert not state.exists(), "the runner's session acknowledged the inbox"
+        rows = json.loads(trace.read_text(encoding="utf-8"))
+        assert rows["trace"][-1]["decision"] == inbox_watch.TRIGGER_RUNNER_SESSION
+
+    def test_a_released_runner_lock_lets_the_operators_turn_acknowledge(
+        self, tmp_path: Path
+    ) -> None:
+        from ops.loop import guard
+
+        inbox, state, reported, trace = _tree(tmp_path)
+        state.parent.mkdir(parents=True)
+        lock = state.parent / inbox_watch.RUNNER_LOCK_NAME
+        guard.acquire(lock, label="test-runner")
+        guard.release(lock)
+        decision = inbox_watch.on_prompt_submit(
+            _payload(), inbox=inbox, state=state, reported=reported, trace=trace
+        )
+        assert decision == inbox_watch.TRIGGER_ACKNOWLEDGED
+
+
 class TestTheOperatorsTurnAcknowledges:
     def test_a_prompt_submit_payload_acknowledges_the_inbox(self, tmp_path: Path) -> None:
         decision, (_, state, _, _) = _call(_payload(), tmp_path)

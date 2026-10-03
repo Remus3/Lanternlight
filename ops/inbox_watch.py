@@ -300,6 +300,12 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
+if str(Path(__file__).resolve().parents[1]) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+# The hook runs this file as a script, hence the path insert above.
+from ops.loop import guard
+
 __all__ = [
     "OURS",
     "NOT_OURS",
@@ -456,6 +462,21 @@ TRIGGER_WRONG_EVENT = "refused-wrong-event"
 TRIGGER_UNREADABLE = "refused-unreadable-payload"
 TRIGGER_NO_SESSION = "refused-no-session-id"
 TRIGGER_UNREADABLE_INBOX = "refused-inbox-could-not-be-listed"
+TRIGGER_RUNNER_SESSION = "refused-inbox-runner-session"
+
+#: The lock :mod:`ops.inbox_runner` holds for the whole life of its headless
+#: session, kept beside the seen set - ``OPS-115``. That session's one prompt
+#: fires the prompt hook like any other, and acknowledging there marked the
+#: mail read before the runner session had listed it, so the runner's own
+#: re-check could decide nothing. While the lock is held the hook refuses and
+#: the runner acknowledges by hand at its own re-check instead.
+#:
+#: A FILE the runner writes, not an environment marker, on purpose: this
+#: module consults no environment (``tests/test_inbox_acknowledge.py``). The
+#: lock fails CLOSED - an attended prompt during a runner session, or an
+#: unreadable lock, acknowledges nothing, which leaves mail unread rather than
+#: eaten.
+RUNNER_LOCK_NAME = "inbox_runner.lock"
 
 #: The decision written by the SCAN path - the ordinary ``SessionStart`` run.
 #:
@@ -1848,6 +1869,7 @@ def on_prompt_submit(
     state: Path | None = None,
     reported: Path | None = None,
     trace: Path | None = None,
+    runner_lock: Path | None = None,
 ) -> str:
     """Acknowledge the inbox on the operator's own turn - ``OPS-41``.
 
@@ -1857,6 +1879,8 @@ def on_prompt_submit(
         state: Acknowledged-set path, defaulting to :func:`default_state_path`.
         reported: Reported-set path, defaulting to :func:`default_reported_path`.
         trace: Trigger-trace path, defaulting to :func:`default_trace_path`.
+        runner_lock: The inbox runner's lock, defaulting to
+            :data:`RUNNER_LOCK_NAME` beside the acknowledged-set file.
 
     Returns:
         One of the ``TRIGGER_*`` decisions. Exactly one of them,
@@ -1889,8 +1913,13 @@ def on_prompt_submit(
         event = _trace_field(payload.get("hook_event_name"))
         session = _trace_field(payload.get("session_id"))
 
+        if runner_lock is None:
+            seen_path = Path(state) if state is not None else default_state_path()
+            runner_lock = seen_path.parent / RUNNER_LOCK_NAME
         if event != PROMPT_EVENT:
             decision = TRIGGER_WRONG_EVENT
+        elif guard.is_locked(Path(runner_lock)):
+            decision = TRIGGER_RUNNER_SESSION
         elif not session:
             decision = TRIGGER_NO_SESSION
         elif any(

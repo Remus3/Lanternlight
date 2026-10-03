@@ -45,6 +45,7 @@ if str(Path(__file__).resolve().parents[1]) not in sys.path:
 
 from ops import headless_spawn
 from ops.inbox_watch import (
+    RUNNER_LOCK_NAME,
     _read_drops,
     _read_entries,
     default_inbox,
@@ -70,7 +71,9 @@ __all__ = [
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 HALT_NAME = "INBOX_RUNNER_HALT"
-LOCK_NAME = "inbox_runner.lock"
+#: The prompt hook in ops/inbox_watch.py refuses to acknowledge while this is
+#: held - ``OPS-115`` - so the name lives there and is only re-exported here.
+LOCK_NAME = RUNNER_LOCK_NAME
 LOG_NAME = "inbox_runner.log"
 SESSION_TIMEOUT = 45 * 60
 
