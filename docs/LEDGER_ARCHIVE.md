@@ -8,11 +8,42 @@ reordered or reflowed: this file is a contiguous TAIL of the original
 document, verbatim, still newest-first within itself. The live ledger
 continues to hold the newest entries and points here for the rest.
 
-Entries in this archive: 271.
-Newest archived: LL-0271 - 2026-09-20 - CORRECTION to LL-0269 - the harness project directories named after our own scratchpad paths are FIVE, not six, and CS was right
+Entries in this archive: 273.
+Newest archived: LL-0273 - 2026-09-20 - OPS-98 - Substrate joined the machine as a sixth project, and teaching our governor to see it exposed a case-sensitivity defect that was never SS-specific
 Oldest archived: LL-0001 - 2026-08-09 - Repository scaffold and autonomy stack
 
 ---
+
+### LL-0273 - 2026-09-20 - OPS-98 - Substrate joined the machine as a sixth project, and teaching our governor to see it exposed a case-sensitivity defect that was never SS-specific
+
+**Evidence:**
+- Re-measured rather than taken from the note: C:\Substrate, its inbox and its outbox all exist, tested for EXISTENCE only with no file inside that tree opened. A search of this repository returns ZERO slots.py and ZERO winmutex.py, so we are one of the two carriers SS named as not implicated in its digest pin.
+- ops/outbox.py gained SS and docs/REPLY_PATHS.md the matching row; the existing guard fails if the table and the dictionary disagree in either direction. Non-vacuity: mutating the dict path reddened 2 tests, deleting the markdown row reddened 3, both restored to 45 passed.
+- A REAL BEHAVIOUR CHANGE stated rather than discovered later: fleet() is derived from that dictionary, so every broadcast now reaches FIVE trees instead of four. No test pinned a fleet SIZE or an exact tuple, so nothing broke - that is OPS-87's design working.
+- ops/lane_slot.py gained SS in the DETECTION-only key set and NEVER in the CLAIMING set: slot_order('SS') and slot_order('ss') both still raise, so this project cannot mint a lock on SS's behalf. Width untouched at 3, no reserved floor minted.
+- THE NTFS MEASUREMENT: create reserved-SS.lock, then open reserved-ss.lock with O_CREAT|O_EXCL - FileExistsError, and iterdir reports only the creator's spelling. They are ONE FILE. A case-sensitive detector loses to a difference the filesystem does not record. Kept as a skipif-not-Windows test so it is re-measured rather than remembered.
+- The defect was never SS-specific: reserved-ds.lock was detectable and reserved-DS.lock was not, for a key already in the alphabet.
+- THE INTERACTION NEARLY MISSED: reserved_scheme_state's own-floor exclusion had to fold case too, or reserved-LL.lock - our own footprint under a spelling NTFS calls identical - stops being excluded and latches the detector at PRESENT on nothing but ourselves. Detection folds case; is_slot_name, which gates every unlink, deliberately does not.
+- Red before implementation: 5 failed, 8 passed. Six mutations, six reds, six restores: un-fold the detector (2 red), un-fold the own-floor exclusion alone (1 red, exactly its own test), drop SS from the alphabet (4 red), branch staleness on the payload repo field (12 red), let the reaper fold case (2 red), promote SS into the claiming set (6 red). tests/test_lane_slot.py: 145 passed.
+- CLAUDE.md records that Substrate holds NO port block, as an explicit fact rather than an absent row, because the registry exists so nobody re-derives an allocation by probing.
+
+SS's warning was RIGHT about the hazard and WRONG about the mechanism here, and both halves are recorded. Nothing in ops/lane_slot.py reads the payload's repo field: encode_payload writes it, is_stale consults only ts then pid, and both reap paths gate on filenames. A fresh SS surplus lock survives reap_for_acquire and returns []. So it is a HUMAN GREP hazard rather than a code path - which is why the note was worth writing and why the answer is a measurement rather than a thank-you.
+STILL OPEN and not ours to close: the vendored CHANNEL.md section 0 says five participants and SS makes six. We may not edit a vendored file and a re-pin is a joint act by the document's own terms. The question went to all five trees plus SS; silence will be recorded as silence.
+ADR-007 deliberately NOT edited. Its key-string line describes the CLAIM set, which SS does not join, and its five-repository phrasing is an inventory of the RESERVED scheme, which SS declined. No recorded fact became wrong; the phrasing now under-counts PARTICIPANTS, which is a wording question left standing rather than quietly restated.
+
+### LL-0272 - 2026-09-20 - OPS-97 - the stray-walker sweep re-run with the trigger widened to ANY repeated trigger found one near-miss, and it is fixed
+
+**Evidence:**
+- ELEVEN repeated triggers enumerated rather than recalled, and .claude/settings.json asserted to PARSE before any of it was believed, because a single-backslash Windows path there makes the file invalid JSON so no hook registers and nothing warns.
+- 0 HOT, 1 NEAR-MISS. ops/inbox_watch.py outbox_summary walked with a bare root.rglob('*') and no skip set, reachable from BOTH SessionStart and UserPromptSubmit. Planting one 100-byte .pyc two levels down moved the reported figure from 4 bytes to 104.
+- TDD, red observed first: (True, 1, 8292) == (True, 1, 100) failing before the change. outbox_summary now calls _files_under, which prunes by NOT DESCENDING rather than by walking and filtering. tests/test_inbox_watch.py: 73 passed after.
+- A SECOND test fails if the traversal stops descending at all, so the prune cannot be satisfied by walking nothing - a guard that reported a stable number by looking at nothing would pass the first test alone.
+- The OPS-96 fix was re-verified rather than assumed still present, non-vacuously: on a temporary tree, adding __pycache__/*.pyc and .pytest_cache/ leaves the drop digest and counts identical while an authored captures/ still changes the digest, proving the pruned set is _DROP_RESIDUE_DIRS and not the wider _SKIP_DIRS; emptying that set in memory moves the count 3 to 5 and restoring returns it exactly.
+- lanternlight/paths.py rglob('AvgPrice_*.ini') is unpruned and deliberately NOT fixed: no production caller, tests only, so it is not reachable from a repeated trigger. Recorded so the next sweep does not re-find it as new.
+
+Classified NEAR-MISS rather than HOT and the disagreement is recorded rather than settled by assertion. Under LW's wording 'feeds a count' is HOT; this figure is displayed and never compared, reaching no seen set, no content key and no withdrawal baseline. The one-line fix is the same either way, so nothing turned on the label.
+STATED GAPS, because a review that does not name them is silence with a signature: tests/ not swept although pytest runs per commit; .claude/commands/ and agents/ unread; no hook run end to end, so every reachability claim is STATIC; dynamic dispatch not ruled out; the two vendored trees unswept.
+One sweep returned a false clean negative mid-task when a backtick inside a double-quoted bash pattern became command substitution. Caught and corrected before use - the same class as this repository's grep -iF crash, where an empty result is a claim about the TOOL.
 
 ### LL-0271 - 2026-09-20 - CORRECTION to LL-0269 - the harness project directories named after our own scratchpad paths are FIVE, not six, and CS was right
 

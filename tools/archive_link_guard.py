@@ -27,16 +27,17 @@ hyphens are PRESERVED, never collapsed: this repository's headings are written
 as ``OPS-49. ... - CLOSED 2026-09-07``, so the `` - `` clause break becomes
 ``---`` and a rule that collapsed it would disagree with every real link.
 
-KNOWN, DELIBERATE DIVERGENCE FROM GITHUB'S OWN SLUGGER, recorded here rather
-than left as a surprise: GitHub keeps underscores in an anchor, and the rule
-above drops them, so a heading containing ``_dead_pid()`` yields ``deadpid``
-here and ``_dead_pid`` on github.com. The rule implemented here is the one
-OPS-57's dispatch specified and the one this repository's own stubs are written
-against, and the guard's job is to match how the link is ACTUALLY WRITTEN. If
-the archive is ever browsed on github.com and an underscore heading is found
-not to jump, that is a real defect - fix it by changing this function and
-re-deriving the stubs together, not by loosening the comparison, since a fuzzy
-match here would make the dangling-link check unable to fail.
+THE DIVERGENCE FROM GITHUB THAT USED TO BE RECORDED HERE IS GONE - ``OPS-117``
+item 2. This rule once dropped underscores, so ``_dead_pid()`` slugged to
+``deadpid`` here and ``_dead_pid`` on github.com, and this paragraph said that
+if an underscore heading were ever found not to jump on github.com, the fix was
+to change this function and re-derive the stubs together. On 2026-10-03 the
+rendered archive was read and every underscore stub, plus one whose heading
+carried ``<a date that has passed>`` (rendered as an HTML tag and dropped), was
+a dead link there. Both slug functions now keep ``_`` and drop raw HTML tags,
+the stubs were re-derived in the same commit, and
+``tests/test_archive_link_guard.py`` pins both functions to anchors read off
+the rendered page.
 
 WHAT COUNTS AS A STUB. Only a Markdown link whose target is the archive path
 AND carries a ``#fragment`` is a stub. A fragment-less link to the archive as a
@@ -193,16 +194,32 @@ class Report:
 def anchor_for(heading: str) -> str:
     """Derive the link anchor for a Markdown heading's text.
 
-    Lowercase, spaces to hyphens, then drop every character that is not
-    ``a-z``, ``0-9`` or ``-``. Hyphen runs are preserved - see the module
-    docstring for why collapsing them would disagree with every real stub in
-    this repository, and for the deliberate divergence from GitHub over
-    underscores.
+    GitHub's rule, measured against its rendered page (``OPS-117`` item 2):
+    drop raw inline HTML tags, lowercase, spaces to hyphens, then drop every
+    character that is not ``a-z``, ``0-9``, ``-`` or ``_``. Hyphen runs are
+    preserved - see the module docstring for why collapsing them would
+    disagree with every real stub in this repository.
 
     ``heading`` is the heading TEXT, without its leading ``## ``.
     """
-    lowered = heading.strip().lower().replace(" ", "-")
-    return "".join(ch for ch in lowered if ch.isascii() and (ch.isalnum() or ch == "-"))
+    # Tags are markup only OUTSIDE a code span; inside one GitHub renders the
+    # characters literally. Even pieces of a backtick split are outside.
+    pieces = heading.strip().split("`")
+    text = "".join(
+        _RAW_HTML_TAG.sub("", piece) if index % 2 == 0 else piece
+        for index, piece in enumerate(pieces)
+    )
+    lowered = text.lower().replace(" ", "-")
+    return "".join(
+        ch for ch in lowered if ch.isascii() and (ch.isalnum() or ch in "-_")
+    )
+
+
+#: A raw inline HTML tag as CommonMark recognises one - ``<name attr attr>`` or
+#: ``</name>`` - which GitHub renders as markup and then drops, text and all.
+#: Measured 2026-10-03: "archiving into <a date that has passed>" anchors as
+#: ``archiving-into--`` on github.com. ``OPS-117`` item 2.
+_RAW_HTML_TAG = re.compile(r"</?[A-Za-z][A-Za-z0-9-]*(?:\s+[^<>]*)?>")
 
 
 def _uncoded_lines(text: str) -> list[str]:

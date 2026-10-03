@@ -332,19 +332,30 @@ def extract_item_id(heading: str) -> str | None:
 def anchor_for(heading: str) -> str:
     """Return the GitHub-style in-page anchor for a heading.
 
-    Lowercase, spaces become hyphens, and every character that is not
-    alphanumeric or a hyphen is dropped. Backticks, periods, commas and
-    parentheses all vanish; the `` - `` clause separators this repo writes turn
-    into a run of three hyphens, which is what GitHub itself produces.
+    Raw inline HTML tags are dropped, then lowercase, spaces become hyphens,
+    and every character that is not alphanumeric, a hyphen or an underscore is
+    dropped - GitHub keeps ``_``, measured on its rendered page (``OPS-117``
+    item 2). Backticks, periods, commas and parentheses all vanish; the `` - ``
+    clause separators this repo writes turn into a run of three hyphens, which
+    is what GitHub itself produces.
     """
-    body = _strip_hashes(heading).lower()
+    # A tag shape inside a code span is literal text on GitHub, not markup.
+    body = "".join(
+        _RAW_HTML_TAG.sub("", piece) if index % 2 == 0 else piece
+        for index, piece in enumerate(_strip_hashes(heading).split("`"))
+    ).lower()
     out: list[str] = []
     for char in body:
-        if char.isalnum() and char.isascii():
+        if (char.isalnum() and char.isascii()) or char == "_":
             out.append(char)
         elif char in " \t-":
             out.append("-")
     return "".join(out)
+
+
+#: A raw inline HTML tag as CommonMark recognises one; GitHub renders it as
+#: markup and its text never reaches the anchor. ``OPS-117`` item 2.
+_RAW_HTML_TAG = re.compile(r"</?[A-Za-z][A-Za-z0-9-]*(?:\s+[^<>]*)?>")
 
 
 def stub_line(section: Section, archive_path: str) -> str:

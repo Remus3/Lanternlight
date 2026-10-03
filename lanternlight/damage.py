@@ -104,7 +104,7 @@ class DamageHit:
     damage_value: float
     time_stamp: float
     name_id: int | None = None
-    key: str = ""
+    key: str | None = None
     child_death_causer: bool | None = None
 
 
@@ -141,7 +141,7 @@ class ObservedHit:
     monster_id: int | None = None
     source_type: int | None = None
     name_id: int | None = None
-    key: str = ""
+    key: str | None = None
     death_causer: bool | None = None
     child_death_causer: bool | None = None
 
@@ -281,6 +281,36 @@ def _guid(mapping: dict[str, Any], where: str) -> str | None:
     return value
 
 
+def _name_id(mapping: dict[str, Any], where: str) -> int | None:
+    """``nameId``: an int as written, None when absent - ``OPS-117`` item 1.
+
+    ``raw.get`` folded a JSON null and an absent key both to None. Absent is
+    omission; a null, a bool or any non-int is not the shape the game has been
+    seen to write, so it is refused rather than read as unmeasured.
+    """
+    if "nameId" not in mapping:
+        return None
+    value = mapping["nameId"]
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise MalformedDamageSet(f"{where}: 'nameId' is {value!r}, not an integer")
+    return value
+
+
+def _key(mapping: dict[str, Any], where: str) -> str | None:
+    """``Key``: the string as written ("" included), None when absent.
+
+    ``OPS-117`` item 1. ``raw.get("Key", "") or ""`` folded null, absent and a
+    written empty string into one "". A written "" is a measurement - every
+    save reading so far carries it - and absence is not.
+    """
+    if "Key" not in mapping:
+        return None
+    value = mapping["Key"]
+    if not isinstance(value, str):
+        raise MalformedDamageSet(f"{where}: 'Key' is {value!r}, not a string")
+    return value
+
+
 def _hit(raw: Any, index: int) -> DamageHit:
     if not isinstance(raw, dict):
         raise MalformedDamageSet(f"damageChildList[{index}] is {type(raw).__name__}, not an object")
@@ -288,8 +318,8 @@ def _hit(raw: Any, index: int) -> DamageHit:
     return DamageHit(
         damage_value=float(_require(raw, "damageValue", where)),
         time_stamp=float(_require(raw, "timeStamp", where)),
-        name_id=raw.get("nameId"),
-        key=raw.get("Key", "") or "",
+        name_id=_name_id(raw, where),
+        key=_key(raw, where),
         child_death_causer=_flag(raw, "bChildDeathCauser", where),
     )
 

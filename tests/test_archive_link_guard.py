@@ -56,6 +56,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
@@ -82,7 +84,7 @@ REAL_HEADING_PARENS = (
     "warns about - CLOSED 2026-09-04"
 )
 REAL_ANCHOR_PARENS = (
-    "ops-17-deadpid-reopens-the-pid-reuse-hole-its-own-docstring-"
+    "ops-17-_dead_pid-reopens-the-pid-reuse-hole-its-own-docstring-"
     "warns-about---closed-2026-09-04"
 )
 
@@ -225,13 +227,12 @@ class TestAnchorRuleAgainstRealHeadings:
             == REAL_ANCHOR_PUNCTUATION
         )
 
-    def test_parentheses_and_underscores_are_dropped(self) -> None:
-        """``_dead_pid()`` collapses to ``deadpid``.
+    def test_parentheses_are_dropped_and_underscores_kept(self) -> None:
+        """``_dead_pid()`` slugs to ``_dead_pid``, as GitHub renders it.
 
-        The underscore drop is a deliberate, documented divergence from
-        GitHub's own slugger, which keeps underscores. It is pinned here so the
-        divergence is a decision on the record rather than an accident nobody
-        measured - see the module docstring of ``tools/archive_link_guard.py``.
+        This test used to pin ``deadpid`` - a documented divergence from GitHub
+        that the module docstring said to reverse if an underscore stub was
+        ever found dead on github.com. It was, on 2026-10-03 (``OPS-117``).
         """
         assert archive_link_guard.anchor_for(REAL_HEADING_PARENS) == REAL_ANCHOR_PARENS
 
@@ -855,3 +856,81 @@ class TestArgvIsRefusedOrReal:
         assert str(tmp_path) in out
         assert "ROADMAP.md" in out
         assert ARCHIVE_REL in out
+
+
+# --- OPS-117 item 2: the anchor GitHub actually renders ---------------------
+#
+# Each pair is a heading as written in docs/ROADMAP_ARCHIVE.md and the anchor
+# github.com rendered for it, read off the rendered page of
+# Remus3/Lanternlight docs/ROADMAP_ARCHIVE.md on 2026-10-03 (the a.anchor href
+# of each h2). Both slug functions in this repository must produce GitHub's
+# anchor, because a stub that resolves only under our own rule is a dead link
+# for anyone reading the archive on github.com. Measured the day this was
+# written: every stub whose heading carried an underscore or an angle-bracketed
+# phrase was dead there.
+
+GITHUB_RENDERED_ANCHORS = (
+    ("OPS-17. `_dead_pid()` reopens the pid-reuse hole its own docstring warns about"
+     " - CLOSED 2026-09-04",
+     "ops-17-_dead_pid-reopens-the-pid-reuse-hole-its-own-docstring-warns-about"
+     "---closed-2026-09-04"),
+    ("OPS-21. `guard.read_owner` folds four facts onto `None`, and a corrupt lock is"
+     " reclaimed - CLOSED 2026-09-04",
+     "ops-21-guardread_owner-folds-four-facts-onto-none-and-a-corrupt-lock-is-"
+     "reclaimed---closed-2026-09-04"),
+    ("OPS-15. `precommit_gate._block` fails OPEN when stderr is unusable - CLOSED"
+     " 2026-08-30",
+     "ops-15-precommit_gate_block-fails-open-when-stderr-is-unusable---closed-2026-08-30"),
+    ("OPS-53. The watcher status reporter says \"archiving into <a date that has"
+     " passed>\" in the PRESENT TENSE - CLOSED 2026-09-08",
+     "ops-53-the-watcher-status-reporter-says-archiving-into--in-the-present-tense"
+     "---closed-2026-09-08"),
+    ("OPS-14. C: hit 100% mid-session, then recovered with nothing deleted - CLOSED"
+     " 2026-09-06, cause ANSWERED BY THE OPERATOR",
+     "ops-14-c-hit-100-mid-session-then-recovered-with-nothing-deleted---closed-"
+     "2026-09-06-cause-answered-by-the-operator"),
+    ("OPS-24. `OPS-22`'s accepted false block fired on its own commit - DECLINED,"
+     " CLOSED 2026-09-05",
+     "ops-24-ops-22s-accepted-false-block-fired-on-its-own-commit---declined-closed-"
+     "2026-09-05"),
+    ("4c. Archive the log and the market cache on every session - CLOSED 2026-08-25b,"
+     " successor 4d OPEN",
+     "4c-archive-the-log-and-the-market-cache-on-every-session---closed-2026-08-25b-"
+     "successor-4d-open"),
+)
+
+
+@pytest.mark.parametrize(("heading", "github"), GITHUB_RENDERED_ANCHORS)
+def test_the_guard_slugs_a_heading_exactly_as_github_renders_it(heading, github):
+    assert archive_link_guard.anchor_for(heading) == github
+
+
+@pytest.mark.parametrize(("heading", "github"), GITHUB_RENDERED_ANCHORS)
+def test_the_splitter_slugs_a_heading_exactly_as_github_renders_it(heading, github):
+    from tools import doc_archive
+
+    assert doc_archive.anchor_for("## " + heading) == github
+
+
+def test_the_fixture_headings_are_the_real_archive_headings():
+    # The pairs are only evidence while their headings are still the archive's.
+    archive = (REPO_ROOT / "docs" / "ROADMAP_ARCHIVE.md").read_text(encoding="utf-8")
+    for heading, _github in GITHUB_RENDERED_ANCHORS:
+        assert "## " + heading + "\n" in archive, heading
+
+
+@pytest.mark.parametrize(
+    ("heading", "github"),
+    (
+        # Inside a code span GitHub renders <name> as literal text, so its
+        # letters reach the anchor; outside one it is a tag and is dropped.
+        # Refutation pass 2026-10-03 found the first version stripped both.
+        ("use `<name>` here", "use-name-here"),
+        ("use <name> here", "use--here"),
+    ),
+)
+def test_a_tag_shape_inside_a_code_span_is_text_not_markup(heading, github):
+    from tools import doc_archive
+
+    assert archive_link_guard.anchor_for(heading) == github
+    assert doc_archive.anchor_for("## " + heading) == github

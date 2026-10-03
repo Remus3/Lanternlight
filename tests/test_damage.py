@@ -526,3 +526,46 @@ class TestAbsentFlagsAndGuidsAreNotInvented:
             damage.parse_damage_set(_payload(body))
         assert "monsterGuid" in str(caught.value)
         assert damage.parse_damage_set(_payload(_record(monsterGuid=None)))[0].monster_guid is None
+
+
+class TestNameIdAndKeyKeepNullAndAbsentApart:
+    """OPS-117 item 1. ``nameId`` folded a JSON null and an absent key both to
+    None, and ``Key`` folded null, absent and a written "" all to "". Absent is
+    omission (None); a written value is kept; a null or a wrong type is not the
+    game's shape and is refused, exactly as OPS-112 settled for the flags."""
+
+    def _child(self, **over):
+        child = {"damageValue": 1.0, "timeStamp": 1.0}
+        child.update(over)
+        return _payload(_record(damageChildList=[child]))
+
+    def _series_hit(self, payload):
+        series = damage.DamageSeries()
+        series.add_payload(payload)
+        (hit,) = series.hits
+        return hit
+
+    def test_an_absent_key_reaches_the_series_as_none_not_empty(self):
+        assert self._series_hit(self._child()).key is None
+
+    def test_a_written_empty_key_stays_empty(self):
+        assert self._series_hit(self._child(Key="")).key == ""
+
+    def test_a_written_key_is_kept(self):
+        assert self._series_hit(self._child(Key="Skill_A")).key == "Skill_A"
+
+    def test_a_null_or_non_string_key_is_refused(self):
+        for value in (None, 0, False, ["x"]):
+            with pytest.raises(damage.MalformedDamageSet):
+                damage.parse_damage_set(self._child(Key=value))
+
+    def test_a_null_or_non_integer_name_id_is_refused(self):
+        for value in (None, "0", 1.5, True):
+            with pytest.raises(damage.MalformedDamageSet):
+                damage.parse_damage_set(self._child(nameId=value))
+
+    def test_an_absent_name_id_still_reaches_the_series_as_none(self):
+        assert self._series_hit(self._child()).name_id is None
+
+    def test_a_written_zero_name_id_reaches_the_series_as_zero(self):
+        assert self._series_hit(self._child(nameId=0)).name_id == 0
