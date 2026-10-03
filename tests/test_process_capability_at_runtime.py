@@ -226,6 +226,19 @@ NATIVE_SCOPE_EXCLUSIONS: dict[str, str] = {
         "SEVERITY-1 guard for a module that is not the reason that guard "
         "exists."
     ),
+    "ops/headless_spawn.py": (
+        "Imports winreg to READ one value, CLAUDE_HEADLESS_BASE_URL, out of "
+        "HKCU Environment at spawn time, as the operator's 2026-10-02 ruling "
+        "requires (LL-0317) - a registry read of our own user's store, no "
+        "process handle. Its subprocess use starts the claude CLI as its OWN "
+        "child and, on timeout only, runs taskkill /T on that child's PID, the "
+        "one tree it created; it never opens, signals or reads any process it "
+        "did not start, and the game is unreachable from it because it names "
+        "no process but its own child. Kept out of the capability allowlist "
+        "for the same reason as the window above: routing it there would "
+        "widen a SEVERITY-1 guard for a module that is not why that guard "
+        "exists."
+    ),
 }
 
 

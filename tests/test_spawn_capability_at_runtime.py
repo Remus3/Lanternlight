@@ -332,6 +332,24 @@ SPAWN_RUNTIME_ENTRY_POINTS: dict[str, tuple[tuple[str, str], ...]] = {
 #: narrows, and an unpinned surface is how a module grows a new spawn under an
 #: exclusion that still reads as a decision.
 SPAWN_SCOPE_EXCLUSIONS: dict[str, tuple[str, tuple[str, ...]]] = {
+    "ops/headless_spawn.py": (
+        "NOT PROBED ON PURPOSE. Its only spawn is the claude CLI, which bills a "
+        "real subscription through the operator's proxy (LL-0317), plus a "
+        "taskkill /T of that same child on timeout. A runtime probe would have "
+        "to start a real billed session to observe anything. Every spawn is "
+        "covered instead by tests/test_headless_spawn.py through an injected "
+        "runner, and run_tree's tree kill by a real throwaway python child.",
+        ("import subprocess", "shutil.which", "subprocess.CREATE_NO_WINDOW",
+         "subprocess.CompletedProcess", "subprocess.DEVNULL", "subprocess.PIPE",
+         "subprocess.Popen", "subprocess.TimeoutExpired", "subprocess.run"),
+    ),
+    "scripts/arm_inbox_runner.py": (
+        "NOT PROBED ON PURPOSE. Its only spawn is schtasks, and a probe that "
+        "ran it would create, delete or query the real scheduled task. Its "
+        "argument lists are pure functions pinned by "
+        "tests/test_arm_inbox_runner.py.",
+        ("import subprocess", "shutil.which", "subprocess.run"),
+    ),
     "lanternlight/damage.py": (
         "In scope only because it uses getattr, which is the structural "
         "dynamic-reach clause rather than an observed spawn. It imports no "

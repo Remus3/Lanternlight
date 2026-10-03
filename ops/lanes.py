@@ -490,6 +490,13 @@ LANES: tuple[Lane, ...] = (
             # test_inbox_* glob nor test_outbox.py, so it arrived as an orphan
             # exactly as the four inbox modules did above.
             "tests/test_responder.py",
+            # LL-0317, the ARMED half of the same channel: the headless spawn
+            # door, the scheduled-task definition and their tests. ``ops/**``
+            # covers both ops modules and tests/test_inbox_* covers the
+            # runner's test; these three match neither.
+            "tests/test_headless_spawn.py",
+            "tests/test_arm_inbox_runner.py",
+            "scripts/arm_inbox_runner.py",
             "docs/REPLY_PATHS.md",
             # OPS-82. Replies that are WRITTEN but HELD pending an operator
             # ruling, because OPS-68 put cross-project propagation on standby.
