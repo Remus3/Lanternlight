@@ -84,6 +84,15 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0338 - 2026-10-03 - Wrap 2026-10-03 (third session): OPS-113 marked CLOSED, wrap suite and refutation recorded, hand-off rewritten
+
+**Evidence:**
+- Wrap suite at HEAD c8707b3 plus the uncommitted OPS-113 heading edit: 4354 passed, 22 skipped in 307.74 s; ruff: All checks passed.
+- Wrap refutation pass: OPS-113 citation acceptance points 1-4 CONFIRMED (51 passed, 0 skipped in tests/test_citation_check.py; planting a dead sha in the allowlist reddened test_the_allowlist_only_shrinks, restored by hash); bf27d5c and c8707b3 confirmed on origin/main; every test name cited in LL-0336 and LL-0337 exists. The ROADMAP claim that the checker caught a dead sha in the LL-0336 draft is UNVERIFIABLE from disk - it was observed in session and the draft was reworded before commit, so no trace survives.
+- Watcher: check_watcher NO_RECORD; ensure_armed_at_wrap refused with OPERATOR DISARM (LL-0234). Correct; not worked around.
+- Stop-claim audit: 0 refuted, 1 confirmed (outcomes sum to 4376 collected).
+- OPS-68 criterion 6 re-read: moon_sync_inbox/_drafts/ holds 0 drafts, so its measured record cannot accrue while the inbox runner answers directly. Recorded, not acted on.
+
 ### LL-0337 - 2026-10-03 - OPS-119 closed: done.md states the source register's measured scope and its pinning test asserts it; dated correction under archived OPS-97
 
 **Evidence:**

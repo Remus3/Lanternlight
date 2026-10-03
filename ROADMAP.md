@@ -2988,7 +2988,15 @@ override is how this session answered MAIN.
 
 ---
 
-## OPS-113. Our own documents cite lines, shas and constants that have decayed, and no checker covers any of them
+## OPS-113. Our own documents cite lines, shas and constants that have decayed, and no checker covers any of them - BOTH HALVES DONE - CLOSED 2026-10-03
+
+**CLOSED 2026-10-03 (third session), `LL-0336`.** The citation half's four
+accept points are met by `tools/citation_check.py`: sha cites in all four
+continuity documents resolve or are named in a shrink-only allowlist pinned in
+its test, `path:line` cites are range-checked, and the test runs in the suite
+and in the pre-flight. It caught a dead sha in this session's own ledger draft
+before commit. Stale CONSTANTS remain uncheckable by a program and are not
+claimed.
 
 **2026-10-03, `LL-0332`: the size-budget half is DONE.** The detector was
 measured against all 32 live headings: it classified 0 closed, 12 were closed in

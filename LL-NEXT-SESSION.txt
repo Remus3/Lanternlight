@@ -1,89 +1,76 @@
 LANTERNLIGHT - NEXT SESSION PROMPT
-Written at the wrap of 2026-10-03 (second session that day). Assume zero
+Written at the wrap of 2026-10-03 (third session that day). Assume zero
 context; everything you need is here or in the files this names.
 
 START HERE
   - `git log` FIRST. The armed inbox runner (\Lanternlight\InboxRunner, every
     15 min, ops/inbox_runner.py -> one headless claude via ops/headless_spawn.py)
-    commits while nobody watches. This session HALTED it for its whole length
-    (ops/runtime/INBOX_RUNNER_HALT) and deleted the HALT file at the wrap.
-  - 8 notes were UNREAD at the wrap (they arrived while the runner was
-    halted). The runner should answer them within ~15 minutes of the wrap.
-    Check `python ops/inbox_watch.py` and git log before answering anything,
-    so nothing is answered twice. READ BODIES, NOT FILENAMES.
+    commits while nobody watches. This session HALTED it (ops/runtime/
+    INBOX_RUNNER_HALT) and deleted the HALT file at the wrap.
+  - Inbox was clean at session start (runner had answered the 9 notes, LL-0335).
+    Run `python ops/inbox_watch.py` and read git log before answering anything.
+    READ BODIES, NOT FILENAMES.
   - Before a long interactive commit sequence, create
     ops/runtime/INBOX_RUNNER_HALT, and DELETE it when done.
 
-READ FIRST: CLAUDE.md (rules; MAIN SPEAKS FOR THE OPERATOR), ROADMAP.md (now
-~210 KB, 21 sections - OPS-113 freed 130 KB), docs/LEDGER.md LL-0327..LL-0334
-(this session), docs/HEADLESS.md (STOP CONDITIONS).
+READ FIRST: CLAUDE.md (rules; MAIN SPEAKS FOR THE OPERATOR), ROADMAP.md,
+docs/LEDGER.md LL-0336..LL-0338 (this session), docs/HEADLESS.md (STOP
+CONDITIONS).
 
-LANDED THIS SESSION (all pushed; each had a refutation pass, and 6 of the
+LANDED THIS SESSION (all pushed; every slice had a refutation pass, and 3
 first versions were refuted and repaired before commit)
-  - OPS-116 CLOSED (LL-0327): the runner now measures the tree after a session
-    returns rc 0; uncommitted or unpushed work logs UNCOMMITTED (attributed if
-    the tree was already dirty), a failing check logs UNVERIFIED - never RAN.
-    Prompt step 7 tells the session to give git commit and the suite a
-    600000 ms Bash timeout and confirm HEAD moved. Cause named, NOT reproduced
-    end to end: the pre-commit hook outlives the tool timeout and the commit
-    is backgrounded. Measured this session: the hook took 273 s, 174 s, 231 s
-    and 210 s on four commits - every one above a 120/180 s tool timeout.
-  - OPS-114 CLOSED (LL-0328, LL-0329): ops/lane_slot.py's acquire path never
-    reaps a LIVE foreign holder below LIVE_FOREIGN_CEILING_SECONDS (3 x 16,200
-    s); an unreadable lock gets 60 s grace by mtime; explicit reap() unchanged.
-    The promised line went to RC and LW (outbox 2026-10-03-1200-from-LL-OPS-
-    114-item-1-landed-...; its filename stamp 1200 is hand-chosen, sent 06:39
-    local). ops/answered.py now times inbound notes by CREATION time in our
-    inbox, not the sender's filename stamp: record unchanged (62/0/379),
-    inference 118 -> 146 answered.
-  - OPS-111 CLOSED (LL-0330): the archive guard's real-tree tests could not
-    fail; now they can, and a broken stub is refused by suite, preflight and a
-    real commit (proved in a throwaway clone).
-  - OPS-112 CLOSED (LL-0331), OPS-117 CLOSED (LL-0333): damage.py keeps absent
-    flags/nameId/Key absent (None), refuses null or wrong-typed values, never
-    stringifies a null guid. DECIDED (not asked): an ABSENT monsterGuid key is
-    refused - it is in the dedup key; all 278 observed records carry it.
-  - FOUND AND FIXED: 14 ROADMAP archive stubs were DEAD LINKS on github.com
-    (our slug dropped '_' and kept text GitHub parses as an HTML tag). Both
-    slug functions now match anchors read off the rendered page; stubs
-    re-derived (LL-0333).
-  - OPS-113 budget half DONE (LL-0332): the split's detector archived 0 of 32
-    live headings; 12 were closed in substance; headings marked CLOSED and
-    archived. Widening CLOSED_WORDS was measured and REFUSED (it archives open
-    items). RULE: when you close an item, write CLOSED in its heading.
+  - OPS-118 CLOSED (LL-0336): stray-walker sweep of tests/, .claude/commands/,
+    .claude/agents/, third_party/ -> 2 HOT + 1 latent in tests/, all pruned by
+    not descending (reusing the inbox watcher's residue set), each seen red.
+    archive_link_guard now numbers anchors across ALL heading levels like
+    GitHub: new findings `shadowed` and `duplicate_suffix`.
+  - OPS-109 CLOSED (LL-0336): ops/channel_route.py discovers a carrier inbox
+    one level under the drive root by README "Code on this channel: X.";
+    raises on 0 or 2+ matches, names a count never a path, writes nothing.
+    Runner prompt step 4 names deliver_to. CORRECTION: the old "criterion 4
+    MET 2026-10-02" was FALSE (REPLY_PATHS.md never mentioned MAIN). Residual
+    gaps recorded: a junction pointing at our inbox; scan-to-write race.
+  - OPS-113 CLOSED (LL-0336, LL-0338): tools/citation_check.py checks sha and
+    path:line cites in ROADMAP.md, docs/LEDGER.md and both archives; allowlist
+    tools/citation_allowlist.txt must be a SUBSET of a key set pinned in
+    tests/test_citation_check.py (72 keys). Growing that pinned set without a
+    ledger entry is the forbidden move. Runs in suite and preflight.
+  - OPS-119 CLOSED (LL-0337): done.md states the register's real scope
+    (tracked .md and .txt since OPS-63); pinning test in test_loop_watch.py
+    updated; correction note under archived OPS-97.
+  - ops/docguards.py gained a `citation_check` reading idiom - the observed
+    map cross-check caught the selector missing it.
 
 STATE AT THE WRAP
-  Branch main, pushed. Full suite at the wrap: 4269 passed, 22 skipped (283 s, HEAD e2ffe31, clean tree). Ruff: All checks passed.
-  Wrap refutation pass: 5 of 6 claims confirmed; refuted one stale
-    test name in LL-0333, corrected by LL-0334. Runner HALT file deleted.
+  Branch main, pushed. Wrap suite: 4354 passed, 22 skipped (307.74 s). Ruff:
+  All checks passed.
   CAPTURE WATCHER: check_watcher -> NO_RECORD, ensure_armed_at_wrap refused
     with OPERATOR DISARM (LL-0234). Correct. Never arm it; only the operator
     lifts it.
-  STOP-CLAIM AUDIT: 0 refuted, 0 confirmed (last turn made no numeric claim).
-  Loop state: cycle 104, item OPS-118.
+  STOP-CLAIM AUDIT: 0 refuted, 1 confirmed.
+  Loop state: cycle 106, no item.
 
-NEXT, in order
-  1. OPS-118: (1) extend OPS-97's stray-walker sweep to tests/,
-     .claude/commands/, .claude/agents/, third_party/ and ledger the result;
-     (3) a stub targeting a duplicate heading (GitHub appends -1) must fail
-     the guard, seen red. (2) needs the client - leave it.
-  2. OPS-113 citation half: file:line cites and 63 pre-rewrite shas in
-     ROADMAP.md / docs/LEDGER.md that no longer resolve; no checker exists.
-     Write an acceptance criterion into OPS-113 first - it has none for this
-     half - then build the checker test-first.
-  3. OPS-109 criteria 2 and 3; OPS-71 is blocked on a mode.
-  4. OPS-102 / OPS-104 and items 1, 4b, 5-7, 10-12 need the operator playing.
+NEXT
+  No unblocked item with an acceptance criterion remains.
+  1. OPS-68 criterion 6: moon_sync_inbox/_drafts/ holds 0 drafts, so the
+     measured record it needs can never accrue while the inbox runner answers
+     directly. Decide (adjudicate, do not ask) whether the runner supersedes
+     the draft-only responder, and record it in OPS-68.
+  2. OPS-71 is blocked on a mode (not bypass permissions).
+  3. OPS-102 / OPS-104 and items 1, 4b, 5-7, 10-12 need the operator playing.
 
 PROCESS RULES THAT BIT THIS SESSION
-  - Python write_text on Windows writes CRLF. Six files went CRLF mid-session
-    (ROADMAP.md grew 5 KB and blew its budget). Write bytes, or check
-    `tr -dc '\r' < f | wc -c` before staging.
-  - The Bash tool collapses `\` inside heredocs; Python source written via a
-    heredoc lost escapes three times. Use the Edit tool for backslashes.
-  - The source-register guard reads any dotted token in docs/LEDGER.md as a
-    host - a module-dot-function name, a class-dot-attribute name, or a
-    note filename ending in its extension all tripped it this session.
-    Write "the X function in module Y" instead of the dotted form.
+  - The pre-commit hook REFUSES when the observed doc-open map is stale: after
+    editing any tests/ file, run the full suite (`python -m pytest`, ~5 min)
+    BEFORE `git commit`, or the hook blocks with "test modules edited since
+    the run". Give both a 600000 ms timeout and confirm HEAD moved.
+  - A new module trips several registration guards at once: ops/lanes.py
+    owner + `python scripts/write_lane_contracts.py`, docs/INVENTORY.md row,
+    spawn-capability roster if it runs subprocess, docguards idiom if it
+    opens docs indirectly, and the source register until the file is STAGED.
+  - The citation checker will flag any hex token you write into a doc that is
+    not a commit here - describe planted test shas instead of quoting them.
+  - Some files are CRLF on disk with eol=lf in the index (done.md was);
+    normalise before exact-match edits, check `tr -dc '\r' < f | wc -c`.
   - Paste SHARED_WORKTREE_BAN (ops/store_drift.py) into every dispatch; take
     the merge-gate per-file baseline BEFORE dispatching.
-  - Check HEAD moved after every commit; never trust rc alone.
