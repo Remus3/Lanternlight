@@ -1,79 +1,79 @@
-LANTERNLIGHT - NEXT SESSION PROMPT
-Written at the wrap of 2026-10-03 (fourth session that day). Assume zero
-context; everything you need is here or in the files this names.
+LANTERNLIGHT - NEXT SESSION HAND-OFF
+Written at the wrap of 2026-10-03 (fifth session that day). Assume zero
+context; everything you need is here or in the files this names. Never print
+this file into chat. /done prints only "Done ritual complete, safe to clear".
 
 START HERE
   - `git log` FIRST. The armed inbox runner (\Lanternlight\InboxRunner, every
-    15 min, ops/inbox_runner.py -> one headless claude via ops/headless_spawn.py)
-    commits while nobody watches. It was HALTED for this wrap and the HALT file
-    (ops/runtime/INBOX_RUNNER_HALT) was deleted after the push.
-  - EXPECTED: the first runner tick after the wrap answers MAIN 0830 (the
-    provenance self-test; MAIN wants the SHA-256 computed by the UNATTENDED
-    responder, not a session). It was deliberately left the ONLY unread note.
-    Verify: a runner commit in git log, a 0830 reply in
-    moon_sync_inbox/_outbox/DELIVERIES.json, and the runner log
-    ops/runtime/inbox_runner.log. If the tick failed, read the log reason; do
-    NOT answer 0830 from a session.
+    15 min, ops/inbox_runner.py) commits while nobody watches. It now spawns
+    ONLY through the vendored fleet kit (ops/fleet_kit/fleet_headless.py)
+    behind our wrapper ops/headless_spawn.py. First live kit-routed run:
+    2026-10-03 16:36 UTC, rc 0, opus/medium, bare false, answered MAIN 1029
+    and two SS notes, commit 174690a. The runner was HALTED for this wrap and
+    the HALT file (ops/runtime/INBOX_RUNNER_HALT) was deleted after the push.
   - Run `python ops/inbox_watch.py` and read BODIES, not filenames.
   - Before a long interactive commit sequence, create
     ops/runtime/INBOX_RUNNER_HALT, and DELETE it when done.
 
-READ FIRST: CLAUDE.md (rules; MAIN SPEAKS FOR THE OPERATOR), ROADMAP.md,
-docs/LEDGER.md LL-0339 and LL-0340 (this session), docs/HEADLESS.md (STOP
-CONDITIONS).
+READ FIRST: CLAUDE.md (now condensed; the FLEET-COMMON block at the top is
+byte-pinned by tests/test_fleet_kit_conformance.py - never edit it; reasoning
+lives in docs/claude-md-history.md), ROADMAP.md, docs/LEDGER.md LL-0341, LL-0342 (the first
+kit-routed runner run) and LL-0343, docs/HEADLESS.md (STOP CONDITIONS).
 
-LANDED THIS SESSION (1245298 + the wrap commit, pushed)
-  - MAIN 0845/0855/0850/0912/0915 (7 of 7 MAIN notes SHA-256 MATCH vs MAIN's
-    outbox), LL-0339:
-    * ops/inbox_runner.py: RUNS_CAP 120 runs STARTED per rolling 86400 s,
-      counted from its own log; LIMIT at the cap.
-    * Loop damping: own notes (first -from- is LL) and notes MARKED terminal /
-      no-reply (name word TERMINAL, or the answered: trailer / a CLASS header)
-      never trigger; ORDER/FIX/RULING never damped by a trailer. Damped notes
-      are not acknowledged.
-    * ops/loop/control/inbox_status.json (gitignored), MAIN 0915 schema 1.
-      Known gap: reads idle, not backoff, after a usage-limited run until the
-      next tick. A BUSY tick does not overwrite the holder's status.
-    * Routing: ORDER/FIX/RULING -> opus medium; else sonnet, low effort only
-      if every trigger is ack-class. --output-format json.
-    * ops/headless_spawn.py (the one door): adds --strict-mcp-config,
-      --setting-sources project,local, --no-session-persistence; REFUSES any
-      argv containing --bare (floors live in a PreToolUse hook; --bare skips
-      hooks - so never put the literal flag in the runner PROMPT); logs numeric
-      usage fields. Measured 69,706 -> 55,328 input tokens on a trivial call.
-  - Refutations this session: (1) first damping scanned whole bodies and
-    damped MAIN 0845/0855 themselves (they quote the rule) - repaired;
-    (2) at the wrap, the repair's test was VACUOUS (all cases used ORDER
-    names, which skip the body check) - repaired to a CORRECTION name, seen
-    red 4 failed under the old scan (LL-0340).
-  - OPS-68 criterion 6 SUPERSEDED by adjudication (dated section at the top of
-    OPS-68): the inbox runner is the delivery path; ops/responder.py never
-    gains a send.
-  - One reply delivered to MAIN, CS, LW, RC, RSC, SS (0 failures).
+LANDED THIS SESSION (a6ce00b, pushed; LL-0341)
+  - OPS-120 CLOSED: MAIN FLEET-KIT v3 adopted. Provenance 12 of 12 MATCH.
+    License gate: an adjudicator held vendoring; the OPERATOR (kit owner and
+    holder) then ruled in chat: Apache-2.0, operator as holder, path
+    ops/fleet_kit/ (exception to third_party/, recorded in CLAUDE.md SECOND
+    EXCEPTION and ops/fleet_kit/NOTICE.md).
+  - CLAUDE.md 52,184 -> 24,548 bytes (a6ce00b; its commit message and the
+    1105 reply said 23,965, measured BEFORE six rules were restored - the
+    1105 figure was corrected in a follow-up note, LL-0343); history verbatim in
+    docs/claude-md-history.md. Refutation restored six rules that had moved
+    out. FULL AUTHORITY item 4 (checklists) superseded by FLEET-COMMON item 3.
+  - Session style now (FLEET-COMMON items 2, 3, 12): quiet chat, background
+    agents/commands, no inline checklists, status = done / left / +added /
+    -retracted, progress files ops/loop/control/progress/<task>.json for work
+    over 5 minutes.
+  - /done: carries forward unacted items; one chat line. Pinned by
+    tests/test_done_ritual_output.py.
+  - Reply to MAIN + CS, LW, RC, RSC, SS delivered 6/6 (kit gaps for v4 listed
+    in it), plus a follow-up naming a6ce00b, 6/6.
 
 STATE AT THE WRAP
-  Branch main, pushed. Wrap suite and ruff: see LL-0340's commit message and
-  the wrap commit; counts are in the commit, not repeated here.
+  Branch main, pushed. Suite and ruff counts: see LL-0343 (observed at the
+  wrap, not repeated here).
   CAPTURE WATCHER: check_watcher -> NO_RECORD; ensure_armed_at_wrap refused
     with OPERATOR DISARM (LL-0234). Correct. Never arm it; only the operator
     lifts it.
-  STOP-CLAIM AUDIT: 2 confirmed, 2 refuted - both were partial/quoted counts
-    (a single-file 79; a 4423 quoted without its 22 skipped), not suite claims.
-  Loop state: cycle 107, no item.
+  Loop state: cycle advanced at this wrap, no item.
 
-NEXT
-  No unblocked item with an acceptance criterion remains.
-  1. Verify the runner answered MAIN 0830 (above).
+OPEN - CARRIED FORWARD (none acted on this session unless marked)
+  1. Next kit version: when a MAIN note FLEET-KIT-v4 arrives (provenance
+     checked), replace all three files in ops/fleet_kit/ and re-embed the
+     block in ONE commit; update NOTICE.md digests and the conformance test
+     goes green again. Never patch a kit file locally.
   2. OPS-71 is blocked on a mode (not bypass permissions).
   3. OPS-102 / OPS-104 and items 1, 4b, 5-7, 10-12 need the operator playing.
+  4. MAIN 0830 is STILL UNANSWERED. It asks that the UNATTENDED responder
+     compute the note's SHA-256 and reply with it. No DELIVERIES.json record
+     lists 0830 in answers (the wrap refutation checked; an earlier session
+     check matched '0830' as a substring of another name and was wrong). The
+     note is no longer in the unread set, so the runner will not pick it up
+     by itself. Accept: a runner-authored reply whose answers= names the 0830
+     filename and states the SHA-256 the runner computed; do NOT answer it
+     from an attended session.
 
 PROCESS RULES THAT BIT THIS SESSION
+  - The pre-commit hook refuses unless the LAST COMPLETE suite run is green
+    and newer than every test edit; any test edit after a run means another
+    full run (~5 min) before `git commit`.
+  - The source register reads dotted filenames as hosts and ALSO refuses a
+    KNOWN_NON_HOSTS entry that is a tracked repo file - add only non-tracked
+    names, or describe the file instead.
+  - docguards: a test module must NAME every doc it opens (its selector is
+    text-based); conformance() hashing FLEET-COMMON.md counted as opening it.
   - Adding an EXEMPTION after writing a guard's test can make that test
     vacuous. Re-run the mutation after every later change to the same rule.
-  - The source register reads dotted file names in docs as hosts
-    (runner.log, status.json were added to KNOWN_NON_HOSTS); the citation
-    checker flags a sibling's commit sha written into a doc - describe it.
-  - After editing any tests/ file, run the full suite (~6 min) BEFORE
-    `git commit`; give both a 600000 ms timeout and confirm HEAD moved.
   - Paste SHARED_WORKTREE_BAN (ops/store_drift.py) into every dispatch; take
     the merge-gate per-file baseline BEFORE dispatching.

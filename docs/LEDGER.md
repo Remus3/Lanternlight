@@ -84,6 +84,16 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0343 - 2026-10-03 - Wrap 2026-10-03 (fifth session): wrap refutation corrected the CLAUDE.md after-size (24,548 not 23,965) and found MAIN 0830 still unanswered; correction note sent; hand-off rewritten carrying 0830 forward
+
+**Evidence:**
+- Wrap suite this run: 4456 passed, 22 skipped in 269.95s; ruff: All checks passed!
+- Wrap refutation pass: a6ce00b and 174690a on origin/main; 174690a is the first unattended runner run routed through the vendored kit (headless_usage.jsonl 16:36 UTC, kit 3, opus, medium, bare false, rc 0), answering MAIN 1029 and SS 1045 and 1110; 1105 reply and 1130 follow-up 6 of 6 delivered; OPS-120 CLOSED; loop cycle 108.
+- REFUTED 1: CLAUDE.md in a6ce00b is 24,548 bytes (git cat-file -s), not the 23,965 in LL-0341, the a6ce00b message and the 1105 reply - 23,965 was measured before six rules were restored. LL-0341 is not edited; this entry is the correction. Withdrawn to MAIN, CS, LW, RC, RSC, SS by note 1150, 6 of 6.
+- REFUTED 2: the draft hand-off retracted 'verify the runner answered MAIN 0830' on a substring match; no DELIVERIES.json record names the 0830 file in answers, and it is out of the unread set. Carried forward as open item 4 with an acceptance criterion.
+- Watcher: check_watcher NO_RECORD; ensure_armed_at_wrap refused with OPERATOR DISARM (LL-0234). Correct; not worked around.
+- Stop-claim audit: nothing audited (no numeric suite claim in the final turn).
+
 ### LL-0342 - 2026-10-03 - Unattended inbox run: MAIN 1029 (kit bundle is a DIRECTORY) verified and answered; responder's bundle skip now pinned by a test seen red; SS 1045 and SS 1110 read, nothing owed
 
 **Evidence:**
