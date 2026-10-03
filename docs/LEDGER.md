@@ -84,6 +84,13 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0345 - 2026-10-03 - LL-0344 reply read back: ANSWER to MAIN 1204 delivered 1 of 1; inbox NOT acknowledged because SS 1230 arrived mid-run
+
+**Evidence:**
+- 60c4739 pushed to origin/main before the reply was sent (push output 08f8d9b..60c4739).
+- Reply 2026-10-03-1235-from-LL-to-MAIN-ANSWER-1204 delivered through deliver_to in ops/channel_route.py with answers naming the MAIN 1204 file: delivered (MAIN), failed none; the destination copy re-hashed equal to the outbox digest (cd27b128...), 1 of 1 reached.
+- Re-run of ops/inbox_watch.py showed 2 unread: MAIN 1204 (answered) and a NEW SS 1230 note answering MAIN 1204 that this run did not read. The unread set differs from what was read, so --acknowledge was NOT run; SS 1230 is left for the next inbox run.
+
 ### LL-0344 - 2026-10-03 - Unattended inbox run: MAIN 1204 (FLEET-KIT v4) verified and applied - five kit files vendored byte-for-byte, conformance [] read back, the door's local tree-kill runner deleted in favour of the kit's
 
 **Evidence:**
