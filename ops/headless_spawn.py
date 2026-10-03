@@ -22,6 +22,13 @@ THE CONTRACT, and each clause is a test in ``tests/test_headless_spawn.py``:
 * A usage-limit refusal BACKS OFF - an exponential hold written under
   ``ops/runtime/`` - and never retries another way. An unreadable backoff file
   is read as "still backing off", which is the closed direction.
+* SETUP OVERHEAD IS CUT AT THE DOOR (MAIN order 0912, 2026-10-03). Unless the
+  caller already chose, the child gets ``--strict-mcp-config``,
+  ``--setting-sources project,local`` and ``--no-session-persistence``.
+  Dropping USER scope is safe only because every floor hook (the PreToolUse
+  gate, the ASCII check) is registered in PROJECT scope - a test pins that.
+  ``--bare`` is REFUSED wherever it appears: it skips hooks, and this tree's
+  floors live in a PreToolUse hook.
 * Deleting the variable is the operator's kill switch for every tree at once.
   Because the variable is re-read on every spawn, that switch takes effect on
   the very next attempt with nothing to restart.
@@ -30,11 +37,15 @@ WHAT IS NEVER WRITTEN DOWN. The URL carries an account path segment, so it
 appears in no tracked file and in no log line here: the log records the
 decision and the reason, never the value. Same for the child's output - only
 its length and return code are logged, because a transcript can carry anything.
+When stdout parses as a JSON object (``--output-format json``) a fixed list of
+NUMERIC usage fields is copied into the log record; no string field ever is,
+and a field the CLI did not report stays ABSENT rather than becoming 0.
 """
 
 from __future__ import annotations
 
 import json
+import math
 import os
 import shutil
 import socket
@@ -184,6 +195,53 @@ def _backoff_state(runtime: Path) -> tuple[dict | None, bool]:
         return None, False
 
 
+# Flags the door adds when the caller did not. Each entry is
+# (flag the caller may already pass, argv tokens to add).
+_DOOR_FLAGS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("--strict-mcp-config", ("--strict-mcp-config",)),
+    ("--setting-sources", ("--setting-sources", "project,local")),
+    ("--no-session-persistence", ("--no-session-persistence",)),
+)
+
+_USAGE_TOP = ("total_cost_usd", "num_turns", "duration_ms")
+_USAGE_NESTED = ("input_tokens", "cache_creation_input_tokens",
+                 "cache_read_input_tokens", "output_tokens")
+
+
+def _door_flags(args: Sequence[str]) -> list[str]:
+    """The overhead-cutting flags the caller did not already pass."""
+    extra: list[str] = []
+    for flag, tokens in _DOOR_FLAGS:
+        if not any(a == flag or a.startswith(flag + "=") for a in args):
+            extra.extend(tokens)
+    return extra
+
+
+def _is_number(value) -> bool:
+    return (isinstance(value, (int, float)) and not isinstance(value, bool)
+            and math.isfinite(value))
+
+
+def _usage_fields(stdout: str) -> dict:
+    """Numeric usage fields from a JSON-object stdout; {} on anything else.
+
+    NUMBERS ONLY. ``result`` and ``session_id`` are strings and model output
+    may quote an operator identifier, so no string is ever copied. A field
+    that is missing or not a finite number is left out, never zeroed.
+    """
+    try:
+        data = json.loads(stdout)
+    except (ValueError, TypeError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    out = {k: data[k] for k in _USAGE_TOP if _is_number(data.get(k))}
+    usage = data.get("usage")
+    if isinstance(usage, dict):
+        out.update({k: usage[k] for k in _USAGE_NESTED if _is_number(usage.get(k))})
+    return out
+
+
 def _is_usage_limited(stdout: str, stderr: str) -> bool:
     text = f"{stdout}\n{stderr}".lower()
     return any(marker in text for marker in _USAGE_LIMIT_MARKERS)
@@ -264,6 +322,9 @@ def spawn(
 
     if any("auto-fallback" in a for a in args):
         return refuse("REFUSED: --auto-fallback bills the interactive subscription")
+    if any("--bare" in a for a in args):
+        return refuse("REFUSED: --bare skips hooks, and this tree's floors live in a "
+                      "PreToolUse hook")
     if not url:
         return refuse(f"REFUSED: {HEADLESS_VAR} is UNSET in the user store and the process env")
     target, why = _check_url(str(url))
@@ -293,7 +354,7 @@ def spawn(
         kwargs["cwd"] = str(cwd)
     if os.name == "nt":
         kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
-    argv = [claude or _default_claude(), *args]
+    argv = [claude or _default_claude(), *_door_flags(args), *args]
 
     try:
         done = (runner or run_tree)(argv, **kwargs)
@@ -316,7 +377,7 @@ def spawn(
             (runtime / BACKOFF_NAME).unlink()
         reason = "RAN"
     _log(runtime, now, spawned=True, reason=reason, returncode=done.returncode,
-         stdout_chars=len(stdout), stderr_chars=len(stderr))
+         stdout_chars=len(stdout), stderr_chars=len(stderr), **_usage_fields(stdout))
     return SpawnResult(True, reason, done.returncode, stdout, stderr, limited)
 
 

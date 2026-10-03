@@ -818,6 +818,10 @@ KNOWN_NON_HOSTS = frozenset(
         # `ops/runtime/inbox_seen.json`, quoted by `LL-0153`. Truncated to
         # `seen.json` by the host-shaped pattern.
         "seen.json",
+        # `ops/runtime/inbox_runner.log` and `ops/loop/control/inbox_status.json`,
+        # quoted by `LL-0339`; truncated the same way.
+        "runner.log",
+        "status.json",
         # STANDARD LIBRARY API NAMES, a TEST FILENAME and a SIBLING's file,
         # all quoted by `LL-0154`, and every one of them arrives here
         # TRUNCATED - which is the form the failure message named and

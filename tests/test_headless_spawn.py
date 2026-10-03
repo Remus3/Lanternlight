@@ -170,7 +170,9 @@ def test_argv_starts_with_the_claude_executable(tmp_path):
     runner = _Runner()
     hs.spawn(["-p", "reply ok"], base_url=URL, probe=_ok_probe, runner=runner,
              runtime=tmp_path, claude="CLAUDE_EXE")
-    assert runner.calls[0][0] == ["CLAUDE_EXE", "-p", "reply ok"]
+    assert runner.calls[0][0] == ["CLAUDE_EXE", "--strict-mcp-config", "--setting-sources",
+                                  "project,local", "--no-session-persistence",
+                                  "-p", "reply ok"]
 
 
 def test_child_gets_no_console_window_on_windows(tmp_path):
@@ -351,3 +353,137 @@ def test_the_default_runner_kills_the_whole_tree_on_timeout():
         hs.run_tree([sys.executable, "-c", code], timeout=2, capture_output=True, text=True,
                     stdin=subprocess.DEVNULL)
     assert time.monotonic() - t0 < 15
+
+
+# --- setup-overhead cut, MAIN 0912 order 2026-10-03 -------------------------
+#
+# The door adds --strict-mcp-config, --setting-sources project,local and
+# --no-session-persistence unless the caller already chose. Dropping USER
+# scope is only safe because every floor hook lives in PROJECT scope, so the
+# first test below pins that fact: if a floor ever moves to user scope, this
+# goes red before a headless child silently runs without it.
+
+_DOOR_FLAGS = ["--strict-mcp-config", "--setting-sources", "project,local",
+               "--no-session-persistence"]
+
+
+def _project_hooks():
+    root = hs.REPO_ROOT / ".claude"
+    found = []
+    for name in ("settings.json", "settings.local.json"):
+        path = root / name
+        if not path.exists():
+            continue
+        data = json.loads(path.read_text(encoding="utf-8"))
+        for event, matchers in (data.get("hooks") or {}).items():
+            for m in matchers:
+                for h in m.get("hooks") or []:
+                    found.append((event, m.get("matcher") or "", h.get("command") or ""))
+    return found
+
+
+def test_the_floor_hooks_live_in_project_scope_settings():
+    hooks = _project_hooks()
+    gate = [(ev, mt) for ev, mt, cmd in hooks
+            if ev == "PreToolUse" and "tools/precommit_gate.py" in cmd]
+    assert gate, "the PreToolUse precommit gate is not registered in project scope"
+    matchers = {part for _ev, mt in gate for part in mt.split("|")}
+    assert {"Bash", "PowerShell"} <= matchers
+    ascii_floor = [cmd for ev, _mt, cmd in hooks
+                   if ev == "PostToolUse" and "tools/ascii_check.py" in cmd]
+    assert ascii_floor, "the ASCII floor hook is not registered in project scope"
+
+
+def test_the_door_adds_the_overhead_flags(tmp_path):
+    runner = _Runner()
+    hs.spawn(["-p", "x"], base_url=URL, probe=_ok_probe, runner=runner, runtime=tmp_path,
+             claude="CLAUDE_EXE")
+    assert runner.calls[0][0] == ["CLAUDE_EXE", *_DOOR_FLAGS, "-p", "x"]
+
+
+@pytest.mark.parametrize("caller", [
+    ["--setting-sources", "project", "-p", "x"],
+    ["--setting-sources=user,project", "-p", "x"],
+])
+def test_a_callers_setting_sources_is_kept(tmp_path, caller):
+    runner = _Runner()
+    hs.spawn(caller, base_url=URL, probe=_ok_probe, runner=runner, runtime=tmp_path,
+             claude="CLAUDE_EXE")
+    argv = runner.calls[0][0]
+    assert sum(1 for a in argv if a.startswith("--setting-sources")) == 1
+    assert "project,local" not in argv
+    assert argv[-len(caller):] == caller
+
+
+def test_a_callers_flags_are_not_doubled(tmp_path):
+    caller = ["--strict-mcp-config", "--mcp-config", "m.json", "--no-session-persistence",
+              "-p", "x"]
+    runner = _Runner()
+    hs.spawn(caller, base_url=URL, probe=_ok_probe, runner=runner, runtime=tmp_path,
+             claude="CLAUDE_EXE")
+    argv = runner.calls[0][0]
+    assert argv.count("--strict-mcp-config") == 1
+    assert argv.count("--no-session-persistence") == 1
+    assert argv[argv.index("--mcp-config") + 1] == "m.json"
+    assert argv == ["CLAUDE_EXE", "--setting-sources", "project,local", *caller]
+
+
+@pytest.mark.parametrize("argv", [["--bare", "-p", "x"], ["-p", "x", "--bare"]])
+def test_bare_is_refused_because_it_skips_the_hook_floor(tmp_path, argv):
+    runner = _Runner()
+    res = hs.spawn(argv, base_url=URL, probe=_ok_probe, runner=runner, runtime=tmp_path)
+    assert not res.spawned and "--bare" in res.reason and "hook" in res.reason
+    assert runner.calls == []
+
+
+# --- usage logging: numbers only, absent stays absent -----------------------
+
+
+def _last_log(tmp_path):
+    lines = (tmp_path / hs.LOG_NAME).read_text(encoding="utf-8").splitlines()
+    return json.loads(lines[-1])
+
+
+def test_usage_numbers_are_logged_from_json_stdout(tmp_path):
+    out = json.dumps({
+        "type": "result", "result": "ok SECRET-OPERATOR-NAME", "session_id": "sess-123",
+        "total_cost_usd": 0.0123, "num_turns": 1, "duration_ms": 4567,
+        "usage": {"input_tokens": 4, "cache_creation_input_tokens": 1200,
+                  "cache_read_input_tokens": 9000, "output_tokens": 5,
+                  "service_tier": "standard"},
+    })
+    hs.spawn(["-p", "x"], base_url=URL, probe=_ok_probe, runner=_Runner(stdout=out),
+             runtime=tmp_path)
+    rec = _last_log(tmp_path)
+    assert rec["input_tokens"] == 4
+    assert rec["cache_creation_input_tokens"] == 1200
+    assert rec["cache_read_input_tokens"] == 9000
+    assert rec["output_tokens"] == 5
+    assert rec["total_cost_usd"] == 0.0123
+    assert rec["num_turns"] == 1 and rec["duration_ms"] == 4567
+    text = (tmp_path / hs.LOG_NAME).read_text(encoding="utf-8")
+    assert "SECRET-OPERATOR-NAME" not in text and "sess-123" not in text
+    assert "standard" not in text
+
+
+def test_absent_or_non_numeric_usage_fields_stay_absent(tmp_path):
+    out = json.dumps({"num_turns": 2, "duration_ms": "fast", "total_cost_usd": True,
+                      "usage": {"output_tokens": 0, "input_tokens": None}})
+    hs.spawn(["-p", "x"], base_url=URL, probe=_ok_probe, runner=_Runner(stdout=out),
+             runtime=tmp_path)
+    rec = _last_log(tmp_path)
+    assert rec["num_turns"] == 2 and rec["output_tokens"] == 0
+    for name in ("duration_ms", "total_cost_usd", "input_tokens",
+                 "cache_creation_input_tokens", "cache_read_input_tokens"):
+        assert name not in rec, name
+
+
+@pytest.mark.parametrize("out", ["ok", "", "{not json", "[1, 2]", '"text"',
+                                 json.dumps({"usage": "nope"})])
+def test_unparseable_stdout_logs_nothing_extra(tmp_path, out):
+    res = hs.spawn(["-p", "x"], base_url=URL, probe=_ok_probe, runner=_Runner(stdout=out),
+                   runtime=tmp_path)
+    assert res.spawned and res.reason == "RAN"
+    rec = _last_log(tmp_path)
+    assert set(rec) == {"at", "spawned", "reason", "returncode", "stdout_chars",
+                        "stderr_chars"}

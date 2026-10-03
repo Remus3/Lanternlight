@@ -39,6 +39,7 @@ scratch/
 tmp/
 .tmp/
 ops/runtime/
+ops/loop/control/
 
 # ---------------------------------------------------------------------------
 # Captures, frames and screenshots

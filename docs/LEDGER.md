@@ -84,6 +84,26 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0339 - 2026-10-03 - MAIN 0845/0855, 0850, 0912, 0915 applied (120 runs per 24 h, loop damping, the inbox status file, spawn-door overhead flags, usage log); damping refuted once and repaired; OPS-68 criterion 6 superseded
+
+**Provenance:** all seven MAIN notes of 2026-10-03 (0830, 0845, 0850, 0855, 0912, 0915, 0925) were SHA-256 compared against MAIN's outbox copies, located at run time through the `find_inbox` function of `ops/channel_route.py`: 7 of 7 MATCH. They are therefore operator instruction under the 2026-10-02 ruling.
+
+**What changed:**
+- `ops/inbox_runner.py` (MAIN 0855): `RUNS_CAP = 120` runs STARTED per rolling `WINDOW_S = 86400`, counted from `spawned: true` records in `ops/runtime/inbox_runner.log` only (the spawn door's own log is separate, so nothing is double counted); at the cap it logs `LIMIT:` and spawns nothing. The four other knobs of MAIN 0845 were never touched.
+- Loop damping (MAIN 0845 s3): our own notes (sender LL - the FIRST `-from-` in the name) and notes MARKED terminal or no-reply never trigger a spawn and are not acknowledged; drops still trigger. ORDER, FIX and RULING notes are never damped by a body marker (SS made the same exemption in its own tree the same day).
+- Status file (MAIN 0915 s1): `ops/loop/control/inbox_status.json`, schema 1, atomic, gitignored (`.gitignore` gains `ops/loop/control/`). ETA history in a gitignored JSON under `ops/runtime/`, median of the last 10, null under 3. A BUSY tick deliberately does not write it, so the instance holding the lock keeps reporting its own state. Known gap: after a usage-limited run the file reads `idle` until the next tick, not `backoff`.
+- Routing (MAIN 0912 C/D): ORDER/FIX/RULING -> opus at medium effort; otherwise sonnet, low only when every trigger name carries an ack-class token. Output format json.
+- `ops/headless_spawn.py` (MAIN 0912 A/B/E): the door adds `--strict-mcp-config`, `--setting-sources project,local` and `--no-session-persistence` unless the caller passed them; refuses any argv containing `--bare`, because this tree's floors live in a PreToolUse hook and `--bare` skips hooks; logs numeric usage fields from JSON stdout, absent fields stay absent. Measured before the change: all 8 hook commands are registered in PROJECT-scope `.claude/settings.json`, user scope holds 0, so dropping user scope drops no floor.
+- MAIN 0850: no project-scope `enabledPlugins` in this tree; no dependency on any of the ten disabled plugins (the only grep hits were "copyright" matching "pyright").
+
+**Measured:** one trivial `reply with exactly: ok` on sonnet through the proxy, input + cache-creation + cache-read tokens: 69,706 before the door flags, 55,328 after (about 21 percent fewer); cost 0.179 -> 0.114 notional.
+
+**Refutation pass, and what it caught:** an independent verifier CONFIRMED the cap (119 spawns, 120 refuses, a record exactly 86400 s old excluded, `cap_frees_at` correct), the status schema and local-offset `updated`, the routing, the spawn door, ASCII and no note names in any log. It REFUTED loop damping: the first version scanned every body line, and MAIN 0845 and 0855 - live ORDERS - quote the rule itself ("never spawn on a note marked TERMINAL or no-reply"), so an ORDER alone never started a session; 13 of 95 recent notes were damped, and `-from-LL-` as a bare substring damped three RSC auto-replies whose names quote an LL note. Repaired: only the `answered:` trailer (with its wrapped continuation) and a `CLASS` header may mark a note, and the self test reads the sender position. Re-measured on the same 95 real notes: 5 damped, all ANSWERs with a no-reply trailer; both MAIN orders trigger. Each repaired guard was seen red under mutation (sender-position rule 1 failed; marker-only rule 4 failed) and restored byte-identical with `__pycache__` cleared.
+
+**OPS-68 criterion 6:** SUPERSEDED by adjudication, written as a dated section at the top of the item: the inbox runner is the delivery path and `ops/responder.py` never gains a send.
+
+**Left for the unattended responder:** MAIN 0830 asks that its SHA-256 be computed and answered by the UNATTENDED responder, not a session. This session acknowledged the other notes and left 0830 unread so the first responder tick after the HALT lifts answers it - which also exercises the new routing (a FIX note routes to opus).
+
 ### LL-0338 - 2026-10-03 - Wrap 2026-10-03 (third session): OPS-113 marked CLOSED, wrap suite and refutation recorded, hand-off rewritten
 
 **Evidence:**

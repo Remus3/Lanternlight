@@ -2568,6 +2568,31 @@ that deserves a decision rather than one uniform change.
 
 ## OPS-68. The operator directed a RESPONDER RUNNER - BUILT 2026-09-20 in the DRAFT-ONLY shape, refuted on its load-bearing property, repaired, and criteria 1 to 3 are MET
 
+### 2026-10-03 - criterion 6 SUPERSEDED by adjudication, not MET
+
+**Adjudicated in session under the FULL AUTHORITY directive; this section
+supersedes criterion 6 below and edits nothing beneath it.** Criterion 6 made
+delivery a SESSION act until a measured record of reviewed drafts existed. That
+record can no longer accrue: `moon_sync_inbox/_drafts/` held 0 drafts when
+measured at the 2026-10-03 third-session wrap, because the armed inbox runner
+(`ops/inbox_runner.py`, operator ruling 2026-10-02, `LL-0317`) answers unread
+mail before any draft is wanted.
+
+**The ruling: the inbox runner SUPERSEDES the draft-only responder as the
+delivery path, and the draft-only responder NEVER gains the ability to send.**
+Reasons. (1) The operator's 2026-10-02 ruling authorised unattended delivery
+through a SESSION working under `CLAUDE.md`, which is exactly the property
+criterion 6 protected - a reply composed by code nobody reviews is still not
+built, and is still refused. (2) The evidence behind criterion 6 (`LL-0271`,
+`LL-0277`, two wrong figures published in four hours) was about composition,
+and the runner's session carries step 3 of its prompt, "re-measure every claim
+a note makes about this tree before you repeat it". (3) Keeping a criterion that
+cannot be met leaves an open item that reads as owed work when none is owed.
+
+`ops/responder.py` stays draft-only and unchanged. Criterion 6 is retired: no
+measured-drafts record is owed, and a session must not build a sending path into
+`ops/responder.py` on the strength of this item.
+
 ### 2026-09-20 - BUILT, then REFUTED on the one property that mattered, then repaired
 
 **This section supersedes the ones below it**, which are left standing because

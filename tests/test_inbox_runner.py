@@ -304,3 +304,445 @@ def test_a_tree_already_dirty_before_the_session_is_attributed(tmp_path):
 
 def test_prompt_gives_a_recovery_step_when_head_did_not_move():
     assert "HEAD did not move" in ir.PROMPT
+
+
+# --- MAIN orders 2026-10-03: budget, damping, status file, routing ----------
+#
+# MAIN 0855 (daily run budget), MAIN 0845 s3 (loop damping), MAIN 0915 s1
+# (status file), MAIN 0912 C/D/E (headless flags and model routing). Every test
+# below injects the clock and the status path; none writes into this tree.
+
+from datetime import UTC, datetime, timedelta  # noqa: E402
+
+_T0 = datetime(2026, 10, 3, 12, 0, 0, tzinfo=UTC)
+
+
+class _Clock:
+    def __init__(self, at=_T0):
+        self.at = at
+
+    def __call__(self):
+        return self.at
+
+    def advance(self, seconds):
+        self.at = self.at + timedelta(seconds=seconds)
+
+
+@pytest.fixture(autouse=True)
+def _status_in_tmp(tmp_path, monkeypatch):
+    """No test may write the real ops/loop/control/inbox_status.json."""
+    target = tmp_path / "control" / "inbox_status.json"
+    monkeypatch.setattr(ir, "_default_status_path", lambda: target)
+    return target
+
+
+def _status(path):
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _write_runs(runtime, times, spawned=True):
+    with (runtime / ir.LOG_NAME).open("a", encoding="utf-8", newline="\n") as fh:
+        for t in times:
+            fh.write(json.dumps({"at": t.isoformat(), "spawned": spawned,
+                                 "unread": 1, "reason": "RAN"}) + "\n")
+
+
+def _crun(inbox, state, runtime, spawn, clock=None, status=None, **kw):
+    return ir.run(inbox=inbox, state=state, runtime=runtime, spawn=spawn,
+                  now=clock or _Clock(), status_path=status, **kw)
+
+
+# --- item 1: daily run budget ----------------------------------------------
+
+
+def test_budget_constants_are_exported():
+    assert ir.RUNS_CAP == 120 and ir.WINDOW_S == 86400
+    assert "RUNS_CAP" in ir.__all__ and "WINDOW_S" in ir.__all__
+
+
+def test_the_daily_budget_refuses_a_run_at_the_cap(tmp_path):
+    inbox, state, runtime = _setup(tmp_path, [("a.md", "x")])
+    _write_runs(runtime, [_T0 - timedelta(minutes=10 + i) for i in range(120)])
+    sp = _Spawn()
+    res = _crun(inbox, state, runtime, sp)
+    assert sp.calls == [] and not res.spawned
+    assert res.reason.startswith("LIMIT:") and "120" in res.reason
+    rec = json.loads((runtime / ir.LOG_NAME).read_text(encoding="utf-8").splitlines()[-1])
+    assert rec["reason"].startswith("LIMIT:") and rec["spawned"] is False
+
+
+def test_one_below_the_cap_still_spawns(tmp_path):
+    inbox, state, runtime = _setup(tmp_path, [("a.md", "x")])
+    _write_runs(runtime, [_T0 - timedelta(minutes=10 + i) for i in range(119)])
+    sp = _Spawn()
+    assert _crun(inbox, state, runtime, sp).spawned and len(sp.calls) == 1
+
+
+def test_runs_older_than_the_window_do_not_count(tmp_path):
+    inbox, state, runtime = _setup(tmp_path, [("a.md", "x")])
+    _write_runs(runtime, [_T0 - timedelta(seconds=ir.WINDOW_S + 1 + i) for i in range(200)])
+    sp = _Spawn()
+    assert _crun(inbox, state, runtime, sp).spawned
+
+
+def test_unspawned_records_do_not_count(tmp_path):
+    inbox, state, runtime = _setup(tmp_path, [("a.md", "x")])
+    _write_runs(runtime, [_T0 - timedelta(minutes=i) for i in range(200)], spawned=False)
+    sp = _Spawn()
+    assert _crun(inbox, state, runtime, sp).spawned
+
+
+def test_an_unparseable_log_line_neither_crashes_nor_lowers_the_count(tmp_path):
+    inbox, state, runtime = _setup(tmp_path, [("a.md", "x")])
+    _write_runs(runtime, [_T0 - timedelta(minutes=10 + i) for i in range(60)])
+    with (runtime / ir.LOG_NAME).open("a", encoding="utf-8") as fh:
+        fh.write("{not json\n")
+        fh.write(json.dumps({"at": "yesterday-ish", "spawned": True}) + "\n")
+        fh.write("[1, 2]\n")
+    _write_runs(runtime, [_T0 - timedelta(minutes=100 + i) for i in range(60)])
+    budget = ir.runs_in_window(runtime, _T0)
+    assert budget.count == 120 and budget.unparseable == 3
+    sp = _Spawn()
+    res = _crun(inbox, state, runtime, sp)
+    assert sp.calls == [] and res.reason.startswith("LIMIT:")
+
+
+# --- item 2: loop damping --------------------------------------------------
+
+
+def test_our_own_note_does_not_trigger_a_spawn(tmp_path):
+    inbox, state, runtime = _setup(tmp_path, [("2026-10-03-from-LL-to-RC.md", "x")])
+    sp = _Spawn()
+    res = _crun(inbox, state, runtime, sp)
+    assert sp.calls == [] and not res.spawned
+    assert res.reason == "NO TRIGGER: 1 unread, all self or terminal"
+    assert ir.unread_count(inbox, state) == 1  # semantics kept for other callers
+
+
+def test_a_terminal_filename_does_not_trigger_a_spawn(tmp_path):
+    inbox, state, runtime = _setup(tmp_path, [("2026-10-03-from-RC-TERMINAL-ack.md", "x")])
+    sp = _Spawn()
+    assert _crun(inbox, state, runtime, sp).reason.startswith("NO TRIGGER")
+    assert sp.calls == []
+
+
+@pytest.mark.parametrize("name", ["terminal-notes.md", "TERMINALS.md", "xTERMINAL.md"])
+def test_terminal_in_a_filename_must_be_the_uppercase_word(tmp_path, name):
+    inbox, state, runtime = _setup(tmp_path, [(name, "body")])
+    sp = _Spawn()
+    assert _crun(inbox, state, runtime, sp).spawned
+
+
+@pytest.mark.parametrize("body", [
+    "# Note\n\nanswered: n/a (FYI, no reply requested)\n",
+    "Done.\n\nanswered: n/a (ANSWER, no reply requested beyond the question above)\n",
+    "Done.\n\nanswered: MAIN 0830 (partial), MAIN 0855\n(collision). A reply is not requested.\n",
+    "Done.\n\nanswered: n/a - TERMINAL\n",
+    "    FROM      RC\n    CLASS     TERMINAL. Nothing is asked.\n\nBody.\n",
+    "CLASS: no-reply\n\nBody.\n",
+])
+def test_a_terminal_or_no_reply_marker_does_not_trigger(tmp_path, body):
+    inbox, state, runtime = _setup(tmp_path, [("2026-10-03-from-RC-note.md", body)])
+    sp = _Spawn()
+    res = _crun(inbox, state, runtime, sp)
+    assert sp.calls == [] and res.reason.startswith("NO TRIGGER")
+
+
+# Refutation pass 2026-10-03: a body-wide scan damped MAIN 0845 and 0855, live
+# ORDERS whose prose QUOTES the damping rule. Only the marker lines - the
+# ``answered:`` trailer and a ``CLASS`` header - may declare a note terminal.
+@pytest.mark.parametrize("body", [
+    "## 3. What does NOT change\n\n- Loop damping: never spawn on your OWN notes,"
+    " never spawn on a note marked TERMINAL or no-reply.\n\n"
+    "answered: n/a - a reply IS requested (section 4)\n",
+    "kill switch and every safety floor are untouched, and every tree must\n"
+    "TERMINAL or no-reply.\n\nanswered: n/a - a reply IS requested (section 4)\n",
+    "Status: no-reply is what LW added.\n\nPlease answer.\n",
+    "Thanks.\n\nNo reply requested from RC; LL please answer section 2.\n",
+])
+def test_a_note_that_quotes_the_damping_rule_still_triggers(tmp_path, body):
+    inbox, state, runtime = _setup(
+        tmp_path, [("2026-10-03-0845-from-MAIN-ORDER-ALL-x.md", body)])
+    sp = _Spawn()
+    assert _crun(inbox, state, runtime, sp).spawned
+
+
+def test_a_sibling_note_quoting_an_ll_note_in_its_name_still_triggers(tmp_path):
+    inbox, state, runtime = _setup(
+        tmp_path, [("2026-10-03-2311-from-RSC-AUTO-REPLY-to-2026-10-03-from-LL-x.md", "y")])
+    sp = _Spawn()
+    assert _crun(inbox, state, runtime, sp).spawned
+
+
+def test_a_live_note_beside_a_terminal_one_still_spawns(tmp_path):
+    inbox, state, runtime = _setup(
+        tmp_path, [("a-TERMINAL.md", "x"), ("b.md", "please answer")])
+    sp = _Spawn()
+    res = _crun(inbox, state, runtime, sp)
+    assert res.spawned and res.unread == 2
+
+
+def test_damped_notes_are_not_acknowledged(tmp_path):
+    inbox, state, runtime = _setup(tmp_path, [("x-from-LL-y.md", "x")])
+    before = state.read_bytes()
+    _crun(inbox, state, runtime, _Spawn())
+    assert state.read_bytes() == before
+
+
+def test_a_drop_still_triggers_beside_only_self_notes(tmp_path):
+    inbox, state, runtime = _setup(tmp_path, [("x-from-LL-y.md", "x")])
+    (inbox / "from-XX-drop").mkdir()
+    (inbox / "from-XX-drop" / "a.py").write_text("x = 1\n", encoding="utf-8")
+    sp = _Spawn()
+    assert _crun(inbox, state, runtime, sp).spawned
+
+
+def test_the_no_trigger_log_carries_no_note_names(tmp_path):
+    inbox, state, runtime = _setup(tmp_path, [("secret-from-LL-subject.md", "x")])
+    _crun(inbox, state, runtime, _Spawn())
+    assert "secret" not in (runtime / ir.LOG_NAME).read_text(encoding="utf-8")
+
+
+# --- item 3: status file ---------------------------------------------------
+
+_KEYS = {"schema", "code", "updated", "state", "task", "task_started", "task_eta_s",
+         "next_tick", "runs_in_window", "runs_cap", "window_s", "cap_frees_at"}
+
+
+def test_an_idle_tick_writes_the_exact_schema(tmp_path, _status_in_tmp):
+    inbox, state, runtime = _setup(tmp_path, [("a.md", "x")], seen=["a.md"])
+    _crun(inbox, state, runtime, _Spawn())
+    st = _status(_status_in_tmp)
+    assert set(st) == _KEYS
+    assert st["schema"] == 1 and st["code"] == "LL"
+    assert st["state"] == "idle" and st["task"] == "Idle"
+    assert st["runs_cap"] == 120 and st["window_s"] == 86400
+    assert st["runs_in_window"] == 0 and st["cap_frees_at"] is None
+    nxt = datetime.fromisoformat(st["next_tick"])
+    assert nxt.utcoffset() is not None
+    assert nxt == _T0 + timedelta(seconds=ir.CADENCE_S)
+    assert datetime.fromisoformat(st["updated"]).utcoffset() is not None
+    assert datetime.fromisoformat(st["task_started"]).utcoffset() is not None
+
+
+def test_the_cadence_is_the_scheduled_task_interval():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "arm_inbox_runner", ir.REPO_ROOT / "scripts" / "arm_inbox_runner.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    assert ir.CADENCE_S == mod.INTERVAL_MINUTES * 60
+
+
+def test_the_status_is_running_session_while_the_spawn_runs(tmp_path, _status_in_tmp):
+    inbox, state, runtime = _setup(tmp_path, [("a.md", "x")])
+    inside = []
+
+    def spawn(args, **kw):
+        inside.append(_status(_status_in_tmp))
+        return hs.SpawnResult(True, "RAN", 0, "", "")
+
+    _crun(inbox, state, runtime, spawn)
+    assert inside[0]["state"] == "running" and inside[0]["task"] == "Running Session"
+    assert inside[0]["next_tick"] is None
+    assert _status(_status_in_tmp)["state"] == "idle"
+
+
+def test_the_status_is_checking_inbox_while_the_inbox_is_read(
+        tmp_path, monkeypatch, _status_in_tmp):
+    inbox, state, runtime = _setup(tmp_path, [("a.md", "x")], seen=["a.md"])
+    seen_states = []
+    real = ir.unread_count
+
+    def spy(*a, **kw):
+        seen_states.append(_status(_status_in_tmp))
+        return real(*a, **kw)
+
+    monkeypatch.setattr(ir, "unread_count", spy)
+    _crun(inbox, state, runtime, _Spawn())
+    assert seen_states and seen_states[0]["state"] == "running"
+    assert seen_states[0]["task"] == "Checking Inbox"
+
+
+def test_a_halted_tick_writes_halted_and_reads_no_inbox(
+        tmp_path, monkeypatch, _status_in_tmp):
+    inbox, state, runtime = _setup(tmp_path, [("a.md", "x")])
+    (runtime / ir.HALT_NAME).write_text("operator", encoding="utf-8")
+
+    def forbidden(*a, **kw):
+        raise AssertionError("the inbox was read under HALT")
+
+    monkeypatch.setattr(ir, "unread_count", forbidden)
+    monkeypatch.setattr(ir, "trigger_names", forbidden)
+    res = _crun(inbox, state, runtime, _Spawn())
+    assert "HALT" in res.reason
+    st = _status(_status_in_tmp)
+    assert st["state"] == "halted" and st["task"] == "Halted"
+
+
+def test_a_limit_tick_reports_when_the_cap_frees(tmp_path, _status_in_tmp):
+    inbox, state, runtime = _setup(tmp_path, [("a.md", "x")])
+    times = [_T0 - timedelta(minutes=10 + i) for i in range(121)]
+    _write_runs(runtime, times)
+    _crun(inbox, state, runtime, _Spawn())
+    st = _status(_status_in_tmp)
+    assert st["state"] == "limit" and st["task"] == "Turn Limit Reached"
+    assert st["runs_in_window"] == 121
+    # 121 counted against a cap of 120: the cap frees when TWO have aged out,
+    # i.e. when the second-oldest leaves the window.
+    second_oldest = sorted(times)[1]
+    assert datetime.fromisoformat(st["cap_frees_at"]) == second_oldest + timedelta(
+        seconds=ir.WINDOW_S)
+
+
+def test_a_backoff_refusal_is_backing_off(tmp_path, _status_in_tmp):
+    inbox, state, runtime = _setup(tmp_path, [("a.md", "x")])
+    sp = _Spawn(hs.SpawnResult(False, "REFUSED: BACKOFF after a usage limit, until x"))
+    _crun(inbox, state, runtime, sp)
+    st = _status(_status_in_tmp)
+    assert st["state"] == "backoff" and st["task"] == "Backing Off"
+
+
+def test_another_refusal_is_refused_and_idle(tmp_path, _status_in_tmp):
+    inbox, state, runtime = _setup(tmp_path, [("a.md", "x")])
+    sp = _Spawn(hs.SpawnResult(False, "REFUSED: the local proxy refused a TCP connection"))
+    _crun(inbox, state, runtime, sp)
+    st = _status(_status_in_tmp)
+    assert st["state"] == "refused" and st["task"] == "Idle"
+
+
+def test_a_busy_tick_leaves_the_holders_status_alone(tmp_path, _status_in_tmp):
+    inbox, state, runtime = _setup(tmp_path, [("a.md", "x")])
+    from ops.loop import guard
+    guard.acquire(runtime / ir.LOCK_NAME, label="test-holder")
+    _status_in_tmp.parent.mkdir(parents=True)
+    _status_in_tmp.write_text('{"state": "running"}', encoding="utf-8")
+    _crun(inbox, state, runtime, _Spawn())
+    assert _status(_status_in_tmp) == {"state": "running"}
+
+
+def test_the_eta_is_null_until_three_runs_then_the_median(tmp_path, _status_in_tmp):
+    clock = _Clock()
+    inside = []
+
+    def make_spawn(duration):
+        def spawn(args, **kw):
+            inside.append(_status(_status_in_tmp)["task_eta_s"])
+            clock.advance(duration)
+            return hs.SpawnResult(True, "RAN", 0, "", "")
+        return spawn
+
+    shared = tmp_path / "shared_rt"
+    for i, d in enumerate((100, 600, 200, 50)):
+        sub = tmp_path / f"r{i}"
+        sub.mkdir()
+        inbox, state, _rt = _setup(sub, [("a.md", "x")])
+        _crun(inbox, state, shared, make_spawn(d), clock=clock)
+        clock.advance(900)
+    assert inside == [None, None, None, 200]
+
+
+def test_the_task_history_is_kept_to_ten(tmp_path):
+    runtime = tmp_path / "rt"
+    for d in range(15):
+        ir._record_duration(runtime, "Running Session", float(d))
+    data = json.loads((runtime / ir.HISTORY_NAME).read_text(encoding="utf-8"))
+    assert data["tasks"]["Running Session"] == [float(d) for d in range(5, 15)]
+    assert ir._eta(runtime, "Running Session") == 10  # median of 5..14 is 9.5
+    assert ir._eta(runtime, "Idle") is None
+
+
+def test_a_status_write_failure_is_logged_and_the_runner_continues(
+        tmp_path, monkeypatch):
+    inbox, state, runtime = _setup(tmp_path, [("a.md", "x")])
+
+    def boom(path, payload):
+        raise PermissionError("locked")
+
+    monkeypatch.setattr(ir, "_write_status_file", boom)
+    sp = _Spawn()
+    res = _crun(inbox, state, runtime, sp)
+    assert res.spawned and len(sp.calls) == 1
+    logged = (runtime / ir.LOG_NAME).read_text(encoding="utf-8")
+    assert "STATUS WRITE FAILED: PermissionError" in logged
+
+
+def test_the_status_write_is_atomic_and_leaves_no_temp(tmp_path, _status_in_tmp):
+    inbox, state, runtime = _setup(tmp_path, [("a.md", "x")])
+    _crun(inbox, state, runtime, _Spawn())
+    assert [p.name for p in _status_in_tmp.parent.iterdir()] == [_status_in_tmp.name]
+
+
+def test_every_task_name_is_from_the_ordered_set():
+    assert set(ir.TASK_NAMES) == {
+        "Idle", "Checking Inbox", "Running Session", "Delivering Notes",
+        "Committing", "Backing Off", "Halted", "Turn Limit Reached"}
+    assert all(len(t) <= 24 for t in ir.TASK_NAMES)
+
+
+# --- item 4: the status file is not tracked --------------------------------
+
+
+def test_the_status_path_is_gitignored():
+    import subprocess
+    done = subprocess.run(
+        ["git", "check-ignore", "-q", "ops/loop/control/inbox_status.json"],
+        cwd=str(ir.REPO_ROOT), capture_output=True)
+    assert done.returncode == 0
+
+
+# --- item 5: headless flags and model routing ------------------------------
+
+
+def _flag(args, name):
+    return args[args.index(name) + 1]
+
+
+def test_output_format_is_json_and_no_bare():
+    args = ir.session_args()
+    assert _flag(args, "--output-format") == "json"
+    assert "--bare" not in args
+
+
+@pytest.mark.parametrize("names, model, effort", [
+    (["2026-from-MAIN-ORDER-x.md"], "opus", "medium"),
+    (["a-ACK-b.md", "c-FIX-d.md"], "opus", "medium"),
+    (["a-RULING-b.md"], "opus", "medium"),
+    (["a-ACK-b.md", "c-ANSWER-d.md", "e-INFORMATION-f.md"], "sonnet", "low"),
+    (["a-TERMINAL-b.md", "c-CORRECTION-d.md"], "sonnet", "low"),
+    (["a-ACK-b.md", "plain.md"], "sonnet", "medium"),
+    (["plain.md"], "sonnet", "medium"),
+    ([], "sonnet", "medium"),
+    (None, "sonnet", "medium"),
+])
+def test_session_args_route_the_model(names, model, effort):
+    args = ir.session_args(names)
+    assert _flag(args, "--model") == model and _flag(args, "--effort") == effort
+    assert args[0] == "-p" and ir.PROMPT in args
+
+
+def test_the_spawn_receives_the_routed_model(tmp_path):
+    inbox, state, runtime = _setup(
+        tmp_path, [("x-from-MAIN-ORDER-y.md", "do it"), ("z-from-LL-FIX-q.md", "ours")])
+    sp = _Spawn()
+    _crun(inbox, state, runtime, sp)
+    assert _flag(sp.calls[0][0], "--model") == "opus"
+
+
+def test_a_self_note_does_not_route_the_model(tmp_path):
+    inbox, state, runtime = _setup(
+        tmp_path, [("a-ACK-b.md", "ok"), ("z-from-LL-ORDER-q.md", "ours")])
+    sp = _Spawn()
+    _crun(inbox, state, runtime, sp)
+    args = sp.calls[0][0]
+    assert _flag(args, "--model") == "sonnet" and _flag(args, "--effort") == "low"
+
+
+def test_an_order_is_never_damped_by_its_trailer(tmp_path):
+    # An ORDER needs acting on whether or not it wants a reply (SS
+    # made the same exemption); only its NAME, never its trailer, can damp it.
+    inbox, state, runtime = _setup(tmp_path, [(
+        "2026-10-03-0900-from-MAIN-ORDER-ALL-x.md",
+        "Do the thing.\n\nanswered: n/a - no reply requested\n")])
+    sp = _Spawn()
+    assert _crun(inbox, state, runtime, sp).spawned
