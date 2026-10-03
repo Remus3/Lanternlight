@@ -3144,6 +3144,76 @@ Accept: (a) done.md states the measured scope and the pinning test asserts the
 measured scope, seen red against the old wording; (b) a dated correction note
 under the archived `OPS-97` heading.
 
+## OPS-120. MAIN's FLEET-KIT order - behaviour adopted; vendoring HELD at the license gate, then CLEARED by the operator in chat the same day - CLOSED 2026-10-03, `LL-0341`
+
+**CLOSED 2026-10-03 (fifth session), `LL-0341`.** (a) superseded: the license
+answer came from the operator, the kit's holder, in chat rather than from MAIN;
+(b) v3 vendored at `ops/fleet_kit/` with a NOTICE, block embedded, conformance
+seen red then `[]`; (c) the one spawn door routes through the kit's `spawn()`,
+and the kit's gaps went to MAIN in the reply rather than into our copy.
+
+**UPDATE 2026-10-03 (same session): the gate was SATISFIED, not waived.** The
+operator, the kit's owner and copyright holder, ruled in this session's chat:
+the kit may be vendored into Lanternlight under Apache-2.0 with the operator
+as copyright holder, at `ops/fleet_kit/` (not `third_party/fleet_kit/`). The
+v3 files were then copied and re-hashed, 3 of 3 MATCH the licensed digests,
+with `ops/fleet_kit/NOTICE.md` and `tests/test_fleet_kit_conformance.py`
+(seen red: `CLAUDE.md lacks the FLEET-COMMON markers`). The questions to MAIN
+below are therefore answered and are NOT sent; MAIN is told the outcome.
+
+Filed 2026-10-03 (fifth session). MAIN 0955 (kit v1), 1014 (v2) and 1016 (v3)
+are operator orders: all three notes and all nine kit files were SHA-256
+compared against MAIN's outbox copies, 12 of 12 MATCH. The order has four
+parts: (1) vendor the three kit files byte-for-byte to `ops/fleet_kit/`; (2) a
+conformance test `fleet_headless.conformance(root) == []`; (3) condense
+`CLAUDE.md`, moving history verbatim to `docs/claude-md-history.md`, and embed
+`FLEET-COMMON.md` between `<!-- FLEET-COMMON BEGIN -->` and
+`<!-- FLEET-COMMON END -->`; (4) route every headless spawn through the kit's
+`spawn()`. v2 and v3 add session behaviour: quiet chat, background work,
+progress files, and a `/done` that prints only one line and carries forward
+every unacted hand-off item.
+
+**Adjudicated this session by a distinct agent: hold (1), the embed half of
+(3), and therefore (2) and (4); do everything else now.** The kit files carry
+no license statement and no copyright line, and the order notes name none.
+`CLAUDE.md` lists the third-party license gate as a floor that no grant of
+authority reaches, and the operator's own 2026-10-02 paragraph says MAIN cannot
+lift a safety floor. Byte-identity with MAIN's outbox proves PROVENANCE, not a
+LICENSE. Embedding `FLEET-COMMON.md` byte-for-byte in a public Apache-2.0 file
+is vendoring too. Both earlier vendorings (`OPS-84`, `OPS-91`) refused first,
+asked, and vendored once the owner named a license. Alternatives rejected:
+vendor now on the order (crosses the floor); refuse the whole order (the
+behaviour parts carry no license question). **What reverses it:** a
+provenance-checked MAIN note naming the kit's license (Apache-2.0 or another
+permissive one), its copyright holder, and the published copy to hash against
+(MAIN's outbox copy serves if it is published nowhere else). GPL, AGPL or
+BUSL-1.1 would make the refusal permanent.
+
+**Second open question, put to MAIN in the same reply:** this repository's
+rule puts vendored code under `third_party/<name>/` with a NOTICE and names it
+in the inventory paragraph of `CLAUDE.md`, which
+`tests/test_vendored_inventory_is_declared.py` enforces. The kit's
+`conformance()` expects `ops/fleet_kit/`. The path has to be settled before a
+byte is copied; a gap is reported to MAIN, never patched in our copy.
+
+**Done this session:** `.claude/commands/done.md` steps 9-10 now carry forward
+every unacted item and print only `Done ritual complete, safe to clear`,
+pinned by `tests/test_done_ritual_output.py` (4 tests, seen red 4 failed
+before the edit). The kit's runtime files (`ops/loop/control/progress/`,
+`headless_budget.json`, `headless_usage.jsonl`) were measured already ignored
+by the existing `ops/loop/control/` line in `.gitignore`. The `CLAUDE.md`
+condensation (our own text, no license question) is the other half of (3) -
+see the ledger entry for this session for its before and after bytes.
+
+Accept: (a) MAIN's license answer recorded here verbatim in substance, with the
+note's SHA-256 match; (b) on a permissive answer, the v-current kit vendored in
+ONE commit at the agreed path with a NOTICE (upstream, license, holder, digest,
+changes: none), the inventory paragraph and its test updated, the block
+embedded between the markers, and the conformance test seen red before the
+vendoring and green after; (c) every spawn path routed through the kit's
+`spawn()` or listed in the reply with the reason it is not, and any capability
+the kit lacks reported to MAIN rather than patched locally.
+
 ## Archive index
 
 Every closed and refuted item is still here, one hop away, in

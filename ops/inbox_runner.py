@@ -17,26 +17,35 @@ that composes replies itself.
 FLOORS THIS MODULE KEEPS, each tested in ``tests/test_inbox_runner.py``:
 
 * A HALT file under ``ops/runtime/`` stops it before it reads the inbox. It is
-  the per-tree stop; deleting ``CLAUDE_HEADLESS_BASE_URL`` is the operator's
-  every-tree stop, enforced in :mod:`ops.headless_spawn`. A halted tick still
-  writes the status file (state ``halted``), which reads only this module's
-  own run log, never the inbox.
-* DAILY RUN BUDGET, MAIN 0855: at most ``RUNS_CAP`` runs STARTED in any
-  rolling ``WINDOW_S`` seconds, counted from this module's own log. At the cap
-  it logs ``LIMIT:`` and spawns nothing.
+  the per-tree stop (the spawn door refuses on it too, so the CLI honours it);
+  deleting ``CLAUDE_HEADLESS_BASE_URL`` is the operator's every-tree stop,
+  enforced by the fleet kit. A halted tick still writes the status file
+  (state ``halted``) and reads nothing from the inbox.
+* DAILY RUN BUDGET, MAIN 0855: enforced by the FLEET KIT at the spawn door
+  (MAIN 0955 s2 step 4), not here, so every caller of the door is under it.
+  A budget refusal comes back as a ``LIMIT:`` reason and the status reads
+  ``limit``.
 * LOOP DAMPING, MAIN 0845 s3: our OWN notes (sender ``LL`` - the first
   ``-from-`` in the name) and notes MARKED TERMINAL or no-reply (by name, or on
   the ``answered:`` trailer or a ``CLASS`` header - never by prose that merely
   quotes the rule) never trigger a spawn. They are not
   acknowledged either - they simply do not count as a trigger, and are read by
-  the next session some other note starts.
+  the next session some other note starts. This stays HERE and does NOT call
+  the kit's ``should_skip``: that matches TERMINAL / NO-REPLY anywhere in the
+  name plus head, case-folded, which is the first version of ours that was
+  REFUTED on 2026-10-03 for damping live MAIN orders that quote the rule
+  (LL-0339, LL-0340). Reported to MAIN as a kit gap.
 * STATUS FILE, MAIN 0915 s1: ``ops/loop/control/inbox_status.json`` (ignored
-  by git) is rewritten atomically on every state change. A failure writing it
-  is LOGGED and never stops the runner.
-* MODEL ROUTING, MAIN 0912 C/D/E: :func:`session_args` picks the model and
-  effort from the triggering notes' filenames. ``--bare`` is never passed,
-  because this tree's floors live in a PreToolUse hook and ``--bare`` skips
-  hooks.
+  by git) is written through the kit's ``write_status`` - by the kit while a
+  session runs, and by this module on every tick (with ``next_tick``) and for
+  the states the kit has no word for (``halted``, ``backoff``, ``refused``). A
+  failure writing it is LOGGED and never stops the runner.
+* MODEL ROUTING, MAIN 0912 C/D/E: :func:`session_args` turns the triggering
+  notes' filenames into the kit's inputs - ``writes_code`` (opus) for any
+  ORDER/FIX/RULING, and a fixed ``note`` string the kit reads as low effort
+  for an all-acknowledgement batch, medium otherwise. ``--bare`` is never
+  passed, because this tree's floors live in a PreToolUse hook and ``--bare``
+  skips hooks.
 * One instance at a time, through :mod:`ops.loop.guard`, which never kills.
 * The session is NOT given bypass permissions. It gets an explicit tool allow
   list; the repository's own PreToolUse gate still runs on every shell call.
@@ -72,6 +81,7 @@ if str(Path(__file__).resolve().parents[1]) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from ops import headless_spawn
+from ops.fleet_kit import fleet_headless as kit
 from ops.inbox_watch import (
     RUNNER_LOCK_NAME,
     _read_drops,
@@ -95,36 +105,37 @@ __all__ = [
     "RUNS_CAP",
     "TASK_NAMES",
     "WINDOW_S",
-    "Budget",
     "RunnerResult",
     "main",
     "run",
-    "runs_in_window",
     "session_args",
     "trigger_names",
     "unread_count",
 ]
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-HALT_NAME = "INBOX_RUNNER_HALT"
+#: Defined at the spawn door so the door can refuse on it without importing
+#: this module; re-exported here.
+HALT_NAME = headless_spawn.HALT_NAME
 #: The prompt hook in ops/inbox_watch.py refuses to acknowledge while this is
 #: held - ``OPS-115`` - so the name lives there and is only re-exported here.
 LOCK_NAME = RUNNER_LOCK_NAME
 LOG_NAME = "inbox_runner.log"
 SESSION_TIMEOUT = 45 * 60
 
-#: MAIN 0855: at most this many headless runs STARTED per rolling window.
-RUNS_CAP = 120
-WINDOW_S = 86400
+#: MAIN 0855: at most this many headless runs STARTED per rolling window -
+#: the fleet kit's numbers, enforced in the kit's door, re-exported here.
+RUNS_CAP = kit.RUNS_CAP
+WINDOW_S = kit.WINDOW_S
 
 #: The scheduler cadence. It comes from ``scripts/arm_inbox_runner.py``
 #: ``INTERVAL_MINUTES = 15``, the record of the scheduled task's definition;
 #: ``test_the_cadence_is_the_scheduled_task_interval`` fails if they drift.
 CADENCE_S = 15 * 60
 
-#: MAIN 0915 s1: the status file other trees and the operator read.
-STATUS_RELPATH = Path("ops") / "loop" / "control" / "inbox_status.json"
-STATUS_SCHEMA = 1
+#: MAIN 0915 s1: the status file other trees and the operator read. Its path
+#: and schema belong to the fleet kit.
+STATUS_RELPATH = kit.STATUS_REL
 #: Per-task duration history for ``task_eta_s``, under the gitignored runtime.
 HISTORY_NAME = "inbox_task_history.json"
 HISTORY_KEEP = 10
@@ -217,25 +228,27 @@ def _route(names: Sequence[str] | None) -> tuple[str, str]:
     return "sonnet", "medium"
 
 
-def session_args(names: Sequence[str] | None = None) -> list[str]:
-    """The claude CLI arguments for one runner session, prompt included.
+def session_args(names: Sequence[str] | None = None) -> dict:
+    """The spawn-door keywords for one runner session: ``note``,
+    ``writes_code`` and ``extra``.
 
     ``names`` are the unread TRIGGER notes' filenames (see
-    :func:`trigger_names`); they choose the model and effort and are never
-    logged. ``--bare`` is deliberately absent: it skips hooks, and this tree's
-    floors are enforced by a PreToolUse hook. The spawn-door flags
-    (``--strict-mcp-config`` and friends) are added in :mod:`ops.headless_spawn`,
-    not here.
+    :func:`trigger_names`); they choose the model and effort and never leave
+    this function - the kit is given a FIXED note string, because it logs it.
+    The kit takes the model from ``writes_code`` and the effort from
+    ``pick_effort(note)``, so :func:`_route`'s intent is mapped onto those:
+    opus <-> ``writes_code=True``; low <-> ``headless_spawn.NOTE_ACK``;
+    medium <-> ``headless_spawn.NOTE_WORK``. ``--bare`` is deliberately
+    absent: it skips hooks, and this tree's floors are enforced by a PreToolUse
+    hook. ``-p``, ``--output-format json``, the model, the effort and the lean
+    flags are added by the kit, so ``extra`` carries only what the kit does not.
     """
     model, effort = _route(names)
-    return [
-        "-p", PROMPT,
-        "--permission-mode", "acceptEdits",
-        "--allowedTools", _ALLOWED_TOOLS,
-        "--output-format", "json",
-        "--model", model,
-        "--effort", effort,
-    ]
+    return {
+        "note": headless_spawn.NOTE_ACK if effort == "low" else headless_spawn.NOTE_WORK,
+        "writes_code": model == "opus",
+        "extra": ["--permission-mode", "acceptEdits", "--allowedTools", _ALLOWED_TOOLS],
+    }
 
 
 @dataclass(frozen=True)
@@ -353,87 +366,6 @@ def trigger_names(inbox: Path, state: Path) -> list[str]:
     return names
 
 
-@dataclass(frozen=True)
-class Budget:
-    """Runs STARTED in the rolling window, read from this module's own log.
-
-    ``count`` is every record with ``spawned`` true and a parseable ``at``
-    inside the window. ``unparseable`` counts lines that are not a JSON object,
-    and spawned-true records whose ``at`` cannot be read. THE CHOICE, recorded:
-    such a line is SKIPPED, individually - one bad line never abandons the
-    scan, so the count is never lower than what the log makes countable. It is
-    not counted as a run either, because a line with no readable time can never
-    age out of the window and would hold the cap down for ever. The number of
-    skipped lines is logged on every record that has one. A log that cannot be
-    read at all is ``readable=False`` and the caller refuses to spawn.
-    """
-
-    count: int
-    unparseable: int = 0
-    frees_at: datetime | None = None
-    last_run_at: datetime | None = None
-    readable: bool = True
-
-
-def _parse_at(value) -> datetime | None:
-    if not isinstance(value, str):
-        return None
-    try:
-        at = datetime.fromisoformat(value)
-    except ValueError:
-        return None
-    return at if at.tzinfo is not None else at.replace(tzinfo=UTC)
-
-
-def runs_in_window(runtime: Path, now: datetime) -> Budget:
-    """Count runs started in ``(now - WINDOW_S, now]`` and later - see :class:`Budget`.
-
-    A record dated in the future (clock skew) is counted: the cap errs toward
-    refusing.
-    """
-    path = Path(runtime) / LOG_NAME
-    try:
-        text = path.read_text(encoding="utf-8", errors="replace")
-    except FileNotFoundError:
-        return Budget(0)
-    except OSError:
-        return Budget(0, readable=False)
-    start = now - timedelta(seconds=WINDOW_S)
-    times: list[datetime] = []
-    last: datetime | None = None
-    bad = 0
-    for line in text.splitlines():
-        if not line.strip():
-            continue
-        try:
-            rec = json.loads(line)
-        except ValueError:
-            bad += 1
-            continue
-        if not isinstance(rec, dict):
-            bad += 1
-            continue
-        if rec.get("spawned") is not True:
-            continue
-        at = _parse_at(rec.get("at"))
-        if at is None:
-            bad += 1
-            continue
-        last = at if last is None or at > last else last
-        if at > start:
-            times.append(at)
-    times.sort()
-    frees = None
-    if len(times) >= RUNS_CAP:
-        frees = times[len(times) - RUNS_CAP] + timedelta(seconds=WINDOW_S)
-    return Budget(len(times), bad, frees, last)
-
-
-def _iso(at: datetime | None) -> str | None:
-    """ISO-8601 in LOCAL time with its offset, as the status schema requires."""
-    return None if at is None else at.astimezone().isoformat(timespec="seconds")
-
-
 def _atomic_write_text(target: Path, text: str) -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
     tmp = target.with_name(target.name + ".tmp")
@@ -441,12 +373,9 @@ def _atomic_write_text(target: Path, text: str) -> None:
     tmp.replace(target)
 
 
-def _write_status_file(path: Path, payload: dict) -> None:
-    _atomic_write_text(Path(path), json.dumps(payload, sort_keys=True) + "\n")
-
-
-def _default_status_path() -> Path:
-    return REPO_ROOT / STATUS_RELPATH
+def _default_root() -> Path:
+    """The tree whose status file and kit budget this runner reads and writes."""
+    return REPO_ROOT
 
 
 def _load_history(runtime: Path) -> dict:
@@ -528,43 +457,36 @@ def run(
     spawn: Callable[..., headless_spawn.SpawnResult] = headless_spawn.spawn,
     tree_check: Callable[[], str | None] | None = None,
     now: Callable[[], datetime] | None = None,
-    status_path: Path | None = None,
+    root: Path | None = None,
 ) -> RunnerResult:
     inbox = Path(inbox) if inbox is not None else default_inbox()
     state = Path(state) if state is not None else default_state_path()
     runtime = Path(runtime) if runtime is not None else REPO_ROOT / "ops" / "runtime"
-    status_path = Path(status_path) if status_path is not None else _default_status_path()
+    root = Path(root) if root is not None else _default_root()
     clock = now or _utcnow
+
+    def epoch() -> float:
+        return clock().timestamp()
 
     def safe_log(**fields) -> None:
         # Nothing further can be done from a scheduled task if this fails.
         with contextlib.suppress(Exception):
             _log(runtime, clock(), spawned=False, **fields)
 
-    def publish(st: str, task: str, started: datetime, budget: Budget,
+    def publish(st: str, task: str, started: datetime,
                 next_tick: datetime | None) -> None:
-        """Write the status file; a failure is LOGGED and never raised."""
-        at = clock()
+        """Write the status file through the kit; a failure is LOGGED, never raised."""
         try:
             eta = _eta(runtime, task)
         except Exception:
             eta = None
-        payload = {
-            "schema": STATUS_SCHEMA,
-            "code": "LL",
-            "updated": _iso(at),
-            "state": st,
-            "task": task,
-            "task_started": _iso(started),
-            "task_eta_s": eta,
-            "next_tick": _iso(next_tick),
-            "runs_in_window": budget.count,
-            "runs_cap": RUNS_CAP,
-            "window_s": WINDOW_S,
-            "cap_frees_at": _iso(budget.frees_at),
-        }
         try:
-            _write_status_file(status_path, payload)
+            kit.write_status(
+                root, headless_spawn.CODE, st, task, started.timestamp(),
+                kit.RunBudget(root / kit.BUDGET_REL, clock=epoch),
+                task_eta_s=eta,
+                next_tick=None if next_tick is None else next_tick.timestamp(),
+                clock=epoch)
         except Exception as exc:
             safe_log(unread=0, reason=f"STATUS WRITE FAILED: {type(exc).__name__}")
 
@@ -577,15 +499,9 @@ def run(
     def done(unread: int, spawned: bool, reason: str, *, st: str | None = None,
              task: str = TASK_IDLE, started: datetime | None = None) -> RunnerResult:
         at = clock()
-        budget = runs_in_window(runtime, at)
-        extra = {"log_unparseable": budget.unparseable} if budget.unparseable else {}
-        _log(runtime, at, unread=unread, spawned=spawned, reason=reason, **extra)
+        _log(runtime, at, unread=unread, spawned=spawned, reason=reason)
         if st is not None:
-            # Re-read AFTER logging so a run just finished is in the count.
-            budget = runs_in_window(runtime, at)
-            if started is None:
-                started = budget.last_run_at or at
-            publish(st, task, started, budget, at + timedelta(seconds=CADENCE_S))
+            publish(st, task, started or at, at + timedelta(seconds=CADENCE_S))
         return RunnerResult(unread, spawned, reason)
 
     if (runtime / HALT_NAME).exists():
@@ -602,7 +518,7 @@ def run(
 
     try:
         t_check = clock()
-        publish("running", TASK_CHECKING, t_check, runs_in_window(runtime, t_check), None)
+        publish("running", TASK_CHECKING, t_check, None)
         unread = unread_count(inbox, state)
         triggers = trigger_names(inbox, state) if unread else []
         record(TASK_CHECKING, (clock() - t_check).total_seconds())
@@ -611,24 +527,16 @@ def run(
         if not triggers:
             return done(unread, False,
                         f"NO TRIGGER: {unread} unread, all self or terminal", st="idle")
-        budget = runs_in_window(runtime, clock())
-        if not budget.readable:
-            return done(unread, False, "LIMIT: run log unreadable; count unknown",
-                        st="limit", task=TASK_LIMIT, started=clock())
-        if budget.count >= RUNS_CAP:
-            return done(unread, False,
-                        f"LIMIT: {budget.count} runs started in the last {WINDOW_S} s"
-                        f" (cap {RUNS_CAP})",
-                        st="limit", task=TASK_LIMIT, started=clock())
         check = tree_check or _default_tree_check
         try:
             before = check()
         except Exception:  # only used to attribute; the after-check decides
             before = "an unmeasurable tree"
         t_spawn = clock()
-        publish("running", TASK_SESSION, t_spawn, budget, None)
+        publish("running", TASK_SESSION, t_spawn, None)
         try:
-            res = spawn(session_args(triggers), cwd=REPO_ROOT, timeout=SESSION_TIMEOUT)
+            res = spawn(PROMPT, root=root, runtime=runtime, timeout=SESSION_TIMEOUT,
+                        **session_args(triggers))
         except Exception as exc:  # the lock must still be released
             return done(unread, False, f"ERROR: spawn raised {type(exc).__name__}",
                         st="refused", started=clock())
@@ -647,6 +555,9 @@ def run(
                         reason += f" (the tree already had {before} before it started)"
         if res.spawned:
             return done(unread, True, reason, st="idle", started=clock())
+        if reason.startswith("LIMIT"):
+            return done(unread, False, reason, st="limit", task=TASK_LIMIT,
+                        started=clock())
         if "BACKOFF" in reason:
             return done(unread, False, reason, st="backoff", task=TASK_BACKOFF,
                         started=clock())

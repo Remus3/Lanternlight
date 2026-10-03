@@ -822,6 +822,16 @@ KNOWN_NON_HOSTS = frozenset(
         # quoted by `LL-0339`; truncated the same way.
         "runner.log",
         "status.json",
+        # OPS-120, MAIN's fleet kit: its runtime files under ops/loop/control/,
+        # truncated (`headless_budget.json` as `budget.json`), the kit's
+        # `fleet_headless.conformance` as `headless.conformance`, and
+        # `powershell.exe` quoted by the byte-pinned FLEET-COMMON block in
+        # CLAUDE.md. Looked at 2026-10-03; none is a host. The kit's own tracked
+        # files are covered by the live tracked-file check and are not listed.
+        "budget.json",
+        "usage.jsonl",
+        "headless.conformance",
+        "powershell.exe",
         # STANDARD LIBRARY API NAMES, a TEST FILENAME and a SIBLING's file,
         # all quoted by `LL-0154`, and every one of them arrives here
         # TRUNCATED - which is the form the failure message named and

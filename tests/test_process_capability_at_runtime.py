@@ -226,18 +226,19 @@ NATIVE_SCOPE_EXCLUSIONS: dict[str, str] = {
         "SEVERITY-1 guard for a module that is not the reason that guard "
         "exists."
     ),
-    "ops/headless_spawn.py": (
-        "Imports winreg to READ one value, CLAUDE_HEADLESS_BASE_URL, out of "
-        "HKCU Environment at spawn time, as the operator's 2026-10-02 ruling "
-        "requires (LL-0317) - a registry read of our own user's store, no "
-        "process handle. Its subprocess use starts the claude CLI as its OWN "
-        "child and, on timeout only, runs taskkill /T on that child's PID, the "
-        "one tree it created; it never opens, signals or reads any process it "
-        "did not start, and the game is unreachable from it because it names "
-        "no process but its own child. Kept out of the capability allowlist "
-        "for the same reason as the window above: routing it there would "
-        "widen a SEVERITY-1 guard for a module that is not why that guard "
-        "exists."
+    "ops/fleet_kit/fleet_headless.py": (
+        "MAIN's fleet kit, vendored byte-for-byte under Apache-2.0 (OPS-120); "
+        "since 2026-10-03 the code our spawn door delegates to. Imports winreg "
+        "to READ one value, CLAUDE_HEADLESS_BASE_URL, out of HKCU Environment "
+        "at spawn time (LL-0317) - a registry read of our own user's store, no "
+        "process handle. Its only process use is subprocess.run of the claude "
+        "CLI as its OWN child; audited 2026-10-03: no ctypes, no OpenProcess, "
+        "no kill, and it names no process but that child, so the game is "
+        "unreachable from it. Kept out of the capability allowlist for the "
+        "same reason as the window above, and because the file is digest-"
+        "pinned and cannot be edited to suit a scan. The previous entry for "
+        "ops/headless_spawn.py was retired the same day: the door no longer "
+        "imports winreg, which this file's staleness test caught."
     ),
 }
 

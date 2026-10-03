@@ -84,6 +84,19 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0341 - 2026-10-03 - OPS-120: MAIN FLEET-KIT v3 adopted - vendored at ops/fleet_kit/ after the operator cleared the license gate in chat (Apache-2.0, operator as holder), FLEET-COMMON block embedded, CLAUDE.md condensed 52,184 -> 23,965 bytes with history moved verbatim, every headless spawn routed through the kit, /done prints one line and carries forward unacted items
+
+**Evidence:**
+- Provenance: MAIN 0955, 1014, 1016 and all nine kit files (v1-v3) SHA-256 compared against MAIN's outbox (found by the single-match discovery in ops/channel_route.py): 12 of 12 MATCH.
+- License gate: a distinct adjudicator HELD the vendoring (kit carries no license line; MAIN cannot lift a safety floor). The operator then ruled in this session's chat: vendor under Apache-2.0 with the operator as copyright holder, at ops/fleet_kit/ rather than third_party/. Recorded in ops/fleet_kit/NOTICE.md and CLAUDE.md's SECOND EXCEPTION (now three instances). Copied files re-hashed: 3 of 3 match the licensed digests.
+- tests/test_fleet_kit_conformance.py seen red before the embed with 'CLAUDE.md lacks the FLEET-COMMON markers'; fleet_headless.conformance(root) == [] after.
+- CLAUDE.md condensation by a background agent: every non-blank line of HEAD CLAUDE.md is in docs/claude-md-history.md in order (refutation pass confirmed, 770 lines). The same pass REFUTED rule survival: six rules lived only in the history doc (vault mirror, wiki-learned ids, ROLE panel vs sidebar, git-blob hash, break long work into turns, permissive-outbound licence bite) plus a self-contradicting SECOND EXCEPTION location rule; all restored to CLAUDE.md. FULL AUTHORITY item 4 (checklist) marked superseded by FLEET-COMMON item 3.
+- Spawn routing (background agent): ops/headless_spawn.py is a wrapper calling the kit spawn() with bare=False; keeps HALT refusal (CLI included), --bare/--auto-fallback refusal before the kit, usage-limit backoff, tree kill on timeout. ops/inbox_runner.py: own run counting removed, status via kit write_status, ORDER/FIX/RULING -> writes_code=True, damping kept ours (does not call should_skip). tests/test_spawn_routes_through_fleet_kit.py 18 tests; refutation pass mutated a scratch copy: deleting the --bare refusal turned 5 red, deleting the HALT check 1 red.
+- .claude/commands/done.md: only chat line 'Done ritual complete, safe to clear', hand-off carries forward every unacted item; tests/test_done_ritual_output.py seen red 4 failed before the edit. Stale 'next-session prompt is printed' wording fixed in done.md and docs/HEADLESS.md.
+- Guards updated for the new files, each after looking: ops/lanes.py (docs/claude-md-history.md cross-cutting, three tests to ops), lane contracts regenerated, docs/INVENTORY.md rows, source register KNOWN_NON_HOSTS (filenames read as hosts), process/spawn capability exclusions for the vendored kit with an audit (no ctypes, no OpenProcess, no kill; only its own claude child) and the stale ops/headless_spawn.py native exclusion retired, ruff excludes ops/fleet_kit, docguards selector given the kit filenames.
+- Suite: last full run before the final ruff fix read '2 failed, 4453 passed, 22 skipped'; both failures were tests/test_preflight.py lint tests reacting to one E501 in the new test file, fixed; ruff 'All checks passed!' and those files 76 passed. The commit's pre-commit hook runs the full suite again.
+- Inbox runner HALTED for this session (ops/runtime/INBOX_RUNNER_HALT); MAIN 0830 deliberately left for the unattended responder.
+
 ### LL-0340 - 2026-10-03 - Wrap 2026-10-03 (fourth session): wrap refutation found the LL-0339 damping-repair test VACUOUS and it was repaired; wrap suite, watcher and stop-audit recorded; hand-off rewritten
 
 **Evidence:**

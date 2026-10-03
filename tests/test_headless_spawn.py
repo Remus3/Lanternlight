@@ -1,18 +1,23 @@
 """Tests for ops/headless_spawn.py - the one door every headless `claude` run
-from this tree goes through. Operator ruling 2026-10-02, recorded in CLAUDE.md
-and LL-0317.
+from this tree goes through. Operator ruling 2026-10-02 (LL-0317); since MAIN
+ORDER 0955 section 2 step 4 the door is a thin wrapper around MAIN's fleet kit,
+``ops/fleet_kit/fleet_headless.spawn``.
 
-The contract under test, in the operator's terms:
+The contract under test:
 
-* the base URL is read AT SPAWN TIME from the USER environment store first and
-  the process environment second;
-* it is set as ANTHROPIC_BASE_URL in the CHILD's environment only;
-* FAIL CLOSED - an unset variable, a non-loopback URL, or a proxy that refuses a
-  TCP connection refuses the spawn and logs why; there is no direct fallback;
-* a usage-limit refusal backs off and never retries another way.
+* the proxy URL is read at spawn time by the KIT (registry first, a readable
+  registry without the value is the kill switch), set as ANTHROPIC_BASE_URL in
+  the CHILD's environment only, with credentials and provider switches removed;
+* FAIL CLOSED - an unset variable, a non-loopback URL, or a proxy that refuses
+  a TCP connection refuses the spawn, and our log says why; no fallback;
+* ``--bare`` and ``--auto-fallback`` are refused by THIS door before the kit;
+* a usage-limit refusal backs off and never retries another way (ours, the kit
+  has none);
+* the child runs with stdin closed, UTF-8 decoding and a whole-tree kill.
 
-Nothing here talks to the real proxy or runs the real CLI: the registry
-reader, the TCP probe and the runner are all injected.
+Nothing here talks to the real proxy, runs the real CLI or reads a real
+environment variable's value: the kit's ``url_source``, ``connect``,
+``exe_source`` and ``run`` seams are injected, and every root is a tmp dir.
 """
 
 from __future__ import annotations
@@ -25,16 +30,22 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from ops import headless_spawn as hs
+from ops.fleet_kit import fleet_headless as kit
 
 URL = "http://localhost:18999/some-path"
 
 
-def _ok_probe(host, port):
-    return True
+class _Sock:
+    def close(self):
+        pass
 
 
-def _refused_probe(host, port):
-    return False
+def _ok_connect(addr, timeout=2.0):
+    return _Sock()
+
+
+def _refused_connect(addr, timeout=2.0):
+    raise ConnectionRefusedError("no listener")
 
 
 class _Runner:
@@ -47,34 +58,55 @@ class _Runner:
         return subprocess.CompletedProcess(argv, self.rc, self.stdout, self.stderr)
 
 
-# --- resolution -------------------------------------------------------------
+def _spawn(tmp_path, prompt="x", *, url=URL, connect=_ok_connect, runner=None,
+           now=None, extra=(), **kw):
+    """One spawn through the REAL kit with every outward seam injected."""
+    return hs.spawn(prompt, extra=extra, root=tmp_path, runtime=tmp_path / "rt", now=now,
+                    url_source=lambda: url, connect=connect,
+                    exe_source=lambda: "CLAUDE_EXE",
+                    run=runner if runner is not None else _Runner(), **kw)
 
 
-def test_user_store_wins_over_process_env():
-    got = hs.resolve_base_url(
-        user_store=lambda name: "http://127.0.0.1:18999/a",
-        environ={hs.HEADLESS_VAR: "http://127.0.0.1:18999/b"},
-    )
+def _our_log(tmp_path):
+    return (tmp_path / "rt" / hs.LOG_NAME).read_text(encoding="utf-8")
+
+
+# --- resolution: the kit's, and the kill switch it gives us ------------------
+
+
+def test_the_kit_reads_the_registry_before_the_process_env():
+    got = kit.base_url(registry=lambda: (True, "http://127.0.0.1:18999/a"),
+                       environ={kit.VAR: "http://127.0.0.1:18999/b"})
     assert got == "http://127.0.0.1:18999/a"
 
 
-def test_process_env_is_the_fallback_when_user_store_is_unset():
-    got = hs.resolve_base_url(
-        user_store=lambda name: None,
-        environ={hs.HEADLESS_VAR: "http://127.0.0.1:18999/b"},
-    )
-    assert got == "http://127.0.0.1:18999/b"
-
-
-def test_blank_values_count_as_unset():
-    got = hs.resolve_base_url(user_store=lambda name: "   ", environ={hs.HEADLESS_VAR: ""})
+def test_a_readable_registry_without_the_value_is_the_kill_switch():
+    """Our old resolver fell back to a stale inherited env copy here."""
+    got = kit.base_url(registry=lambda: (True, None),
+                       environ={kit.VAR: "http://127.0.0.1:18999/b"})
     assert got is None
 
 
-def test_user_store_reads_the_named_variable():
-    seen = []
-    hs.resolve_base_url(user_store=lambda name: seen.append(name), environ={})
-    assert seen == ["CLAUDE_HEADLESS_BASE_URL"]
+def test_an_unreadable_registry_falls_back_to_the_process_env():
+    got = kit.base_url(registry=lambda: (False, None),
+                       environ={kit.VAR: "http://127.0.0.1:18999/b"})
+    assert got == "http://127.0.0.1:18999/b"
+
+
+def test_the_door_leaves_url_resolution_to_the_kit(tmp_path):
+    seen = {}
+
+    def kit_spawn(root, code, prompt, **kw):
+        seen.update(kw)
+        return {"rc": 0}
+
+    hs.spawn("x", root=tmp_path, runtime=tmp_path / "rt", kit_spawn=kit_spawn,
+             run=_Runner())
+    assert "url_source" not in seen and "connect" not in seen
+
+
+def test_the_variable_name_is_unchanged():
+    assert kit.VAR == "CLAUDE_HEADLESS_BASE_URL"
 
 
 # --- the gate ---------------------------------------------------------------
@@ -82,17 +114,15 @@ def test_user_store_reads_the_named_variable():
 
 def test_unset_variable_refuses(tmp_path):
     runner = _Runner()
-    res = hs.spawn(["-p", "reply ok"], base_url=None, probe=_ok_probe, runner=runner,
-                   runtime=tmp_path, user_store=lambda n: None, environ={})
-    assert not res.spawned and "UNSET" in res.reason
+    res = _spawn(tmp_path, url=None, runner=runner)
+    assert not res.spawned and "unset" in res.reason
     assert runner.calls == []
 
 
 def test_refused_proxy_refuses(tmp_path):
     runner = _Runner()
-    res = hs.spawn(["-p", "reply ok"], base_url=URL, probe=_refused_probe, runner=runner,
-                   runtime=tmp_path)
-    assert not res.spawned and "REFUSED" in res.reason
+    res = _spawn(tmp_path, connect=_refused_connect, runner=runner)
+    assert not res.spawned and "REFUSED" in res.reason and "unreachable" in res.reason
     assert runner.calls == []
 
 
@@ -102,42 +132,46 @@ def test_refused_proxy_refuses(tmp_path):
 ])
 def test_non_loopback_or_malformed_url_refuses(tmp_path, bad):
     runner = _Runner()
-    res = hs.spawn(["-p", "x"], base_url=bad, probe=_ok_probe, runner=runner, runtime=tmp_path)
+    res = _spawn(tmp_path, url=bad, runner=runner)
     assert not res.spawned
     assert runner.calls == []
 
 
-def test_probe_is_aimed_at_loopback_on_the_urls_port(tmp_path):
+def test_probe_is_aimed_at_the_urls_host_and_port(tmp_path):
     aimed = []
-    hs.spawn(["-p", "x"], base_url="http://localhost:18999/p",
-             probe=lambda h, p: aimed.append((h, p)) or True,
-             runner=_Runner(), runtime=tmp_path)
-    assert aimed == [("127.0.0.1", 18999)]
+    _spawn(tmp_path, url="http://localhost:18999/p",
+           connect=lambda addr, timeout=2.0: aimed.append(addr) or _Sock())
+    assert aimed == [("localhost", 18999)]
 
 
-@pytest.mark.parametrize("argv", [
-    ["--auto-fallback", "-p", "x"], ["-p", "teamclaude run --auto-fallback"],
+@pytest.mark.parametrize("prompt, extra", [
+    ("x", ["--auto-fallback"]), ("teamclaude run --auto-fallback", []),
 ])
-def test_auto_fallback_is_never_passed(tmp_path, argv):
+def test_auto_fallback_is_never_passed(tmp_path, prompt, extra):
     runner = _Runner()
-    res = hs.spawn(argv, base_url=URL, probe=_ok_probe, runner=runner, runtime=tmp_path)
+    res = _spawn(tmp_path, prompt, extra=extra, runner=runner)
     assert not res.spawned and "auto-fallback" in res.reason
     assert runner.calls == []
 
 
 def test_every_refusal_is_logged(tmp_path):
-    hs.spawn(["-p", "x"], base_url=None, probe=_ok_probe, runner=_Runner(), runtime=tmp_path,
-             user_store=lambda n: None, environ={})
-    lines = (tmp_path / hs.LOG_NAME).read_text(encoding="utf-8").splitlines()
-    rec = json.loads(lines[-1])
-    assert rec["spawned"] is False and "UNSET" in rec["reason"]
+    _spawn(tmp_path, url=None)
+    rec = json.loads(_our_log(tmp_path).splitlines()[-1])
+    assert rec["spawned"] is False and "unset" in rec["reason"]
 
 
 def test_the_log_never_carries_the_url(tmp_path):
-    hs.spawn(["-p", "x"], base_url=URL, probe=_refused_probe, runner=_Runner(), runtime=tmp_path)
-    hs.spawn(["-p", "x"], base_url=URL, probe=_ok_probe, runner=_Runner(), runtime=tmp_path)
-    text = (tmp_path / hs.LOG_NAME).read_text(encoding="utf-8")
+    _spawn(tmp_path, connect=_refused_connect)
+    _spawn(tmp_path)
+    text = _our_log(tmp_path)
     assert "some-path" not in text and "18999" not in text
+
+
+def test_a_malformed_port_is_a_refusal_not_a_crash(tmp_path):
+    runner = _Runner()
+    res = _spawn(tmp_path, url="http://localhost:99999999/x", runner=runner)
+    assert not res.spawned and res.reason.startswith("REFUSED")
+    assert runner.calls == []
 
 
 # --- the child environment --------------------------------------------------
@@ -146,8 +180,7 @@ def test_the_log_never_carries_the_url(tmp_path):
 def test_url_reaches_the_child_env_and_not_ours(tmp_path, monkeypatch):
     monkeypatch.delenv("ANTHROPIC_BASE_URL", raising=False)
     runner = _Runner()
-    res = hs.spawn(["-p", "reply ok"], base_url=URL, probe=_ok_probe, runner=runner,
-                   runtime=tmp_path)
+    res = _spawn(tmp_path, runner=runner)
     assert res.spawned
     _argv, kw = runner.calls[0]
     child_value = kw["env"].get("ANTHROPIC_BASE_URL")
@@ -159,27 +192,34 @@ def test_url_reaches_the_child_env_and_not_ours(tmp_path, monkeypatch):
 def test_child_env_overrides_an_inherited_base_url(tmp_path, monkeypatch):
     monkeypatch.setenv("ANTHROPIC_BASE_URL", "http://elsewhere.invalid")
     runner = _Runner()
-    hs.spawn(["-p", "x"], base_url=URL, probe=_ok_probe, runner=runner, runtime=tmp_path)
+    _spawn(tmp_path, runner=runner)
     child_value = runner.calls[0][1]["env"].get("ANTHROPIC_BASE_URL")
     assert child_value == URL
     ours = os.environ.get("ANTHROPIC_BASE_URL")
     assert ours == "http://elsewhere.invalid"
 
 
-def test_argv_starts_with_the_claude_executable(tmp_path):
+def test_argv_is_the_kits_with_our_extra_last(tmp_path):
     runner = _Runner()
-    hs.spawn(["-p", "reply ok"], base_url=URL, probe=_ok_probe, runner=runner,
-             runtime=tmp_path, claude="CLAUDE_EXE")
-    assert runner.calls[0][0] == ["CLAUDE_EXE", "--strict-mcp-config", "--setting-sources",
-                                  "project,local", "--no-session-persistence",
-                                  "-p", "reply ok"]
+    _spawn(tmp_path, "reply ok", extra=["--permission-mode", "plan"], runner=runner)
+    assert runner.calls[0][0] == [
+        "CLAUDE_EXE", "-p", "reply ok", "--output-format", "json",
+        "--no-session-persistence", "--model", "sonnet", "--effort", "medium",
+        "--strict-mcp-config", "--setting-sources", "project,local",
+        "--permission-mode", "plan"]
 
 
 def test_child_gets_no_console_window_on_windows(tmp_path):
     runner = _Runner()
-    hs.spawn(["-p", "x"], base_url=URL, probe=_ok_probe, runner=runner, runtime=tmp_path)
+    _spawn(tmp_path, runner=runner)
     if os.name == "nt":
         assert runner.calls[0][1]["creationflags"] & subprocess.CREATE_NO_WINDOW
+
+
+def test_the_child_runs_in_the_root(tmp_path):
+    runner = _Runner()
+    _spawn(tmp_path, runner=runner)
+    assert runner.calls[0][1]["cwd"] == str(tmp_path)
 
 
 # --- usage-limit backoff ----------------------------------------------------
@@ -188,33 +228,27 @@ def test_child_gets_no_console_window_on_windows(tmp_path):
 def test_usage_limit_sets_a_backoff_and_does_not_retry(tmp_path):
     runner = _Runner(rc=1, stdout="Claude AI usage limit reached|1760000000")
     now = datetime(2026, 10, 2, 22, 0, tzinfo=UTC)
-    res = hs.spawn(["-p", "x"], base_url=URL, probe=_ok_probe, runner=runner,
-                   runtime=tmp_path, now=now)
+    res = _spawn(tmp_path, runner=runner, now=now)
     assert res.spawned and res.usage_limited
     assert len(runner.calls) == 1
-    state = json.loads((tmp_path / hs.BACKOFF_NAME).read_text(encoding="utf-8"))
+    state = json.loads((tmp_path / "rt" / hs.BACKOFF_NAME).read_text(encoding="utf-8"))
     assert datetime.fromisoformat(state["until"]) > now
 
 
 def test_backoff_refuses_the_next_spawn(tmp_path):
     now = datetime(2026, 10, 2, 22, 0, tzinfo=UTC)
-    hs.spawn(["-p", "x"], base_url=URL, probe=_ok_probe,
-             runner=_Runner(rc=1, stderr="rate_limit_error: usage limit"),
-             runtime=tmp_path, now=now)
+    _spawn(tmp_path, runner=_Runner(rc=1, stderr="rate_limit_error: usage limit"), now=now)
     runner = _Runner()
-    res = hs.spawn(["-p", "x"], base_url=URL, probe=_ok_probe, runner=runner,
-                   runtime=tmp_path, now=now + timedelta(minutes=5))
+    res = _spawn(tmp_path, runner=runner, now=now + timedelta(minutes=5))
     assert not res.spawned and "BACKOFF" in res.reason
     assert runner.calls == []
 
 
 def test_backoff_expires(tmp_path):
     now = datetime(2026, 10, 2, 22, 0, tzinfo=UTC)
-    hs.spawn(["-p", "x"], base_url=URL, probe=_ok_probe,
-             runner=_Runner(rc=1, stdout="usage limit reached"), runtime=tmp_path, now=now)
+    _spawn(tmp_path, runner=_Runner(rc=1, stdout="usage limit reached"), now=now)
     runner = _Runner()
-    res = hs.spawn(["-p", "x"], base_url=URL, probe=_ok_probe, runner=runner,
-                   runtime=tmp_path, now=now + timedelta(hours=7))
+    res = _spawn(tmp_path, runner=runner, now=now + timedelta(hours=7))
     assert res.spawned and len(runner.calls) == 1
 
 
@@ -222,10 +256,9 @@ def test_backoff_doubles_on_repeat_and_is_capped(tmp_path):
     t = datetime(2026, 10, 2, 22, 0, tzinfo=UTC)
     spans = []
     for _ in range(6):
-        hs.spawn(["-p", "x"], base_url=URL, probe=_ok_probe,
-                 runner=_Runner(rc=1, stdout="usage limit"), runtime=tmp_path, now=t)
-        until = datetime.fromisoformat(
-            json.loads((tmp_path / hs.BACKOFF_NAME).read_text(encoding="utf-8"))["until"])
+        _spawn(tmp_path, runner=_Runner(rc=1, stdout="usage limit"), now=t)
+        until = datetime.fromisoformat(json.loads(
+            (tmp_path / "rt" / hs.BACKOFF_NAME).read_text(encoding="utf-8"))["until"])
         spans.append(until - t)
         t = until + timedelta(seconds=1)
     assert spans[1] == 2 * spans[0]
@@ -234,44 +267,52 @@ def test_backoff_doubles_on_repeat_and_is_capped(tmp_path):
 
 def test_a_clean_run_clears_the_backoff_streak(tmp_path):
     t = datetime(2026, 10, 2, 22, 0, tzinfo=UTC)
-    hs.spawn(["-p", "x"], base_url=URL, probe=_ok_probe,
-             runner=_Runner(rc=1, stdout="usage limit"), runtime=tmp_path, now=t)
-    t += timedelta(hours=7)
-    hs.spawn(["-p", "x"], base_url=URL, probe=_ok_probe, runner=_Runner(), runtime=tmp_path, now=t)
-    assert not (tmp_path / hs.BACKOFF_NAME).exists()
+    _spawn(tmp_path, runner=_Runner(rc=1, stdout="usage limit"), now=t)
+    _spawn(tmp_path, now=t + timedelta(hours=7))
+    assert not (tmp_path / "rt" / hs.BACKOFF_NAME).exists()
 
 
 def test_unreadable_backoff_file_fails_closed(tmp_path):
-    (tmp_path / hs.BACKOFF_NAME).write_text("{not json", encoding="utf-8")
+    (tmp_path / "rt").mkdir()
+    (tmp_path / "rt" / hs.BACKOFF_NAME).write_text("{not json", encoding="utf-8")
     runner = _Runner()
-    res = hs.spawn(["-p", "x"], base_url=URL, probe=_ok_probe, runner=runner, runtime=tmp_path)
+    res = _spawn(tmp_path, runner=runner)
     assert not res.spawned and "BACKOFF" in res.reason
+    assert runner.calls == []
+
+
+def test_a_backoff_refusal_never_reaches_the_kit_budget(tmp_path):
+    (tmp_path / "rt").mkdir()
+    (tmp_path / "rt" / hs.BACKOFF_NAME).write_text("{not json", encoding="utf-8")
+    _spawn(tmp_path)
+    assert not (tmp_path / kit.BUDGET_REL).exists()
 
 
 def test_a_timeout_is_reported_not_raised(tmp_path):
     def runner(argv, **kw):
         raise subprocess.TimeoutExpired(argv, kw.get("timeout"))
-    res = hs.spawn(["-p", "x"], base_url=URL, probe=_ok_probe, runner=runner, runtime=tmp_path)
+    res = _spawn(tmp_path, runner=runner)
     assert res.spawned and res.returncode is None and "TIMEOUT" in res.reason
 
 
-# --- real probe, against a socket we own ------------------------------------
+# --- the kit's probe, against a socket we own -------------------------------
 
 
-def test_real_probe_sees_a_listener_and_a_closed_port():
+def test_the_kit_probe_sees_a_listener_and_a_closed_port():
     import socket
     srv = socket.socket()
     srv.bind(("127.0.0.1", 0))
     srv.listen(1)
     port = srv.getsockname()[1]
     try:
-        assert hs.tcp_probe("127.0.0.1", port) is True
+        kit.probe("127.0.0.1", port)
     finally:
         srv.close()
-    assert hs.tcp_probe("127.0.0.1", port) is False
+    with pytest.raises(kit.Refused):
+        kit.probe("127.0.0.1", port)
 
 
-# --- refutation pass 2026-10-02, LL-0317: each test below was red first ------
+# --- refutation pass 2026-10-02, LL-0317 - now held by the kit ---------------
 
 
 @pytest.mark.parametrize("bad", [
@@ -283,7 +324,7 @@ def test_real_probe_sees_a_listener_and_a_closed_port():
 ])
 def test_userinfo_and_backslash_tricks_refuse(tmp_path, bad):
     runner = _Runner()
-    res = hs.spawn(["-p", "x"], base_url=bad, probe=_ok_probe, runner=runner, runtime=tmp_path)
+    res = _spawn(tmp_path, url=bad, runner=runner)
     assert not res.spawned, bad
     assert runner.calls == []
 
@@ -296,49 +337,78 @@ def test_userinfo_and_backslash_tricks_refuse(tmp_path, bad):
 def test_credentials_and_provider_switches_never_reach_the_child(tmp_path, monkeypatch, name):
     monkeypatch.setenv(name, "parent-value")
     runner = _Runner()
-    hs.spawn(["-p", "x"], base_url=URL, probe=_ok_probe, runner=runner, runtime=tmp_path)
+    _spawn(tmp_path, runner=runner)
     present_in_child = name in runner.calls[0][1]["env"]
     assert present_in_child is False
     ours = os.environ.get(name)
     assert ours == "parent-value"
 
 
-def test_the_url_is_resolved_at_spawn_time_by_default(tmp_path):
+def test_the_url_is_resolved_on_every_spawn(tmp_path):
     asked = []
-    hs.spawn(["-p", "x"], probe=_ok_probe, runner=_Runner(), runtime=tmp_path,
-             user_store=lambda n: asked.append(n) or None, environ={})
-    assert asked == [hs.HEADLESS_VAR]
+
+    def source():
+        asked.append(1)
+        return URL
+
+    for _ in range(2):
+        hs.spawn("x", root=tmp_path, runtime=tmp_path / "rt", url_source=source,
+                 connect=_ok_connect, exe_source=lambda: "E", run=_Runner())
+    assert asked == [1, 1]
 
 
-def test_the_real_user_store_reader_answers_none_for_an_absent_name():
-    assert hs._user_store("LL_TEST_NO_SUCH_VARIABLE_0317") is None
+def test_the_default_run_seam_closes_stdin_and_decodes_utf8(monkeypatch):
+    seen = {}
+
+    def fake_tree(argv, **kw):
+        seen.update(kw)
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    monkeypatch.setattr(hs, "run_tree", fake_tree)
+    hs._kit_run(["x"], text=True, capture_output=True)
+    assert seen["stdin"] is subprocess.DEVNULL
+    assert seen["encoding"] == "utf-8" and seen["errors"] == "replace"
 
 
-def test_the_child_reads_no_stdin(tmp_path):
-    runner = _Runner()
-    hs.spawn(["-p", "x"], base_url=URL, probe=_ok_probe, runner=runner, runtime=tmp_path)
-    assert runner.calls[0][1]["stdin"] is subprocess.DEVNULL
+def test_the_default_run_seam_is_used_when_none_is_given(tmp_path, monkeypatch):
+    used = []
+    monkeypatch.setattr(hs, "_kit_run",
+                        lambda argv, **kw: used.append(argv) or subprocess.CompletedProcess(
+                            argv, 0, "", ""))
+    hs.spawn("x", root=tmp_path, runtime=tmp_path / "rt", url_source=lambda: URL,
+             connect=_ok_connect, exe_source=lambda: "E")
+    assert len(used) == 1
 
 
 def test_a_cli_that_cannot_start_is_a_logged_refusal(tmp_path):
     def runner(argv, **kw):
         raise FileNotFoundError(argv[0])
-    res = hs.spawn(["-p", "x"], base_url=URL, probe=_ok_probe, runner=runner, runtime=tmp_path)
+    res = _spawn(tmp_path, runner=runner)
     assert not res.spawned and "could not start" in res.reason
+    assert "could not start" in _our_log(tmp_path)
+
+
+def test_a_missing_claude_is_a_refusal(tmp_path):
+    def gone():
+        raise kit.Refused("claude not found on PATH")
+    res = hs.spawn("x", root=tmp_path, runtime=tmp_path / "rt", url_source=lambda: URL,
+                   connect=_ok_connect, exe_source=gone, run=_Runner())
+    assert not res.spawned and "not found" in res.reason
 
 
 def test_a_malformed_streak_holds_closed(tmp_path):
-    (tmp_path / hs.BACKOFF_NAME).write_text(
+    (tmp_path / "rt").mkdir()
+    (tmp_path / "rt" / hs.BACKOFF_NAME).write_text(
         json.dumps({"until": "2000-01-01T00:00:00+00:00", "streak": "two"}), encoding="utf-8")
     runner = _Runner()
-    res = hs.spawn(["-p", "x"], base_url=URL, probe=_ok_probe, runner=runner, runtime=tmp_path)
+    res = _spawn(tmp_path, runner=runner)
     assert not res.spawned and "BACKOFF" in res.reason
 
 
 def test_ipv6_loopback_is_probed_on_ipv6(tmp_path):
     aimed = []
-    hs.spawn(["-p", "x"], base_url="http://[::1]:18999/p",
-             probe=lambda h, p: aimed.append((h, p)) or True, runner=_Runner(), runtime=tmp_path)
+    _spawn(tmp_path, url="http://[::1]:18999/p",
+           connect=lambda addr, timeout=2.0: aimed.append(addr) or _Sock())
     assert aimed == [("::1", 18999)]
 
 
@@ -355,15 +425,15 @@ def test_the_default_runner_kills_the_whole_tree_on_timeout():
     assert time.monotonic() - t0 < 15
 
 
-# --- setup-overhead cut, MAIN 0912 order 2026-10-03 -------------------------
+# --- setup-overhead cut, MAIN 0912, now added by the kit ---------------------
 #
-# The door adds --strict-mcp-config, --setting-sources project,local and
-# --no-session-persistence unless the caller already chose. Dropping USER
-# scope is only safe because every floor hook lives in PROJECT scope, so the
-# first test below pins that fact: if a floor ever moves to user scope, this
-# goes red before a headless child silently runs without it.
+# The kit adds --strict-mcp-config, --setting-sources project,local and
+# --no-session-persistence on every non-bare run. Dropping USER scope is only
+# safe because every floor hook lives in PROJECT scope, so the first test below
+# pins that fact: if a floor ever moves to user scope, this goes red before a
+# headless child silently runs without it.
 
-_DOOR_FLAGS = ["--strict-mcp-config", "--setting-sources", "project,local",
+_LEAN_FLAGS = ["--strict-mcp-config", "--setting-sources", "project,local",
                "--no-session-persistence"]
 
 
@@ -394,57 +464,53 @@ def test_the_floor_hooks_live_in_project_scope_settings():
     assert ascii_floor, "the ASCII floor hook is not registered in project scope"
 
 
-def test_the_door_adds_the_overhead_flags(tmp_path):
+def test_the_kit_adds_the_overhead_flags(tmp_path):
     runner = _Runner()
-    hs.spawn(["-p", "x"], base_url=URL, probe=_ok_probe, runner=runner, runtime=tmp_path,
-             claude="CLAUDE_EXE")
-    assert runner.calls[0][0] == ["CLAUDE_EXE", *_DOOR_FLAGS, "-p", "x"]
+    _spawn(tmp_path, runner=runner)
+    argv = runner.calls[0][0]
+    for flag in _LEAN_FLAGS:
+        assert flag in argv, flag
+    assert argv[argv.index("--setting-sources") + 1] == "project,local"
 
 
-@pytest.mark.parametrize("caller", [
-    ["--setting-sources", "project", "-p", "x"],
-    ["--setting-sources=user,project", "-p", "x"],
+@pytest.mark.parametrize("extra", [
+    ["--mcp-config", "m.json"],
+    ["--permission-mode", "acceptEdits", "--allowedTools", "Read"],
 ])
-def test_a_callers_setting_sources_is_kept(tmp_path, caller):
+def test_a_callers_extra_follows_the_kits_flags_unchanged(tmp_path, extra):
     runner = _Runner()
-    hs.spawn(caller, base_url=URL, probe=_ok_probe, runner=runner, runtime=tmp_path,
-             claude="CLAUDE_EXE")
+    _spawn(tmp_path, extra=extra, runner=runner)
     argv = runner.calls[0][0]
-    assert sum(1 for a in argv if a.startswith("--setting-sources")) == 1
-    assert "project,local" not in argv
-    assert argv[-len(caller):] == caller
+    assert argv[-len(extra):] == extra
 
 
-def test_a_callers_flags_are_not_doubled(tmp_path):
-    caller = ["--strict-mcp-config", "--mcp-config", "m.json", "--no-session-persistence",
-              "-p", "x"]
+def test_the_runners_extra_repeats_no_flag_the_kit_adds():
+    """The kit appends ``extra`` without de-duplicating, so ours must not repeat."""
+    from ops import inbox_runner as ir
+    extra = ir.session_args(["a.md"])["extra"]
+    kit_argv = kit.build_argv("E", "p", "sonnet", "medium")
+    flags = {a for a in kit_argv if a.startswith("--")}
+    assert not flags & {a for a in extra if a.startswith("--")}
+
+
+@pytest.mark.parametrize("prompt, extra", [
+    ("x", ["--bare"]), ("x", ["-c", "--bare"]), ("use --bare please", []),
+])
+def test_bare_is_refused_because_it_skips_the_hook_floor(tmp_path, prompt, extra):
     runner = _Runner()
-    hs.spawn(caller, base_url=URL, probe=_ok_probe, runner=runner, runtime=tmp_path,
-             claude="CLAUDE_EXE")
-    argv = runner.calls[0][0]
-    assert argv.count("--strict-mcp-config") == 1
-    assert argv.count("--no-session-persistence") == 1
-    assert argv[argv.index("--mcp-config") + 1] == "m.json"
-    assert argv == ["CLAUDE_EXE", "--setting-sources", "project,local", *caller]
-
-
-@pytest.mark.parametrize("argv", [["--bare", "-p", "x"], ["-p", "x", "--bare"]])
-def test_bare_is_refused_because_it_skips_the_hook_floor(tmp_path, argv):
-    runner = _Runner()
-    res = hs.spawn(argv, base_url=URL, probe=_ok_probe, runner=runner, runtime=tmp_path)
+    res = _spawn(tmp_path, prompt, extra=extra, runner=runner)
     assert not res.spawned and "--bare" in res.reason and "hook" in res.reason
     assert runner.calls == []
 
 
-# --- usage logging: numbers only, absent stays absent -----------------------
+# --- logging: our log is decisions only; the kit's file is the usage record --
 
 
 def _last_log(tmp_path):
-    lines = (tmp_path / hs.LOG_NAME).read_text(encoding="utf-8").splitlines()
-    return json.loads(lines[-1])
+    return json.loads(_our_log(tmp_path).splitlines()[-1])
 
 
-def test_usage_numbers_are_logged_from_json_stdout(tmp_path):
+def test_usage_numbers_go_to_the_kits_usage_file_not_our_log(tmp_path):
     out = json.dumps({
         "type": "result", "result": "ok SECRET-OPERATOR-NAME", "session_id": "sess-123",
         "total_cost_usd": 0.0123, "num_turns": 1, "duration_ms": 4567,
@@ -452,38 +518,36 @@ def test_usage_numbers_are_logged_from_json_stdout(tmp_path):
                   "cache_read_input_tokens": 9000, "output_tokens": 5,
                   "service_tier": "standard"},
     })
-    hs.spawn(["-p", "x"], base_url=URL, probe=_ok_probe, runner=_Runner(stdout=out),
-             runtime=tmp_path)
-    rec = _last_log(tmp_path)
-    assert rec["input_tokens"] == 4
-    assert rec["cache_creation_input_tokens"] == 1200
-    assert rec["cache_read_input_tokens"] == 9000
-    assert rec["output_tokens"] == 5
-    assert rec["total_cost_usd"] == 0.0123
-    assert rec["num_turns"] == 1 and rec["duration_ms"] == 4567
-    text = (tmp_path / hs.LOG_NAME).read_text(encoding="utf-8")
+    _spawn(tmp_path, runner=_Runner(stdout=out))
+    usage = json.loads((tmp_path / kit.USAGE_REL).read_text(encoding="ascii").splitlines()[-1])
+    assert usage["input_tokens"] == 4 and usage["output_tokens"] == 5
+    assert usage["code"] == "LL" and usage["note"] == hs.NOTE_WORK
+    text = _our_log(tmp_path)
     assert "SECRET-OPERATOR-NAME" not in text and "sess-123" not in text
-    assert "standard" not in text
+    assert "standard" not in text and "input_tokens" not in text
 
 
-def test_absent_or_non_numeric_usage_fields_stay_absent(tmp_path):
-    out = json.dumps({"num_turns": 2, "duration_ms": "fast", "total_cost_usd": True,
-                      "usage": {"output_tokens": 0, "input_tokens": None}})
-    hs.spawn(["-p", "x"], base_url=URL, probe=_ok_probe, runner=_Runner(stdout=out),
-             runtime=tmp_path)
-    rec = _last_log(tmp_path)
-    assert rec["num_turns"] == 2 and rec["output_tokens"] == 0
-    for name in ("duration_ms", "total_cost_usd", "input_tokens",
-                 "cache_creation_input_tokens", "cache_read_input_tokens"):
-        assert name not in rec, name
+def test_the_kit_usage_file_never_carries_model_output(tmp_path):
+    out = json.dumps({"result": "ok SECRET-OPERATOR-NAME", "usage": {}})
+    _spawn(tmp_path, runner=_Runner(stdout=out))
+    assert "SECRET" not in (tmp_path / kit.USAGE_REL).read_text(encoding="ascii")
 
 
-@pytest.mark.parametrize("out", ["ok", "", "{not json", "[1, 2]", '"text"',
-                                 json.dumps({"usage": "nope"})])
-def test_unparseable_stdout_logs_nothing_extra(tmp_path, out):
-    res = hs.spawn(["-p", "x"], base_url=URL, probe=_ok_probe, runner=_Runner(stdout=out),
-                   runtime=tmp_path)
+@pytest.mark.parametrize("out", ["ok", "", "{not json", json.dumps({"n": 1})])
+def test_our_log_record_has_a_fixed_shape(tmp_path, out):
+    res = _spawn(tmp_path, runner=_Runner(stdout=out))
     assert res.spawned and res.reason == "RAN"
     rec = _last_log(tmp_path)
     assert set(rec) == {"at", "spawned", "reason", "returncode", "stdout_chars",
                         "stderr_chars"}
+
+
+@pytest.mark.parametrize("out", ["[1, 2]", '"text"', json.dumps({"usage": "nope"})])
+def test_a_kit_error_after_the_run_is_reported_not_raised(tmp_path, out):
+    """KIT GAP: usage_line calls .get on a non-object stdout and raises after
+    the child ran. The door reports it, and the status is not left running."""
+    res = _spawn(tmp_path, runner=_Runner(stdout=out))
+    assert res.spawned and res.reason.startswith("KIT ERROR")
+    assert res.returncode == 0
+    status = json.loads((tmp_path / kit.STATUS_REL).read_text(encoding="ascii"))
+    assert status["state"] == "idle"

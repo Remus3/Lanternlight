@@ -23,6 +23,11 @@ extend-exclude = [
     # tests/test_vendored_write_tracer.py both say plainly. We do not lint code
     # we are not going to modify.
     "third_party",
+    # OPS-120. MAIN's fleet kit, vendored byte-for-byte under Apache-2.0 at
+    # the path its own conformance() requires. Same reason as third_party:
+    # it draws findings under this config, and editing it would break the
+    # pinned digests that tests/test_fleet_kit_conformance.py checks.
+    "ops/fleet_kit",
 ]
 
 [lint]

@@ -108,6 +108,9 @@ WORKTREE_ROOT = Path(os.environ.get("LL_WORKTREE_ROOT", r"C:\ll-worktrees"))
 CROSS_CUTTING: frozenset[str] = frozenset(
     {
         "CLAUDE.md",
+        # The rationale CLAUDE.md's rules point to, moved verbatim 2026-10-03
+        # (MAIN 0955). Same kind of file: it explains the rules, not a lane's work.
+        "docs/claude-md-history.md",
         "README.md",
         "BACKLOG.md",
         "LICENSE",
@@ -596,6 +599,12 @@ LANES: tuple[Lane, ...] = (
             # cold session reads first - so its writer and its guard belong
             # here rather than with the hygiene lane whose engine it calls.
             "tests/test_handoff.py",
+            # OPS-120, MAIN's fleet kit: the /done output contract, the
+            # vendored kit's conformance, and the spawn door routed through it.
+            # ops/** covers the kit and the door; these tests match nothing.
+            "tests/test_done_ritual_output.py",
+            "tests/test_fleet_kit_conformance.py",
+            "tests/test_spawn_routes_through_fleet_kit.py",
             # OPS-37 document size budget. It guards the byte growth of
             # ROADMAP.md and docs/LEDGER.md, which are this lane's own
             # continuity documents, so the budget belongs beside them

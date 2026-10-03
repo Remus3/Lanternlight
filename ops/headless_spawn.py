@@ -1,127 +1,115 @@
 """The one door every headless ``claude`` run from this tree goes through.
 
-OPERATOR RULING, 2026-10-02, in this tree's own session - recorded in
-``CLAUDE.md`` and ``LL-0317``. Headless runs (inbox runner, lane, loop,
-watchdog - anything that starts ``claude`` with no session open) bill the
-operator's SECOND subscription through a local proxy, never the interactive one.
+OPERATOR RULING, 2026-10-02, recorded in ``CLAUDE.md`` and ``LL-0317``:
+headless runs bill the operator's SECOND subscription through a local proxy.
+MAIN ORDER 0955 section 2 step 4 (2026-10-03, operator authority, provenance
+checked): every headless ``claude`` in every tree goes through MAIN's fleet kit,
+``ops/fleet_kit/fleet_headless.spawn``, and each tree deletes its own proxy,
+probe, budget, skip, status and console code. So this module is now a THIN
+WRAPPER around the kit. Our code still calls only this module; this module is
+the only caller of the kit's ``spawn``.
 
-THE CONTRACT, and each clause is a test in ``tests/test_headless_spawn.py``:
+WHAT THE KIT NOW DOES, and this module therefore no longer does: reads the
+proxy URL (registry first, so a readable store WITHOUT the value is the kill
+switch even over a stale inherited copy), checks it is plain http to loopback,
+probes it, fails closed; strips credentials and provider switches from the
+child env; enforces the 120-runs-per-rolling-day budget AT THE DOOR (so the
+CLI below, which used to bypass the runner's cap, now gets it); adds the lean
+flags; hides the console; writes ``ops/loop/control/inbox_status.json``,
+``headless_budget.json`` and ``headless_usage.jsonl``.
 
-* The base URL is read AT SPAWN TIME from the USER environment store first
-  (``HKCU\\Environment`` through :mod:`winreg`) and the process environment
-  second. A process started before the variable was set does not inherit it,
-  which is why the store is read directly rather than trusted to ``os.environ``.
-* It reaches the CHILD's environment as ``ANTHROPIC_BASE_URL`` and nothing
-  else's. This module never writes ``os.environ`` and never sets anything
-  user-wide or machine-wide.
-* FAIL CLOSED. An unset variable, a URL that is not plain http on a loopback
-  host with an explicit port, or a proxy that refuses a TCP connection on
-  ``127.0.0.1`` refuses the spawn and logs why. There is NO fallback to a direct
-  ``claude``, and ``--auto-fallback`` is refused wherever it appears, because
-  both bill the interactive subscription.
-* A usage-limit refusal BACKS OFF - an exponential hold written under
-  ``ops/runtime/`` - and never retries another way. An unreadable backoff file
-  is read as "still backing off", which is the closed direction.
-* SETUP OVERHEAD IS CUT AT THE DOOR (MAIN order 0912, 2026-10-03). Unless the
-  caller already chose, the child gets ``--strict-mcp-config``,
-  ``--setting-sources project,local`` and ``--no-session-persistence``.
-  Dropping USER scope is safe only because every floor hook (the PreToolUse
-  gate, the ASCII check) is registered in PROJECT scope - a test pins that.
-  ``--bare`` is REFUSED wherever it appears: it skips hooks, and this tree's
-  floors live in a PreToolUse hook.
-* Deleting the variable is the operator's kill switch for every tree at once.
-  Because the variable is re-read on every spawn, that switch takes effect on
-  the very next attempt with nothing to restart.
+WHAT THIS WRAPPER KEEPS, because the kit cannot express it (each is a gap
+reported to MAIN, never a patch to the vendored copy):
 
-WHAT IS NEVER WRITTEN DOWN. The URL carries an account path segment, so it
-appears in no tracked file and in no log line here: the log records the
-decision and the reason, never the value. Same for the child's output - only
-its length and return code are logged, because a transcript can carry anything.
-When stdout parses as a JSON object (``--output-format json``) a fixed list of
-NUMERIC usage fields is copied into the log record; no string field ever is,
-and a field the CLI did not report stays ABSENT rather than becoming 0.
+* ``--bare`` and ``--auto-fallback`` are REFUSED wherever they appear, in the
+  prompt or in ``extra``, BEFORE the kit is called. ``--bare`` skips hooks and
+  this tree's floors live in a PreToolUse hook; ``--auto-fallback`` bills the
+  interactive subscription. The kit passes ``extra`` through unchecked, so the
+  refusal has to live here. The kit is always called with ``bare=False``.
+* USAGE-LIMIT BACKOFF: an exponential hold under ``ops/runtime/``, never a
+  retry another way. An unreadable backoff file holds closed. The kit has none.
+* The per-tree HALT file ``ops/runtime/INBOX_RUNNER_HALT`` refuses every spawn
+  through this door, the CLI included.
+* The child is run through :func:`run_tree` - stdin closed, output decoded as
+  UTF-8 with replacement, the WHOLE tree killed on timeout - because the kit's
+  default ``subprocess.run`` inherits stdin, decodes with the locale codec and
+  kills only the npm shim's cmd.exe.
+* A timeout, start failure or kit error escaping the kit is reported, not
+  raised, and the status file the kit left at ``running`` is set back to
+  ``idle``.
+* A decision log, ``ops/runtime/headless_spawn.log``: every refusal and every
+  run, reason and lengths only. It never carries the URL, a note name, model
+  output, or usage numbers - the kit's usage file is the one usage record.
+
+ROUTING, documented because the kit takes different inputs from ours. The kit
+picks the MODEL from ``writes_code`` (opus when True) and the EFFORT from
+``pick_effort(note)`` - low when the note string contains an ack marker. This
+door passes ``note`` from a FIXED vocabulary, never channel text (the kit logs
+it): :data:`NOTE_ACK` reads as low, :data:`NOTE_WORK` as medium. The runner maps
+ORDER/FIX/RULING mail to ``writes_code=True`` with :data:`NOTE_WORK`, an
+all-acknowledgement batch to :data:`NOTE_ACK`, everything else to
+:data:`NOTE_WORK`. ``tests/test_spawn_routes_through_fleet_kit.py`` asks the
+kit itself what each note string yields.
 """
 
 from __future__ import annotations
 
+import contextlib
 import json
-import math
 import os
 import shutil
-import socket
 import subprocess
 import sys
 import tempfile
-from collections.abc import Callable, Mapping, Sequence
+import time
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from urllib.parse import urlsplit
+
+if str(Path(__file__).resolve().parents[1]) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from ops.fleet_kit import fleet_headless as kit
 
 __all__ = [
     "BACKOFF_BASE",
     "BACKOFF_MAX",
     "BACKOFF_NAME",
-    "HEADLESS_VAR",
+    "CODE",
+    "HALT_NAME",
     "LOG_NAME",
+    "NOTE_ACK",
+    "NOTE_WORK",
     "SpawnResult",
-    "resolve_base_url",
+    "main",
     "run_tree",
     "spawn",
-    "tcp_probe",
 ]
 
-HEADLESS_VAR = "CLAUDE_HEADLESS_BASE_URL"
+CODE = "LL"
+HALT_NAME = "INBOX_RUNNER_HALT"
 LOG_NAME = "headless_spawn.log"
 BACKOFF_NAME = "headless_backoff.json"
 BACKOFF_BASE = timedelta(minutes=30)
 BACKOFF_MAX = timedelta(hours=6)
 DEFAULT_TIMEOUT = 45 * 60
 
-_LOOPBACK_NAMES = {"localhost", "127.0.0.1", "::1"}
+#: The note strings handed to the kit. FIXED vocabulary: the kit writes the
+#: note into its usage log, so channel-chosen text must never reach it.
+#: ``kit.pick_effort`` reads NOTE_ACK as "low" (it carries ``ACK``) and
+#: NOTE_WORK as "medium" (it carries no ack marker).
+NOTE_ACK = "LL-RUNNER-ACK-BATCH"
+NOTE_WORK = "LL-RUNNER-MAIL-BATCH"
+
 _USAGE_LIMIT_MARKERS = ("usage limit", "rate_limit_error", "rate limit")
+_FORBIDDEN = (
+    ("--bare", "REFUSED: --bare skips hooks, and this tree's floors live in a "
+               "PreToolUse hook"),
+    ("auto-fallback", "REFUSED: --auto-fallback bills the interactive subscription"),
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-
-
-def _default_runtime() -> Path:
-    return REPO_ROOT / "ops" / "runtime"
-
-
-def _user_store(name: str) -> str | None:
-    """Read one value from the USER environment store, or None."""
-    if os.name != "nt":
-        return None
-    import winreg
-
-    try:
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment") as key:
-            value, _kind = winreg.QueryValueEx(key, name)
-    except OSError:
-        return None
-    return value if isinstance(value, str) else None
-
-
-def resolve_base_url(
-    *,
-    user_store: Callable[[str], str | None] = _user_store,
-    environ: Mapping[str, str] | None = None,
-) -> str | None:
-    """User store first, process env second; blank is unset."""
-    env = os.environ if environ is None else environ
-    for value in (user_store(HEADLESS_VAR), env.get(HEADLESS_VAR)):
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    return None
-
-
-def tcp_probe(host: str, port: int, timeout: float = 3.0) -> bool:
-    """True when something accepts a TCP connection at host:port."""
-    try:
-        with socket.create_connection((host, port), timeout=timeout):
-            return True
-    except OSError:
-        return False
 
 
 @dataclass(frozen=True)
@@ -149,37 +137,6 @@ def _log(runtime: Path, now: datetime, **fields) -> None:
         fh.write(json.dumps(rec, sort_keys=True) + "\n")
 
 
-def _check_url(url: str) -> tuple[tuple[str, int] | None, str]:
-    """Return ((probe_host, port), "") or (None, reason).
-
-    STRICT ON PURPOSE. Python's parser and the CLI's parser disagree about
-    some URLs: ``http://evil.invalid\\@localhost:18999`` is host ``localhost``
-    to :func:`urllib.parse.urlsplit` and host ``evil.invalid`` to Node, so a
-    check that trusts the parsed host would probe our proxy while the child
-    talked elsewhere - measured by the 2026-10-02 refutation pass. So any
-    backslash, any ``@``, any whitespace, and any netloc that is not EXACTLY
-    ``host:port`` is refused before parsing is trusted.
-    """
-    if any(ch in url for ch in "\\@") or any(ch.isspace() for ch in url):
-        return None, "REFUSED: base URL carries userinfo, a backslash or whitespace"
-    try:
-        parts = urlsplit(url)
-        port = parts.port
-    except ValueError:
-        return None, "REFUSED: base URL is malformed"
-    if parts.scheme != "http":
-        return None, "REFUSED: base URL is not plain http to a local proxy"
-    host = (parts.hostname or "").lower()
-    if host not in _LOOPBACK_NAMES:
-        return None, "REFUSED: base URL host is not loopback"
-    if port is None:
-        return None, "REFUSED: base URL names no port"
-    shown = f"[{host}]" if ":" in host else host
-    if parts.netloc.lower() != f"{shown}:{port}":
-        return None, "REFUSED: base URL netloc is not exactly host:port"
-    return ("::1" if host == "::1" else "127.0.0.1", port), ""
-
-
 def _backoff_state(runtime: Path) -> tuple[dict | None, bool]:
     """(state, readable). Missing file is (None, True)."""
     path = runtime / BACKOFF_NAME
@@ -195,72 +152,9 @@ def _backoff_state(runtime: Path) -> tuple[dict | None, bool]:
         return None, False
 
 
-# Flags the door adds when the caller did not. Each entry is
-# (flag the caller may already pass, argv tokens to add).
-_DOOR_FLAGS: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("--strict-mcp-config", ("--strict-mcp-config",)),
-    ("--setting-sources", ("--setting-sources", "project,local")),
-    ("--no-session-persistence", ("--no-session-persistence",)),
-)
-
-_USAGE_TOP = ("total_cost_usd", "num_turns", "duration_ms")
-_USAGE_NESTED = ("input_tokens", "cache_creation_input_tokens",
-                 "cache_read_input_tokens", "output_tokens")
-
-
-def _door_flags(args: Sequence[str]) -> list[str]:
-    """The overhead-cutting flags the caller did not already pass."""
-    extra: list[str] = []
-    for flag, tokens in _DOOR_FLAGS:
-        if not any(a == flag or a.startswith(flag + "=") for a in args):
-            extra.extend(tokens)
-    return extra
-
-
-def _is_number(value) -> bool:
-    return (isinstance(value, (int, float)) and not isinstance(value, bool)
-            and math.isfinite(value))
-
-
-def _usage_fields(stdout: str) -> dict:
-    """Numeric usage fields from a JSON-object stdout; {} on anything else.
-
-    NUMBERS ONLY. ``result`` and ``session_id`` are strings and model output
-    may quote an operator identifier, so no string is ever copied. A field
-    that is missing or not a finite number is left out, never zeroed.
-    """
-    try:
-        data = json.loads(stdout)
-    except (ValueError, TypeError):
-        return {}
-    if not isinstance(data, dict):
-        return {}
-    out = {k: data[k] for k in _USAGE_TOP if _is_number(data.get(k))}
-    usage = data.get("usage")
-    if isinstance(usage, dict):
-        out.update({k: usage[k] for k in _USAGE_NESTED if _is_number(usage.get(k))})
-    return out
-
-
 def _is_usage_limited(stdout: str, stderr: str) -> bool:
     text = f"{stdout}\n{stderr}".lower()
     return any(marker in text for marker in _USAGE_LIMIT_MARKERS)
-
-
-# Names stripped from the CHILD's environment, and why. A credential in the
-# child would let the CLI bill something other than the proxy's subscription,
-# and a provider switch makes the CLI ignore ANTHROPIC_BASE_URL altogether.
-# The 2026-10-02 refutation pass found ANTHROPIC_API_KEY present in this
-# machine's environment, so a scheduled-task child inherited it.
-_STRIP_EXACT = frozenset({"ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"})
-_STRIP_PREFIXES = ("CLAUDE_CODE_USE_",)
-
-
-def _must_not_inherit(name: str) -> bool:
-    upper = name.upper()
-    if upper in _STRIP_EXACT or upper.startswith(_STRIP_PREFIXES):
-        return True
-    return upper.startswith("ANTHROPIC_") and upper.endswith("_BASE_URL")
 
 
 def run_tree(argv, *, timeout=None, **kwargs) -> subprocess.CompletedProcess:
@@ -289,83 +183,117 @@ def run_tree(argv, *, timeout=None, **kwargs) -> subprocess.CompletedProcess:
         return subprocess.CompletedProcess(argv, proc.returncode, out, err)
 
 
-def _default_claude() -> str:
-    return shutil.which("claude") or "claude"
+def _kit_run(argv, **kwargs) -> subprocess.CompletedProcess:
+    """The ``run`` seam handed to the kit: :func:`run_tree`, stdin closed,
+    output decoded as UTF-8 with replacement rather than the locale codec."""
+    kwargs["stdin"] = subprocess.DEVNULL
+    kwargs["encoding"] = "utf-8"
+    kwargs["errors"] = "replace"
+    return run_tree(argv, **kwargs)
+
+
+def _default_exe() -> str:
+    """The kit's own resolver (it prefers the real claude.exe behind the npm
+    shim), given the PATH lookup explicitly."""
+    return kit.claude_exe(shutil.which)
+
+
+def _status_idle(root: Path) -> None:
+    """Put the kit's status file back to idle after an exception escaped it."""
+    with contextlib.suppress(Exception):
+        kit.write_status(root, CODE, "idle", "Idle", time.time(),
+                         kit.RunBudget(root / kit.BUDGET_REL))
 
 
 def spawn(
-    args: Sequence[str],
+    prompt: str,
     *,
-    base_url: str | None | object = ...,
-    probe: Callable[[str, int], bool] = tcp_probe,
-    runner: Callable[..., subprocess.CompletedProcess] | None = None,
+    note: str = NOTE_WORK,
+    writes_code: bool = False,
+    extra: Sequence[str] = (),
+    root: Path | None = None,
     runtime: Path | None = None,
     now: datetime | None = None,
     timeout: float = DEFAULT_TIMEOUT,
-    cwd: Path | None = None,
-    claude: str | None = None,
-    user_store: Callable[[str], str | None] = _user_store,
-    environ: Mapping[str, str] | None = None,
+    run: Callable[..., subprocess.CompletedProcess] | None = None,
+    url_source: Callable[[], str | None] | None = None,
+    connect: Callable | None = None,
+    exe_source: Callable[[], str] | None = None,
+    kit_spawn: Callable[..., dict] | None = None,
 ) -> SpawnResult:
-    """Run ``claude <args>`` through the headless proxy, or refuse and say why.
+    """Run ONE headless ``claude -p prompt`` through the fleet kit, or refuse.
 
-    ``base_url`` left at its default is resolved here, at spawn time; a test
-    passes it explicitly, ``None`` included.
+    ``url_source``, ``connect`` and ``exe_source`` are the kit's own seams and
+    are passed only when given, so in production the kit's defaults decide.
     """
-    runtime = Path(runtime) if runtime is not None else _default_runtime()
+    root = Path(root) if root is not None else REPO_ROOT
+    runtime = Path(runtime) if runtime is not None else root / "ops" / "runtime"
     now = now or datetime.now(UTC)
-    url = resolve_base_url(user_store=user_store, environ=environ) if base_url is ... else base_url
+    extra = [str(a) for a in extra]
 
     def refuse(reason: str) -> SpawnResult:
         _log(runtime, now, spawned=False, reason=reason)
         return SpawnResult(False, reason)
 
-    if any("auto-fallback" in a for a in args):
-        return refuse("REFUSED: --auto-fallback bills the interactive subscription")
-    if any("--bare" in a for a in args):
-        return refuse("REFUSED: --bare skips hooks, and this tree's floors live in a "
-                      "PreToolUse hook")
-    if not url:
-        return refuse(f"REFUSED: {HEADLESS_VAR} is UNSET in the user store and the process env")
-    target, why = _check_url(str(url))
-    if target is None:
-        return refuse(why)
-    probe_host, port = target
+    if (runtime / HALT_NAME).exists():
+        return refuse(f"HALT: {HALT_NAME} present; nothing spawned")
+    for token, why in _FORBIDDEN:
+        if any(token in a for a in [prompt, *extra]):
+            return refuse(why)
     state, readable = _backoff_state(runtime)
     if not readable:
         return refuse("REFUSED: BACKOFF file unreadable; holding until an operator removes it")
     if state is not None and datetime.fromisoformat(state["until"]) > now:
         return refuse(f"REFUSED: BACKOFF after a usage limit, until {state['until']}")
-    if not probe(probe_host, port):
-        return refuse("REFUSED: the local proxy refused a TCP connection")
 
-    child_env = {k: v for k, v in os.environ.items() if not _must_not_inherit(k)}
-    child_env["ANTHROPIC_BASE_URL"] = str(url)
-    kwargs: dict = {
-        "env": child_env,
-        "capture_output": True,
-        "text": True,
-        "encoding": "utf-8",
-        "errors": "replace",
-        "timeout": timeout,
-        "stdin": subprocess.DEVNULL,
-    }
-    if cwd is not None:
-        kwargs["cwd"] = str(cwd)
-    if os.name == "nt":
-        kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
-    argv = [claude or _default_claude(), *_door_flags(args), *args]
+    captured: dict = {}
+
+    def recording_run(argv, **kwargs):
+        done = (run or _kit_run)(argv, **kwargs)
+        captured["done"] = done
+        return done
+
+    kwargs: dict = {"note": note, "writes_code": writes_code, "bare": False,
+                    "timeout": timeout, "extra": tuple(extra), "run": recording_run,
+                    "exe_source": exe_source or _default_exe}
+    if url_source is not None:
+        kwargs["url_source"] = url_source
+    if connect is not None:
+        kwargs["connect"] = connect
 
     try:
-        done = (runner or run_tree)(argv, **kwargs)
+        line = (kit_spawn or kit.spawn)(root, CODE, prompt, **kwargs)
+    except kit.Refused as exc:
+        why = str(exc)
+        prefix = "LIMIT: " if "budget" in why else "REFUSED: "
+        return refuse(prefix + why)
     except subprocess.TimeoutExpired:
+        _status_idle(root)
         _log(runtime, now, spawned=True, reason="TIMEOUT", returncode=None)
         return SpawnResult(True, "TIMEOUT: the child outlived its budget", None)
     except OSError as exc:
+        _status_idle(root)
         return refuse(f"REFUSED: could not start the CLI ({type(exc).__name__})")
+    except ValueError as exc:  # the kit's URL parse raises on a malformed port
+        return refuse(f"REFUSED: the kit rejected the proxy URL ({type(exc).__name__})")
+    except Exception as exc:
+        # The kit's usage_line calls .get on whatever stdout parsed to, so a
+        # JSON array or string stdout raises AFTER the child ran (a kit gap
+        # reported to MAIN). The run happened and is counted; say so.
+        _status_idle(root)
+        done = captured.get("done")
+        if done is None:
+            return refuse(f"REFUSED: the kit raised {type(exc).__name__}")
+        _log(runtime, now, spawned=True, reason=f"KIT ERROR: {type(exc).__name__}",
+             returncode=done.returncode)
+        return SpawnResult(True, f"KIT ERROR: {type(exc).__name__} after the child ran",
+                           done.returncode, done.stdout or "", done.stderr or "")
 
-    stdout, stderr = done.stdout or "", done.stderr or ""
-    limited = done.returncode != 0 and _is_usage_limited(stdout, stderr)
+    done = captured.get("done")
+    stdout = (done.stdout or "") if done is not None else ""
+    stderr = (done.stderr or "") if done is not None else ""
+    rc = line.get("rc") if isinstance(line, dict) else None
+    limited = rc not in (0, None) and _is_usage_limited(stdout, stderr)
     if limited:
         streak = (state or {}).get("streak", 0) + 1
         span = min(BACKOFF_BASE * (2 ** (streak - 1)), BACKOFF_MAX)
@@ -373,20 +301,35 @@ def spawn(
                       json.dumps({"until": (now + span).isoformat(), "streak": streak}))
         reason = f"USAGE LIMIT: backing off {int(span.total_seconds())} s, no retry"
     else:
-        if done.returncode == 0 and (runtime / BACKOFF_NAME).exists():
+        if rc == 0 and (runtime / BACKOFF_NAME).exists():
             (runtime / BACKOFF_NAME).unlink()
         reason = "RAN"
-    _log(runtime, now, spawned=True, reason=reason, returncode=done.returncode,
-         stdout_chars=len(stdout), stderr_chars=len(stderr), **_usage_fields(stdout))
-    return SpawnResult(True, reason, done.returncode, stdout, stderr, limited)
+    _log(runtime, now, spawned=True, reason=reason, returncode=rc,
+         stdout_chars=len(stdout), stderr_chars=len(stderr))
+    return SpawnResult(True, reason, rc, stdout, stderr, limited)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """``python -m ops.headless_spawn -- <claude args>``: one gated spawn."""
+    """``python -m ops.headless_spawn [--writes-code] [--note N] -- PROMPT [EXTRA...]``.
+
+    One gated spawn through the same door as the runner: the HALT file, the
+    ``--bare``/``--auto-fallback`` refusal, the backoff, and - because it now
+    lives in the kit door - the run budget all apply.
+    """
     args = list(sys.argv[1:] if argv is None else argv)
+    writes_code, note = False, NOTE_WORK
+    while args and args[0] in ("--writes-code", "--note"):
+        flag = args.pop(0)
+        if flag == "--writes-code":
+            writes_code = True
+        elif args:
+            note = args.pop(0)
     if args[:1] == ["--"]:
         args = args[1:]
-    res = spawn(args)
+    if not args:
+        print("usage: python -m ops.headless_spawn [--writes-code] [--note N] -- PROMPT [EXTRA...]")
+        return 2
+    res = spawn(args[0], note=note, writes_code=writes_code, extra=args[1:])
     print(res.reason)
     if res.stdout:
         print(res.stdout.rstrip())

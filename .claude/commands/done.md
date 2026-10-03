@@ -1,5 +1,5 @@
 ---
-description: Wrap the session - full suite, commit, push, ledger the item, sync docs, print the next-session prompt.
+description: Wrap the session - full suite, commit, push, ledger the item, sync docs, rewrite the hand-off file; chat gets one line.
 ---
 
 # /done - the wrap ritual
@@ -59,8 +59,8 @@ test rather than the code is not a green suite.
 7. **Advance the loop state.** `ops.loop.state.advance_cycle(...)` with the
    next directive, so a cold session can pick up from disk alone.
 8. **Re-check the watcher.** Call `check_watcher()` from `ops/loop/watch.py`
-   (or its `ensure_armed_at_wrap` wrapper) before the next-session prompt is
-   printed. **While the OPERATOR DISARM stands** (2026-09-11, `LL-0234`,
+   (or its `ensure_armed_at_wrap` wrapper) before the hand-off is
+   written. **While the OPERATOR DISARM stands** (2026-09-11, `LL-0234`,
    enforced by `OPERATOR_DISARM` in `lanternlight/armwatch.py`), `NO_RECORD` is the
    expected answer and `ensure_armed_at_wrap` refuses to re-arm with a reason
    beginning `OPERATOR DISARM` - that refusal is correct, report it and never
@@ -157,33 +157,32 @@ test rather than the code is not a green suite.
      duplicate with `WAKEUP_NOTES.md`. Each was caught by a later pass; the
      point is that a second copy gave the drift somewhere to hide. One
      hand-off, one location, one name. Do not re-create the second copy.
-   - **Do not send it as a file attachment.** The operator does not want a file
-     card inline; the tracked file and the fenced block below ARE the delivery.
+   - **Do not send it as a file attachment, and do not print it into chat.**
+     The tracked file and its Desktop shortcut ARE the delivery.
+   - **CARRY FORWARD EVERY ITEM NOT ACTED ON this session**, verbatim or
+     tighter. Start the draft from the PREVIOUS hand-off, not from a blank page:
+     an item is removed only when this session finished it (and the ledger says
+     so) or retracted it with a reason written down. An item is never dropped
+     because the session worked on something else, or because it started from
+     an operator ask rather than "continue" (MAIN 1014, operator order relayed
+     2026-10-03). Complete and self-contained: what was just finished, what is
+     next, the acceptance criterion, the state at the wrap, and the files to
+     read first. Assume the reader has zero context, because they will.
 
-10. **Emit the next-session prompt as ONE copy-pastable block.** The whole
-    prompt goes inside a single fenced code block so the operator can copy it
-    in one action and paste it into the next session. Not prose, not markdown
-    headings, not several blocks - one fence, because the UI puts a copy button
-    on a fence and cannot put one on a section of chat.
-    - **REAFFIRMED BY THE OPERATOR IN CHAT, 2026-09-07, in these words: "just
-      keep the wrap output as one copy-pastable fence."** It was reaffirmed
-      because a wrap had already stopped doing it, and the operator wrote the
-      complaint by hand into `LL-NEXT-SESSION.txt` rather than into chat - see
-      `LL-0166`. So this step is not a style preference a later session may
-      trade away for something it finds more informative: it is the operator's
-      standing instruction, and the failure it corrects was a session ignoring
-      a rule that was already written here, not a rule that was missing.
-    - Complete and self-contained: what was just finished, what is next, the
-      acceptance criterion, the state at the wrap, and the files to read first.
-      Assume the reader has zero context, because they will.
-    - **Nothing after it, and NO RECAP.** No review, no summary of the session,
-      no notes on what you decided. If a fact is worth the operator's
-      attention, it belongs INSIDE the prompt, where the next session reads it
-      and can act on it. A recap in chat is read by nobody and is lost when the
-      context clears - which is the one failure this project's whole continuity
-      design exists to prevent.
-    - Findings, corrections and withdrawn claims are not recap - they are
-      state. Put them in the prompt, in the ledger, or in `ROADMAP.md`.
+10. **Print exactly one line into chat: `Done ritual complete, safe to clear`**
+    - or, if a step failed, the failure that stopped the wrap. Nothing else: no
+    next-session prompt, no review, NO RECAP, no summary of the session, no notes
+    on what you decided. Findings, corrections and withdrawn claims are state, not
+    recap - they go in the hand-off file, the ledger or `ROADMAP.md`.
+    - **This SUPERSEDES the 2026-09-07 instruction to emit the prompt as one
+      fenced block (`LL-0166`).** The operator withdrew it on 2026-10-03, relayed
+      by MAIN 1014 (FLEET-KIT v2 item 5, SHA-256 verified against MAIN's outbox):
+      the inline next-session prompt is not needed; the file at the repo root
+      and the Desktop shortcut stay and keep being updated. The operator now
+      starts a session with "continue" or with whatever they want to work on,
+      and either way the session reads the hand-off file first. The inline
+      prompt is no longer a copy-pastable deliverable, so a later session must
+      not restore it from the old wording in `LL-0166`.
 
 ## Definition of done
 
@@ -193,10 +192,9 @@ test rather than the code is not a green suite.
 - Ledger entry appended with real evidence.
 - `ROADMAP.md` reflects reality.
 - Watcher re-checked with `check_watcher()`, and its state reported in the
-  next-session prompt rather than assumed.
-- `C:\Lanternlight\LL-NEXT-SESSION.txt` rewritten in place, staged, and
-  committed with the session's other work.
+  hand-off file rather than assumed.
+- `C:\Lanternlight\LL-NEXT-SESSION.txt` rewritten in place, carrying forward
+  every item not acted on, staged, and committed with the session's other work.
 - The Desktop `.lnk` verified by reading `TargetPath` back off the saved
   shortcut and `Test-Path`-ing it - not merely by saving without error.
-- Next-session prompt emitted as ONE copy-pastable fenced block, with nothing
-  after it.
+- Chat output is the single line `Done ritual complete, safe to clear`.

@@ -73,6 +73,9 @@ Touch these paths and nothing else. Every other path in the repository belongs t
 - `docs/PREFLIGHT_BACKTEST.md`
 - `docs/ORCHESTRATION_TIERS.md`
 - `tests/test_handoff.py`
+- `tests/test_done_ritual_output.py`
+- `tests/test_fleet_kit_conformance.py`
+- `tests/test_spawn_routes_through_fleet_kit.py`
 - `tools/doc_size_budget.py`
 - `tests/test_doc_size_budget.py`
 - `tools/doc_archive.py`

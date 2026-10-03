@@ -296,7 +296,7 @@ watcher was armed, correctly refused two re-arm attempts while it looked
 alive, and was then found DEAD at the wrap - for an unmeasured stretch nothing
 was archiving the log, the saves or the market cache. `ops/loop/watch.py`
 closes that gap with `check_watcher()`, and `ensure_armed_at_wrap` is the wrap
-entry point that calls it before the next-session prompt is printed.
+entry point that calls it before the hand-off file is written.
 
 `check_watcher()` returns one of seven states. The first three mean "not armed"
 and cause a re-arm; the other four are reported and left alone:

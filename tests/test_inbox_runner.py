@@ -2,8 +2,10 @@
 2026-10-02, LL-0317.
 
 It decides one thing - is there unread mail - and when there is, hands the
-whole job to ONE headless session through ops.headless_spawn, the only door.
-Everything is injected: no real inbox, no real lock, no real CLI.
+whole job to ONE headless session through ops.headless_spawn, the only door,
+which since MAIN 0955 s2 step 4 wraps the fleet kit (ops/fleet_kit/).
+Everything is injected: no real inbox, no real lock, no real CLI, and the
+status file and kit budget live under a tmp root.
 """
 
 from __future__ import annotations
@@ -13,6 +15,7 @@ import json
 import pytest
 
 from ops import headless_spawn as hs, inbox_runner as ir
+from ops.fleet_kit import fleet_headless as kit
 from ops.inbox_watch import SCHEMA, digest_of
 
 
@@ -27,8 +30,8 @@ class _Spawn:
         self.calls = []
         self.result = result or hs.SpawnResult(True, "RAN", 0, "done", "")
 
-    def __call__(self, args, **kw):
-        self.calls.append((list(args), kw))
+    def __call__(self, prompt, **kw):
+        self.calls.append((prompt, kw))
         return self.result
 
 
@@ -62,9 +65,9 @@ def test_unread_mail_spawns_exactly_one_session(tmp_path):
     res = _run(tmp_path, inbox, state, runtime, sp)
     assert res.unread == 1 and res.spawned
     assert len(sp.calls) == 1
-    args, kw = sp.calls[0]
-    assert args[0] == "-p" and ir.PROMPT in args
-    assert kw["cwd"] == ir.REPO_ROOT
+    prompt, kw = sp.calls[0]
+    assert prompt == ir.PROMPT
+    assert kw["root"] == ir._default_root() and kw["runtime"] == runtime
 
 
 def test_the_prompt_hook_refuses_while_the_spawned_session_runs(tmp_path):
@@ -79,7 +82,7 @@ def test_the_prompt_hook_refuses_while_the_spawned_session_runs(tmp_path):
     state.write_text(json.dumps({"schema": SCHEMA, "seen": []}), encoding="utf-8")
     seen_inside = []
 
-    def spawn(args, **kw):
+    def spawn(prompt, **kw):
         seen_inside.append(inbox_watch.on_prompt_submit(
             json.dumps({"hook_event_name": "UserPromptSubmit", "session_id": "child"}),
             inbox=inbox, state=state, reported=runtime / "rep.json",
@@ -135,7 +138,7 @@ def test_the_lock_is_released_after_a_run(tmp_path):
 def test_the_lock_is_released_when_the_spawn_raises(tmp_path):
     inbox, state, runtime = _setup(tmp_path, [("a.md", "x")])
 
-    def boom(args, **kw):
+    def boom(prompt, **kw):
         raise RuntimeError("x")
 
     res = _run(tmp_path, inbox, state, runtime, boom)
@@ -167,7 +170,7 @@ def test_prompt_names_the_floors_it_must_keep():
 
 
 def test_the_session_is_not_given_bypass_permissions():
-    joined = " ".join(ir.session_args())
+    joined = " ".join(ir.session_args()["extra"])
     assert "bypassPermissions" not in joined
     assert "dangerously" not in joined
     assert "--allowedTools" in joined
@@ -330,10 +333,11 @@ class _Clock:
 
 @pytest.fixture(autouse=True)
 def _status_in_tmp(tmp_path, monkeypatch):
-    """No test may write the real ops/loop/control/inbox_status.json."""
-    target = tmp_path / "control" / "inbox_status.json"
-    monkeypatch.setattr(ir, "_default_status_path", lambda: target)
-    return target
+    """No test may write the real ops/loop/control/inbox_status.json or the
+    kit's budget file: the runner's root is a tmp directory."""
+    root = tmp_path / "root"
+    monkeypatch.setattr(ir, "_default_root", lambda: root)
+    return root / kit.STATUS_REL
 
 
 def _status(path):
@@ -341,15 +345,49 @@ def _status(path):
 
 
 def _write_runs(runtime, times, spawned=True):
+    """Records in the RUNNER's own log - which no longer counts toward the cap."""
     with (runtime / ir.LOG_NAME).open("a", encoding="utf-8", newline="\n") as fh:
         for t in times:
             fh.write(json.dumps({"at": t.isoformat(), "spawned": spawned,
                                  "unread": 1, "reason": "RAN"}) + "\n")
 
 
-def _crun(inbox, state, runtime, spawn, clock=None, status=None, **kw):
+def _write_budget(starts):
+    """Starts in the KIT's budget file under the tmp root, as epoch seconds."""
+    path = ir._default_root() / kit.BUDGET_REL
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"starts": list(starts)}), encoding="ascii")
+
+
+class _Sock:
+    def close(self):
+        pass
+
+
+class _Door:
+    """The REAL spawn door and the REAL kit, every outward seam injected."""
+
+    def __init__(self):
+        self.ran = []
+
+    def _run(self, argv, **kw):
+        import subprocess
+        self.ran.append(argv)
+        return subprocess.CompletedProcess(argv, 0, "{}", "")
+
+    def __call__(self, prompt, **kw):
+        return hs.spawn(prompt, url_source=lambda: "http://localhost:18999/p",
+                        connect=lambda addr, timeout=2.0: _Sock(),
+                        exe_source=lambda: "E", run=self._run, **kw)
+
+
+def _real_now():
+    return datetime.now(UTC)
+
+
+def _crun(inbox, state, runtime, spawn, clock=None, **kw):
     return ir.run(inbox=inbox, state=state, runtime=runtime, spawn=spawn,
-                  now=clock or _Clock(), status_path=status, **kw)
+                  now=clock or _Clock(), **kw)
 
 
 # --- item 1: daily run budget ----------------------------------------------
@@ -360,51 +398,48 @@ def test_budget_constants_are_exported():
     assert "RUNS_CAP" in ir.__all__ and "WINDOW_S" in ir.__all__
 
 
-def test_the_daily_budget_refuses_a_run_at_the_cap(tmp_path):
+def test_the_kit_budget_refuses_a_run_at_the_cap(tmp_path):
+    import time
     inbox, state, runtime = _setup(tmp_path, [("a.md", "x")])
-    _write_runs(runtime, [_T0 - timedelta(minutes=10 + i) for i in range(120)])
-    sp = _Spawn()
-    res = _crun(inbox, state, runtime, sp)
-    assert sp.calls == [] and not res.spawned
+    _write_budget([time.time() - 600 - i for i in range(120)])
+    door = _Door()
+    res = _crun(inbox, state, runtime, door, clock=_real_now)
+    assert door.ran == [] and not res.spawned
     assert res.reason.startswith("LIMIT:") and "120" in res.reason
     rec = json.loads((runtime / ir.LOG_NAME).read_text(encoding="utf-8").splitlines()[-1])
     assert rec["reason"].startswith("LIMIT:") and rec["spawned"] is False
 
 
 def test_one_below_the_cap_still_spawns(tmp_path):
+    import time
     inbox, state, runtime = _setup(tmp_path, [("a.md", "x")])
-    _write_runs(runtime, [_T0 - timedelta(minutes=10 + i) for i in range(119)])
-    sp = _Spawn()
-    assert _crun(inbox, state, runtime, sp).spawned and len(sp.calls) == 1
+    _write_budget([time.time() - 600 - i for i in range(119)])
+    door = _Door()
+    assert _crun(inbox, state, runtime, door, clock=_real_now).spawned
+    assert len(door.ran) == 1
 
 
 def test_runs_older_than_the_window_do_not_count(tmp_path):
+    import time
     inbox, state, runtime = _setup(tmp_path, [("a.md", "x")])
-    _write_runs(runtime, [_T0 - timedelta(seconds=ir.WINDOW_S + 1 + i) for i in range(200)])
-    sp = _Spawn()
-    assert _crun(inbox, state, runtime, sp).spawned
+    _write_budget([time.time() - ir.WINDOW_S - 60 - i for i in range(200)])
+    door = _Door()
+    assert _crun(inbox, state, runtime, door, clock=_real_now).spawned
 
 
-def test_unspawned_records_do_not_count(tmp_path):
+def test_the_runners_own_log_no_longer_counts_toward_the_cap(tmp_path):
+    """The cap moved into the kit's door (MAIN 0955 s2 step 4)."""
     inbox, state, runtime = _setup(tmp_path, [("a.md", "x")])
-    _write_runs(runtime, [_T0 - timedelta(minutes=i) for i in range(200)], spawned=False)
-    sp = _Spawn()
-    assert _crun(inbox, state, runtime, sp).spawned
+    _write_runs(runtime, [_T0 - timedelta(minutes=10 + i) for i in range(200)])
+    door = _Door()
+    assert _crun(inbox, state, runtime, door, clock=_real_now).spawned
 
 
-def test_an_unparseable_log_line_neither_crashes_nor_lowers_the_count(tmp_path):
+def test_a_spawn_counts_in_the_kit_budget(tmp_path):
     inbox, state, runtime = _setup(tmp_path, [("a.md", "x")])
-    _write_runs(runtime, [_T0 - timedelta(minutes=10 + i) for i in range(60)])
-    with (runtime / ir.LOG_NAME).open("a", encoding="utf-8") as fh:
-        fh.write("{not json\n")
-        fh.write(json.dumps({"at": "yesterday-ish", "spawned": True}) + "\n")
-        fh.write("[1, 2]\n")
-    _write_runs(runtime, [_T0 - timedelta(minutes=100 + i) for i in range(60)])
-    budget = ir.runs_in_window(runtime, _T0)
-    assert budget.count == 120 and budget.unparseable == 3
-    sp = _Spawn()
-    res = _crun(inbox, state, runtime, sp)
-    assert sp.calls == [] and res.reason.startswith("LIMIT:")
+    _crun(inbox, state, runtime, _Door(), clock=_real_now)
+    path = ir._default_root() / kit.BUDGET_REL
+    assert len(json.loads(path.read_text(encoding="ascii"))["starts"]) == 1
 
 
 # --- item 2: loop damping --------------------------------------------------
@@ -505,8 +540,9 @@ def test_the_no_trigger_log_carries_no_note_names(tmp_path):
 
 # --- item 3: status file ---------------------------------------------------
 
-_KEYS = {"schema", "code", "updated", "state", "task", "task_started", "task_eta_s",
-         "next_tick", "runs_in_window", "runs_cap", "window_s", "cap_frees_at"}
+_KEYS = {"schema", "kit", "code", "updated", "state", "task", "task_started",
+         "task_eta_s", "next_tick", "runs_in_window", "runs_cap", "window_s",
+         "cap_frees_at"}
 
 
 def test_an_idle_tick_writes_the_exact_schema(tmp_path, _status_in_tmp):
@@ -538,7 +574,7 @@ def test_the_status_is_running_session_while_the_spawn_runs(tmp_path, _status_in
     inbox, state, runtime = _setup(tmp_path, [("a.md", "x")])
     inside = []
 
-    def spawn(args, **kw):
+    def spawn(prompt, **kw):
         inside.append(_status(_status_in_tmp))
         return hs.SpawnResult(True, "RAN", 0, "", "")
 
@@ -581,18 +617,18 @@ def test_a_halted_tick_writes_halted_and_reads_no_inbox(
 
 
 def test_a_limit_tick_reports_when_the_cap_frees(tmp_path, _status_in_tmp):
+    import time
     inbox, state, runtime = _setup(tmp_path, [("a.md", "x")])
-    times = [_T0 - timedelta(minutes=10 + i) for i in range(121)]
-    _write_runs(runtime, times)
-    _crun(inbox, state, runtime, _Spawn())
+    starts = [time.time() - 600 - i for i in range(121)]
+    _write_budget(starts)
+    _crun(inbox, state, runtime, _Door(), clock=_real_now)
     st = _status(_status_in_tmp)
     assert st["state"] == "limit" and st["task"] == "Turn Limit Reached"
     assert st["runs_in_window"] == 121
-    # 121 counted against a cap of 120: the cap frees when TWO have aged out,
-    # i.e. when the second-oldest leaves the window.
-    second_oldest = sorted(times)[1]
-    assert datetime.fromisoformat(st["cap_frees_at"]) == second_oldest + timedelta(
-        seconds=ir.WINDOW_S)
+    # The KIT's semantics: the oldest counted start plus the window.
+    want = datetime.fromtimestamp(min(starts) + ir.WINDOW_S).astimezone()
+    got = datetime.fromisoformat(st["cap_frees_at"])
+    assert abs((got - want).total_seconds()) < 1.5
 
 
 def test_a_backoff_refusal_is_backing_off(tmp_path, _status_in_tmp):
@@ -626,7 +662,7 @@ def test_the_eta_is_null_until_three_runs_then_the_median(tmp_path, _status_in_t
     inside = []
 
     def make_spawn(duration):
-        def spawn(args, **kw):
+        def spawn(prompt, **kw):
             inside.append(_status(_status_in_tmp)["task_eta_s"])
             clock.advance(duration)
             return hs.SpawnResult(True, "RAN", 0, "", "")
@@ -656,10 +692,10 @@ def test_a_status_write_failure_is_logged_and_the_runner_continues(
         tmp_path, monkeypatch):
     inbox, state, runtime = _setup(tmp_path, [("a.md", "x")])
 
-    def boom(path, payload):
+    def boom(*a, **kw):
         raise PermissionError("locked")
 
-    monkeypatch.setattr(ir, "_write_status_file", boom)
+    monkeypatch.setattr(kit, "write_status", boom)
     sp = _Spawn()
     res = _crun(inbox, state, runtime, sp)
     assert res.spawned and len(sp.calls) == 1
@@ -694,14 +730,20 @@ def test_the_status_path_is_gitignored():
 # --- item 5: headless flags and model routing ------------------------------
 
 
+def _kit_argv(plan):
+    """The argv the kit would build for one runner session plan."""
+    return kit.build_argv("E", ir.PROMPT, kit.pick_model(plan["writes_code"]),
+                          kit.pick_effort(plan["note"]), False, None, plan["extra"])
+
+
 def _flag(args, name):
     return args[args.index(name) + 1]
 
 
 def test_output_format_is_json_and_no_bare():
-    args = ir.session_args()
+    args = _kit_argv(ir.session_args())
     assert _flag(args, "--output-format") == "json"
-    assert "--bare" not in args
+    assert "--bare" not in args and "--bare" not in ir.session_args()["extra"]
 
 
 @pytest.mark.parametrize("names, model, effort", [
@@ -716,9 +758,10 @@ def test_output_format_is_json_and_no_bare():
     (None, "sonnet", "medium"),
 ])
 def test_session_args_route_the_model(names, model, effort):
-    args = ir.session_args(names)
+    """Asked of the KIT: what it picks from the plan's writes_code and note."""
+    args = _kit_argv(ir.session_args(names))
     assert _flag(args, "--model") == model and _flag(args, "--effort") == effort
-    assert args[0] == "-p" and ir.PROMPT in args
+    assert args[1] == "-p" and args[2] == ir.PROMPT
 
 
 def test_the_spawn_receives_the_routed_model(tmp_path):
@@ -726,7 +769,7 @@ def test_the_spawn_receives_the_routed_model(tmp_path):
         tmp_path, [("x-from-MAIN-ORDER-y.md", "do it"), ("z-from-LL-FIX-q.md", "ours")])
     sp = _Spawn()
     _crun(inbox, state, runtime, sp)
-    assert _flag(sp.calls[0][0], "--model") == "opus"
+    assert kit.pick_model(sp.calls[0][1]["writes_code"]) == "opus"
 
 
 def test_a_self_note_does_not_route_the_model(tmp_path):
@@ -734,8 +777,16 @@ def test_a_self_note_does_not_route_the_model(tmp_path):
         tmp_path, [("a-ACK-b.md", "ok"), ("z-from-LL-ORDER-q.md", "ours")])
     sp = _Spawn()
     _crun(inbox, state, runtime, sp)
-    args = sp.calls[0][0]
-    assert _flag(args, "--model") == "sonnet" and _flag(args, "--effort") == "low"
+    kw = sp.calls[0][1]
+    assert kit.pick_model(kw["writes_code"]) == "sonnet"
+    assert kit.pick_effort(kw["note"]) == "low"
+
+
+def test_the_note_handed_to_the_kit_is_never_a_note_name(tmp_path):
+    inbox, state, runtime = _setup(tmp_path, [("secret-subject-ACK-x.md", "ok")])
+    sp = _Spawn()
+    _crun(inbox, state, runtime, sp)
+    assert sp.calls[0][1]["note"] in (hs.NOTE_ACK, hs.NOTE_WORK)
 
 
 def test_an_order_is_never_damped_by_its_trailer(tmp_path):
