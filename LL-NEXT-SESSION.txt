@@ -1,76 +1,79 @@
 LANTERNLIGHT - NEXT SESSION PROMPT
-Written at the wrap of 2026-10-03 (third session that day). Assume zero
+Written at the wrap of 2026-10-03 (fourth session that day). Assume zero
 context; everything you need is here or in the files this names.
 
 START HERE
   - `git log` FIRST. The armed inbox runner (\Lanternlight\InboxRunner, every
     15 min, ops/inbox_runner.py -> one headless claude via ops/headless_spawn.py)
-    commits while nobody watches. This session HALTED it (ops/runtime/
-    INBOX_RUNNER_HALT) and deleted the HALT file at the wrap.
-  - Inbox was clean at session start (runner had answered the 9 notes, LL-0335).
-    Run `python ops/inbox_watch.py` and read git log before answering anything.
-    READ BODIES, NOT FILENAMES.
+    commits while nobody watches. It was HALTED for this wrap and the HALT file
+    (ops/runtime/INBOX_RUNNER_HALT) was deleted after the push.
+  - EXPECTED: the first runner tick after the wrap answers MAIN 0830 (the
+    provenance self-test; MAIN wants the SHA-256 computed by the UNATTENDED
+    responder, not a session). It was deliberately left the ONLY unread note.
+    Verify: a runner commit in git log, a 0830 reply in
+    moon_sync_inbox/_outbox/DELIVERIES.json, and the runner log
+    ops/runtime/inbox_runner.log. If the tick failed, read the log reason; do
+    NOT answer 0830 from a session.
+  - Run `python ops/inbox_watch.py` and read BODIES, not filenames.
   - Before a long interactive commit sequence, create
     ops/runtime/INBOX_RUNNER_HALT, and DELETE it when done.
 
 READ FIRST: CLAUDE.md (rules; MAIN SPEAKS FOR THE OPERATOR), ROADMAP.md,
-docs/LEDGER.md LL-0336..LL-0338 (this session), docs/HEADLESS.md (STOP
+docs/LEDGER.md LL-0339 and LL-0340 (this session), docs/HEADLESS.md (STOP
 CONDITIONS).
 
-LANDED THIS SESSION (all pushed; every slice had a refutation pass, and 3
-first versions were refuted and repaired before commit)
-  - OPS-118 CLOSED (LL-0336): stray-walker sweep of tests/, .claude/commands/,
-    .claude/agents/, third_party/ -> 2 HOT + 1 latent in tests/, all pruned by
-    not descending (reusing the inbox watcher's residue set), each seen red.
-    archive_link_guard now numbers anchors across ALL heading levels like
-    GitHub: new findings `shadowed` and `duplicate_suffix`.
-  - OPS-109 CLOSED (LL-0336): ops/channel_route.py discovers a carrier inbox
-    one level under the drive root by README "Code on this channel: X.";
-    raises on 0 or 2+ matches, names a count never a path, writes nothing.
-    Runner prompt step 4 names deliver_to. CORRECTION: the old "criterion 4
-    MET 2026-10-02" was FALSE (REPLY_PATHS.md never mentioned MAIN). Residual
-    gaps recorded: a junction pointing at our inbox; scan-to-write race.
-  - OPS-113 CLOSED (LL-0336, LL-0338): tools/citation_check.py checks sha and
-    path:line cites in ROADMAP.md, docs/LEDGER.md and both archives; allowlist
-    tools/citation_allowlist.txt must be a SUBSET of a key set pinned in
-    tests/test_citation_check.py (72 keys). Growing that pinned set without a
-    ledger entry is the forbidden move. Runs in suite and preflight.
-  - OPS-119 CLOSED (LL-0337): done.md states the register's real scope
-    (tracked .md and .txt since OPS-63); pinning test in test_loop_watch.py
-    updated; correction note under archived OPS-97.
-  - ops/docguards.py gained a `citation_check` reading idiom - the observed
-    map cross-check caught the selector missing it.
+LANDED THIS SESSION (1245298 + the wrap commit, pushed)
+  - MAIN 0845/0855/0850/0912/0915 (7 of 7 MAIN notes SHA-256 MATCH vs MAIN's
+    outbox), LL-0339:
+    * ops/inbox_runner.py: RUNS_CAP 120 runs STARTED per rolling 86400 s,
+      counted from its own log; LIMIT at the cap.
+    * Loop damping: own notes (first -from- is LL) and notes MARKED terminal /
+      no-reply (name word TERMINAL, or the answered: trailer / a CLASS header)
+      never trigger; ORDER/FIX/RULING never damped by a trailer. Damped notes
+      are not acknowledged.
+    * ops/loop/control/inbox_status.json (gitignored), MAIN 0915 schema 1.
+      Known gap: reads idle, not backoff, after a usage-limited run until the
+      next tick. A BUSY tick does not overwrite the holder's status.
+    * Routing: ORDER/FIX/RULING -> opus medium; else sonnet, low effort only
+      if every trigger is ack-class. --output-format json.
+    * ops/headless_spawn.py (the one door): adds --strict-mcp-config,
+      --setting-sources project,local, --no-session-persistence; REFUSES any
+      argv containing --bare (floors live in a PreToolUse hook; --bare skips
+      hooks - so never put the literal flag in the runner PROMPT); logs numeric
+      usage fields. Measured 69,706 -> 55,328 input tokens on a trivial call.
+  - Refutations this session: (1) first damping scanned whole bodies and
+    damped MAIN 0845/0855 themselves (they quote the rule) - repaired;
+    (2) at the wrap, the repair's test was VACUOUS (all cases used ORDER
+    names, which skip the body check) - repaired to a CORRECTION name, seen
+    red 4 failed under the old scan (LL-0340).
+  - OPS-68 criterion 6 SUPERSEDED by adjudication (dated section at the top of
+    OPS-68): the inbox runner is the delivery path; ops/responder.py never
+    gains a send.
+  - One reply delivered to MAIN, CS, LW, RC, RSC, SS (0 failures).
 
 STATE AT THE WRAP
-  Branch main, pushed. Wrap suite: 4354 passed, 22 skipped (307.74 s). Ruff:
-  All checks passed.
-  CAPTURE WATCHER: check_watcher -> NO_RECORD, ensure_armed_at_wrap refused
+  Branch main, pushed. Wrap suite and ruff: see LL-0340's commit message and
+  the wrap commit; counts are in the commit, not repeated here.
+  CAPTURE WATCHER: check_watcher -> NO_RECORD; ensure_armed_at_wrap refused
     with OPERATOR DISARM (LL-0234). Correct. Never arm it; only the operator
     lifts it.
-  STOP-CLAIM AUDIT: 0 refuted, 1 confirmed.
-  Loop state: cycle 106, no item.
+  STOP-CLAIM AUDIT: 2 confirmed, 2 refuted - both were partial/quoted counts
+    (a single-file 79; a 4423 quoted without its 22 skipped), not suite claims.
+  Loop state: cycle 107, no item.
 
 NEXT
   No unblocked item with an acceptance criterion remains.
-  1. OPS-68 criterion 6: moon_sync_inbox/_drafts/ holds 0 drafts, so the
-     measured record it needs can never accrue while the inbox runner answers
-     directly. Decide (adjudicate, do not ask) whether the runner supersedes
-     the draft-only responder, and record it in OPS-68.
+  1. Verify the runner answered MAIN 0830 (above).
   2. OPS-71 is blocked on a mode (not bypass permissions).
   3. OPS-102 / OPS-104 and items 1, 4b, 5-7, 10-12 need the operator playing.
 
 PROCESS RULES THAT BIT THIS SESSION
-  - The pre-commit hook REFUSES when the observed doc-open map is stale: after
-    editing any tests/ file, run the full suite (`python -m pytest`, ~5 min)
-    BEFORE `git commit`, or the hook blocks with "test modules edited since
-    the run". Give both a 600000 ms timeout and confirm HEAD moved.
-  - A new module trips several registration guards at once: ops/lanes.py
-    owner + `python scripts/write_lane_contracts.py`, docs/INVENTORY.md row,
-    spawn-capability roster if it runs subprocess, docguards idiom if it
-    opens docs indirectly, and the source register until the file is STAGED.
-  - The citation checker will flag any hex token you write into a doc that is
-    not a commit here - describe planted test shas instead of quoting them.
-  - Some files are CRLF on disk with eol=lf in the index (done.md was);
-    normalise before exact-match edits, check `tr -dc '\r' < f | wc -c`.
+  - Adding an EXEMPTION after writing a guard's test can make that test
+    vacuous. Re-run the mutation after every later change to the same rule.
+  - The source register reads dotted file names in docs as hosts
+    (runner.log, status.json were added to KNOWN_NON_HOSTS); the citation
+    checker flags a sibling's commit sha written into a doc - describe it.
+  - After editing any tests/ file, run the full suite (~6 min) BEFORE
+    `git commit`; give both a 600000 ms timeout and confirm HEAD moved.
   - Paste SHARED_WORKTREE_BAN (ops/store_drift.py) into every dispatch; take
     the merge-gate per-file baseline BEFORE dispatching.

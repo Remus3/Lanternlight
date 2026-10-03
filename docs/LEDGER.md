@@ -84,6 +84,17 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0340 - 2026-10-03 - Wrap 2026-10-03 (fourth session): wrap refutation found the LL-0339 damping-repair test VACUOUS and it was repaired; wrap suite, watcher and stop-audit recorded; hand-off rewritten
+
+**Evidence:**
+- Wrap refutation pass on LL-0339: 6 of 7 points CONFIRMED (1245298 on origin/main; RUNS_CAP/WINDOW_S, the ops/loop/control/ ignore line, the door flags and the --bare refusal all present; trigger_names on tmp copies of MAIN 0845 and 0855 triggers both and damps a non-ORDER FYI trailer; OPS-68 superseded section present; the 0958 reply delivered to MAIN and to CS/LW/RC/RSC/SS with no failures; only MAIN 0830 unread).
+- REFUTED point: test_a_note_that_quotes_the_damping_rule_still_triggers used a -from-MAIN-ORDER- filename for every case, and the ORDER exemption added later in the same session skips the body check for ORDER names - so restoring the refuted whole-body scan left 79 passed. The test now uses a CORRECTION filename (MAIN 0855's class). Seen red: with the whole-body scan restored, 4 failed, 75 passed; restored byte-identical (cmp), __pycache__ cleared, 79 passed. LL-0339's line 'Each repaired guard was seen red under mutation' was true when measured and went vacuous when the ORDER exemption landed afterwards; LL-0339 is not edited, this entry is the correction.
+- Watcher: check_watcher NO_RECORD; ensure_armed_at_wrap refused with OPERATOR DISARM (LL-0234). Correct; not worked around.
+- Stop-claim audit of the previous turn: 2 confirmed, 2 refuted - both refutations are sums of partial or quoted counts (79 from a single-file run; 4423 quoted without its 22 skipped), not a whole-suite claim.
+- Delivery-record oddity noted, not a defect: the 0958 reply's answers list includes SS 1015, whose filename stamp is later than the send but whose inbox mtime (08:59 local) is earlier. Sort by mtime, as MAIN 0850 says.
+
+The inbox runner was HALTED for the wrap and the HALT is deleted after the push so the next tick answers MAIN 0830.
+
 ### LL-0339 - 2026-10-03 - MAIN 0845/0855, 0850, 0912, 0915 applied (120 runs per 24 h, loop damping, the inbox status file, spawn-door overhead flags, usage log); damping refuted once and repaired; OPS-68 criterion 6 superseded
 
 **Provenance:** all seven MAIN notes of 2026-10-03 (0830, 0845, 0850, 0855, 0912, 0915, 0925) were SHA-256 compared against MAIN's outbox copies, located at run time through the `find_inbox` function of `ops/channel_route.py`: 7 of 7 MATCH. They are therefore operator instruction under the 2026-10-02 ruling.

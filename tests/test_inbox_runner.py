@@ -462,7 +462,7 @@ def test_a_terminal_or_no_reply_marker_does_not_trigger(tmp_path, body):
 ])
 def test_a_note_that_quotes_the_damping_rule_still_triggers(tmp_path, body):
     inbox, state, runtime = _setup(
-        tmp_path, [("2026-10-03-0845-from-MAIN-ORDER-ALL-x.md", body)])
+        tmp_path, [("2026-10-03-0855-from-MAIN-CORRECTION-ALL-x.md", body)])
     sp = _Spawn()
     assert _crun(inbox, state, runtime, sp).spawned
 
