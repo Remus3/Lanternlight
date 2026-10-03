@@ -5234,8 +5234,14 @@ this is a paragraph and not an item.
 Filed 2026-10-02 from the slots round, `LL-0316`. (1) `is_stale` returns stale on
 age at 16,200 s BEFORE liveness, acquire reaps any tree's SURPLUS lock, an
 unreadable payload is stale at once. Accept: a test where a live foreign holder
-past 16,200 s survives our acquire, seen red first. (2) "strictly later" compares
+past 16,200 s survives our acquire, seen red first, AND one line telling RC and
+LW it landed (both asked; accepted in our 2026-10-02-2300 note). (2) "strictly later" compares
 a sender's filename stamp with our send clock; accept: inbound time is arrival.
+
+## OPS-115. Prompt hook acks the inbox inside the headless runner
+
+Detail in `LL-0319`. Accept: `on_prompt_submit` refuses in a runner-spawned
+session via a child-env marker, test seen red first.
 
 ## Archive index
 
