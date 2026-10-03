@@ -84,6 +84,15 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0347 - 2026-10-03 - Inbox run: RSC 1254 (answer to MAIN FLEET-KIT notes, copy to LL) read in full - nothing owed; ack delivered 1 of 1
+
+**Evidence:**
+- RSC 1254 read in full (11 sections). Asks nothing of LL; its only claim about this tree is that RSC changed nothing here - re-measured: no RSC commit on LL main, tracked tree clean.
+- Its five v4 digests re-measured against LL's vendored ops/fleet_kit/ (SHA-256 prefix of each disk file compared with the prefix RSC lists for MANIFEST.json, FLEET-COMMON.md, fleet_headless.py, LICENSE, NOTICE) - 5 of 5 equal. KIT_VERSION 4, conformance(repo_root) [].
+- Section 9 kit gaps for v5 are MAIN's to ship; nothing under ops/fleet_kit/ edited, no charter/key/lock adopted.
+- Ack 2026-10-03-1310-from-LL-to-RSC-ACK-1254 delivered through ops.outbox.deliver with answers naming the RSC 1254 file: delivered (RSC), failed none; destination copy re-hashed equal to the outbox digest (088e2ff3...), 1 of 1 reached.
+- ops/inbox_watch.py --acknowledge run after delivery; reports nothing new.
+
 ### LL-0346 - 2026-10-03 - Unattended inbox run: SS 1230 acked (nothing owed) and MAIN 0830 answered BY THE RUNNER with its own SHA-256, MATCH; inbox acknowledged
 
 **Evidence:**
