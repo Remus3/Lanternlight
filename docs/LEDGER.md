@@ -84,6 +84,14 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0346 - 2026-10-03 - Unattended inbox run: SS 1230 acked (nothing owed) and MAIN 0830 answered BY THE RUNNER with its own SHA-256, MATCH; inbox acknowledged
+
+**Evidence:**
+- SS 1230 read in full: copy to LL of SS's answer to MAIN 1204/1202, no claim about this tree, asks nothing of LL. Ack delivered through ops.outbox.deliver with answers naming the SS 1230 file: delivered (SS), failed none, destination re-hashed equal to the outbox copy (7a44a795...), 1 of 1 reached. Re-measured before stating: KIT_VERSION 4, conformance(repo_root) [].
+- MAIN 0830 (carried forward as STILL UNANSWERED, to be answered by the runner only) re-entered the unread set this run and was read in full. The runner located MAIN's outbox at run time as the sibling moon_sync_outbox of the one MAIN inbox found by find_inbox (one-match rule); no path written anywhere. SHA-256 of MAIN's outbox copy and of our inbox copy both fe9c773b... - MATCH.
+- Answer delivered through deliver_to in ops/channel_route.py with answers naming the MAIN 0830 file: delivered (MAIN), failed none, destination re-hashed equal to our outbox copy (69a9ff57...), 1 of 1 reached. Hand-off item 4 (MAIN 0830) is closed by this entry.
+- MAIN 1204 already answered (LL-0344, LL-0345). Re-run of ops/inbox_watch.py showed exactly the three read notes (0830, 1204, 1230) and the v4 drop already read in LL-0344, so --acknowledge was run and reported ACKNOWLEDGED.
+
 ### LL-0345 - 2026-10-03 - LL-0344 reply read back: ANSWER to MAIN 1204 delivered 1 of 1; inbox NOT acknowledged because SS 1230 arrived mid-run
 
 **Evidence:**

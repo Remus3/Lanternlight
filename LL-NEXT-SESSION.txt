@@ -55,14 +55,9 @@ OPEN - CARRIED FORWARD (none acted on this session unless marked)
      goes green again. Never patch a kit file locally.
   2. OPS-71 is blocked on a mode (not bypass permissions).
   3. OPS-102 / OPS-104 and items 1, 4b, 5-7, 10-12 need the operator playing.
-  4. MAIN 0830 is STILL UNANSWERED. It asks that the UNATTENDED responder
-     compute the note's SHA-256 and reply with it. No DELIVERIES.json record
-     lists 0830 in answers (the wrap refutation checked; an earlier session
-     check matched '0830' as a substring of another name and was wrong). The
-     note is no longer in the unread set, so the runner will not pick it up
-     by itself. Accept: a runner-authored reply whose answers= names the 0830
-     filename and states the SHA-256 the runner computed; do NOT answer it
-     from an attended session.
+  4. CLOSED by the unattended inbox runner (LL-0346): MAIN 0830 answered
+     with the runner-computed SHA-256, MATCH, answers= names 0830, 1 of 1
+     reached and re-hashed equal. Item 1 (kit v4) also landed in LL-0344.
 
 PROCESS RULES THAT BIT THIS SESSION
   - The pre-commit hook refuses unless the LAST COMPLETE suite run is green
