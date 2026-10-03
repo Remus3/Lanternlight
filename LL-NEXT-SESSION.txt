@@ -49,15 +49,16 @@ STATE AT THE WRAP
   Loop state: cycle advanced at this wrap, no item.
 
 OPEN - CARRIED FORWARD (none acted on this session unless marked)
-  1. Next kit version: when a MAIN note FLEET-KIT-v4 arrives (provenance
-     checked), replace all three files in ops/fleet_kit/ and re-embed the
-     block in ONE commit; update NOTICE.md digests and the conformance test
-     goes green again. Never patch a kit file locally.
+  1. Kit version: v4 was installed unattended by the runner (60c4739,
+     f2f7b3a; 5 of 5 files match MAIN's v4, conformance []). On a future MAIN
+     note FLEET-KIT-vN (provenance checked), replace every kit file in
+     ops/fleet_kit/ and re-embed the block in ONE commit; never patch locally.
   2. OPS-71 is blocked on a mode (not bypass permissions).
   3. OPS-102 / OPS-104 and items 1, 4b, 5-7, 10-12 need the operator playing.
-  4. CLOSED by the unattended inbox runner (LL-0346): MAIN 0830 answered
-     with the runner-computed SHA-256, MATCH, answers= names 0830, 1 of 1
-     reached and re-hashed equal. Item 1 (kit v4) also landed in LL-0344.
+  DONE after the wrap: MAIN 0830. Returned to the unread set by removing its
+    row from ops/runtime/inbox_seen.json; the next runner tick (kit 4, rc 0)
+    computed fe9c773b... MATCH and delivered the reply to MAIN 1 of 1. The
+    runner committed it as 9a00a58, ledger LL-0346.
 
 PROCESS RULES THAT BIT THIS SESSION
   - The pre-commit hook refuses unless the LAST COMPLETE suite run is green
