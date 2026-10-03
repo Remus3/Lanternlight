@@ -61,7 +61,10 @@ WHAT IS CONSERVED, EXACTLY, INCLUDING THE ONE THING THAT IS NOT.
   claim that silently drops an unnamed section is worth nothing. The index's
   own correctness - one stub per archived item, every stub resolving - is
   proved separately and in both directions by ``tools/archive_link_guard.py``,
-  which is the other half of this guarantee and is run after any apply.
+  which is the other half of this guarantee. It is ARMED through
+  ``tests/test_archive_link_guard.py`` (``OPS-111``): the full suite,
+  ``python -m ops.preflight`` and the pre-commit doc-guard subset all run that
+  module, so the check after an apply does not depend on anyone remembering it.
 * APPLYING TWICE IS A STRICT FIXED POINT, in all four documents, byte for
   byte. It was not always: the planner used to append a blank line above the
   regenerated index whether or not the junction already had one, so every
@@ -189,8 +192,11 @@ class ApplyReport:
             [
                 "",
                 "Character counts, not git blob bytes. Re-derive the budgets with",
-                "python -m tools.doc_size_budget, and prove the index still resolves",
-                "with python tools/archive_link_guard.py.",
+                "python -m tools.doc_size_budget.",
+                "The archive index is checked by tests/test_archive_link_guard.py,",
+                "which the full suite, python -m ops.preflight and the pre-commit",
+                "doc-guard subset run whenever ROADMAP.md or the archive is staged.",
+                "python tools/archive_link_guard.py shows the same verdict by hand.",
             ]
         )
         return "\n".join(lines)

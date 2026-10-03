@@ -5128,64 +5128,6 @@ override is how this session answered MAIN.
 
 ---
 
-## OPS-111. `tools/archive_link_guard.py` has no armed caller, and its real-tree tests cannot fail
-
-Filed 2026-10-02 from a sibling's analysis, with a demonstration this project can
-reproduce. Two independent problems that compound.
-
-**No caller.** Nothing in `.githooks/`, CI or `ops/preflight.py` runs the guard.
-It is the only check that this file's archive-index stubs still resolve
-into `docs/ROADMAP_ARCHIVE.md`, and `scripts/apply_doc_split.py` PRINTS an
-instruction to run it by hand - the weakest place for a verification step, because
-`CLAUDE.md` records that a step depending on being remembered gets skipped.
-
-**Vacuous tests.** `tests/test_archive_link_guard.py` derives its `expected`
-values from the function under test in its real-tree cases, so those cannot fail.
-A slice proved it in a scratch clone: a broken stub gave exit 1 by hand while that
-clone's full suite passed. The guard works; nothing asks it.
-
-### Acceptance
-
-1. The guard has an ARMED caller that runs without anyone remembering it, and the
-   arming is proved by breaking a stub and watching the ARMED ROUTE go red - not
-   by observing that the guard exits 1 when invoked by hand.
-2. The real-tree test cases assert against values that do NOT come from the
-   function under test, or they are deleted in favour of fixture cases that can
-   fail. A test that cannot fail is removed rather than kept for its name.
-3. The instruction printed by `scripts/apply_doc_split.py` either stops being the
-   only enforcement or stops being printed as though it were.
-
----
-
-## OPS-112. `lanternlight/damage.py` turns an ABSENT field into a measured `False`, and a JSON null into the string `'None'`
-
-Filed 2026-10-02 from a sibling's analysis.
-
-`CLAUDE.md`'s measurement doctrine: a missing field is ABSENT, and "unmeasured"
-must stay distinguishable from "measured zero". A slice measured that
-`lanternlight/damage.py` around lines 251 and 285 turns an absent
-`bChildDeathCauser` and `bDeathCauser` into `False`, and that a JSON-null
-`monsterGuid` becomes the string `'None'` while an absent one becomes `''`.
-
-`False` is a MEASUREMENT. A flag the log never emitted is not a flag the game set
-to false, and a `monsterGuid` of `'None'` is a four-character id that joins
-against nothing while looking like data.
-
-### Acceptance
-
-1. Re-measure the claim against the real parser before changing code; the line
-   numbers come from a slice and the file may have moved.
-2. An absent boolean stays absent through to every consumer, and a test proves
-   the consumer's OUTPUT differs - `CLAUDE.md`'s rule is that proving the change
-   happened is not the same as proving it matters, so the diff is of the
-   consumer, not of the edited line.
-3. A JSON null and an absent key are distinguishable at the output, and neither
-   becomes a string that looks like an id.
-4. Nothing in the fix invents a sentinel. Omission is the representation this
-   project already chose.
-
----
-
 ## OPS-113. Our own documents cite lines, shas and constants that have decayed, and no checker covers any of them
 
 Filed 2026-10-02. Three slices found instances independently, and this session
@@ -5228,6 +5170,16 @@ so a split can reach what it keeps. A session finding this item open and a budge
 firing again takes the structural fix, not a third number. The PER-DOCUMENT
 ceiling here was NOT raised and has under 100 bytes of headroom, which is why
 this is a paragraph and not an item.
+
+## OPS-117. Two null-versus-absent mixes and one slug assumption, left by OPS-111 and OPS-112
+
+Filed 2026-10-03, `LL-0331` and `LL-0330`. (1) `lanternlight/damage.py` still
+folds a JSON-null and an absent `nameId` both to None, and `Key` both to "".
+(2) Archive stub anchors resolve only if `tools/archive_link_guard.py` and
+`tools/doc_archive.py` slug a heading the way GitHub does; no test pins either
+against a GitHub-rendered anchor. Accept: (1) null and absent distinguishable
+at `DamageSeries` output, seen red; (2) a fixture heading with punctuation and
+its GitHub anchor, taken from a rendered page, asserted for both slug functions.
 
 ## Archive index
 
@@ -5342,3 +5294,5 @@ links to that item's full original text.
 - **OPS-115** - Prompt hook acks the inbox inside the headless runner - CLOSED 2026-10-02 - [full text](docs/ROADMAP_ARCHIVE.md#ops-115-prompt-hook-acks-the-inbox-inside-the-headless-runner---closed-2026-10-02)
 - **OPS-116** - Runner session exits 0 uncommitted - CLOSED 2026-10-03 - [full text](docs/ROADMAP_ARCHIVE.md#ops-116-runner-session-exits-0-uncommitted---closed-2026-10-03)
 - **OPS-114** - `ops/lane_slot.py` can reap a sibling's LIVE lock; `ops/answered.py` mixes two clocks - CLOSED 2026-10-03 - [full text](docs/ROADMAP_ARCHIVE.md#ops-114-opslaneslotpy-can-reap-a-siblings-live-lock-opsansweredpy-mixes-two-clocks---closed-2026-10-03)
+- **OPS-111** - `tools/archive_link_guard.py` has no armed caller, and its real-tree tests cannot fail - CLOSED 2026-10-03 - [full text](docs/ROADMAP_ARCHIVE.md#ops-111-toolsarchivelinkguardpy-has-no-armed-caller-and-its-real-tree-tests-cannot-fail---closed-2026-10-03)
+- **OPS-112** - `lanternlight/damage.py` turns an ABSENT field into a measured `False`, and a JSON null into the string `'None'` - CLOSED 2026-10-03 - [full text](docs/ROADMAP_ARCHIVE.md#ops-112-lanternlightdamagepy-turns-an-absent-field-into-a-measured-false-and-a-json-null-into-the-string-none---closed-2026-10-03)

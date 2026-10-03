@@ -190,7 +190,7 @@ class TestAnchorRuleAgainstRealHeadings:
         a heading wrongly moved to the archive while still open - or dragged
         back out of it - passes here. That is deliberate, and it is not
         unguarded: reachability BETWEEN the two documents is the whole subject
-        of ``check_texts`` and of ``TestLiveRepoEntryPoint`` below. The one
+        of ``check_texts`` and of ``TestLiveTreeIsReachable`` below. The one
         thing this control must still be able to say is ABSENT, which
         :meth:`test_a_heading_in_neither_document_is_reported_absent` pins.
         """
@@ -481,31 +481,103 @@ class TestStubLinkScan:
         assert archive_link_guard.stub_anchors(text, ARCHIVE_REL) == [SECOND_ANCHOR]
 
 
-class TestLiveRepoEntryPoint:
-    """``main()`` behaves sanely against the real tree, split or not."""
+class TestLiveTreeIsReachable:
+    """ROADMAP ``OPS-111``: THE ARMED ROUTE. The real pair must be GREEN.
 
-    def test_check_repo_returns_a_report_either_way(self) -> None:
-        report = archive_link_guard.check_repo()
-        assert isinstance(report, archive_link_guard.Report)
-        # Whatever the state of the tree, the report must be self-describing:
-        # a not-ran report says so, and a ran report never claims OK while
-        # carrying findings.
-        if report.ran:
-            assert report.ok is (report.findings == ())
-        else:
-            assert "DID NOT RUN" in report.format()
+    WHY THIS CLASS IS THE GUARD'S CALLER. Until ``OPS-111`` nothing that runs
+    without being remembered asked this guard about the real documents and
+    acted on the answer. The cases that touched the live tree computed their
+    ``expected`` exit code FROM :func:`tools.archive_link_guard.check_repo` -
+    so a broken stub moved the expectation and the result together, and the
+    test stayed green. A slice proved it in a scratch clone: a broken stub gave
+    exit 1 by hand while that clone's full suite passed.
 
-    def test_main_exit_code_matches_the_verdict(self) -> None:
-        # An EXPLICIT empty argument list, not main(). Since OPS-64 the guard
-        # reads sys.argv when argv is None, and under a test runner sys.argv is
-        # the runner's own - which is now refused rather than ignored, and would
-        # make this test measure argument handling instead of the verdict. The
-        # None-means-sys.argv contract has its own test in
-        # TestArgvIsRefusedOrReal, with sys.argv patched so the argv under test
-        # is a known one.
+    These cases assert LITERALS instead - ``ran is True``, ``ok is True``, no
+    findings, exit code ``0`` - so a dangling or missing stub in the real
+    ``ROADMAP.md`` / ``docs/ROADMAP_ARCHIVE.md`` pair turns this module red.
+    This module is already run by three routes nobody has to remember: the full
+    suite, ``python -m ops.preflight`` (``ops/preflight.py`` lists it), and the
+    ``.githooks/pre-commit`` doc-guard subset, which ``ops/docguards.py``
+    selects whenever ``ROADMAP.md`` or ``docs/ROADMAP_ARCHIVE.md`` is staged.
+
+    THE COUNT CROSS-CHECKS ARE INDEPENDENT OF THE FUNCTION UNDER TEST. A green
+    verdict over "0 of 0" would be the vacuous pass this module exists to
+    refuse, so the number of archive headings and the set of stub anchors are
+    re-derived here with a deliberately naive line scan that shares no code
+    with the guard, and the guard must agree with it.
+
+    A live tree that has not been split yet would fail ``ran is True``. That is
+    intended: the split has happened (``OPS-57``), and an archive that vanished
+    is a regression this test should report rather than excuse.
+    """
+
+    @staticmethod
+    def _naive_archive_headings() -> list[str]:
+        """``## `` lines of the real archive outside fences, scanned by hand."""
+        text = (REPO_ROOT / ARCHIVE_REL).read_text(encoding="utf-8")
+        headings: list[str] = []
+        fence: str | None = None
+        for line in text.splitlines():
+            stripped = line.lstrip()
+            marker = stripped[:3]
+            if marker in ("```", "~~~"):
+                if fence is None:
+                    fence = marker
+                elif marker == fence:
+                    fence = None
+                continue
+            if fence is None and line.startswith("## "):
+                headings.append(line[3:].strip())
+        return headings
+
+    @staticmethod
+    def _naive_stub_anchors() -> set[str]:
+        """Anchors linked from the real roadmap into the archive, by hand."""
+        text = (REPO_ROOT / "ROADMAP.md").read_text(encoding="utf-8")
+        needle = ARCHIVE_REL + "#"
+        anchors: set[str] = set()
+        for line in text.splitlines():
+            start = 0
+            while True:
+                at = line.find(needle, start)
+                if at < 0:
+                    break
+                begin = at + len(needle)
+                end = line.find(")", begin)
+                anchors.add(line[begin:end].strip() if end >= 0 else line[begin:])
+                start = begin
+        return anchors
+
+    def test_the_real_pair_ran_and_has_no_findings(self) -> None:
         report = archive_link_guard.check_repo()
-        expected = 0 if (not report.ran or report.ok) else 1
-        assert archive_link_guard.main([]) == expected
+        assert report.ran is True, report.format()
+        assert report.findings == (), report.format()
+        assert report.ok is True, report.format()
+
+    def test_the_guard_saw_every_archive_heading_a_naive_scan_sees(self) -> None:
+        naive = self._naive_archive_headings()
+        assert len(naive) > 0, "the real archive carries no ## heading at all"
+        report = archive_link_guard.check_repo()
+        assert list(report.archive_headings) == naive
+
+    def test_the_guard_saw_every_stub_a_naive_scan_sees(self) -> None:
+        naive = self._naive_stub_anchors()
+        assert len(naive) > 0, "ROADMAP.md links to no anchor in the archive"
+        report = archive_link_guard.check_repo()
+        assert set(report.stub_anchors) == naive
+
+    def test_one_stub_per_archived_heading(self) -> None:
+        """Counted by the naive scans alone, so it cannot share a bug with the guard."""
+        assert len(self._naive_stub_anchors()) == len(self._naive_archive_headings())
+
+    def test_main_on_the_real_tree_exits_zero(self, capsys) -> None:
+        # An EXPLICIT empty argument list, not main(): under a test runner
+        # sys.argv is the runner's own and would be refused. The None-means-
+        # sys.argv contract has its own test in TestArgvIsRefusedOrReal.
+        code = archive_link_guard.main([])
+        out = capsys.readouterr().out
+        assert code == 0, out
+        assert "archive link guard: OK" in out, out
 
 
 class TestArgvIsRefusedOrReal:
@@ -613,10 +685,14 @@ class TestArgvIsRefusedOrReal:
         assert archive_link_guard.main(["--help"]) == 0
 
     def test_empty_argv_runs_the_live_check(self) -> None:
-        """No arguments still means the real tree, exactly as before OPS-64."""
-        report = archive_link_guard.check_repo()
-        expected = 0 if (not report.ran or report.ok) else 1
-        assert archive_link_guard.main([]) == expected
+        """No arguments still means the real tree, exactly as before OPS-64.
+
+        The expectation is the LITERAL 0, not a value computed from
+        :func:`tools.archive_link_guard.check_repo` - ``OPS-111``. The live pair
+        is required to be green by :class:`TestLiveTreeIsReachable`, so 0 is
+        the only correct answer here and a broken stub must make this red.
+        """
+        assert archive_link_guard.main([]) == 0
 
     def test_none_argv_reads_the_process_arguments(self, monkeypatch) -> None:
         """``main(None)`` means "read ``sys.argv``", proved by patching it.
@@ -631,10 +707,9 @@ class TestArgvIsRefusedOrReal:
         monkeypatch.setattr(sys, "argv", ["archive_link_guard.py", self.BOGUS])
         assert archive_link_guard.main() == 2
 
-        report = archive_link_guard.check_repo()
-        expected = 0 if (not report.ran or report.ok) else 1
+        # Literal 0, not derived from check_repo() - OPS-111.
         monkeypatch.setattr(sys, "argv", ["archive_link_guard.py"])
-        assert archive_link_guard.main() == expected
+        assert archive_link_guard.main() == 0
 
     def test_repo_root_option_reads_the_scratch_tree(self, tmp_path, capsys) -> None:
         """Criterion 2: ``--repo-root`` changes which tree is read.

@@ -472,6 +472,38 @@ class TestCommandLine:
             apply_doc_split.main(["--repo-root", str(root), "--not-a-flag"])
 
 
+class TestTheReportDoesNotPoseAsTheOnlyEnforcement:
+    """ROADMAP ``OPS-111`` criterion 3.
+
+    The report used to end by telling the reader to "prove the index still
+    resolves with python tools/archive_link_guard.py" - a step that depends on
+    being remembered, printed as though it were the check. The armed check is
+    now ``tests/test_archive_link_guard.py``, which the suite, the pre-flight
+    and the pre-commit doc-guard subset all run, so the report must NAME that
+    armed route and present the by-hand command as optional.
+    """
+
+    def _formatted(self) -> str:
+        report = apply_doc_split.ApplyReport(
+            written=True,
+            changes=[],
+            roadmap_archived=0,
+            roadmap_kept=0,
+            ledger_archived=0,
+            ledger_kept=0,
+        )
+        return " ".join(report.format().split())
+
+    def test_it_names_the_armed_test_module(self) -> None:
+        assert "tests/test_archive_link_guard.py" in self._formatted()
+
+    def test_the_old_remember_to_run_it_sentence_is_gone(self) -> None:
+        assert (
+            "prove the index still resolves with python tools/archive_link_guard.py"
+            not in self._formatted()
+        )
+
+
 class TestClaudeMdNamesTheApplyingStep:
     """OPS-80 criterion 4. The instruction must name the step that applies.
 

@@ -432,3 +432,97 @@ class TestMalformedInputIsRefusedNotAbsorbed:
         # The game writes an empty string on some generations. That is absence,
         # not corruption.
         assert damage.parse_damage_set("") == ()
+
+
+class TestAbsentFlagsAndGuidsAreNotInvented:
+    """OPS-112. An absent flag is not a measured False, and a null guid is no id.
+
+    `bDeathCauser` and `bChildDeathCauser` were read with `bool(raw.get(k,
+    False))`, so a record that never carried the flag reported the same `False`
+    as one where the game wrote it. And `monsterGuid` went through `str()`, so a
+    JSON null became the four-character string 'None' - which joins against
+    nothing while looking exactly like data - and an absent key became ''.
+
+    The consumer under test is :class:`damage.DamageSeries`: its `hits` and its
+    `instance_count` are what a caller actually reads, so the assertions are on
+    those outputs, not only on the parsed record.
+    """
+
+    def _no_flags(self, **over):
+        body = _record(**over)
+        del body["bDeathCauser"]
+        del body["damageChildList"][0]["bChildDeathCauser"]
+        return body
+
+    def test_an_absent_death_causer_reaches_the_series_as_none(self):
+        series = damage.DamageSeries()
+        series.add_payload(_payload(self._no_flags()))
+        (hit,) = series.hits
+        assert hit.death_causer is None
+        assert hit.child_death_causer is None
+
+    def test_a_written_false_still_reaches_the_series_as_false(self):
+        # The control: the fix must not turn a MEASURED False into None.
+        series = damage.DamageSeries()
+        series.add_payload(_payload(_record()))
+        (hit,) = series.hits
+        assert hit.death_causer is False
+        assert hit.child_death_causer is False
+
+    def test_a_written_true_reaches_the_series_as_true(self):
+        body = _record(bDeathCauser=True)
+        body["damageChildList"][0]["bChildDeathCauser"] = True
+        series = damage.DamageSeries()
+        series.add_payload(_payload(body))
+        (hit,) = series.hits
+        assert hit.death_causer is True
+        assert hit.child_death_causer is True
+
+    def test_a_null_or_non_boolean_flag_is_refused_not_coerced(self):
+        # bool("false") is True and bool(None) is False - both are inventions.
+        for value in (None, "false", 0, 1):
+            with pytest.raises(damage.MalformedDamageSet):
+                damage.parse_damage_set(_payload(_record(bDeathCauser=value)))
+            body = _record()
+            body["damageChildList"][0]["bChildDeathCauser"] = value
+            with pytest.raises(damage.MalformedDamageSet):
+                damage.parse_damage_set(_payload(body))
+
+    def test_a_non_string_guid_is_refused_not_stringified(self):
+        # Refutation pass 2026-10-03: this rule had no test that failed without it.
+        for value in (0, 12345, True, ["x"], {"a": 1}):
+            with pytest.raises(damage.MalformedDamageSet):
+                damage.parse_damage_set(_payload(_record(monsterGuid=value)))
+
+    def test_a_null_guid_is_none_and_never_the_string_none(self):
+        record = damage.parse_damage_set(_payload(_record(monsterGuid=None)))[0]
+        assert record.monster_guid is None
+        series = damage.DamageSeries()
+        series.add_records((record,))
+        (hit,) = series.hits
+        assert hit.monster_guid is None
+        assert hit.identity[0] is None
+
+    def test_a_null_guid_is_not_counted_as_an_instance(self):
+        series = damage.DamageSeries()
+        series.add_payload(_payload(_record(monsterGuid=None)))
+        assert len(series) == 1
+        assert series.instance_count == 0
+
+    def test_a_null_guid_does_not_merge_with_a_literal_none_string(self):
+        # Under str() both read 'None' and the dedup key merged them into one
+        # hit. They are different facts: one guid the game wrote, one it did not.
+        series = damage.DamageSeries()
+        series.add_payload(_payload(_record(monsterGuid=None), _record(monsterGuid="None")))
+        assert len(series) == 2
+        assert series.instance_count == 1
+
+    def test_an_absent_guid_is_refused_and_so_differs_from_a_null_one(self):
+        # monsterGuid is part of the dedup key, exactly like timeStamp, so a
+        # defaulted one merges distinct hits. Absent raises; null reads as None.
+        body = _record()
+        del body["monsterGuid"]
+        with pytest.raises(damage.MalformedDamageSet) as caught:
+            damage.parse_damage_set(_payload(body))
+        assert "monsterGuid" in str(caught.value)
+        assert damage.parse_damage_set(_payload(_record(monsterGuid=None)))[0].monster_guid is None

@@ -9,7 +9,7 @@ the original text, verbatim, in its original order, and the live roadmap
 carries a one-line stub linking to each one. If an item here turns out to
 matter again, move the section back rather than rewriting it.
 
-Sections in this archive: 107.
+Sections in this archive: 109.
 
 ---
 
@@ -12898,4 +12898,62 @@ backgrounded, session ends), not reproduced end to end; UNCOMMITTED logged.
 
 Filed 2026-10-02, `LL-0316`. (1) age-before-liveness reap: DONE, `LL-0328`.
 (2) two-clock "strictly later": DONE, `LL-0329` - inbound time is arrival.
+
+## OPS-111. `tools/archive_link_guard.py` has no armed caller, and its real-tree tests cannot fail - CLOSED 2026-10-03
+
+Filed 2026-10-02 from a sibling's analysis, with a demonstration this project can
+reproduce. Two independent problems that compound.
+
+**No caller.** Nothing in `.githooks/`, CI or `ops/preflight.py` runs the guard.
+It is the only check that this file's archive-index stubs still resolve
+into `docs/ROADMAP_ARCHIVE.md`, and `scripts/apply_doc_split.py` PRINTS an
+instruction to run it by hand - the weakest place for a verification step, because
+`CLAUDE.md` records that a step depending on being remembered gets skipped.
+
+**Vacuous tests.** `tests/test_archive_link_guard.py` derives its `expected`
+values from the function under test in its real-tree cases, so those cannot fail.
+A slice proved it in a scratch clone: a broken stub gave exit 1 by hand while that
+clone's full suite passed. The guard works; nothing asks it.
+
+### Acceptance
+
+1. The guard has an ARMED caller that runs without anyone remembering it, and the
+   arming is proved by breaking a stub and watching the ARMED ROUTE go red - not
+   by observing that the guard exits 1 when invoked by hand.
+2. The real-tree test cases assert against values that do NOT come from the
+   function under test, or they are deleted in favour of fixture cases that can
+   fail. A test that cannot fail is removed rather than kept for its name.
+3. The instruction printed by `scripts/apply_doc_split.py` either stops being the
+   only enforcement or stops being printed as though it were.
+
+---
+
+## OPS-112. `lanternlight/damage.py` turns an ABSENT field into a measured `False`, and a JSON null into the string `'None'` - CLOSED 2026-10-03
+
+Filed 2026-10-02 from a sibling's analysis.
+
+`CLAUDE.md`'s measurement doctrine: a missing field is ABSENT, and "unmeasured"
+must stay distinguishable from "measured zero". A slice measured that
+`lanternlight/damage.py` around lines 251 and 285 turns an absent
+`bChildDeathCauser` and `bDeathCauser` into `False`, and that a JSON-null
+`monsterGuid` becomes the string `'None'` while an absent one becomes `''`.
+
+`False` is a MEASUREMENT. A flag the log never emitted is not a flag the game set
+to false, and a `monsterGuid` of `'None'` is a four-character id that joins
+against nothing while looking like data.
+
+### Acceptance
+
+1. Re-measure the claim against the real parser before changing code; the line
+   numbers come from a slice and the file may have moved.
+2. An absent boolean stays absent through to every consumer, and a test proves
+   the consumer's OUTPUT differs - `CLAUDE.md`'s rule is that proving the change
+   happened is not the same as proving it matters, so the diff is of the
+   consumer, not of the edited line.
+3. A JSON null and an absent key are distinguishable at the output, and neither
+   becomes a string that looks like an id.
+4. Nothing in the fix invents a sentinel. Omission is the representation this
+   project already chose.
+
+---
 

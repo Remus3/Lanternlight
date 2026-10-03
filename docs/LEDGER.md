@@ -84,6 +84,24 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0331 - 2026-10-03 - OPS-112 CLOSED: lanternlight/damage.py keeps an absent death-causer flag absent (None), refuses a non-boolean flag, and never turns a null monsterGuid into the id-looking string 'None'
+
+**Evidence:**
+- RE-MEASURED first against the real parse_damage_set on synthetic JSON (no game data read): line 251 turned an absent bChildDeathCauser into False, line 288 an absent bDeathCauser into False, and line 283's str() made a JSON-null monsterGuid 'None' and an absent one ''. The claim was true as filed.
+- Fix: _flag() - absent -> None, JSON boolean kept, anything else (null, 'false', 0, 1) raises MalformedDamageSet (bool('false') had read as True); _guid() - JSON null -> None, non-string raises, ABSENT key raises through _require like a missing timeStamp, because the guid is part of the dedup key and a default would merge distinct hits. Fields are bool | None and str | None; the DamageSeries instance_count no longer counts a None guid.
+- Consumer output, the only consumer being DamageSeries in the same file (whole-repo grep by the slice and again by the refutation pass, no truthiness test on these fields anywhere): absent flags now reach hits as None instead of False; a series with one null-guid record has instance_count 0 instead of 1; a null guid and a literal 'None' string are 2 hits instead of 1. Controls: a written False and a written True survive unchanged.
+- Tests: tests/test_damage.py class TestAbsentFlagsAndGuidsAreNotInvented, 40 -> 49 tests; seen red first (6 of the new tests failed, the 2 passing being the False/True controls). Slice mutant (bool() back, None filter removed) -> 4 red. Refutation pass ran 5 mutants; 4 went red and the 5th - non-string guid no longer raising - stayed GREEN, so the merger added test_a_non_string_guid_is_refused_not_stringified and watched that mutant go 1 red, restored, __pycache__ cleared, 49 passed.
+- ADJUDICATED by the merger, not asked: refusing an ABSENT monsterGuid is kept. All 278 save records observed so far carry the key and the only fixture parses; the cost is that a future record shape without it is refused loudly rather than merged silently. Risk recorded from the refutation pass: the log's death payload is documented without monsterGuid, so any future code that feeds log payloads to parse_damage_set must not reuse this parser unchanged. Left open as OPS-117 (1): nameId still folds null and absent to None, and Key both to ''. Pre-existing and unchanged: the first copy of a duplicated hit is kept, which can drop a later bDeathCauser true.
+- Merge gate (ops/merge_gate.verify, per-file baseline taken in the primary tree before dispatch): OK, 4267 collected against a 4253 floor, 4245 passed, 0 failed, 22 skipped.
+
+### LL-0330 - 2026-10-03 - OPS-111 CLOSED: the archive link guard's real-tree tests can now fail, and a broken stub is refused by the suite, ops.preflight and a real commit; the item's 'no caller' half was half wrong
+
+**Evidence:**
+- RE-MEASURED before changing anything: tests/test_archive_link_guard.py already ran on three routes - the full suite, ops/preflight.py (which lists the module), and the pre-commit doc-guard subset, since ops/docguards selects it whenever ROADMAP.md or docs/ROADMAP_ARCHIVE.md is staged (the refutation pass confirmed both single-file cases, with docs/FINDINGS.md as a control that does not select it). What was missing was a test on those routes that could FAIL: the real-tree cases took expected from check_repo() itself. So the armed caller existed and was blind.
+- tests/test_archive_link_guard.py: the two vacuous real-tree cases replaced by class TestLiveTreeIsReachable (5 tests) asserting fixed values - the check ran, no findings, exit 0 - and cross-checking the guard's heading and stub counts against a naive scan that imports nothing from the guard. Two TestArgvIsRefusedOrReal cases now expect a literal 0 rather than a guard-derived value. 36 -> 39 tests. scripts/apply_doc_split.py's report and docstring now name the armed test module and its three routes and describe running the guard by hand as optional; tests/test_apply_doc_split.py 24 -> 26, the new wording test seen red against the old text.
+- RED THROUGH THE ARMED ROUTE (slice, in a throwaway clone with hooks installed): one stub anchor broken, ROADMAP.md staged, git commit -> the hook ran 52 doc-reading modules, 4 failed, printed BLOCKED and exited 1; HEAD did not move. First failure TestLiveTreeIsReachable::test_the_real_pair_ran_and_has_no_findings naming the dangling anchor. ops.preflight REFUSED on the same tree and passed with the stub restored. CONTROL: the HEAD test module against the same broken stub passed 36 of 36 - the old tests really were vacuous. The refutation pass reproduced it independently (4 failed on a dangling anchor, 5 on a deleted stub) and found the naive scan catches three stub shapes the guard misses (reference-style, autolink, titled links), which the set comparison would turn red.
+- Left open as OPS-117 (2): stub-per-heading is a COUNT check, and whether an anchor resolves on GitHub rests on two slug implementations (the guard's and tools/doc_archive.py's) agreeing with GitHub; both could be wrong together and stay green.
+
 ### LL-0329 - 2026-10-03 - OPS-114 CLOSED: item 2 - ops/answered.py times each inbound note by its CREATION time in our inbox, not the sender's filename stamp; the promised OPS-114 item 1 line delivered to RC and LW; the pre-commit hook measured at 273 s
 
 **Evidence:**
@@ -822,35 +840,4 @@ ADR-007 deliberately NOT edited. Its key-string line describes the CLAIM set, wh
 Classified NEAR-MISS rather than HOT and the disagreement is recorded rather than settled by assertion. Under LW's wording 'feeds a count' is HOT; this figure is displayed and never compared, reaching no seen set, no content key and no withdrawal baseline. The one-line fix is the same either way, so nothing turned on the label.
 STATED GAPS, because a review that does not name them is silence with a signature: tests/ not swept although pytest runs per commit; .claude/commands/ and agents/ unread; no hook run end to end, so every reachability claim is STATIC; dynamic dispatch not ruled out; the two vendored trees unswept.
 One sweep returned a false clean negative mid-task when a backtick inside a double-quoted bash pattern became command substitution. Caught and corrected before use - the same class as this repository's grep -iF crash, where an empty result is a claim about the TOOL.
-
-### LL-0271 - 2026-09-20 - CORRECTION to LL-0269 - the harness project directories named after our own scratchpad paths are FIVE, not six, and CS was right
-
-**Evidence:**
-- Re-measured by enumerating ~/.claude/projects/ directly on 2026-09-20: 32 project directories in total, of which SIX carry the string Lanternlight. One of those six is C--Lanternlight, this repository's own legitimate project identity and not a scratchpad artifact. The remaining FIVE are the scratchpad-derived ones and are exactly the five named suffixes - -e2e-clone, -e2e-worktree, -probe-clone, -probe-space-clone, -probe-worktree. The bare ...-<session>-scratchpad entry is not there.
-- LL-0269 and ROADMAP.md OPS-96 row 4 both say SIX. CS's sweep note of 2026-09-19 1430 said FIVE. CS was right and this project was wrong.
-- WITHDRAWN ON THE CHANNEL, not corrected quietly at home: 2026-09-20-1230-from-LL-CORRECTION-... delivered to CS, LW, RC, RSC and SS, none failed. LL-0244 requires that a figure another tree may be designing against is withdrawn in a note.
-- ROADMAP.md OPS-96 carries a dated correction section stating the same thing.
-
-The error has a repeatable shape worth naming: a count of 'directories named after our own scratchpad paths' that swept in the directory named after the REPOSITORY. Both match a grep for the project name; only one is the artifact being counted.
-NOT claimed: that the sixth never existed. This is a measurement of today's disk. It could have been miscounted on 2026-09-19 or removed since, and nothing available separates those. Asserting either would repeat the overreach that produced the wrong number.
-Nothing else in the sweep report is affected. The cause, the fix and the acceptance criterion stand; five artifacts prove the practice as well as six would have.
-This entry corrects LL-0269 rather than editing it. The ledger is append-only.
-
-### LL-0270 - 2026-09-20 - OPS-91 - the operator ruled VENDOR, and Amberstone's docs/CHANNEL.md is in the tree byte-identical at the digest its owner published
-
-**Evidence:**
-- third_party/rc_channel/docs/CHANNEL.md, 20633 bytes, sha256 899f6eb957cc26ee25993d83d65d8ca291841fe4eec24a48f729c2dc005f4c6b - equal to the value RC published on 2026-09-15, checked BEFORE a byte was copied.
-- Fetched ANONYMOUSLY from the public remote at the commit RC named, 6e3c1c752, which is the route RC's own note invited. No sibling TREE was read, so the standalone rule is untouched: a public remote is not a checkout on this machine. The HTTP 200 to a credential-less reader is also this project's own measurement of the PUBLIC claim, which is stronger than a sibling asserting it.
-- LICENSE at the same commit fetched and read: Apache License 2.0, 219 lines, with a SCOPE OF THIS LICENSE block putting authored documentation - 'the Markdown that describes them' - inside the grant, and a carve-out only for third-party data under data/. The file is documentation outside data/.
-- The copyright LINE was read rather than the license NAME, because a LICENSE can name nobody: two copyright lines, both RENDERED, each with a year and a non-empty holder and no unfilled template. The holder is NOT written into this repository as a literal - it is the operator's git identity.
-- The 2026-09-07 three-way licence contradiction was measured on the half that could have poisoned the copy rather than accepted as resolved on RC's word: Share/LICENSE.md returns HTTP 404 at that commit.
-- Copied with shutil.copyfile - byte level, never Path.write_text, which on Windows turns LF into CRLF while read_text hides it.
-- ONE digest recorded, where third_party/lw_write_tracer records two, and the difference was measured: zero CRLF pairs, zero bare CR, zero non-ASCII bytes, and .gitattributes stores *.md as LF, so disk, git blob and what RC published are the same 20633 bytes.
-- third_party/rc_channel/NOTICE.md carries the Apache-2.0 section 4(b) attribution and the statement of changes, which is that NOTHING was changed - the location differs from upstream and not one byte does.
-- tests/test_vendored_channel_md.py: 4 failed before the file existed. Then four mutations, four reds, four restores to green - a one-character heading edit (1 failed), a whole-file CRLF rewrite (2 failed, the line-ending assertion firing separately so a text-mode copy reports as what it is), the NOTICE naming an unpinned digest (1 failed), and the NOTICE losing its statement of changes (1 failed).
-- ops/lanes.py gained a row for the new test module, for the same reason the write tracer's has one: third_party/** already owns the vendored tree, but a test module under tests/ matches no other glob and was reported as an unowned file by tests/test_lanes.py.
-
-THE ONE ASYMMETRY governed this item for four days: declining was always a session decision, adopting is an operator ruling that no grant of authority reaches. Criteria 1 and 2 were MET on 2026-09-16 and the item still could not move. What unblocked it was a sentence, not a measurement.
-The cost of the original refusal is now paid off rather than argued away. This project held NO copy and NO pin rather than a private near-copy that would look like agreement without being it; it now pins the same digest the channel agrees on.
-Criterion 4 - the seven portable assertions as OUR OWN test module - is the remainder. RC's gate module is NOT vendored under any answer, because RC states it hard-imports RC-only tooling.
 

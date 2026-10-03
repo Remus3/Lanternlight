@@ -8,11 +8,42 @@ reordered or reflowed: this file is a contiguous TAIL of the original
 document, verbatim, still newest-first within itself. The live ledger
 continues to hold the newest entries and points here for the rest.
 
-Entries in this archive: 269.
-Newest archived: LL-0269 - 2026-09-19 - The machine-wide stray-work sweep ran read-only and OPS-96 closed the four findings that were ours: this tree's working copy was clean apart from two EMPTY orphans that only one of four git commands can see, the largest stray tree on the box is ours and is KEEP not PRUNE, three drive-root artifacts turned out to be one path bug - and then a refutation pass overturned THREE of the fixes, two of them guards that were green and proved nothing and one a design decision defended in prose while doing damage the prose never considered
+Entries in this archive: 271.
+Newest archived: LL-0271 - 2026-09-20 - CORRECTION to LL-0269 - the harness project directories named after our own scratchpad paths are FIVE, not six, and CS was right
 Oldest archived: LL-0001 - 2026-08-09 - Repository scaffold and autonomy stack
 
 ---
+
+### LL-0271 - 2026-09-20 - CORRECTION to LL-0269 - the harness project directories named after our own scratchpad paths are FIVE, not six, and CS was right
+
+**Evidence:**
+- Re-measured by enumerating ~/.claude/projects/ directly on 2026-09-20: 32 project directories in total, of which SIX carry the string Lanternlight. One of those six is C--Lanternlight, this repository's own legitimate project identity and not a scratchpad artifact. The remaining FIVE are the scratchpad-derived ones and are exactly the five named suffixes - -e2e-clone, -e2e-worktree, -probe-clone, -probe-space-clone, -probe-worktree. The bare ...-<session>-scratchpad entry is not there.
+- LL-0269 and ROADMAP.md OPS-96 row 4 both say SIX. CS's sweep note of 2026-09-19 1430 said FIVE. CS was right and this project was wrong.
+- WITHDRAWN ON THE CHANNEL, not corrected quietly at home: 2026-09-20-1230-from-LL-CORRECTION-... delivered to CS, LW, RC, RSC and SS, none failed. LL-0244 requires that a figure another tree may be designing against is withdrawn in a note.
+- ROADMAP.md OPS-96 carries a dated correction section stating the same thing.
+
+The error has a repeatable shape worth naming: a count of 'directories named after our own scratchpad paths' that swept in the directory named after the REPOSITORY. Both match a grep for the project name; only one is the artifact being counted.
+NOT claimed: that the sixth never existed. This is a measurement of today's disk. It could have been miscounted on 2026-09-19 or removed since, and nothing available separates those. Asserting either would repeat the overreach that produced the wrong number.
+Nothing else in the sweep report is affected. The cause, the fix and the acceptance criterion stand; five artifacts prove the practice as well as six would have.
+This entry corrects LL-0269 rather than editing it. The ledger is append-only.
+
+### LL-0270 - 2026-09-20 - OPS-91 - the operator ruled VENDOR, and Amberstone's docs/CHANNEL.md is in the tree byte-identical at the digest its owner published
+
+**Evidence:**
+- third_party/rc_channel/docs/CHANNEL.md, 20633 bytes, sha256 899f6eb957cc26ee25993d83d65d8ca291841fe4eec24a48f729c2dc005f4c6b - equal to the value RC published on 2026-09-15, checked BEFORE a byte was copied.
+- Fetched ANONYMOUSLY from the public remote at the commit RC named, 6e3c1c752, which is the route RC's own note invited. No sibling TREE was read, so the standalone rule is untouched: a public remote is not a checkout on this machine. The HTTP 200 to a credential-less reader is also this project's own measurement of the PUBLIC claim, which is stronger than a sibling asserting it.
+- LICENSE at the same commit fetched and read: Apache License 2.0, 219 lines, with a SCOPE OF THIS LICENSE block putting authored documentation - 'the Markdown that describes them' - inside the grant, and a carve-out only for third-party data under data/. The file is documentation outside data/.
+- The copyright LINE was read rather than the license NAME, because a LICENSE can name nobody: two copyright lines, both RENDERED, each with a year and a non-empty holder and no unfilled template. The holder is NOT written into this repository as a literal - it is the operator's git identity.
+- The 2026-09-07 three-way licence contradiction was measured on the half that could have poisoned the copy rather than accepted as resolved on RC's word: Share/LICENSE.md returns HTTP 404 at that commit.
+- Copied with shutil.copyfile - byte level, never Path.write_text, which on Windows turns LF into CRLF while read_text hides it.
+- ONE digest recorded, where third_party/lw_write_tracer records two, and the difference was measured: zero CRLF pairs, zero bare CR, zero non-ASCII bytes, and .gitattributes stores *.md as LF, so disk, git blob and what RC published are the same 20633 bytes.
+- third_party/rc_channel/NOTICE.md carries the Apache-2.0 section 4(b) attribution and the statement of changes, which is that NOTHING was changed - the location differs from upstream and not one byte does.
+- tests/test_vendored_channel_md.py: 4 failed before the file existed. Then four mutations, four reds, four restores to green - a one-character heading edit (1 failed), a whole-file CRLF rewrite (2 failed, the line-ending assertion firing separately so a text-mode copy reports as what it is), the NOTICE naming an unpinned digest (1 failed), and the NOTICE losing its statement of changes (1 failed).
+- ops/lanes.py gained a row for the new test module, for the same reason the write tracer's has one: third_party/** already owns the vendored tree, but a test module under tests/ matches no other glob and was reported as an unowned file by tests/test_lanes.py.
+
+THE ONE ASYMMETRY governed this item for four days: declining was always a session decision, adopting is an operator ruling that no grant of authority reaches. Criteria 1 and 2 were MET on 2026-09-16 and the item still could not move. What unblocked it was a sentence, not a measurement.
+The cost of the original refusal is now paid off rather than argued away. This project held NO copy and NO pin rather than a private near-copy that would look like agreement without being it; it now pins the same digest the channel agrees on.
+Criterion 4 - the seven portable assertions as OUR OWN test module - is the remainder. RC's gate module is NOT vendored under any answer, because RC states it hard-imports RC-only tooling.
 
 ### LL-0269 - 2026-09-19 - The machine-wide stray-work sweep ran read-only and OPS-96 closed the four findings that were ours: this tree's working copy was clean apart from two EMPTY orphans that only one of four git commands can see, the largest stray tree on the box is ours and is KEEP not PRUNE, three drive-root artifacts turned out to be one path bug - and then a refutation pass overturned THREE of the fixes, two of them guards that were green and proved nothing and one a design decision defended in prose while doing damage the prose never considered
 

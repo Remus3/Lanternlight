@@ -105,19 +105,25 @@ class DamageHit:
     time_stamp: float
     name_id: int | None = None
     key: str = ""
-    child_death_causer: bool = False
+    child_death_causer: bool | None = None
 
 
 @dataclass(frozen=True)
 class DamageRecord:
-    """One top-level entry - all damage from one source against one target."""
+    """One top-level entry - all damage from one source against one target.
 
-    monster_guid: str
+    ``monster_guid`` is ``None`` when the game wrote JSON null; it is never the
+    string ``'None'``. ``death_causer`` is ``None`` when the flag was absent and
+    a bool only when the game wrote one - an unwritten flag is not a measured
+    False. ``OPS-112``.
+    """
+
+    monster_guid: str | None
     hits: tuple[DamageHit, ...]
     source_type: int | None = None
     monster_id: int | None = None
     total_damage: float | None = None
-    death_causer: bool = False
+    death_causer: bool | None = None
 
     @property
     def source(self) -> str | None:
@@ -129,18 +135,18 @@ class DamageRecord:
 class ObservedHit:
     """One deduplicated hit, carrying the record context it was seen in."""
 
-    monster_guid: str
+    monster_guid: str | None
     time_stamp: float
     damage_value: float
     monster_id: int | None = None
     source_type: int | None = None
     name_id: int | None = None
     key: str = ""
-    death_causer: bool = False
-    child_death_causer: bool = False
+    death_causer: bool | None = None
+    child_death_causer: bool | None = None
 
     @property
-    def identity(self) -> tuple[str, float, float]:
+    def identity(self) -> tuple[str | None, float, float]:
         """The deduplication key.
 
         Value alone is wrong: damage here is deterministic, and three values
@@ -239,6 +245,42 @@ def _require(mapping: dict[str, Any], key: str, where: str) -> Any:
     return mapping[key]
 
 
+def _flag(mapping: dict[str, Any], key: str, where: str) -> bool | None:
+    """Return a boolean flag as written, or None when the game did not write it.
+
+    ``OPS-112``. This was ``bool(raw.get(key, False))``, which reported an
+    ABSENT flag as a measured False and would also have read the string
+    ``"false"`` as True. Absence is omission; anything present that is not a
+    JSON boolean - null included - is not the game's shape and is refused.
+    """
+    if key not in mapping:
+        return None
+    value = mapping[key]
+    if not isinstance(value, bool):
+        raise MalformedDamageSet(
+            f"{where}: {key!r} is {value!r}, not a JSON boolean. Refused rather "
+            f"than coerced - bool() of it would invent a measurement."
+        )
+    return value
+
+
+def _guid(mapping: dict[str, Any], where: str) -> str | None:
+    """Return ``monsterGuid``: the string, None for JSON null, refused if absent.
+
+    ``OPS-112``. ``str()`` turned a null into the four-character id ``'None'``
+    and an absent key into ``''``. A null is something the game wrote and reads
+    as None. An absent key is refused for the same reason as a missing
+    ``timeStamp``: the guid is part of the deduplication key, so a default
+    merges distinct hits.
+    """
+    value = _require(mapping, "monsterGuid", where)
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise MalformedDamageSet(f"{where}: monsterGuid is {type(value).__name__}, not a string")
+    return value
+
+
 def _hit(raw: Any, index: int) -> DamageHit:
     if not isinstance(raw, dict):
         raise MalformedDamageSet(f"damageChildList[{index}] is {type(raw).__name__}, not an object")
@@ -248,7 +290,7 @@ def _hit(raw: Any, index: int) -> DamageHit:
         time_stamp=float(_require(raw, "timeStamp", where)),
         name_id=raw.get("nameId"),
         key=raw.get("Key", "") or "",
-        child_death_causer=bool(raw.get("bChildDeathCauser", False)),
+        child_death_causer=_flag(raw, "bChildDeathCauser", where),
     )
 
 
@@ -280,12 +322,12 @@ def parse_damage_set(payload: str) -> tuple[DamageRecord, ...]:
             raise MalformedDamageSet(f"record {index}: damageChildList is not an array")
         records.append(
             DamageRecord(
-                monster_guid=str(raw.get("monsterGuid", "")),
+                monster_guid=_guid(raw, f"record {index}"),
                 hits=tuple(_hit(child, position) for position, child in enumerate(children)),
                 source_type=raw.get("sourceType"),
                 monster_id=raw.get("monsterId"),
                 total_damage=raw.get("totalDamage"),
-                death_causer=bool(raw.get("bDeathCauser", False)),
+                death_causer=_flag(raw, "bDeathCauser", f"record {index}"),
             )
         )
     return tuple(records)
@@ -335,7 +377,7 @@ class DamageSeries:
     """
 
     def __init__(self) -> None:
-        self._hits: dict[tuple[str, float, float], ObservedHit] = {}
+        self._hits: dict[tuple[str | None, float, float], ObservedHit] = {}
         self.readings = 0
         self.generations = 0
         self.generations_with_payload = 0
@@ -409,8 +451,11 @@ class DamageSeries:
         ids, and one damage value repeated on two different instances of the
         same type, which is the strongest evidence the numbers are computed
         rather than rolled.
+
+        A null guid is not an instance, exactly as a null id is not an id -
+        ``OPS-112``.
         """
-        return len({hit.monster_guid for hit in self._hits.values()})
+        return len({h.monster_guid for h in self._hits.values() if h.monster_guid is not None})
 
     def __len__(self) -> int:
         return len(self._hits)
