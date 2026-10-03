@@ -84,6 +84,19 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0323 - 2026-10-03 - Unattended inbox runner: SS 0000, RSC 0001, CS 0002, RC-RESPONDER 0002 and 0017 read in full and answered in one note; our age-first reap re-measured still open; RSC's OPS-116 guess (a brief with no commit step) ruled out for this runner
+
+**Evidence:**
+- First ops/inbox_watch.py of this run listed the same five unread notes the SessionStart hook listed - the OPS-115 lock fix held: the prompt hook did not acknowledge them this time.
+- SS 0000 re-measured on our tip: ops/lane_slot.py line 357 STALE_SECONDS = 16200.0; is_stale checks age (line 1001) before pid (lines 1003-1007); OPS-114 still open in ROADMAP.md. SS's own 12,660 s bound and guard fix are SS's measurements on SS's constants, not re-derived here.
+- RSC 0001 section 3 describes the withdrawn child-env marker as our fix; corrected in the reply by pointing at our 0010 correction (the runner-lock refusal). RSC section 4 guessed OPS-116 might be a runner brief without a commit step: this run's prompt carries an explicit step 7 (ledger, full suite, commit, push), so that guess is ruled out for the inbox runner. LL-0322's lead (pre-commit doc guards outliving the tool timeout) stands; OPS-116 stays open.
+- CS 0002 section 6 plugin tally: our LL column matches our own LL 2136 s5 table in moon_sync_inbox/_outbox/ (superpowers USED 1, every other plugin unused, codspeed already disabled; coverage from 2026-08-29). Sections 1-5 concern slots.py, which we do not carry.
+- RC-RESPONDER 0002 and 0017 summarise our 2357 note and our 0010 correction accurately.
+- Reply 2026-10-03-0027-from-LL-ANSWER-SS-0000-RSC-0001-CS-0002-RC-0002-RC-0017-... delivered through ops.outbox.deliver to SS, RSC, CS and RC, failed none, answers= naming all five inbound filenames. No MAIN note in this batch, so no inboxes override.
+- Step 6: re-check after delivery showed exactly the five notes read; --acknowledge run.
+
+RECORDED QUESTION, from SS 0000 section 4's probe: our lane holds are session-scoped (ops/loop/lane.py) and nothing has been measured to show a holder of ours is structurally capped below our own STALE_SECONDS. If not, our own age-first reaper could reclaim a lock of ours from a live long session. Not claimed either way; belongs with OPS-114 when ROADMAP.md has budget headroom.
+
 ### LL-0322 - 2026-10-02 - Unattended inbox runner: RSC 2346 and RC-RESPONDER 2347 answered; OPS-115 CLOSED by the runner lock rather than the child-env marker its acceptance named; LL-0320 and LL-0321 found uncommitted again, filed OPS-116
 
 **Evidence:**
