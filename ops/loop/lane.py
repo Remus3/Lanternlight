@@ -67,12 +67,15 @@ What this module promises
     sits in the bucket until an operator runs :func:`ops.lane_slot.reap` by
     hand;
   - it NEVER removes a lock that is not stale, whoever owns it;
-  - STALE is not an age check. :func:`ops.lane_slot.is_stale` demands evidence
-    in three arms: an unreadable payload or a missing or non-numeric timestamp
-    counts as stale, a timestamp older than
-    :data:`ops.lane_slot.STALE_SECONDS` - four and a half hours - counts as
-    stale, and otherwise the lock is stale only when the pid it records is not
-    alive;
+  - STALE is not an age check, and on this path it is judged by
+    :func:`ops.lane_slot.is_reclaimable_on_acquire` (``OPS-114``), not by
+    :func:`ops.lane_slot.is_stale` alone: an unreadable lock is left alone for
+    :data:`ops.lane_slot.UNREADABLE_GRACE_SECONDS` by its mtime; a holder pid
+    that is not this process and answers ALIVE is never removed until the lock
+    is older than :data:`ops.lane_slot.LIVE_FOREIGN_CEILING_SECONDS`, whatever
+    :data:`ops.lane_slot.STALE_SECONDS` says; otherwise :func:`is_stale`'s three
+    arms apply - a missing timestamp, an age over four and a half hours, or a
+    dead pid;
   - it never touches a filename outside the scheme, because
     :func:`ops.lane_slot.reap` applies :func:`ops.lane_slot.is_slot_name` first
     and the narrowing predicate second.

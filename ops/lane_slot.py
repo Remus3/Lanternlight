@@ -222,6 +222,8 @@ __all__ = [
     "STALE_SECONDS",
     "SURPLUS_ENV_VAR",
     "SURPLUS_WIDTH",
+    "UNREADABLE_GRACE_SECONDS",
+    "LIVE_FOREIGN_CEILING_SECONDS",
     "UnknownRepoKey",
     "acquire_lane",
     "bucket_slot_order",
@@ -234,6 +236,7 @@ __all__ = [
     "is_contention_opt_out",
     "is_detectable_reserved_name",
     "is_ours_to_reclaim",
+    "is_reclaimable_on_acquire",
     "is_reserved_name",
     "is_slot_name",
     "is_stale",
@@ -355,6 +358,23 @@ OPT_OUT_STATUS = "OPTED OUT - surplus width 0, this session contends for no lane
 #: siblings' governor uses, so a lock this repository leaves behind is reclaimed
 #: on the same schedule a sibling would apply to it.
 STALE_SECONDS = 16200.0
+
+#: How long an UNREADABLE lock is left alone by the acquire path - ``OPS-114``.
+#: A lock is unreadable in the window between a participant's exclusive create
+#: and its payload write; our own :func:`_claim` has that window, so a sibling's
+#: very likely does too. Measured from the file's mtime, the only clock an
+#: unreadable lock carries. The explicit :func:`reap` does not use it.
+UNREADABLE_GRACE_SECONDS = 60.0
+
+#: The age past which a LIVE foreign holder stops protecting its lock on the
+#: acquire path - ``OPS-114``. Liveness cannot tell a running sibling from an
+#: unrelated process that RECYCLED a dead holder's pid, and access-denied reads
+#: as alive by design, so without a ceiling either case would block that slot
+#: from every automatic reclaim forever - our own reserved floor included,
+#: since a lock left by an EARLIER LL process carries a pid that is not ours.
+#: Three times :data:`STALE_SECONDS`: above the 2 x 16,200 s worst case a live
+#: sibling surplus holder reaches under the frozen candidate (``LL-0316``).
+LIVE_FOREIGN_CEILING_SECONDS = 3 * STALE_SECONDS
 
 #: Set this to point the governor at a different bucket - a private one for a
 #: test, or a relocated shared one. It wins over every default below.
@@ -1029,8 +1049,53 @@ def holders(root: Path | str) -> dict[str, dict]:
     return report
 
 
+def is_reclaimable_on_acquire(
+    payload: Mapping | None,
+    *,
+    mtime: float | None,
+    now: float | None = None,
+    pid_alive=None,
+    own_pid: int | None = None,
+) -> bool:
+    """Whether the ACQUIRE path may remove this lock - ``OPS-114`` item 1.
+
+    Liveness BEFORE age for anyone but us. :func:`is_stale` consults the age
+    arm first, which is right for an orphan leaked by THIS process - its pid
+    stays alive across the leak - and wrong for a sibling: under the frozen
+    candidate of a multiple of 2.0 a live sibling surplus holder can be older
+    than :data:`STALE_SECONDS`, and the old order deleted its lock and handed
+    us its lane while it still ran. So:
+
+    * unreadable: reclaimable only once its mtime is older than
+      :data:`UNREADABLE_GRACE_SECONDS`; an unknown mtime is NOT old;
+    * a pid that is not this process and answers alive: not reclaimable until
+      the lock is older than :data:`LIVE_FOREIGN_CEILING_SECONDS` - a live
+      foreign holder's leak is its own to clear, and leaving it costs us one
+      surplus slot rather than costing it a running lane. The ceiling exists
+      because a RECYCLED pid and an access-denied probe both answer alive; past
+      it the age arm wins again, so neither can block a slot forever;
+    * otherwise exactly :func:`is_stale`.
+    """
+    reference = time.time() if now is None else now
+    if not isinstance(payload, Mapping):
+        return mtime is not None and reference - mtime > UNREADABLE_GRACE_SECONDS
+    me = os.getpid() if own_pid is None else own_pid
+    raw_pid = payload.get("pid")
+    raw_ts = payload.get("ts")
+    young = (
+        isinstance(raw_ts, (int, float)) and not isinstance(raw_ts, bool)
+        and reference - float(raw_ts) <= LIVE_FOREIGN_CEILING_SECONDS
+    )
+    if young and isinstance(raw_pid, int) and not isinstance(raw_pid, bool) and raw_pid != me:
+        alive = _pid_alive if pid_alive is None else pid_alive
+        if alive(raw_pid):
+            return False
+    return is_stale(payload, now=reference, pid_alive=pid_alive)
+
+
 def reap(
-    root: Path | str, *, now: float | None = None, pid_alive=None, only=None
+    root: Path | str, *, now: float | None = None, pid_alive=None, only=None,
+    _acquire_rule: bool = False,
 ) -> list[str]:
     """Remove stale locks in BOTH naming schemes. Returns the names removed.
 
@@ -1058,7 +1123,16 @@ def reap(
         if only is not None and not only(entry.name):
             continue
         payload = _read_payload(entry)
-        if not is_stale(payload, now=now, pid_alive=pid_alive):
+        if _acquire_rule:
+            try:
+                mtime: float | None = entry.stat().st_mtime
+            except OSError:
+                mtime = None
+            if not is_reclaimable_on_acquire(
+                payload, mtime=mtime, now=now, pid_alive=pid_alive
+            ):
+                continue
+        elif not is_stale(payload, now=now, pid_alive=pid_alive):
             continue
         try:
             entry.unlink()
@@ -1078,11 +1152,12 @@ def reap_for_acquire(
     reclaimed by nothing and each one silently lowered our real concurrency by
     one while presenting as an ordinary busy answer.
 
-    It differs from :func:`reap` in exactly one way - it never removes another
-    participant's ``reserved-<key>.lock``. See :func:`is_ours_to_reclaim` for
-    why, and for the blind spot that choice accepts. Everything else, including
-    the narrow :func:`is_slot_name` alphabet and both arms of
-    :func:`is_stale`, is unchanged.
+    It differs from :func:`reap` in two ways - it never removes another
+    participant's ``reserved-<key>.lock``, and since ``OPS-114`` it judges each
+    lock by :func:`is_reclaimable_on_acquire` rather than :func:`is_stale`, so a
+    live foreign holder is never removed whatever its age. See
+    :func:`is_ours_to_reclaim` for why the first, and for the blind spot that
+    choice accepts. The narrow :func:`is_slot_name` alphabet is unchanged.
 
     Answering ``[]`` on a bucket it cannot list is deliberate and is inherited
     from :func:`reap`. Reclaiming is opportunistic; deciding whether the bucket
@@ -1095,6 +1170,7 @@ def reap_for_acquire(
         now=now,
         pid_alive=pid_alive,
         only=lambda name: is_ours_to_reclaim(name, key),
+        _acquire_rule=True,
     )
 
 

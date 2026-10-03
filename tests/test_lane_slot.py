@@ -1908,3 +1908,104 @@ class TestSubstrateJoinedTheBucketSurplusOnly:
             "the listing reports the CREATOR's spelling, which is why a "
             "case-sensitive detector cannot be relied on here"
         )
+
+
+class TestALiveForeignHolderIsNeverReapedOnTheAcquirePath:
+    """``OPS-114`` item 1, disclosed to the channel in ``LL-0316``.
+
+    :func:`ops.lane_slot.is_stale` consults the AGE arm before the pid, which
+    is right for the explicit :func:`reap` and for an orphan leaked by THIS
+    process, whose pid stays alive across the leak. On the ACQUIRE path it was
+    wrong: a sibling's live surplus holder older than :data:`STALE_SECONDS` -
+    possible under the frozen candidate of a multiple of 2.0 - was deleted by
+    our acquire and its lane handed to us while it still ran. On the acquire
+    path a live pid that is not ours now wins over any age, and an unreadable
+    lock gets a grace window, because the window between a sibling's exclusive
+    create and its payload write is exactly when it is unreadable.
+    """
+
+    def test_a_live_foreign_holder_past_the_age_limit_survives_our_acquire(
+        self, bucket: Path
+    ):
+        # A real, live process that is not us: a child we start and stop
+        # ourselves. os.getppid() was used first and is dead when pytest runs
+        # as an orphan - the refutation pass of 2026-10-03 measured it red.
+        child = subprocess.Popen(
+            [sys.executable, "-c", "import time; time.sleep(120)"],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        try:
+            self._live_foreign(bucket, child.pid)
+        finally:
+            child.kill()
+            child.wait(timeout=30)
+
+    def _live_foreign(self, bucket: Path, foreign: int) -> None:
+        assert foreign > 0 and foreign != os.getpid()
+        lock = _plant_lock(
+            bucket, "0.lock", age=lane_slot.STALE_SECONDS + 3600, pid=foreign
+        )
+        assert lane_slot.reap_for_acquire(bucket, "ll") == []
+        assert lock.exists()
+        held = lane_slot.acquire_lane(
+            root=bucket, repo="C:\\Lanternlight", run_id="r", cycle=0, surplus=2
+        )
+        try:
+            assert held is None or held.name != "0.lock"
+            assert lock.exists(), "our acquire deleted a LIVE sibling's lock"
+        finally:
+            if held is not None:
+                lane_slot.release(held, retries=1, backoff=0.0)
+
+    def test_the_same_decision_with_liveness_injected(self, bucket: Path):
+        lock = _plant_lock(
+            bucket, "1.lock", age=lane_slot.STALE_SECONDS * 2, pid=os.getpid() + 1
+        )
+        assert lane_slot.reap_for_acquire(bucket, "ll", pid_alive=lambda p: True) == []
+        assert lock.exists()
+
+    def test_a_dead_foreign_holder_past_the_age_limit_is_still_reclaimed(
+        self, bucket: Path
+    ):
+        _plant_lock(bucket, "0.lock", age=lane_slot.STALE_SECONDS + 60, pid=os.getpid() + 1)
+        assert lane_slot.reap_for_acquire(
+            bucket, "ll", pid_alive=lambda p: False
+        ) == ["0.lock"]
+
+    def test_an_orphan_of_this_very_process_is_still_reclaimed_by_age(
+        self, bucket: Path
+    ):
+        _plant_lock(bucket, "0.lock", age=lane_slot.STALE_SECONDS + 60, pid=os.getpid())
+        assert lane_slot.reap_for_acquire(bucket, "ll") == ["0.lock"]
+
+    def test_a_freshly_created_unreadable_lock_survives_our_acquire(self, bucket: Path):
+        lock = bucket / "0.lock"
+        lock.write_text("", encoding="utf-8")
+        assert lane_slot.reap_for_acquire(bucket, "ll") == []
+        assert lock.exists()
+
+    def test_an_old_unreadable_lock_is_still_reclaimed(self, bucket: Path):
+        lock = bucket / "0.lock"
+        lock.write_text("{not json", encoding="utf-8")
+        old = time.time() - lane_slot.UNREADABLE_GRACE_SECONDS - 60
+        os.utime(lock, (old, old))
+        assert lane_slot.reap_for_acquire(bucket, "ll") == ["0.lock"]
+
+    def test_the_explicit_reap_contract_is_unchanged(self, bucket: Path):
+        _plant_lock(bucket, "0.lock", age=lane_slot.STALE_SECONDS + 60, pid=os.getpid() + 1)
+        assert lane_slot.reap(bucket, pid_alive=lambda p: True) == ["0.lock"]
+
+    def test_a_live_pid_past_the_ceiling_is_reclaimed(self, bucket: Path):
+        """A recycled pid or an access-denied probe answers alive; neither may
+        block a slot forever - our own floor included."""
+        _plant_lock(
+            bucket, "reserved-ll.lock",
+            age=lane_slot.LIVE_FOREIGN_CEILING_SECONDS + 60, pid=os.getpid() + 1,
+        )
+        assert lane_slot.reap_for_acquire(
+            bucket, "ll", pid_alive=lambda p: True
+        ) == ["reserved-ll.lock"]
+
+    def test_the_ceiling_is_above_the_frozen_candidate_worst_case(self):
+        assert lane_slot.LIVE_FOREIGN_CEILING_SECONDS > 2 * lane_slot.STALE_SECONDS

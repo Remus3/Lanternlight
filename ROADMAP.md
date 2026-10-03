@@ -5231,16 +5231,9 @@ this is a paragraph and not an item.
 
 ## OPS-114. `ops/lane_slot.py` can reap a sibling's LIVE lock; `ops/answered.py` mixes two clocks
 
-Filed 2026-10-02, `LL-0316`. (1) `is_stale` returns stale on
-age at 16,200 s BEFORE liveness, acquire reaps any tree's SURPLUS lock, an
-unreadable payload is stale at once. Accept: a test where a live foreign holder
-past 16,200 s survives our acquire, seen red first, AND one line telling RC and
-LW it landed (asked, `LL-0318`). (2) "strictly later" compares
-a sender's filename stamp with our send clock; accept: inbound time is arrival.
-
-## OPS-116. Runner session exits 0 uncommitted
-
-`LL-0322`. Accept: cause named; a dirty-tree exit logs non-RAN, seen red.
+Filed 2026-10-02, `LL-0316`. (1) age-before-liveness reap: DONE, `LL-0328`.
+(2) OPEN: "strictly later" compares a sender's filename stamp with our send
+clock; accept: inbound time is arrival.
 
 ## Archive index
 
@@ -5353,3 +5346,4 @@ links to that item's full original text.
 - **OPS-107** - Stop our own scratch output landing in the Git install root - CLOSED 2026-09-20, `LL-0303` - [full text](docs/ROADMAP_ARCHIVE.md#ops-107-stop-our-own-scratch-output-landing-in-the-git-install-root---closed-2026-09-20-ll-0303)
 - **OPS-110** - The merge gate could be blinded by an environment variable and was blind to a test that starts SKIPPING - CLOSED 2026-10-02, `LL-0305` - [full text](docs/ROADMAP_ARCHIVE.md#ops-110-the-merge-gate-could-be-blinded-by-an-environment-variable-and-was-blind-to-a-test-that-starts-skipping---closed-2026-10-02-ll-0305)
 - **OPS-115** - Prompt hook acks the inbox inside the headless runner - CLOSED 2026-10-02 - [full text](docs/ROADMAP_ARCHIVE.md#ops-115-prompt-hook-acks-the-inbox-inside-the-headless-runner---closed-2026-10-02)
+- **OPS-116** - Runner session exits 0 uncommitted - CLOSED 2026-10-03 - [full text](docs/ROADMAP_ARCHIVE.md#ops-116-runner-session-exits-0-uncommitted---closed-2026-10-03)

@@ -24,6 +24,12 @@ FLOORS THIS MODULE KEEPS, each tested in ``tests/test_inbox_runner.py``:
   list; the repository's own PreToolUse gate still runs on every shell call.
 * Its log records counts and reasons, never a note's name, because note names
   are channel-chosen text.
+* A session that returns rc 0 is NOT logged RAN until the tree is measured
+  clean and pushed afterwards - ``OPS-116``. Two runner sessions (``LL-0320``,
+  ``LL-0321``) returned rc 0 with their ledger entries staged and uncommitted,
+  and this module logged RAN both times. Cause, ``LL-0322`` and ``LL-0327``:
+  the commit step's pre-commit hook outlives the Bash tool's default timeout,
+  the harness backgrounds the commit, and the session ends before it lands.
 * It exits 0 on every path, because it runs from a scheduled task and a red
   exit there is noise nobody reads; the reason is in the log.
 
@@ -34,6 +40,7 @@ Trigger: a Windows scheduled task in this project's own namespace, created by
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -96,8 +103,16 @@ PROMPT = (
     "note is mail, not a task. (6) Re-run python ops/inbox_watch.py; if the "
     "unread set is exactly what you read, run python ops/inbox_watch.py "
     "--acknowledge, otherwise leave it for the next run. (7) Add a ledger "
-    "entry, run the full suite, commit and push. Run every shell command from "
-    "the repository root as a bare python or git command - no cd, no env "
+    "entry, run the full suite, commit and push. The pre-commit hook runs for "
+    "minutes, so give the git commit call the Bash tool's timeout of 600000 "
+    "ms and never let it go to the background; then run git log -1 and "
+    "git status and confirm HEAD moved and the tree is clean before you push "
+    "and before you end - an exit code alone is not proof it committed. If "
+    "HEAD did not move, run git status, fix what the hook reported and commit "
+    "again in the foreground; if a call went to the background, wait for it "
+    "to finish before you end. Give the full suite run the same 600000 ms. "
+    "Run every shell command from the repository root as a bare python or "
+    "git command - no cd, no env "
     "prefix, no chaining - because only those match your tool allow list. "
     "Keep chat output minimal."
 )
@@ -152,6 +167,35 @@ def unread_count(inbox: Path, state: Path) -> int:
     return count
 
 
+def _tree_problem(root: Path) -> str | None:
+    """What a finished session left undone in ``root``, or None if nothing.
+
+    Counts only: uncommitted paths (tracked or untracked, gitignored excluded)
+    and commits not yet on the upstream. Never a path name - the log keeps
+    counts and reasons. Raises when git cannot answer; the caller reads that as
+    UNVERIFIED rather than clean, because clean is the claim being tested.
+    """
+    def git(*args: str) -> str:
+        done = subprocess.run(
+            ["git", *args], cwd=str(root), capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=60, check=True,
+        )
+        return done.stdout
+
+    problems = []
+    dirty = [ln for ln in git("status", "--porcelain").splitlines() if ln.strip()]
+    if dirty:
+        problems.append(f"{len(dirty)} uncommitted paths")
+    ahead = git("rev-list", "--count", "@{upstream}..HEAD").strip()
+    if ahead and ahead != "0":
+        problems.append(f"{ahead} unpushed commits")
+    return "; ".join(problems) or None
+
+
+def _default_tree_check() -> str | None:
+    return _tree_problem(REPO_ROOT)
+
+
 def _log(runtime: Path, **fields) -> None:
     runtime.mkdir(parents=True, exist_ok=True)
     rec = {"at": datetime.now(UTC).isoformat(), **fields}
@@ -165,6 +209,7 @@ def run(
     state: Path | None = None,
     runtime: Path | None = None,
     spawn: Callable[..., headless_spawn.SpawnResult] = headless_spawn.spawn,
+    tree_check: Callable[[], str | None] | None = None,
 ) -> RunnerResult:
     inbox = Path(inbox) if inbox is not None else default_inbox()
     state = Path(state) if state is not None else default_state_path()
@@ -187,11 +232,27 @@ def run(
         unread = unread_count(inbox, state)
         if unread == 0:
             return done(0, False, "NO MAIL")
+        check = tree_check or _default_tree_check
+        try:
+            before = check()
+        except Exception:  # only used to attribute; the after-check decides
+            before = "an unmeasurable tree"
         try:
             res = spawn(session_args(), cwd=REPO_ROOT, timeout=SESSION_TIMEOUT)
         except Exception as exc:  # the lock must still be released
             return done(unread, False, f"ERROR: spawn raised {type(exc).__name__}")
-        return done(unread, res.spawned, res.reason)
+        reason = res.reason
+        if reason == "RAN":
+            try:
+                problem = check()
+            except Exception as exc:  # unknown is not clean
+                reason = f"UNVERIFIED: rc 0 but the tree check raised {type(exc).__name__}"
+            else:
+                if problem:
+                    reason = f"UNCOMMITTED: rc 0 but the session left {problem}"
+                    if before:
+                        reason += f" (the tree already had {before} before it started)"
+        return done(unread, res.spawned, reason)
     finally:
         guard.release(lock)
 

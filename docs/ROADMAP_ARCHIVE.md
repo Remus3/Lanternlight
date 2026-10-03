@@ -9,7 +9,7 @@ the original text, verbatim, in its original order, and the live roadmap
 carries a one-line stub linking to each one. If an item here turns out to
 matter again, move the section back rather than rewriting it.
 
-Sections in this archive: 105.
+Sections in this archive: 106.
 
 ---
 
@@ -12887,4 +12887,10 @@ DIFFERENT MECHANISM: an env marker breaks `tests/test_inbox_acknowledge.py`,
 which bans any environment read in `ops/inbox_watch.py`, so the hook instead
 refuses while the inbox runner's own lock, beside the seen set, is held. The
 runner holds it for the whole spawn. Mutant disabling the branch seen red.
+
+## OPS-116. Runner session exits 0 uncommitted - CLOSED 2026-10-03
+
+`LL-0322`. Accept: cause named; a dirty-tree exit logs non-RAN, seen red.
+Closed by `LL-0327`: cause named (commit hook outlives the tool timeout, commit
+backgrounded, session ends), not reproduced end to end; UNCOMMITTED logged.
 

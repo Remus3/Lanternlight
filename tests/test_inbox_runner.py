@@ -10,8 +10,16 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from ops import headless_spawn as hs, inbox_runner as ir
 from ops.inbox_watch import SCHEMA, digest_of
+
+
+@pytest.fixture(autouse=True)
+def _no_real_tree(monkeypatch):
+    """OPS-116: the default tree check runs git in THIS repository; no test may."""
+    monkeypatch.setattr(ir, "_default_tree_check", lambda: None)
 
 
 class _Spawn:
@@ -195,3 +203,104 @@ def test_main_exits_zero_even_when_run_raises(monkeypatch, tmp_path):
     assert ir.main([]) == 0
     logged = (tmp_path / "ops" / "runtime" / ir.LOG_NAME).read_text(encoding="utf-8")
     assert "ERROR" in logged
+
+
+# --- OPS-116: a session that returns rc 0 with its work uncommitted ---------
+#
+# LL-0320 and LL-0321 were each left staged-not-committed by a runner session
+# that returned rc 0, and the runner logged RAN both times. The runner must
+# measure the tree AFTER the session and refuse to call that RAN.
+
+
+def test_a_dirty_tree_after_a_clean_exit_is_not_logged_ran(tmp_path):
+    inbox, state, runtime = _setup(tmp_path, [("a.md", "x")])
+    res = ir.run(inbox=inbox, state=state, runtime=runtime, spawn=_Spawn(),
+                 tree_check=lambda: "2 uncommitted paths")
+    assert res.spawned
+    assert not res.reason.startswith("RAN"), res.reason
+    assert "UNCOMMITTED" in res.reason
+    rec = json.loads((runtime / ir.LOG_NAME).read_text(encoding="utf-8").splitlines()[-1])
+    assert not rec["reason"].startswith("RAN") and "UNCOMMITTED" in rec["reason"]
+
+
+def test_a_clean_tree_after_a_clean_exit_stays_ran(tmp_path):
+    inbox, state, runtime = _setup(tmp_path, [("a.md", "x")])
+    res = ir.run(inbox=inbox, state=state, runtime=runtime, spawn=_Spawn(),
+                 tree_check=lambda: None)
+    assert res.reason == "RAN"
+
+
+def test_the_tree_is_not_measured_when_nothing_ran(tmp_path):
+    inbox, state, runtime = _setup(tmp_path, [("a.md", "x")])
+    calls = []
+    res = ir.run(inbox=inbox, state=state, runtime=runtime,
+                 spawn=_Spawn(hs.SpawnResult(False, "REFUSED: x")),
+                 tree_check=lambda: calls.append(1) or "dirty")
+    # Measured once BEFORE the spawn, for attribution only; a non-RAN result is
+    # never re-measured or re-labelled.
+    assert calls == [1] and res.reason == "REFUSED: x"
+
+
+def test_a_tree_check_that_raises_is_not_ran(tmp_path):
+    inbox, state, runtime = _setup(tmp_path, [("a.md", "x")])
+
+    def boom():
+        raise OSError("git missing")
+
+    res = ir.run(inbox=inbox, state=state, runtime=runtime, spawn=_Spawn(),
+                 tree_check=boom)
+    assert not res.reason.startswith("RAN") and "UNVERIFIED" in res.reason
+    assert not (runtime / ir.LOCK_NAME).exists()
+
+
+def test_tree_problem_names_staged_and_unpushed_work(tmp_path):
+    """The real measurement, against a throwaway repository - never this one."""
+    import subprocess
+
+    def git(*a, cwd):
+        subprocess.run(["git", *a], cwd=cwd, check=True, capture_output=True)
+
+    remote = tmp_path / "remote.git"
+    git("init", "--bare", "-q", str(remote), cwd=tmp_path)
+    repo = tmp_path / "repo"
+    git("init", "-q", str(repo), cwd=tmp_path)
+    for k, v in (("user.name", "t"), ("user.email", "t@example.invalid"),
+                 ("core.hooksPath", str(tmp_path / "nohooks"))):
+        git("config", k, v, cwd=repo)
+    (repo / "a.txt").write_text("a\n", encoding="utf-8")
+    git("add", "a.txt", cwd=repo)
+    git("commit", "-q", "-m", "a", cwd=repo)
+    git("remote", "add", "origin", str(remote), cwd=repo)
+    git("push", "-q", "-u", "origin", "HEAD", cwd=repo)
+    assert ir._tree_problem(repo) is None
+
+    (repo / "b.txt").write_text("b\n", encoding="utf-8")
+    git("add", "b.txt", cwd=repo)
+    assert "uncommitted" in ir._tree_problem(repo)
+
+    git("commit", "-q", "-m", "b", cwd=repo)
+    assert "unpushed" in ir._tree_problem(repo)
+
+    git("push", "-q", cwd=repo)
+    assert ir._tree_problem(repo) is None
+
+
+def test_prompt_tells_the_session_to_outlast_the_commit_hook():
+    p = ir.PROMPT
+    assert "600000" in p
+    assert "HEAD" in p
+
+
+def test_a_tree_already_dirty_before_the_session_is_attributed(tmp_path):
+    """Refutation pass 2026-10-03: an attended session's uncommitted work must
+    not be reported as if the runner session alone left it."""
+    inbox, state, runtime = _setup(tmp_path, [("a.md", "x")])
+    answers = iter(["2 uncommitted paths", "2 uncommitted paths"])
+    res = ir.run(inbox=inbox, state=state, runtime=runtime, spawn=_Spawn(),
+                 tree_check=lambda: next(answers))
+    assert res.reason.startswith("UNCOMMITTED")
+    assert "already had 2 uncommitted paths before it started" in res.reason
+
+
+def test_prompt_gives_a_recovery_step_when_head_did_not_move():
+    assert "HEAD did not move" in ir.PROMPT

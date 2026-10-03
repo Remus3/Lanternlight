@@ -324,6 +324,9 @@ SPAWN_RUNTIME_ENTRY_POINTS: dict[str, tuple[tuple[str, str], ...]] = {
     "scripts/history_scan.py": (("scripts.history_scan", "reachable_objects"),),
     # OPS-107. Lists this repository's published set with git - a read.
     "ops/scratch_path_guard.py": (("ops.scratch_path_guard", "population"),),
+    # OPS-116. Measures whether a finished runner session left work
+    # uncommitted or unpushed: git status and git rev-list - both reads.
+    "ops/inbox_runner.py": (("ops.inbox_runner", "_tree_problem"),),
 }
 
 #: Modules that CAN reach a spawn and are deliberately not probed, each with
