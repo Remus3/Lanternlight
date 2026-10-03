@@ -100,6 +100,12 @@ NEXT
      live foreign holder; a test where a live foreign holder past 16,200 s
      survives our acquire, seen red first. Tell the channel when it lands.
   3. OPS-114 item 2, then OPS-111 / OPS-112 / OPS-113.
+  EVIDENCE FOR OPS-116 FROM THIS WRAP: the first `git commit -q` of the wrap
+  left HEAD unchanged and printed nothing, because the command piped stdout
+  only and the hook's refusal went to stderr. A plain retry minutes later
+  passed its 46-module pre-commit run and committed (bf24408). Cause unknown -
+  the first attempt overlapped a full suite run in the same tree. Any commit
+  step, interactive or headless, must check HEAD moved rather than trust rc.
 
 PROCESS RULES THAT STILL BIND
   - READ BODIES, NOT FILENAMES, before answering any note.
