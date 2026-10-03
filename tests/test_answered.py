@@ -555,3 +555,98 @@ class TestTheRefutationPassFindings:
         )
         # And a citation we CAN place must not be reported as a problem.
         assert "seen.md" not in joined.replace("not-in-population", "")
+
+
+# ---------------------------------------------------------------------------
+# OPS-114 item 2: inbound time is ARRIVAL, not the sender's filename stamp
+# ---------------------------------------------------------------------------
+#
+# A sender stamps its filename on ITS clock - several stamp UTC - while our
+# sent rows carry OUR local clock. Comparing the two made a reply sent after a
+# note arrived look earlier than it, so "strictly later" failed and a real
+# answer read as unanswered (LL-0316 measured 51 -> 76 inferred answered).
+# The inbound note's own file in our inbox carries an epoch time that needs no
+# clock agreement at all.
+
+
+class _St:
+    def __init__(self, mtime, birth=None):
+        self.st_mtime = mtime
+        if birth is not None:
+            self.st_birthtime = birth
+
+
+@pytest.fixture
+def stats(monkeypatch):
+    """Creation times Windows will not let a test set: name -> (mtime, birth)."""
+    table: dict[str, tuple] = {}
+
+    def fake(path: Path):
+        if path.name not in table:
+            raise FileNotFoundError(path)
+        return _St(*table[path.name])
+
+    monkeypatch.setattr(answered, "_stat", fake)
+    return table
+
+
+def test_a_note_stamped_on_a_later_clock_is_answered_by_its_arrival_time(
+    tmp_path: Path, stats
+) -> None:
+    # Stamped 23:00 by the sender (its UTC); landed here at 18:00 local; our
+    # reply naming it went out at 18:30 local.
+    note = "2026-10-02-2300-from-RC-a-question.md"
+    _seen(tmp_path, [note])
+    landed = datetime(2026, 10, 2, 18, 0).timestamp()
+    stats[note] = (landed, landed)
+    reply = "2026-10-02-1830-from-LL-reply.md"
+    _deliveries(tmp_path, [_row(reply, sent_local="2026-10-02T18:30:00", answers=[note])])
+    _sent_body(tmp_path, reply, "Answering RC 2300 here.\n")
+
+    report = answered.report(root=tmp_path)
+
+    assert report.record.recorded_answered == (note,)
+    assert report.inference is not None
+    assert report.inference.inferred_answered == (note,)
+    assert "other than ARRIVAL: none" in report.format()
+
+
+def test_creation_time_wins_over_a_preserved_older_mtime(tmp_path: Path, stats) -> None:
+    """A copy2-style delivery keeps the sender's mtime; creation is the landing."""
+    note = "2026-10-02-2300-from-RC-a-question.md"
+    stats[note] = (datetime(2026, 10, 2, 9, 0).timestamp(),
+                   datetime(2026, 10, 2, 18, 0).timestamp())
+    ref = answered.timed_by_arrival(
+        answered.parse_note_name(note), tmp_path / "moon_sync_inbox"
+    )
+    assert ref.when == datetime(2026, 10, 2, 18, 0)
+    assert ref.time_source == "arrival"
+
+
+def test_without_a_creation_time_mtime_is_used_and_labelled(tmp_path: Path, stats) -> None:
+    note = "2026-10-02-2300-from-RC-a-question.md"
+    stats[note] = (datetime(2026, 10, 2, 9, 0).timestamp(),)
+    ref = answered.timed_by_arrival(
+        answered.parse_note_name(note), tmp_path / "moon_sync_inbox"
+    )
+    assert ref.when == datetime(2026, 10, 2, 9, 0)
+    assert ref.time_source == "modified"
+
+
+def test_a_note_no_longer_on_disk_falls_back_to_its_filename_and_says_so(
+    tmp_path: Path, stats
+) -> None:
+    note = "2026-10-02-2300-from-RC-a-question.md"
+    _seen(tmp_path, [note])
+    ref = answered.timed_by_arrival(
+        answered.parse_note_name(note), tmp_path / "moon_sync_inbox"
+    )
+    assert ref.when == datetime(2026, 10, 2, 23, 0)
+    assert ref.time_source == "filename"
+    assert "other than ARRIVAL: filename=1" in answered.report(root=tmp_path).format()
+
+
+def test_the_real_stat_seam_reads_a_real_file(tmp_path: Path) -> None:
+    path = tmp_path / "x.md"
+    path.write_text("x\n", encoding="ascii")
+    assert answered._stat(path).st_mtime > 0

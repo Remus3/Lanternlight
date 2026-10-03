@@ -63,7 +63,7 @@ import argparse
 import json
 import re
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
 
@@ -89,6 +89,7 @@ __all__ = [
     "reply_path_codes",
     "report",
     "sent_rows_from",
+    "timed_by_arrival",
 ]
 
 
@@ -173,10 +174,57 @@ class NoteRef:
     stamp: str | None
     slug: str
     when: datetime
+    #: ``"filename"`` - the sender's own stamp, on the SENDER'S clock - or
+    #: ``"arrival"`` - when the file landed in our inbox. See
+    #: :func:`timed_by_arrival`.
+    time_source: str = "filename"
 
     @property
     def stamp_known(self) -> bool:
         return self.stamp is not None
+
+
+def _stat(path: Path):
+    """One seam, so a test can supply a creation time Windows will not let it set."""
+    return path.stat()
+
+
+def timed_by_arrival(ref: NoteRef, inbox: Path) -> NoteRef:
+    """``ref`` re-timed to when its file ARRIVED in ``inbox`` - ``OPS-114`` item 2.
+
+    The filename stamp is on the sender's clock, and several senders stamp UTC
+    while our sent rows carry our LOCAL clock, so "strictly later" compared two
+    clocks: a reply sent after a note landed could read as earlier than it.
+    A filesystem time is an epoch time and needs no clock agreement; it is
+    converted to local here because the sent rows are local.
+
+    WHICH filesystem time: CREATION (``st_birthtime``), because the file is
+    created in our inbox when it lands, and a copy that PRESERVES the sender's
+    mtime (``shutil.copy2``) still gets a fresh creation time here. The first
+    version took the earlier of the two, which picks exactly the preserved
+    sender-side mtime in that case; the 2026-10-03 refutation pass caught it.
+    Known limit, written down rather than solved: a sender that writes a temp
+    file elsewhere on THIS volume and renames it in keeps the temp file's
+    creation time, which is near the send rather than the landing.
+
+    ``time_source`` says which clock was used - ``"arrival"`` (creation),
+    ``"modified"`` (no creation time available, mtime used), or
+    ``"filename"`` (the file is gone; the sender's stamp is kept) - and the
+    report counts the non-arrival ones, so a fallback is visible.
+    """
+    try:
+        st = _stat(inbox / ref.name)
+    except OSError:
+        return ref
+    # Attribute access rather than the dynamic-lookup builtin, which
+    # tests/test_spawn_capability_at_runtime.py counts as reach.
+    try:
+        birth = st.st_birthtime
+    except AttributeError:
+        birth = None
+    if isinstance(birth, (int, float)) and not isinstance(birth, bool) and birth > 0:
+        return replace(ref, when=datetime.fromtimestamp(birth), time_source="arrival")
+    return replace(ref, when=datetime.fromtimestamp(st.st_mtime), time_source="modified")
 
 
 def parse_note_name(name: str) -> NoteRef | None:
@@ -646,6 +694,10 @@ def seen_path(root: Path | str | None = None) -> Path:
     return _repo_root(root) / "ops" / "runtime" / "inbox_seen.json"
 
 
+def inbox_dir(root: Path | str | None = None) -> Path:
+    return _repo_root(root) / "moon_sync_inbox"
+
+
 def outbox_dir(root: Path | str | None = None) -> Path:
     return _repo_root(root) / "moon_sync_inbox" / "_outbox"
 
@@ -714,11 +766,16 @@ class AnsweredReport:
     record: RecordVerdict
     inference: Inference | None = None
     notes_read: int = 0
+    #: ``OPS-114`` item 2: inbound notes NOT timed by arrival, by source.
+    timed_otherwise: dict[str, int] = field(default_factory=dict)
 
     def format(self) -> str:
         lines = [
             "READ AND NOT ANSWERED",
             f"  inbound notes marked READ: {self.notes_read}",
+            "  inbound notes timed by something other than ARRIVAL: "
+            + (", ".join(f"{k}={v}" for k, v in sorted(self.timed_otherwise.items()))
+               or "none"),
             "",
             self.record.format(),
         ]
@@ -745,13 +802,19 @@ def report(
         if ref is None:
             unclassifiable.append(name)
         else:
-            refs.append(ref)
+            refs.append(timed_by_arrival(ref, inbox_dir(root)))
 
     record = classify_record(
         refs, rows, unclassifiable=unclassifiable, problems=seen_problems + row_problems
     )
     inference = infer(refs, rows, outbox_dir(root)) if with_inference else None
-    return AnsweredReport(record=record, inference=inference, notes_read=len(names))
+    otherwise: dict[str, int] = {}
+    for ref in refs:
+        if ref.time_source != "arrival":
+            otherwise[ref.time_source] = otherwise.get(ref.time_source, 0) + 1
+    return AnsweredReport(
+        record=record, inference=inference, notes_read=len(names), timed_otherwise=otherwise
+    )
 
 
 def main(argv: Sequence[str] | None = None) -> int:

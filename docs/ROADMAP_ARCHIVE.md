@@ -9,7 +9,7 @@ the original text, verbatim, in its original order, and the live roadmap
 carries a one-line stub linking to each one. If an item here turns out to
 matter again, move the section back rather than rewriting it.
 
-Sections in this archive: 106.
+Sections in this archive: 107.
 
 ---
 
@@ -12893,4 +12893,9 @@ runner holds it for the whole spawn. Mutant disabling the branch seen red.
 `LL-0322`. Accept: cause named; a dirty-tree exit logs non-RAN, seen red.
 Closed by `LL-0327`: cause named (commit hook outlives the tool timeout, commit
 backgrounded, session ends), not reproduced end to end; UNCOMMITTED logged.
+
+## OPS-114. `ops/lane_slot.py` can reap a sibling's LIVE lock; `ops/answered.py` mixes two clocks - CLOSED 2026-10-03
+
+Filed 2026-10-02, `LL-0316`. (1) age-before-liveness reap: DONE, `LL-0328`.
+(2) two-clock "strictly later": DONE, `LL-0329` - inbound time is arrival.
 

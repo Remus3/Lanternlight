@@ -5229,12 +5229,6 @@ firing again takes the structural fix, not a third number. The PER-DOCUMENT
 ceiling here was NOT raised and has under 100 bytes of headroom, which is why
 this is a paragraph and not an item.
 
-## OPS-114. `ops/lane_slot.py` can reap a sibling's LIVE lock; `ops/answered.py` mixes two clocks
-
-Filed 2026-10-02, `LL-0316`. (1) age-before-liveness reap: DONE, `LL-0328`.
-(2) OPEN: "strictly later" compares a sender's filename stamp with our send
-clock; accept: inbound time is arrival.
-
 ## Archive index
 
 Every closed and refuted item is still here, one hop away, in
@@ -5347,3 +5341,4 @@ links to that item's full original text.
 - **OPS-110** - The merge gate could be blinded by an environment variable and was blind to a test that starts SKIPPING - CLOSED 2026-10-02, `LL-0305` - [full text](docs/ROADMAP_ARCHIVE.md#ops-110-the-merge-gate-could-be-blinded-by-an-environment-variable-and-was-blind-to-a-test-that-starts-skipping---closed-2026-10-02-ll-0305)
 - **OPS-115** - Prompt hook acks the inbox inside the headless runner - CLOSED 2026-10-02 - [full text](docs/ROADMAP_ARCHIVE.md#ops-115-prompt-hook-acks-the-inbox-inside-the-headless-runner---closed-2026-10-02)
 - **OPS-116** - Runner session exits 0 uncommitted - CLOSED 2026-10-03 - [full text](docs/ROADMAP_ARCHIVE.md#ops-116-runner-session-exits-0-uncommitted---closed-2026-10-03)
+- **OPS-114** - `ops/lane_slot.py` can reap a sibling's LIVE lock; `ops/answered.py` mixes two clocks - CLOSED 2026-10-03 - [full text](docs/ROADMAP_ARCHIVE.md#ops-114-opslaneslotpy-can-reap-a-siblings-live-lock-opsansweredpy-mixes-two-clocks---closed-2026-10-03)
