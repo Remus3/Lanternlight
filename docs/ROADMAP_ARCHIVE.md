@@ -13337,6 +13337,16 @@ load-bearing rather than decorative.
 meet the class. Recorded here so the next sweep does not re-find it and treat
 it as new.
 
+**CORRECTION 2026-10-03, `OPS-119`, from the `OPS-118` sweep.** "No production
+caller - tests only - so it is not reachable from any repeated trigger" is
+wrong about REACHABILITY: `tests/test_paths_avgprice.py` calls it, and the
+pre-commit hook runs that test whenever `docs/FINDINGS.md` is staged (the
+selector ties it to that one document), as does every full suite run - both
+repeated triggers, though not on every commit. It still
+stays out of the class, for a different reason: its pattern is
+`AvgPrice_*.ini`, which no build residue can match, so an unpruned descent
+cannot change its answer. Same verdict, corrected reason.
+
 **What the sweep did NOT cover, stated because a review that does not name its
 gaps is silence with a signature:** `tests/` was not swept, although pytest runs
 on every commit, so a walker there would fire; `.claude/commands/` and

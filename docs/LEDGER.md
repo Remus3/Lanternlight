@@ -84,6 +84,13 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0337 - 2026-10-03 - OPS-119 closed: done.md states the source register's measured scope and its pinning test asserts it; dated correction under archived OPS-97
+
+**Evidence:**
+- (a) test_the_txt_extension_reason_is_the_measured_scope_not_the_retired_one in tests/test_loop_watch.py now requires the window to name the tracked-listing scope and OPS-63 and forbids the 'nothing else' claim; red against the HEAD wording of .claude/commands/done.md on the OPS-63 assertion, green on the new paragraph. Verifier confirmed live that scanned_documents includes the tracked LL-NEXT-SESSION.txt and that UNSCANNED_DOCS holds only the roadmap archive and the vendored CHANNEL.md. Weak spot recorded: the word 'tracked' already occurs earlier in the window, so only the OPS-63 check protects the claim.
+- (b) Correction note under the archived OPS-97: the rglob in lanternlight/paths.py IS reachable through tests/test_paths_avgprice.py. First draft said that test runs on every commit; REFUTED - the docguards selector ties it to docs/FINDINGS.md alone, so the hook runs it only when that file is staged, plus every full suite run. Reworded before commit.
+- Archive link guard OK (122/122); citation checker OK; tests/test_loop_watch.py, tests/test_source_register.py, tests/test_handoff.py 238 passed.
+
 ### LL-0336 - 2026-10-03 - OPS-118 closed (test-side stray walkers pruned, GitHub duplicate-heading anchors modelled), OPS-109 closed (run-time MAIN route that refuses on 0 or 2 matches; earlier criterion-4 MET was false), OPS-113 citation checker built with a shrink-only pinned allowlist; OPS-119 filed
 
 **Evidence:**

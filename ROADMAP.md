@@ -3088,7 +3088,14 @@ accept: measured when the operator plays, else carried by `OPS-102`. (3) The
 anchor rule does not model GitHub's `-1` suffix for duplicate headings; no stub
 targets one today; accept: a duplicate-heading stub fails the guard, seen red.
 
-## OPS-119. Two decline reasons the 2026-10-03 sweep found stale
+## OPS-119. Two decline reasons the 2026-10-03 sweep found stale - CLOSED 2026-10-03
+
+**CLOSED 2026-10-03 (third session), `LL-0337`.** (a) done.md now states the
+measured scope and the pinning test in `tests/test_loop_watch.py` asserts it,
+seen red against the HEAD wording. (b) A dated correction sits under the
+archived `OPS-97`; the refutation pass caught its first draft saying the test
+runs on every commit - it runs when `docs/FINDINGS.md` is staged, and on every
+full suite run.
 
 Filed 2026-10-03 (third session) from the `OPS-118` sweep, `LL-0336`.
 (a) `.claude/commands/done.md` says the reach of `test_source_register.py` is

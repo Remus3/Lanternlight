@@ -136,15 +136,17 @@ test rather than the code is not a green suite.
      root joins the markdown guard set that `ops/docguards.py` derives
      repo-wide from `git ls-files` - tracked plus untracked-but-not-ignored -
      which is the last place the highest-variance file in the tree belongs.
-     - **Corrected 2026-09-06; do not re-derive the withdrawn reason.** The
-       reach of `test_source_register.py` is `docs/` and nothing else. This
-       step used to justify `.txt` by claiming it walks every markdown file on
-       disk, so a stray document near the tree reddens a guard. Measured, by
-       reading the module: `cited_hosts` is declared
-       `def cited_hosts(root: Path = DOCS)` with `DOCS = REPO_ROOT / "docs"`,
-       and its top-level guard calls it with that default, so the walk is a
-       directory rglob and a repo-root document is outside it entirely. The
-       extension is right; that reason was not.
+     - **Corrected 2026-09-06, re-measured 2026-10-03 (`OPS-119`); do not
+       re-derive the withdrawn reason.** This step used to justify `.txt` by
+       claiming `test_source_register.py` walks every markdown file on disk,
+       so a stray document near the tree reddens a guard. It does not walk
+       the disk: since `OPS-63` its default scope is `scanned_documents`,
+       every TRACKED `.md` and `.txt` from `git ls-files` plus untracked
+       `docs/*.md`. So the tracked `.txt` hand-off IS scanned and the
+       extension does not exempt it, and an untracked stray outside `docs/`
+       is not. The 2026-09-06 wording that the reach was `docs/` alone was
+       true then and went stale with `OPS-63`. The extension is right for the
+       two reasons above; neither register reason was.
    - **`NEXT_SESSION_PROMPT.md` is collapsed into this file.** It used to be
      "the tracked copy" while the Desktop held the operator's. Once the
      hand-off is tracked at the repo root that distinction is gone - both

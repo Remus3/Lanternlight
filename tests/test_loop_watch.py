@@ -2285,6 +2285,15 @@ class TestTheWrapOutputShapeIsPinned:
         this pins is that the WITHDRAWN reason does not come back, because a
         decline reason goes stale faster than a count does and gets cited
         again.
+
+        **Re-measured 2026-10-03, `OPS-119`.** The 2026-09-06 correction itself
+        went stale: since `OPS-63` the guard's default scope is
+        ``scanned_documents`` - every TRACKED ``.md`` and ``.txt`` plus untracked
+        ``docs/*.md`` - so "``docs/`` and nothing else" is false, and the tracked
+        ``.txt`` hand-off IS in scope. This test used to PIN that stale scope by
+        asserting the window names ``docs/``. It now pins the measured one: the
+        window must name the tracked-listing scope and must not claim
+        ``docs/``-only reach.
         """
         text = _collapsed(_done_md())
         windows = _windows_around(text, "test_source_register.py")
@@ -2294,9 +2303,14 @@ class TestTheWrapOutputShapeIsPinned:
             "be wrong the same way"
         )
         for window in windows:
-            assert "docs/" in window, (
+            assert "tracked" in window and "OPS-63" in window, (
                 "done.md cites test_source_register.py without naming the "
-                f"measured scope, which is docs/ only: ...{window}..."
+                "measured scope, which since OPS-63 is every tracked .md and "
+                f".txt: ...{window}..."
+            )
+            assert "nothing else" not in window, (
+                "done.md still claims the register reads docs/ and nothing "
+                f"else, which OPS-63 made false: ...{window}..."
             )
             assert "over the filesystem" not in window, (
                 "the withdrawn justification is back in done.md - the walk is "
