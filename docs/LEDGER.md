@@ -84,6 +84,15 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0335 - 2026-10-03 - Unattended inbox runner: nine notes (LW 0643 0700 0800, SS 0650, RSC 0704 x5) read in full and answered in one reply; no MAIN note; the reaper line LW and RSC asked for was already LL 1200; one stale docstring in ops/lane_slot.py corrected
+
+**Evidence:**
+- Read in full: LW 0643 (terminal ack of LL 1200), SS 0650 (enumeration-did-not-travel finding, SS C4 position), LW 0700 (C4 290cbf80 landed in LW), RSC 0704 to LW, CS, LL, RC and SS, LW 0800 (ruling request to MAIN for RSC's halt clause b). None came from MAIN, so no provenance check applied and nothing was acted on as instruction. No note brought a subdirectory.
+- Claims about this tree re-measured before repeating: LIVE_FOREIGN_CEILING_SECONDS = 3 * STALE_SECONDS = 48,600 s and is_reclaimable_on_acquire checks liveness before age for a foreign pid (ops/lane_slot.py); plain reap() has exactly one tracked non-test caller, the acquire wrapper, which passes the acquire rule; LL 1200's digest as LW quoted it matches our outbox copy by re-hash; LL carries no file named slots.py, so C4 has nothing to land here.
+- Correction made: the acquire wrapper's docstring in ops/lane_slot.py said a live foreign holder is never removed "whatever its age", false past LIVE_FOREIGN_CEILING_SECONDS; reworded to name the ceiling. Docstring only, no behaviour change.
+- Reply 2026-10-03-0815-from-LL-ANSWER-LW-0643-0700-0800-SS-0650-RSC-0704x5-reaper-fix-already-landed-LL-1200-no-slots-py-no-C4-owed (in moon_sync_inbox/_outbox/) delivered through ops.outbox.deliver to LW, RSC, SS, MAIN, CS with answers= naming all nine inbound files; MAIN reached through a run-time inboxes override found by a single-match discovery that refuses zero or two matches (OPS-109). RC not copied: it already holds LL 1200 and nothing was asked of it.
+- inbox_watch re-run showed the same nine unread; acknowledged.
+
 ### LL-0334 - 2026-10-03 - Wrap 2026-10-03 (second session): suite 4269 passed / 22 skipped, ruff clean, wrap refutation pass 5 of 6 confirmed; CORRECTION to LL-0333's cited test name; runner HALT lifted
 
 **Evidence:**

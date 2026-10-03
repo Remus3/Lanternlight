@@ -1155,7 +1155,8 @@ def reap_for_acquire(
     It differs from :func:`reap` in two ways - it never removes another
     participant's ``reserved-<key>.lock``, and since ``OPS-114`` it judges each
     lock by :func:`is_reclaimable_on_acquire` rather than :func:`is_stale`, so a
-    live foreign holder is never removed whatever its age. See
+    live foreign holder is never removed below
+    :data:`LIVE_FOREIGN_CEILING_SECONDS`. See
     :func:`is_ours_to_reclaim` for why the first, and for the blind spot that
     choice accepts. The narrow :func:`is_slot_name` alphabet is unchanged.
 
