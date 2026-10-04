@@ -47,15 +47,23 @@ from *measured zero*.
 > **The measurement and operations layer is substantial. The product layer is
 > not built yet.** The tables below say which is which.
 
-Status as of 2026-09-14. Nothing below is aspirational, and each measurement
+Status as of 2026-10-03. Nothing below is aspirational, and each measurement
 carries its own date in the document it links to.
+
+> **Two facts shape the current state.** Every remaining measurement item needs
+> a person playing the game, and no amount of session time substitutes for that
+> ([`OPS-102` in the roadmap](ROADMAP.md)). And on 2026-09-20 the local capture
+> tree that held the frame-level ground truth was permanently deleted outside
+> this project - no reading was retracted, but the frames can no longer be
+> independently re-checked until they are retaken (`OPS-104`). The affected
+> documents carry a notice at the top, guarded by a test in both directions.
 
 ### Built and measured
 
 | Area | Notes |
 |---|---|
 | **GVAS save reader** | Every save parses with no unconsumed trailing bytes. Natively serialised structs are handed back verbatim and *named* undecoded rather than guessed. Published parsers do not work on this build: UE 5.4+ changed the property tag |
-| **GVAS save writer** | `serialise(parse(raw)) == raw`, byte-identical on all 276 files of the 2026-08-10 corpus - an oracle that caught a flags word the reader was discarding |
+| **GVAS save writer** | `serialise(parse(raw)) == raw`, byte-identical on all 276 files of the 2026-08-10 corpus - an oracle that caught a flags word the reader was discarding. 263 of those files were captured generations lost on 2026-09-20; the committed fixtures still round-trip in CI |
 | **Log parsing and live tail** | Survives in-place truncation and delete-and-recreate, splits bytes before decoding, and redacts before any sink |
 | **Redaction** | Sees through base64, hex and raw UTF-16, scans binaries, and refuses to certify what it cannot assess |
 | **Save and session watchers** | Snapshot every generation of every save, never write to the source, and name the surface that went stale |
@@ -71,7 +79,7 @@ carries its own date in the document it links to.
 | **Weapon config ids** | The live id space is joined to item cfgIds, but the table is incomplete |
 | **Raid and PvP data** | Solo explores are measured. No run with another player yet, so loot and extraction are **unmeasured, not absent** |
 | **Affix ids** | Two remain unbound - 101 and 214 |
-| **Meter OCR** | The training-ground meter's orange pair is read without a human in the loop. The white row is still open |
+| **Meter OCR** | The training-ground meter's orange pair is read without a human in the loop. The white row is still open, and the tests that need the lost captures skip - loudly, naming the loss - until they are retaken |
 
 ### Not built
 
@@ -79,7 +87,7 @@ carries its own date in the document it links to.
 |---|---|
 | **Emberforge** | Computes nothing yet. No coefficient is published until the same value appears in an independent run |
 | **Dashboard** | Port 8810 reserved, nothing listening |
-| **Packaged release** | No wheel, no installer, no tagged version |
+| **Packaged release** | No wheel, no installer. [`v0.1.0`](https://github.com/Remus3/Lanternlight/releases/tag/v0.1.0) (2026-09-06) is a citable source snapshot, not a build |
 
 ## What is next
 
@@ -96,8 +104,8 @@ per-hit damage with sub-millisecond timestamps, and the log binds damage to
 ability names. What is missing is a second independent run of the same value.
 Until then the overlay shows dashed rows rather than a fabricated one.
 
-**Decisions that are parked.** A few items are waiting on a ruling rather than
-on work.
+**Items blocked on something other than work.** One item (`OPS-71`) waits on a
+measurement that cannot be taken in the permission mode these sessions run in.
 
 Every open item carries an acceptance criterion in [`ROADMAP.md`](ROADMAP.md),
 and every closed one is kept verbatim in
@@ -213,24 +221,49 @@ Four rules, each enforced by tests, and each adopted after a measured failure.
    Steam persona, publisher SDK and EOS account ids, and an IP-resolved
    location.
 
-<details>
-<summary><b>Continuity - how a cold session picks this up</b></summary>
+## How it is developed
 
-State lives on disk, never in a context window. `docs/LEDGER.md` is an
-append-only record of what was decided and why, `ROADMAP.md` holds the open
-items with their acceptance criteria, and `docs/adr/` holds the decisions that
-are not open for re-litigation. Work runs in specialist lanes with enforced file
-ownership so two lanes never race, and every "done" claim gets an independent
-pass that is trying to refute it.
+Lanternlight is built by **multi-agent Claude Code sessions** working under the
+rules in [`CLAUDE.md`](CLAUDE.md), with a human operator who plays the game,
+takes the measurements only a player can take, and makes the rulings.
 
-Both continuity documents are split rather than trimmed: the live file holds the
-open and recent material, and
-[`docs/ROADMAP_ARCHIVE.md`](docs/ROADMAP_ARCHIVE.md) and
-[`docs/LEDGER_ARCHIVE.md`](docs/LEDGER_ARCHIVE.md) hold the rest verbatim. **An
-empty search of one half is not a claim about the project**, only about which
-half you searched.
+- **Orchestrated, then refuted.** A session splits work into disjoint slices
+  with explicit file lists, one merger owns the plan and the merge, and every
+  "done" claim gets an independent pass whose job is to refute it - refuted
+  when unsure. Before any agent's claim is relayed, `ops/merge_gate.py`
+  re-probes the files and the collected test counts rather than trusting the
+  report. Model choice per role is in
+  [`docs/ORCHESTRATION_TIERS.md`](docs/ORCHESTRATION_TIERS.md).
+- **Specialist lanes with enforced ownership.** Work runs in lanes (ingest,
+  safety, research, ops and others, under [`lanes/`](lanes/)) whose file
+  ownership is checked by tests, so two lanes never race on the same file.
+- **Continuity lives on disk, never in a context window.**
+  [`docs/LEDGER.md`](docs/LEDGER.md) is an append-only record of what landed
+  and why, [`ROADMAP.md`](ROADMAP.md) holds open items with acceptance
+  criteria, and [`docs/adr/`](docs/adr/README.md) holds the decisions that are
+  not re-litigated. A cleared session resumes from those files alone. Both
+  continuity documents are split rather than trimmed - the rest is kept verbatim
+  in [`docs/ROADMAP_ARCHIVE.md`](docs/ROADMAP_ARCHIVE.md) and
+  [`docs/LEDGER_ARCHIVE.md`](docs/LEDGER_ARCHIVE.md), so **an empty search of one
+  half is not a claim about the project**.
+- **Cross-repo notes, synced end to end.** This repository is one of several
+  sibling projects on the same machine that share no code, ports or keys but
+  exchange plain-text notes through a sync inbox that is never committed. A
+  note from the supervising project counts as an instruction only when its bytes
+  match that project's outbox copy by SHA-256, and every reply is delivered
+  through one redacting choke point (`ops.outbox.deliver`) and re-hashed at its
+  destination before it is reported as delivered.
+- **Headless lanes in the background.** A scheduled inbox runner
+  (`ops/inbox_runner.py`) checks for unread notes and, when there are some,
+  starts one headless session that reads them in full, answers, commits and
+  pushes - with nobody watching. Every headless run goes through a single
+  vendored spawn door (`ops/fleet_kit/`) that fails closed, caps runs per
+  rolling 24 hours, and stops on a HALT file. The first unattended run through
+  that door completed on 2026-10-03, and the commits it makes are ordinary
+  commits in `git log`, each with its own ledger entry. Stop conditions and the
+  loop's design are in [`docs/HEADLESS.md`](docs/HEADLESS.md).
 
-</details>
+The hard boundary above binds every one of these sessions, attended or not.
 
 ## Contributing
 

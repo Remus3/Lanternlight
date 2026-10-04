@@ -112,6 +112,9 @@ CROSS_CUTTING: frozenset[str] = frozenset(
         # (MAIN 0955). Same kind of file: it explains the rules, not a lane's work.
         "docs/claude-md-history.md",
         "README.md",
+        # The repository's GitHub social-preview card (2026-10-03). Same kind
+        # of file as README.md: the project's public face, not a lane's work.
+        "docs/assets/social-preview.png",
         "BACKLOG.md",
         "LICENSE",
         "NOTICE",
