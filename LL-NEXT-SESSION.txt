@@ -1,93 +1,92 @@
 LANTERNLIGHT - NEXT SESSION HAND-OFF
-Written at the wrap of 2026-10-03 (fifth session that day). Assume zero
+Written at the wrap of 2026-10-04 (first session that day). Assume zero
 context; everything you need is here or in the files this names. Never print
 this file into chat. /done prints only "Done ritual complete, safe to clear".
 
 START HERE
   - `git log` FIRST. The armed inbox runner (\Lanternlight\InboxRunner, every
-    15 min, ops/inbox_runner.py) commits while nobody watches. It now spawns
-    ONLY through the vendored fleet kit (ops/fleet_kit/fleet_headless.py)
-    behind our wrapper ops/headless_spawn.py. First live kit-routed run:
-    2026-10-03 16:36 UTC, rc 0, opus/medium, bare false, answered MAIN 1029
-    and two SS notes, commit 174690a. The runner was HALTED for this wrap and
+    15 min, ops/inbox_runner.py) commits while nobody watches. It spawns ONLY
+    through the vendored fleet kit (ops/fleet_kit/fleet_headless.py) behind
+    our wrapper ops/headless_spawn.py. The runner was HALTED for this wrap and
     the HALT file (ops/runtime/INBOX_RUNNER_HALT) was deleted after the push.
   - Run `python ops/inbox_watch.py` and read BODIES, not filenames.
   - Before a long interactive commit sequence, create
     ops/runtime/INBOX_RUNNER_HALT, and DELETE it when done.
 
-READ FIRST: CLAUDE.md (now condensed; the FLEET-COMMON block at the top is
-byte-pinned by tests/test_fleet_kit_conformance.py - never edit it; reasoning
-lives in docs/claude-md-history.md), ROADMAP.md, docs/LEDGER.md LL-0341, LL-0342 (the first
-kit-routed runner run) and LL-0343, docs/HEADLESS.md (STOP CONDITIONS).
+READ FIRST: CLAUDE.md (the FLEET-COMMON block at the top is byte-pinned by
+tests/test_fleet_kit_conformance.py - never edit it; reasoning lives in
+docs/claude-md-history.md), ROADMAP.md (OPS-121), docs/LEDGER.md LL-0348 and
+LL-0349, docs/HEADLESS.md (STOP CONDITIONS).
 
-LANDED THIS SESSION (a6ce00b, pushed; LL-0341)
-  - OPS-120 CLOSED: MAIN FLEET-KIT v3 adopted. Provenance 12 of 12 MATCH.
-    License gate: an adjudicator held vendoring; the OPERATOR (kit owner and
-    holder) then ruled in chat: Apache-2.0, operator as holder, path
-    ops/fleet_kit/ (exception to third_party/, recorded in CLAUDE.md SECOND
-    EXCEPTION and ops/fleet_kit/NOTICE.md).
-  - CLAUDE.md 52,184 -> 24,548 bytes (a6ce00b; its commit message and the
-    1105 reply said 23,965, measured BEFORE six rules were restored - the
-    1105 figure was corrected in a follow-up note, LL-0343); history verbatim in
-    docs/claude-md-history.md. Refutation restored six rules that had moved
-    out. FULL AUTHORITY item 4 (checklists) superseded by FLEET-COMMON item 3.
-  - Session style now (FLEET-COMMON items 2, 3, 12): quiet chat, background
-    agents/commands, no inline checklists, status = done / left / +added /
-    -retracted, progress files ops/loop/control/progress/<task>.json for work
-    over 5 minutes.
-  - /done: carries forward unacted items; one chat line. Pinned by
-    tests/test_done_ritual_output.py.
-  - Reply to MAIN + CS, LW, RC, RSC, SS delivered 6/6 (kit gaps for v4 listed
-    in it), plus a follow-up naming a6ce00b, 6/6.
+LANDED THIS SESSION (LL-0349)
+  - The runner's 2026-10-04 run on MAIN 0020 + SS 0045 TIMED OUT at 2700 s
+    (headless_usage.jsonl 01:56 local, error "timeout") after writing and
+    staging ROADMAP OPS-121 and ledger LL-0348 but before its commit. The
+    wrap verified those edits were its normal output (independent
+    refutation, all confirmed, see LL-0349) and committed them unchanged as
+    c1b4330. Later ticks all read NO MAIL; nothing else was lost.
+  - Watch for a repeat: an opus/medium mail batch running past the kit
+    timeout leaves staged edits behind. If it recurs, file it (runner prompt
+    size or timeout) rather than hand-committing again.
 
 STATE AT THE WRAP
-  Branch main, pushed. Suite and ruff counts: see LL-0343 (observed at the
+  Branch main, pushed. Suite and ruff counts: see LL-0349 (observed at the
   wrap, not repeated here).
   CAPTURE WATCHER: check_watcher -> NO_RECORD; ensure_armed_at_wrap refused
     with OPERATOR DISARM (LL-0234). Correct. Never arm it; only the operator
     lifts it.
-  Loop state: cycle advanced at this wrap, no item.
+  Loop state: cycle advanced to 109 at this wrap, no item.
 
 OPEN - CARRIED FORWARD (none acted on this session unless marked)
-  1. Kit version: v4 was installed unattended by the runner (60c4739,
-     f2f7b3a; 5 of 5 files match MAIN's v4, conformance []). On a future MAIN
-     note FLEET-KIT-vN (provenance checked), replace every kit file in
-     ops/fleet_kit/ and re-embed the block in ONE commit; never patch locally.
+  1. Kit version: v4 is vendored (5 of 5 files match MAIN's v4, conformance
+     []). On a future MAIN note FLEET-KIT-vN (provenance checked), replace
+     every kit file in ops/fleet_kit/ and re-embed the block in ONE commit;
+     never patch locally.
+  1b. OPS-121 (standing, from MAIN 0020, an operator order): until kit v5
+     ships, build NO fleet-shared watcher, secret resolver, dashboard token
+     palette or operator task engine here; tree-local stopgaps stay and must
+     not grow. P0-4, P0-5, P1-6, P2-8 are ours to build to MAIN's section-5
+     contracts if we build them. Accept: on v5, vendor byte-for-byte,
+     conformance [], then retire or list each overlapping stopgap.
   2. OPS-71 is blocked on a mode (not bypass permissions).
   3. OPS-102 / OPS-104 and items 1, 4b, 5-7, 10-12 need the operator playing.
-  4. v0.1.0 RELEASE AND TAG DELETED 2026-10-03 (operator ruling). Read back
-     after: gh release list empty, git ls-remote --tags origin empty, no local
-     tags. Backup outside the repo, folder Desktop\recovery: a git bundle
-     (git bundle verify OK; holds the old remote tag fa6479e -> ff0bee2 and
-     the old local tag b9bfa4a -> 7806aab) plus the release metadata as gh
-     JSON (release had no assets). The
-     Desktop\recovery folder VANISHED minutes after it was first written (not
-     in the Recycle Bin; some other process); it was rebuilt from the local
-     objects and a second copy kept at Documents\lanternlight-recovery\.
-     Both bundles restore-tested into a scratch repo (262 commits, fsck OK)
-     before the local pre-rewrite objects were pruned (git gc --prune=now).
-     Restore: git fetch from the bundle file, ref
+  4. v0.1.0 RELEASE AND TAG DELETED at the operator's word, 2026-10-04
+     (commit 4589778, 01:01 local; the ruling was given late on 2026-10-03).
+     Read back after: gh release list empty, git ls-remote --tags origin
+     empty, no local tags. Backups outside the repo, in BOTH Desktop\recovery
+     and Documents\lanternlight-recovery: a git bundle (git bundle verify OK
+     on both, re-checked at this wrap; holds the old remote tag fa6479e ->
+     ff0bee2 and the old local tag b9bfa4a -> 7806aab) plus the release
+     metadata as gh JSON (release had no assets). Desktop\recovery once
+     VANISHED minutes after being written (not in the Recycle Bin); it was
+     rebuilt and the Documents copy kept. Both bundles were restore-tested
+     (262 commits, fsck OK) before the local pre-rewrite objects were
+     pruned. Restore: git fetch from the bundle file, ref
      refs/tags/v0.1.0-remote-old, into refs/tags/v0.1.0.
-     GitHub may still serve the pre-rewrite commits by SHA from its cache.
-     They differ from current history ONLY by the Windows account name in
-     paths (the OPS-40 purge); the git author identity is identical to current
-     history, which is public anyway. OPTIONAL operator step: ask GitHub
-     Support to purge cached views / dangling objects - only if that account
-     name is treated as sensitive. Not warranted otherwise.
-  DONE after the wrap: MAIN 0830. Returned to the unread set by removing its
-    row from ops/runtime/inbox_seen.json; the next runner tick (kit 4, rc 0)
-    computed fe9c773b... MATCH and delivered the reply to MAIN 1 of 1. The
-    runner committed it as 9a00a58, ledger LL-0346.
+  5. OPTIONAL, operator's call only: GitHub may still serve the pre-rewrite
+     commits by SHA from its cache. They differ from current history ONLY by
+     the Windows account name in old paths (the OPS-40 purge); the git author
+     identity equals current public history. Ask GitHub Support to purge
+     cached views / dangling objects ONLY if the operator deems that account
+     name sensitive. Not warranted otherwise; do not do it unasked.
+  6. A cloud-session kit for this project exists OUTSIDE the repo, under
+     Documents\cloud-session-kits\lanternlight-* (four files). It is not
+     tracked here; do not copy it into the tree (public repo). Know it exists
+     when the operator asks about running this project in a cloud session.
 
-PROCESS RULES THAT BIT THIS SESSION
+PROCESS RULES THAT BIT RECENTLY
   - The pre-commit hook refuses unless the LAST COMPLETE suite run is green
     and newer than every test edit; any test edit after a run means another
     full run (~5 min) before `git commit`.
+  - Run the suite with a private --basetemp and TEMP/TMP (sibling repos'
+    temp directories vanish mid-run and redden test_tmp_retention).
+  - The shared scratchpad is shared with other sessions: draft the hand-off
+    under a uniquely named subdirectory, never a bare handoff file name.
   - The source register reads dotted filenames as hosts and ALSO refuses a
     KNOWN_NON_HOSTS entry that is a tracked repo file - add only non-tracked
     names, or describe the file instead.
   - docguards: a test module must NAME every doc it opens (its selector is
-    text-based); conformance() hashing FLEET-COMMON.md counted as opening it.
+    text-based).
   - Adding an EXEMPTION after writing a guard's test can make that test
     vacuous. Re-run the mutation after every later change to the same rule.
   - Paste SHARED_WORKTREE_BAN (ops/store_drift.py) into every dispatch; take

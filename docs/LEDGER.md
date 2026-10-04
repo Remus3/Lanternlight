@@ -84,6 +84,17 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0349 - 2026-10-04 - Wrap 2026-10-04: the runner's timed-out MAIN 0020 run (staged OPS-121 and LL-0348, never committed) verified and committed as c1b4330; hand-off rewritten carrying every open item plus the v0.1.0 backups, the optional GitHub cache purge and the out-of-repo cloud-session kit
+
+**Evidence:**
+- Runner timeout: ops/loop/control/headless_usage.jsonl row 2026-10-04T01:56:04-05:00, LL-RUNNER-MAIL-BATCH, opus/medium, duration 2700.9 s, error timeout, rc null; ROADMAP OPS-121 and LL-0348 were left staged. Every later tick in ops/runtime/inbox_runner.log read NO MAIL.
+- Independent refutation agent, read-only, all CONFIRMED: MAIN 0020 and SS 0045 present in the inbox; outbox reply 0110 SHA-256 6ef8ab83... equal in MAIN's and SS's inboxes (2 of 2, found by channel_route find_inbox); MANIFEST version 4, KIT_VERSION 4, conformance [] ; the four watcher modules carry none of WatchState, watch_lock, run_source; 0 tracked css; staged text ASCII and LF. Not re-run by it: verify_main and the acknowledge output.
+- Same agent: both recovery folders (Desktop and Documents) hold the release JSON and the remote bundle at equal sizes; git bundle verify exit 0 on both; the cloud-session kit folder holds four files outside the repo.
+- Suite this run, private basetemp and TEMP: 4459 passed, 22 skipped, 0 failed, collected 4481, 289.16 s (ops/runtime/suite_runs record, full true, 95 of 95 modules); ruff: All checks passed!
+- Runner work committed as c1b4330 with the pre-commit hook (doc subset 3550 passed, 1 skipped); runner HALTED by ops/runtime/INBOX_RUNNER_HALT for the wrap and the file deleted after the push.
+- Watcher: check_watcher NO_RECORD; ensure_armed_at_wrap refused with OPERATOR DISARM (LL-0234), arm armed False, spawn blocked. Correct; not worked around.
+- Stop-claim audit --show-last: 0 refuted, 0 confirmed (its transcript was absent; nothing audited).
+
 ### LL-0348 - 2026-10-04 - Unattended inbox runner: MAIN 0020 (provenance PASSED, operator order - four fleet-ops classes frozen until kit v5) recorded as ROADMAP OPS-121; SS 0045 read; one ACK delivered 2 of 2
 
 **Evidence:**
