@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/social-preview.png" width="100%" alt="Lanternlight banner: a glowing lantern beside the project name and the tagline - measure what the game never tells you, without ever touching the game - anti-cheat-safe companion for Mistfall Hunter">
+</p>
+
 # Lanternlight
 
 **Measure what the game never tells you - without ever touching the game.**
@@ -87,7 +91,7 @@ carries its own date in the document it links to.
 |---|---|
 | **Emberforge** | Computes nothing yet. No coefficient is published until the same value appears in an independent run |
 | **Dashboard** | Port 8810 reserved, nothing listening |
-| **Packaged release** | No wheel, no installer. [`v0.1.0`](https://github.com/Remus3/Lanternlight/releases/tag/v0.1.0) (2026-09-06) is a citable source snapshot, not a build |
+| **Packaged release** | No wheel, no installer and no tagged release. To cite a measurement, cite the commit you read |
 
 ## What is next
 

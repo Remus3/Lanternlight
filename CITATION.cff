@@ -2,7 +2,7 @@ cff-version: 1.2.0
 title: Lanternlight
 message: >-
   If you use Lanternlight, or cite a number measured by it, please cite the
-  release you actually read. Every figure this project publishes is tied to a
+  commit you actually read (there is no tagged release). Every figure this project publishes is tied to a
   specific game build, and a build that has been patched is a different
   measurement.
 type: software
@@ -10,8 +10,6 @@ authors:
   - name: Moonbeam
 repository-code: https://github.com/Remus3/Lanternlight
 license: Apache-2.0
-version: 0.1.0
-date-released: '2026-09-06'
 abstract: >-
   A companion and analysis project for the extraction ARPG Mistfall Hunter
   (Steam appid 3282300) that never touches the game process. The game ships

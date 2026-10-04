@@ -65,8 +65,9 @@ class TestTheRunnerHasWhatTheSuiteAsks:
 
     def test_the_checkout_fetches_the_branch_history_without_tags(self):
         # Depth 0 was tried first (9717c4f) and CI then failed 3 tests: depth 0
-        # also fetches tags, the remote v0.1.0 tag pins pre-rewrite commits,
-        # and the citation allowlist's pre-rewrite rows resolved as stale.
+        # also fetches tags, the remote v0.1.0 tag (deleted 2026-10-03) pinned
+        # pre-rewrite commits, and the citation allowlist's pre-rewrite rows
+        # resolved as stale. Any future tag could do the same.
         text = WORKFLOW.read_text(encoding="ascii")
         depth = re.search(r"^\s*fetch-depth:\s*(\d+)\s*$", text, re.MULTILINE)
         assert depth and int(depth.group(1)) >= 10000, (
@@ -113,10 +114,20 @@ class TestTheTrailerRuleIsConfigurationNotMemory:
 
 
 class TestTheCitationPointsAtSomethingReal:
-    def test_the_cited_version_has_a_matching_tag(self):
+    """Operator ruling 2026-10-03: the v0.1.0 release and tag were deleted (the
+    remote tag still pinned pre-2026-09-07-rewrite commits). With no release,
+    CITATION.cff must cite no version or release date; if a version is ever
+    declared again, a matching tag has to exist."""
+
+    def test_a_cited_version_has_a_matching_tag(self):
         text = CITATION.read_text(encoding="ascii")
         m = re.search(r"^version:\s*(\S+)\s*$", text, re.MULTILINE)
-        assert m, "CITATION.cff declares no version"
+        if not m:
+            assert not re.search(r"^date-released:", text, re.MULTILINE), (
+                "CITATION.cff gives a release date but no version; there is no "
+                "release to date"
+            )
+            return
         version = m.group(1).strip("'\"")
         try:
             tags = subprocess.run(
@@ -131,8 +142,6 @@ class TestTheCitationPointsAtSomethingReal:
         if tags.returncode != 0:
             pytest.skip("git tag failed")
         names = set(tags.stdout.split())
-        if not names:
-            pytest.skip("no tags in this checkout; a shallow clone has none")
         assert f"v{version}" in names, (
             f"CITATION.cff cites version {version!r} but no tag v{version} "
             f"exists. A citation pointing at a version nobody can check out is "

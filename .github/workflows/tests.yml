@@ -68,8 +68,9 @@ jobs:
         # The branch's whole history: the citation-check and cycle-cost tests
         # resolve historical shas, which a depth-1 clone lacks (git exits 128).
         # NOT fetch-depth 0: that also fetches every tag, and the remote
-        # v0.1.0 tag still pins pre-2026-09-07-rewrite commits, which makes
-        # the citation allowlist's pre-rewrite rows resolve and read as stale.
+        # v0.1.0 tag (deleted 2026-10-03) pinned pre-2026-09-07-rewrite
+        # commits, which made the citation allowlist's pre-rewrite rows
+        # resolve and read as stale; any future tag could do the same.
         # A depth far above the commit count, with tags left unfetched (the
         # checkout default), is the branch history and nothing else.
         with:

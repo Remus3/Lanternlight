@@ -55,6 +55,25 @@ OPEN - CARRIED FORWARD (none acted on this session unless marked)
      ops/fleet_kit/ and re-embed the block in ONE commit; never patch locally.
   2. OPS-71 is blocked on a mode (not bypass permissions).
   3. OPS-102 / OPS-104 and items 1, 4b, 5-7, 10-12 need the operator playing.
+  4. v0.1.0 RELEASE AND TAG DELETED 2026-10-03 (operator ruling). Read back
+     after: gh release list empty, git ls-remote --tags origin empty, no local
+     tags. Backup outside the repo, folder Desktop\recovery: a git bundle
+     (git bundle verify OK; holds the old remote tag fa6479e -> ff0bee2 and
+     the old local tag b9bfa4a -> 7806aab) plus the release metadata as gh
+     JSON (release had no assets). The
+     Desktop\recovery folder VANISHED minutes after it was first written (not
+     in the Recycle Bin; some other process); it was rebuilt from the local
+     objects and a second copy kept at Documents\lanternlight-recovery\.
+     Both bundles restore-tested into a scratch repo (262 commits, fsck OK)
+     before the local pre-rewrite objects were pruned (git gc --prune=now).
+     Restore: git fetch from the bundle file, ref
+     refs/tags/v0.1.0-remote-old, into refs/tags/v0.1.0.
+     GitHub may still serve the pre-rewrite commits by SHA from its cache.
+     They differ from current history ONLY by the Windows account name in
+     paths (the OPS-40 purge); the git author identity is identical to current
+     history, which is public anyway. OPTIONAL operator step: ask GitHub
+     Support to purge cached views / dangling objects - only if that account
+     name is treated as sensitive. Not warranted otherwise.
   DONE after the wrap: MAIN 0830. Returned to the unread set by removing its
     row from ops/runtime/inbox_seen.json; the next runner tick (kit 4, rc 0)
     computed fe9c773b... MATCH and delivered the reply to MAIN 1 of 1. The
