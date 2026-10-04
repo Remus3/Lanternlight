@@ -55,6 +55,30 @@ class TestTheWorkflowCannotSilenceItsOwnSummary:
         )
 
 
+class TestTheRunnerHasWhatTheSuiteAsks:
+    """Measured 2026-10-03 on the CI runs for 1245298 through 366e02d: the same
+    nine tests failed on every push. Four citation-check and two cycle-cost
+    tests ask git about commits a depth-1 checkout does not have (`rev-list`
+    exits 128, real shas read as dead), and three preflight tests assert ruff
+    actually ran. Both are runner gaps, not code defects, so the workflow must
+    fetch full history and install ruff."""
+
+    def test_the_checkout_fetches_full_history(self):
+        text = WORKFLOW.read_text(encoding="ascii")
+        assert re.search(r"^\s*fetch-depth:\s*0\s*$", text, re.MULTILINE), (
+            "actions/checkout defaults to depth 1; the citation and cycle-cost "
+            "tests resolve historical shas and fail on a shallow clone"
+        )
+
+    def test_ruff_is_installed_on_the_runner(self):
+        text = WORKFLOW.read_text(encoding="ascii")
+        installs = re.findall(r"^\s*run:\s*(.*pip install.*)$", text, re.MULTILINE)
+        assert any(re.search(r"\bruff\b", r) for r in installs), (
+            "the preflight lint tests assert ruff ran; without it on the runner "
+            "they fail with 'ruff is not installed'"
+        )
+
+
 class TestTheTrailerRuleIsConfigurationNotMemory:
     """``CLAUDE.md`` forbids a Co-Authored-By trailer, and the harness injects
     one by default. Before 2026-09-06 the rule was enforced only by the agent

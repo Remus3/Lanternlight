@@ -65,13 +65,19 @@ jobs:
       # Pinned to exact tags, not moving majors. v4/v5 were also emitting a
       # Node 20 deprecation warning on this runner image.
       - uses: actions/checkout@v7.0.1
+        # Full history: the citation-check and cycle-cost tests resolve
+        # historical shas, which a depth-1 clone does not have (git exits 128).
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-python@v7.0.0
         with:
           python-version: '3.14'
 
       - name: Install test dependencies
-        run: python -m pip install --upgrade pip pytest pillow
+        # ruff: the preflight lint tests assert it actually ran. Pinned to the
+        # version the tree is linted with locally.
+        run: python -m pip install --upgrade pip pytest pillow ruff==0.15.12
 
       - name: Report the collected count before running
         run: python -m pytest --collect-only 2>&1 | tail -3
