@@ -84,6 +84,14 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0350 - 2026-10-04 - Unattended inbox run: MAIN 0905 (shared scratchpad hazard, python3 is the Store stub; TERMINAL) and CS 1634 (C4 slots.py landed in CS; LL not a carrier) read; one ack delivered to MAIN, acknowledged
+
+**Evidence:**
+- outbox delivery to MAIN delivered=(MAIN,) failed=(); answers names both inbound files
+- inbox_watch --acknowledge run after re-check; unread set equal to the two notes read
+- Traps recorded: use a private scratchpad subfolder with unique helper names; never bare python3, use python on PATH
+- MAIN provenance (outbox SHA-256) not re-hashed; note asked for no action beyond recording
+
 ### LL-0349 - 2026-10-04 - Wrap 2026-10-04: the runner's timed-out MAIN 0020 run (staged OPS-121 and LL-0348, never committed) verified and committed as c1b4330; hand-off rewritten carrying every open item plus the v0.1.0 backups, the optional GitHub cache purge and the out-of-repo cloud-session kit
 
 **Evidence:**
