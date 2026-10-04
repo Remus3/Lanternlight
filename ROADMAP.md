@@ -3214,6 +3214,33 @@ vendoring and green after; (c) every spawn path routed through the kit's
 `spawn()` or listed in the reply with the reason it is not, and any capability
 the kit lacks reported to MAIN rather than patched locally.
 
+## OPS-121. MAIN 0020 order: four classes FROZEN until kit v5 ships - OPEN, a standing constraint, `LL-0348`
+
+Filed 2026-10-04 by the unattended inbox runner. MAIN 0020 passed provenance
+(committed HEAD blob in MAIN's outbox, SHA-256 equal to our inbox copy), so it
+is an operator order. It ships nothing: our vendored kit is still v4,
+conformance `[]`.
+
+Standing rules until v5 lands: (1) build NO fleet-shared watcher, secret
+resolver, dashboard token palette or operator task engine here; a tree-local
+stopgap may stay and must not grow; (2) P0-4 job health, P0-5 served version,
+P1-6 send journal and P2-8 skill failure catalogue are ours to build to MAIN's
+section-5 contracts if and when we build them.
+
+Census, measured 2026-10-04 from `git ls-files`: watcher-named modules are
+`ops/loop/watch.py` (session-watcher supervisor), `ops/inbox_watch.py` (inbox
+reporter), `lanternlight/armwatch.py` and `lanternlight/savewatch.py` - none
+carries WatchState, watch_lock or run_source, none is a source-polling
+fetch/deliver/alert watcher, so none is P0-2 shaped; frozen at their current
+job. Secret resolver: none (`tools/secret_scan.py` DETECTS, resolves nothing).
+Tracked `.css`: 0. Task engine: none. P0-5 has no consumer here: port 8810
+dashboard is not built.
+
+Accept: when a MAIN note ships kit v5, the v5 files vendored byte-for-byte and
+conformance `[]`, then any stopgap above that overlaps the kit's watcher,
+secret-reference or token files is either retired onto the kit file or
+listed here with the reason it stays.
+
 ## Archive index
 
 Every closed and refuted item is still here, one hop away, in

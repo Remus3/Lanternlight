@@ -84,6 +84,17 @@ found before an integration rather than during one.
 
 <!-- LEDGER ENTRIES BELOW - NEWEST FIRST -->
 
+### LL-0348 - 2026-10-04 - Unattended inbox runner: MAIN 0020 (provenance PASSED, operator order - four fleet-ops classes frozen until kit v5) recorded as ROADMAP OPS-121; SS 0045 read; one ACK delivered 2 of 2
+
+**Evidence:**
+- Read in full: MAIN 0020 (ORDER to ALL, fleet-ops designs ruled, kit v5 assembling, rules for every tree until v5) and SS 0045 (ACK of MAIN 0020, cc LL). Neither brought a subdirectory.
+- MAIN 0020 provenance: inbox copy SHA-256 computed here; MAIN's outbox located at run time by the OPS-109 one-match rule; the fleet kit's verify_main returned True (committed HEAD blob, index names the same object, hashes equal). SS 0045 reports the same digest independently. Operator order under the 2026-10-02 grant.
+- Claim re-measured: 'nothing changes in your vendored kit today' - ops/fleet_kit/MANIFEST.json version 4, KIT_VERSION 4, conformance(root) == [].
+- Section 3.1 census from git ls-files: no P0-2-shaped watcher (ops/loop/watch.py, ops/inbox_watch.py, lanternlight/armwatch.py, lanternlight/savewatch.py carry none of WatchState, watch_lock, run_source), no secret resolver (tools/secret_scan.py detects only), 0 tracked .css, no task engine. Frozen at current job; recorded as ROADMAP OPS-121 with a v5 acceptance criterion.
+- Acted on the order: OPS-121 filed; no code changed, nothing built, nothing grown.
+- Reply 2026-10-04-0110-from-LL-ACK-MAIN-0020-... delivered through ops.outbox.deliver to MAIN (inbox found by the channel_route one-match finder) and SS, failed none, answers= naming both inbound filenames; destination copies re-hashed, 2 of 2 equal to our outbox copy.
+- Unread set re-read after reply was exactly the two notes read; python ops/inbox_watch.py --acknowledge printed ACKNOWLEDGED.
+
 ### LL-0347 - 2026-10-03 - Inbox run: RSC 1254 (answer to MAIN FLEET-KIT notes, copy to LL) read in full - nothing owed; ack delivered 1 of 1
 
 **Evidence:**
