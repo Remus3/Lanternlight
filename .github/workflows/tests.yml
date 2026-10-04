@@ -65,10 +65,15 @@ jobs:
       # Pinned to exact tags, not moving majors. v4/v5 were also emitting a
       # Node 20 deprecation warning on this runner image.
       - uses: actions/checkout@v7.0.1
-        # Full history: the citation-check and cycle-cost tests resolve
-        # historical shas, which a depth-1 clone does not have (git exits 128).
+        # The branch's whole history: the citation-check and cycle-cost tests
+        # resolve historical shas, which a depth-1 clone lacks (git exits 128).
+        # NOT fetch-depth 0: that also fetches every tag, and the remote
+        # v0.1.0 tag still pins pre-2026-09-07-rewrite commits, which makes
+        # the citation allowlist's pre-rewrite rows resolve and read as stale.
+        # A depth far above the commit count, with tags left unfetched (the
+        # checkout default), is the branch history and nothing else.
         with:
-          fetch-depth: 0
+          fetch-depth: 100000
 
       - uses: actions/setup-python@v7.0.0
         with:

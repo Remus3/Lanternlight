@@ -63,12 +63,18 @@ class TestTheRunnerHasWhatTheSuiteAsks:
     actually ran. Both are runner gaps, not code defects, so the workflow must
     fetch full history and install ruff."""
 
-    def test_the_checkout_fetches_full_history(self):
+    def test_the_checkout_fetches_the_branch_history_without_tags(self):
+        # Depth 0 was tried first (9717c4f) and CI then failed 3 tests: depth 0
+        # also fetches tags, the remote v0.1.0 tag pins pre-rewrite commits,
+        # and the citation allowlist's pre-rewrite rows resolved as stale.
         text = WORKFLOW.read_text(encoding="ascii")
-        assert re.search(r"^\s*fetch-depth:\s*0\s*$", text, re.MULTILINE), (
+        depth = re.search(r"^\s*fetch-depth:\s*(\d+)\s*$", text, re.MULTILINE)
+        assert depth and int(depth.group(1)) >= 10000, (
             "actions/checkout defaults to depth 1; the citation and cycle-cost "
-            "tests resolve historical shas and fail on a shallow clone"
+            "tests resolve historical shas and fail on a shallow clone, and "
+            "depth 0 drags in the pre-rewrite tag"
         )
+        assert not re.search(r"^\s*fetch-tags:\s*true\s*$", text, re.MULTILINE)
 
     def test_ruff_is_installed_on_the_runner(self):
         text = WORKFLOW.read_text(encoding="ascii")
