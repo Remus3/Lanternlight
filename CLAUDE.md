@@ -327,7 +327,7 @@ a free port:
 | 8900-8919 | LegionWallpaper (LW) |
 | 8920-8939 | Clockspeed (CS) |
 
-Substrate (`SS`, `C:\Substrate`) exists and named NO port block; ask on the
+Substrate (`SS`, `<substrate-root>`) exists and named NO port block; ask on the
 channel before allocating anywhere outside 8810-8819. Every row is a
 reservation its owner reported, not a port measured here.
 
@@ -347,12 +347,12 @@ sibling. Why: H, Ports.
 
 ## Paths
 
-- Project root: `C:\Lanternlight\`
+- Project root: `<repo-root>\`
 - Python: `python` on `PATH` (3.14). Never hardcode the interpreter's absolute
   path in a tracked file - it carries the account name. Enforced by
   `tests/test_no_hardcoded_home_path.py`. Install dir if genuinely needed:
   `%LOCALAPPDATA%\Programs\Python\Python314\`.
-- Game install: `C:\Program Files (x86)\Steam\steamapps\common\Mistfall Hunter`
+- Game install: `<steam-root>\steamapps\common\Mistfall Hunter`
 - Game log: `%LOCALAPPDATA%\MistfallHunter\Saved\Logs\MistfallHunter.log`
 - Game saves: `%LOCALAPPDATA%\MistfallHunter\Saved\SaveGames\*.sav` (plain GVAS)
 - Loop runtime state: `ops/runtime/` (gitignored). Why: H, Paths.

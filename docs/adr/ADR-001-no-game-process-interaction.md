@@ -13,7 +13,7 @@ The shipped binary set corroborates a heavy commercial anti-cheat and SDK stack:
 `parfait.dll`, `bmf_hydra.dll`) reporting GSDK version `3.23.0.0`, package
 `com.hermes.pstgame`, app_id `937566`. An embedded CEF browser ships alongside.
 
-The precedent project (`C:\RedMoon`, V Rising) has an architecture with a
+The precedent project (`<redmoon-root>`, V Rising) has an architecture with a
 live-state half built on process integration. The question was whether that
 transfers. It does not.
 

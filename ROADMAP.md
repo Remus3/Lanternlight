@@ -117,7 +117,7 @@ possible template-matching problem.
   measurement, which is exactly the failure mode this project's doctrine
   exists to prevent.
 - Ground truth for the test comes from this session's capture: the frames under
-  `C:/ll-captures/2026-08-25/panel` include series already read by hand and
+  `<captures-root>/2026-08-25/panel` include series already read by hand and
   written into section 11, so a test can assert the reader reproduces
   `10 21 31 41 52 62 72 83 93 103` and `55 109 164 219 275 330 386 441 496 552`
   from the real frames rather than from synthesised ones.
@@ -138,11 +138,11 @@ A reader was built far enough to find out what does not work, then **removed
 from the repository rather than left half-working**, because a reader that
 refuses every real frame is worse than no reader. The draft, its templates and
 the calibration scripts are kept at
-`C:/ll-captures/2026-08-25/meterread-wip/`. What follows is the part worth
+`<captures-root>/2026-08-25/meterread-wip/`. What follows is the part worth
 having: nobody should pay for these measurements twice.
 
 **The panel geometry, measured off the 6,439 captured crops** (500x310 RGB,
-`C:/ll-captures/2026-08-25/panel`):
+`<captures-root>/2026-08-25/panel`):
 
 - Orange **Total Damage** digits occupy rows **y 98-118**; white **Progress
   Record** digits occupy **y 255-273**.
@@ -227,7 +227,7 @@ valid.
 `lanternlight/vision_meter.py` reads the Total Damage value and its hit count
 off a captured panel crop, and **reproduces the hand-read series exactly**:
 `10 21 31 41 52 62 72 83 93 103`, from ten named frames in
-`C:/ll-captures/2026-08-25/panel`. Five other floor runs in the same capture
+`<captures-root>/2026-08-25/panel`. Five other floor runs in the same capture
 read the same series ending `104` rather than `103` - the rounding tie 10.35
 predicts, so that is corroboration rather than disagreement.
 
@@ -970,7 +970,7 @@ not a roadmap item, and mail that exposes a defect in this tree produces one.
 
 ## OPS-104. THE CAPTURE GROUND TRUTH WAS DESTROYED AND MUST BE RETAKEN - OPEN, and it blocks on the operator playing
 
-Filed 2026-09-20. `C:\ll-captures` was permanently deleted - 10.6 GB in 19,241
+Filed 2026-09-20. `<captures-root>` was permanently deleted - 10.6 GB in 19,241
 files. Not to the Recycle Bin, no volume shadow copy existed, and the operator
 confirmed there is no backup and the loss is unrecoverable. This project did not
 delete it: there is no `rmtree` anywhere near a capture or destination path in
@@ -1185,7 +1185,7 @@ Two consecutive hits on one target in the captured run measured 17.356201171875
 and 92.13079833984375, 0.256 seconds apart. Those are the first damage numbers
 this project has ever held, and nobody published them - the game wrote them.
 
-**263 generations of that file are already captured** at `C:\ll-captures\saves\`,
+**263 generations of that file are already captured** at `<captures-root>\saves\`,
 so a damage timeline for a whole 20-minute run exists right now without the
 operator doing anything.
 
@@ -1319,7 +1319,7 @@ existing corpus can close it. Recorded so nobody runs that search again.
 **Do not run this search again.** It has now been run to completion over every
 save on this machine and the answer is a definitive NO.
 
-- **353 `.sav` files** scanned across `C:/ll-captures` and the live `Saved/`
+- **353 `.sav` files** scanned across `<captures-root>` and the live `Saved/`
   tree, **zero parse failures**.
 - **The damage field is confined to ONE save type.** Only
   `StandaloneSlot_<roleId>.sav` carries `DamageCollectonDataSet`. The seven
@@ -2084,10 +2084,10 @@ different capture would have prevented:
   was measuring**; re-deriving from a pattern of your own choosing measures your
   pattern, which is the same defect as an empty grep wearing better clothes.
 
-There are EIGHT full-scene capture sets **within `C:/ll-captures`**, three at
+There are EIGHT full-scene capture sets **within `<captures-root>`**, three at
 2560x1440 - the claim that only one exists was false and is withdrawn. **A
 NINTH sits outside that tree**, at `~/.lanternlight/frames` (2026-08-09,
-2560x1440, 218 PNGs), invisible to a walk of `C:/ll-captures`; it is the only
+2560x1440, 218 PNGs), invisible to a walk of `<captures-root>`; it is the only
 set holding talent page-two hovers. No game video exists on the machine.
 The binding constraint is not resolution alone: a tooltip has to be open, held
 long enough to land in a frame, and identifiable as the right item.
@@ -2516,7 +2516,7 @@ live default is unchanged at `OK (65 archived heading(s), 65 stub link(s))`,
 exit 0.
 
 **The filed defect, stated positively.** Every run now prints its own scope line -
-`scope ROADMAP.md vs docs/ROADMAP_ARCHIVE.md under C:\Lanternlight` - so a
+`scope ROADMAP.md vs docs/ROADMAP_ARCHIVE.md under <repo-root>` - so a
 verdict says what it was a verdict ABOUT. `check_texts` also takes the roadmap's
 relative path for its MESSAGES, so a finding names the document actually read
 instead of the default constant. A true verdict answering a different question is
@@ -2908,9 +2908,9 @@ item rather than an unfinished one.
 
 `.claude/settings.json` keeps three rules anchored at a filesystem root:
 
-    "Read(//C/Lanternlight/**)",
-    "Write(//C/Lanternlight/**)",
-    "Edit(//C/Lanternlight/**)"
+    "Read(<repo-root>/**)",
+    "Write(<repo-root>/**)",
+    "Edit(<repo-root>/**)"
 
 **What `OPS-70` established, with its trust tier attached.** A permission rule's
 content is gitignore syntax with four anchors - `//path` from the filesystem
@@ -2931,7 +2931,7 @@ measurement is not hard, it is unavailable in the mode the work was done in.
 
 **The candidate change, deliberately not made.** The documented portable form is
 a rule anchored at the settings source - `Edit(/**)` in place of
-`Edit(//C/Lanternlight/**)` - which would match in a clone and in every git
+`Edit(<repo-root>/**)` - which would match in a clone and in every git
 worktree rather than in this checkout alone. It was NOT adopted because it is a
 live change to what this machine pre-approves, made on exactly the class of claim
 the session could not observe. Adopting a broader pre-approval on an unverified

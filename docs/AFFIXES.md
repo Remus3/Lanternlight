@@ -2,7 +2,7 @@
 
 > **CAPTURE-EVIDENCE-DESTROYED-2026-09-20 - read this before citing anything
 > below.** Many readings in this document name an individual frame or save file
-> under `C:\ll-captures` as the evidence they rest on. **That tree was
+> under `<captures-root>` as the evidence they rest on. **That tree was
 > permanently deleted on 2026-09-20** - 10.6 GB in 19,241 files. It was not
 > sent to the Recycle Bin, no volume shadow copy existed, and the operator has
 > confirmed there is no backup and the loss is **unrecoverable**. Lanternlight
@@ -1130,9 +1130,9 @@ times.
 
 **WHAT WAS WRONG, and the mistake underneath it.** The first version of this
 section said "Only ONE capture on this machine is full-screen". That is FALSE:
-there are **eight** full-scene capture sets **within `C:/ll-captures`**, three of
+there are **eight** full-scene capture sets **within `<captures-root>`**, three of
 them at 2560x1440 - plus a NINTH outside that tree at `~/.lanternlight/frames`,
-which a walk of `C:/ll-captures` cannot see. It also
+which a walk of `<captures-root>` cannot see. It also
 listed five capture windows when there are **fourteen** capture directories, and
 it blamed the `101` and `209` failure on the capture being a 500x310 crop - when
 a 1280x720 FULL-SCENE capture covered both timestamps.
@@ -1259,7 +1259,7 @@ withdrawn twice.
 
 ## The `Affix Details` panel STATES the aggregation rule - 2026-08-25, read 2026-08-30
 
-Read from frame `f0119_22.28.15` in `C:\ll-captures\2026-08-25b\talents\`, a
+Read from frame `f0119_22.28.15` in `<captures-root>\2026-08-25b\talents\`, a
 2560x1440 capture that **no session had ever opened**. It was found by walking
 the capture tree rather than by looking where the frames were expected to be -
 the same omission that produced the false "only one capture is full-screen"
@@ -1328,7 +1328,7 @@ observed on this screen.
 
 ## The TALENTS screen at level 5 - 2026-08-25, from an unread capture
 
-Read from `f0000_22.23.53` in `C:\ll-captures\2026-08-25b\talents\`, 164 frames
+Read from `f0000_22.23.53` in `<captures-root>\2026-08-25b\talents\`, 164 frames
 at 2560x1440 that no session had opened before 2026-08-30.
 
 ### The screen has TWO pages - RECORDED SINCE 2026-08-09, and this section claimed otherwise
@@ -1544,7 +1544,7 @@ for, arriving by accident rather than by design.
 
 ## The SKILLS screen - 2026-08-25, and it carries a `5` that ROADMAP item 10 needs
 
-Read from `f0059_22.26.04` in `C:\ll-captures\2026-08-25b\talents\`, part of the
+Read from `f0059_22.26.04` in `<captures-root>\2026-08-25b\talents\`, part of the
 2560x1440 capture no session had opened. Level 5 Blackarrow.
 
 **Scope note.** This document opened as a record of affix and item readings and
@@ -2231,7 +2231,7 @@ from `f0079`. Only the three lower sections are new.
 
 ## Mining the 2026-08-30 capture - 2026-08-30 pass
 
-2172 frames at `C:/ll-captures/2026-08-30/frames/`, largely unopened. 186 were
+2172 frames at `<captures-root>/2026-08-30/frames/`, largely unopened. 186 were
 read. The screen map is in the session scratch; what follows is what it settled.
 
 ### `Fervor`'s ladder - the SEVEN-LEVEL prediction was made, then CONFIRMED

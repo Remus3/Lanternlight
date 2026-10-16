@@ -2,7 +2,7 @@
 
 > **CAPTURE-EVIDENCE-DESTROYED-2026-09-20 - read this before citing anything
 > below.** Many readings in this document name an individual frame or save file
-> under `C:\ll-captures` as the evidence they rest on. **That tree was
+> under `<captures-root>` as the evidence they rest on. **That tree was
 > permanently deleted on 2026-09-20** - 10.6 GB in 19,241 files. It was not
 > sent to the Recycle Bin, no volume shadow copy existed, and the operator has
 > confirmed there is no backup and the loss is **unrecoverable**. Lanternlight
@@ -35,7 +35,7 @@ inference. Where something was not measured, it says so.
 Project: **Lanternlight**. Combat / build math engine: **Emberforge**.
 Target game: Mistfall Hunter (Steam appid 3282300).
 
-Precedent: `C:\RedMoon` (Red Moon, V Rising). This document exists because the
+Precedent: `<redmoon-root>` (Red Moon, V Rising). This document exists because the
 RedMoon architecture does NOT transfer, and the reason had to be measured before
 anything was designed.
 
@@ -49,7 +49,7 @@ anything was designed.
 | Genre | dark fantasy PvPvE extraction ARPG, solo or trio | Steam store |
 | Classes | Mercenary, Sorcerer, Blackarrow, Shadowstrix, Seer, Withered Knight | community wikis, NOT yet verified in client |
 | Engine | Unreal Engine 5 (IoStore, pak v12, utoc v8) | measured, section 3 |
-| Installed locally | yes, `C:\Program Files (x86)\Steam\steamapps\common\Mistfall Hunter` | appmanifest_3282300.acf |
+| Installed locally | yes, `<steam-root>\steamapps\common\Mistfall Hunter` | appmanifest_3282300.acf |
 | Install size | 41,633,338,986 bytes (41.6 GB) | appmanifest |
 | Build pin | buildid `24813185`, LastUpdated epoch `1787126796` (2026-08-19T08:06:36Z) | appmanifest, re-read 2026-08-25 |
 | Previous build pin | buildid `24619162`, epoch `1786281053` (2026-08-09T13:10:53Z) | appmanifest, 2026-08-09 - every id observed on or before 2026-08-09 predates the patch and is UNCONFIRMED on the current build |
@@ -669,7 +669,7 @@ contain real other players, so `lanternlight/redact.py` treating any
 `StandaloneSlot_<roleId>.sav` is the file the game writes while a dungeon run is
 in progress and deletes when the run ends. Its entire 263-generation lifetime
 was captured on 2026-08-09, from first appearance at 2,190 bytes to last sight
-at 177,878 bytes. **The bytes live at `C:\ll-captures\saves\`, outside this
+at 177,878 bytes. **The bytes live at `<captures-root>\saves\`, outside this
 repository, and are not committed** - the filename embeds the operator's roleId.
 
 Everything in this section was re-measured from those bytes by the research
@@ -2570,7 +2570,7 @@ That session entered `LoadMap(/Game/Project/Maps/TrainingGround/Training)`
 | A | 00:40:23 - 00:44:31 | 173 | 0.698 fps | 3 s |
 | B | 00:45:16 - 00:49:10 | 182 | 0.778 fps | **2 s** |
 
-`C:\ll-captures\2026-08-30\frames` holds **2172 PNGs at 2560x1440** under one
+`<captures-root>\2026-08-30\frames` holds **2172 PNGs at 2560x1440** under one
 filename convention. **355 fall inside the two windows and 124 show the meter
 panel.**
 
@@ -2584,7 +2584,7 @@ is the same convention 11.7 states for its dashes. A run captured at 0.7 fps is
 sparse, not ambiguous.
 
 **Corpus completeness, so the next sweep does not redo it.** 18,965 images
-machine-wide, 18,898 of them timestamped. Scoped to `C:\ll-captures` alone the
+machine-wide, 18,898 of them timestamped. Scoped to `<captures-root>` alone the
 figures are 18,747 and 18,680, which is what ledger entry LL-0109 recorded. The
 **218-frame difference is `~/.lanternlight/frames`**, the 2026-08-09 set, which
 also holds a **sixth** timestamped filename convention, `skills_HH.MM.SS.png`.

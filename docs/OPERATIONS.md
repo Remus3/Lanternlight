@@ -219,7 +219,7 @@ python scratchpad/probe_paks.py
 ```
 
 Reads the container headers under
-`C:\Program Files (x86)\Steam\steamapps\common\Mistfall Hunter\MistfallHunter\Content\Paks`
+`<steam-root>\steamapps\common\Mistfall Hunter\MistfallHunter\Content\Paks`
 - 144 bytes from each `.utoc`, 221 from the end of each `.pak`. It opens no
 process, loads no game module, and writes nothing.
 

@@ -1,3 +1,5 @@
+**Retired 2026-10-04, read-only archive**
+
 <p align="center">
   <img src="docs/assets/social-preview.png" width="100%" alt="Lanternlight banner: a glowing lantern beside the project name and the tagline - measure what the game never tells you, without ever touching the game - anti-cheat-safe companion for Mistfall Hunter">
 </p>
